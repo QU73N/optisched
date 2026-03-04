@@ -16,7 +16,7 @@ const OptiBotChat: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: '1', user_id: 'bot', is_bot: true, metadata: null, created_at: new Date().toISOString(),
-            content: "Hi! I'm OptiSched AI, your dedicated scheduling assistant for STI College Meycauayan.\n\nI can help you with:\n- Viewing and managing schedules\n- Finding and resolving conflicts\n- Room availability and status\n- Faculty load management\n\nHow can I assist you today?"
+            content: "Hi! I'm OptiSched AI, your dedicated scheduling assistant for STI College Meycauayan.\n\nI can help you with:\n- 📅 Viewing and managing schedules\n- 🔍 Finding and resolving conflicts\n- 🏫 Room availability and status\n- 👨‍🏫 Faculty load management\n\nHow can I assist you today?"
         },
     ]);
     const [inputText, setInputText] = useState('');
