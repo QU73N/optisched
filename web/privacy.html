@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — OptiSched</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.7;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: fadeDown 0.6s ease-out;
+        }
+
+        @keyframes fadeDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -200% 0;
+            }
+
+            100% {
+                background-position: 200% 0;
+            }
+        }
+
+        .logo h1 {
+            font-size: 42px;
+            background: linear-gradient(135deg, #818cf8, #c084fc, #818cf8);
+            background-size: 200% auto;
+            animation: shimmer 3s linear infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 4px;
+            letter-spacing: -0.5px;
+        }
+
+        .logo .tagline {
+            font-size: 16px;
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        .logo .badge {
+            display: inline-block;
+            margin-top: 12px;
+            background: rgba(129, 140, 248, 0.12);
+            color: #a5b4fc;
+            font-size: 12px;
+            padding: 6px 18px;
+            border-radius: 99px;
+            font-weight: 500;
+            border: 1px solid rgba(129, 140, 248, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .logo .badge:hover {
+            background: rgba(129, 140, 248, 0.25);
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(129, 140, 248, 0.2);
+        }
+
+        h2 {
+            font-size: 22px;
+            color: #f1f5f9;
+            margin-top: 40px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+            animation: fadeUp 0.5s ease-out;
+        }
+
+        h3 {
+            font-size: 16px;
+            color: #cbd5e1;
+            margin-top: 20px;
+            margin-bottom: 8px;
+        }
+
+        p,
+        li {
+            color: #94a3b8;
+            margin-bottom: 12px;
+        }
+
+        ul {
+            padding-left: 24px;
+        }
+
+        li {
+            margin-bottom: 6px;
+            transition: all 0.2s ease;
+        }
+
+        li:hover {
+            color: #c7d2fe;
+            transform: translateX(4px);
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, rgba(129, 140, 248, 0.08), rgba(192, 132, 252, 0.08));
+            border-left: 3px solid #818cf8;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            transition: all 0.3s ease;
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        .highlight:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 20px rgba(129, 140, 248, 0.15);
+        }
+
+        .highlight p {
+            color: #c7d2fe;
+            margin-bottom: 0;
+        }
+
+        .section-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 24px;
+            margin: 16px 0;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        .section-card:hover {
+            border-color: rgba(129, 140, 248, 0.3);
+            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .section-card h3 {
+            margin-top: 0;
+            color: #f1f5f9;
+            font-size: 15px;
+        }
+
+        .section-card .icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .data-item {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .data-item:hover {
+            border-color: #818cf8;
+            background: rgba(129, 140, 248, 0.05);
+        }
+
+        .data-item strong {
+            font-size: 13px;
+            color: #e2e8f0;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .data-item span {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .service-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+            padding-left: 0;
+            list-style: none;
+        }
+
+        .service-list li {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-bottom: 0;
+        }
+
+        .service-list li:hover {
+            border-color: #818cf8;
+            color: #c7d2fe;
+            background: rgba(129, 140, 248, 0.08);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(129, 140, 248, 0.1);
+        }
+
+        .rights-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .right-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .right-card:hover {
+            border-color: #34d399;
+            background: rgba(16, 185, 129, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .right-card .right-icon {
+            font-size: 20px;
+            margin-bottom: 6px;
+        }
+
+        .right-card strong {
+            font-size: 13px;
+            color: #f1f5f9;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .right-card span {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        .effective {
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+            margin-top: 48px;
+            border-top: 1px solid #1e293b;
+            padding-top: 20px;
+        }
+
+        a {
+            color: #818cf8;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        a:hover {
+            color: #a5b4fc;
+            text-decoration: underline;
+        }
+
+        .nav {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 32px;
+            animation: fadeDown 0.6s ease-out 0.2s both;
+        }
+
+        .nav a {
+            color: #94a3b8;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav a:hover,
+        .nav a.active {
+            color: #818cf8;
+            border-color: #818cf8;
+            text-decoration: none;
+            background: rgba(129, 140, 248, 0.08);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(129, 140, 248, 0.1);
+        }
+
+        @media (max-width: 600px) {
+
+            .data-grid,
+            .rights-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="logo">
+        <h1>OptiSched</h1>
+        <p class="tagline">Smart Scheduling, Simple Solutions</p>
+        <span class="badge">STI College Meycauayan • Branch ID: 401903</span>
+    </div>
+
+    <nav class="nav">
+        <a class="active" href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="about.html">About</a>
+    </nav>
+
+    <h2>Privacy Policy</h2>
+    <p>This Privacy Policy describes how OptiSched ("we," "our," or "the Platform"), a scheduling application developed
+        for STI College Meycauayan, collects, uses, and protects your personal information. By using OptiSched, you
+        consent to the practices described herein.</p>
+
+    <h2>1. Data Collection</h2>
+    <p>OptiSched collects and processes the following categories of data in order to provide automated academic
+        scheduling services:</p>
+
+    <div class="data-grid">
+        <div class="data-item">
+            <strong>👤 Account Information</strong>
+            <span>Full name, institutional email, role (admin/faculty/student), and authentication credentials.</span>
+        </div>
+        <div class="data-item">
+            <strong>📚 Academic Information</strong>
+            <span>Year level, program, section, department affiliation, and enrollment status.</span>
+        </div>
+        <div class="data-item">
+            <strong>📅 Scheduling Data</strong>
+            <span>Teaching preferences, availability, subject assignments, room assignments, and time slots.</span>
+        </div>
+        <div class="data-item">
+            <strong>🏫 Institutional Data</strong>
+            <span>Room capacities, equipment inventories, building/floor assignments, and enrollment counts.</span>
+        </div>
+        <div class="data-item">
+            <strong>📊 Usage Data</strong>
+            <span>Log data, session timestamps, and interactions with the OptiBot AI assistant.</span>
+        </div>
+        <div class="data-item">
+            <strong>💬 Communication Data</strong>
+            <span>Messages between users and administrators within the platform.</span>
+        </div>
+    </div>
+
+    <h2>2. Purpose of Processing</h2>
+    <div class="section-card">
+        <div class="icon">🎯</div>
+        <h3>Why We Process Your Data</h3>
+        <ul>
+            <li>Automated schedule generation and conflict resolution for academic timetabling.</li>
+            <li>Optimization of room utilization, faculty load balancing, and section placement.</li>
+            <li>Providing scheduling-related insights through the OptiBot AI assistant.</li>
+            <li>Account authentication and role-based access control.</li>
+            <li>System administration, troubleshooting, and performance monitoring.</li>
+        </ul>
+    </div>
+
+    <h2>3. AI Disclosure</h2>
+    <div class="highlight">
+        <p>OptiSched integrates Google's Gemini AI technology to power the OptiBot scheduling assistant. When you
+            interact with OptiBot, your scheduling-related queries may be processed by Google's AI services. <strong>No
+                personally identifiable information (PII)</strong> such as names, email addresses, or student IDs is
+            sent to the AI provider. Only non-identifiable, anonymized scheduling data (e.g., time slots, room types,
+            subject codes) is transmitted for processing.</p>
+    </div>
+
+    <h2>4. Data Storage & Security</h2>
+    <div class="section-card">
+        <div class="icon">🔒</div>
+        <h3>Security Measures</h3>
+        <p>All data is stored securely using Supabase, a cloud database platform with enterprise-grade security:</p>
+        <div class="data-grid" style="margin-top: 12px;">
+            <div class="data-item">
+                <strong>🛡️ Row Level Security</strong>
+                <span>RLS policies restrict data access based on user roles.</span>
+            </div>
+            <div class="data-item">
+                <strong>🔐 Password Hashing</strong>
+                <span>Industry-standard bcrypt algorithms protect credentials.</span>
+            </div>
+            <div class="data-item">
+                <strong>🔗 Encrypted Transmission</strong>
+                <span>All data transmitted via HTTPS/TLS encryption.</span>
+            </div>
+            <div class="data-item">
+                <strong>🎫 JWT Authentication</strong>
+                <span>Token-based auth with automatic expiration.</span>
+            </div>
+        </div>
+    </div>
+
+    <h2>5. User Rights</h2>
+    <p>In accordance with the <strong>Data Privacy Act of 2012 (Republic Act No. 10173)</strong> of the Philippines:</p>
+
+    <div class="rights-grid">
+        <div class="right-card">
+            <div class="right-icon">📋</div>
+            <strong>Right to Access</strong>
+            <span>Request a copy of the personal data we hold about you.</span>
+        </div>
+        <div class="right-card">
+            <div class="right-icon">✏️</div>
+            <strong>Right to Correct</strong>
+            <span>Request correction of inaccurate or incomplete personal data.</span>
+        </div>
+        <div class="right-card">
+            <div class="right-icon">🗑️</div>
+            <strong>Right to Erasure</strong>
+            <span>Request deletion of your personal data, subject to lawful retention.</span>
+        </div>
+        <div class="right-card">
+            <div class="right-icon">🚫</div>
+            <strong>Right to Object</strong>
+            <span>Object to processing under certain circumstances.</span>
+        </div>
+        <div class="right-card">
+            <div class="right-icon">📤</div>
+            <strong>Right to Portability</strong>
+            <span>Request transfer of your data in a structured format.</span>
+        </div>
+        <div class="right-card">
+            <div class="right-icon">📧</div>
+            <strong>How to Exercise</strong>
+            <span>Contact the Data Privacy Officer through the Office of the Registrar.</span>
+        </div>
+    </div>
+
+    <h2>6. Data Retention</h2>
+    <div class="highlight">
+        <p>Personal and scheduling data is retained for <strong>the duration of the academic term plus one (1)
+                year</strong>
+            for historical auditing and institutional record-keeping. After the retention period, data will be securely
+            deleted or anonymized.</p>
+    </div>
+
+    <h2>7. Third-Party Services</h2>
+    <ul class="service-list">
+        <li>Supabase — Cloud Database & Auth</li>
+        <li>Google Gemini AI — Scheduling Assistant</li>
+        <li>Expo / React Native — Mobile Framework</li>
+        <li>Vercel — Web Hosting</li>
+    </ul>
+
+    <h2>8. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy to reflect changes in our practices or applicable regulations. Material changes
+        will be communicated through the application or via institutional email. Continued use of OptiSched after such
+        changes constitutes your acceptance of the revised policy.</p>
+
+    <h2>9. Contact Information</h2>
+    <div class="section-card">
+        <div class="icon">📞</div>
+        <h3>Get in Touch</h3>
+        <p>For questions, concerns, or data privacy requests:</p>
+        <p><strong>STI College Meycauayan — Office of the Registrar</strong><br>
+            Email: registrar@meycauayan.sti.edu.ph</p>
+    </div>
+
+    <p class="effective">Effective Date: February 28, 2026 &middot; OptiSched v1.0 &middot; © 2026 STI College
+        Meycauayan</p>
+</body>
+
+</html>

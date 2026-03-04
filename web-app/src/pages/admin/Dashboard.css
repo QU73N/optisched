@@ -1,0 +1,121 @@
+.dashboard {
+    max-width: 1200px;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.dashboard-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+}
+
+.dashboard-subtitle {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* ========== STATS GRID ========== */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.stat-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.stat-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+}
+
+/* ========== DASHBOARD GRID ========== */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 20px;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+/* ========== QUICK ACTIONS ========== */
+.quick-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.quick-actions .btn {
+    justify-content: flex-start;
+    width: 100%;
+}
+
+/* ========== STATUS LIST ========== */
+.status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-online {
+    background: var(--accent-success);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.status-warning {
+    background: var(--accent-warning);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.status-offline {
+    background: var(--accent-error);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}

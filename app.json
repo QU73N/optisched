@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "optisched",
+    "name": "OptiSched",
     "slug": "optisched",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,22 +9,27 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0f172a"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.optisched.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#1d4ed8",
+        "foregroundImage": "./assets/icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fb3d258d-8783-4693-89f4-7c798ba961dc"
+      }
+    },
+    "owner": "astrekkuno"
   }
 }

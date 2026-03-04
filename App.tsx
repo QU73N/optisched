@@ -1,20 +1,43 @@
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { AuthProvider } from './src/contexts/AuthContext';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import { ToastProvider } from './src/components/CustomToast';
+import { AlertProvider } from './src/contexts/AlertContext';
+import AppNavigator from './src/navigation/AppNavigator';
+import AnimatedSplash from './src/screens/shared/AnimatedSplash';
+import { startOfflineSync, flushQueue } from './src/utils/offlineQueue';
 
-export default function App() {
+function AppContent() {
+  const { colors } = useTheme();
+  const [splashDone, setSplashDone] = useState(false);
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
+      <AppNavigator />
+      {!splashDone && (
+        <AnimatedSplash onFinish={() => setSplashDone(true)} />
+      )}
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  useEffect(() => {
+    startOfflineSync();
+    flushQueue();
+  }, []);
+
+  return (
+    <ThemeProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <AlertProvider>
+            <AppContent />
+          </AlertProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </ThemeProvider>
+  );
+}
