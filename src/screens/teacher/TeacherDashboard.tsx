@@ -2,7 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     View, Text, ScrollView, StyleSheet,
-    ActivityIndicator, Modal, TextInput, Alert
+    ActivityIndicator, Modal, TextInput, Alert, Pressable
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -245,23 +245,23 @@ const TeacherDashboard: React.FC = () => {
                     <View style={styles.statBox}>
                         <MaterialIcons name="school" size={20} color="#60a5fa" />
                         <Text style={styles.statNumber}>{loading ? '...' : todaySchedule.length}</Text>
-                        <Text style={styles.statLabel}>📚 Classes Today</Text>
+                        <Text style={styles.statLabel}>Classes Today</Text>
                     </View>
                     <View style={[styles.statBox, styles.statBoxBorder]}>
                         <MaterialIcons name="book" size={20} color="#a78bfa" />
                         <Text style={styles.statNumber}>{loading ? '...' : schedules.length}</Text>
-                        <Text style={styles.statLabel}>📋 Total Entries</Text>
+                        <Text style={styles.statLabel}>Total Entries</Text>
                     </View>
                     <View style={styles.statBox}>
                         <MaterialIcons name="check-circle" size={20} color="#34d399" />
                         <Text style={styles.statNumber}>{todaySchedule.filter(s => s.status === 'finished').length}</Text>
-                        <Text style={styles.statLabel}>✅ Completed</Text>
+                        <Text style={styles.statLabel}>Completed</Text>
                     </View>
                 </View>
 
                 {/* Today's Schedule */}
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>📅 Today's Classes</Text>
+                    <Text style={styles.sectionTitle}>Today's Classes</Text>
                     <Text style={styles.sectionDay}>{isOffDay ? 'Monday (Tomorrow)' : scheduleDayName}</Text>
                 </View>
 
@@ -271,7 +271,7 @@ const TeacherDashboard: React.FC = () => {
                     <View style={styles.emptyState}>
                         <MaterialIcons name="event-available" size={48} color={Colors.slate600} />
                         <Text style={styles.emptyText}>No classes scheduled for today</Text>
-                        <Text style={styles.emptySubtext}>Enjoy your day off! 🎉</Text>
+                        <Text style={styles.emptySubtext}>Enjoy your day off!</Text>
                     </View>
                 ) : (
                     todaySchedule.map(item => {
@@ -310,44 +310,53 @@ const TeacherDashboard: React.FC = () => {
 
                 {/* Quick Actions */}
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>⚡ Quick Actions</Text>
+                    <Text style={styles.sectionTitle}>Quick Actions</Text>
                 </View>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20, marginHorizontal: 20 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginHorizontal: 20, marginBottom: 24 }}>
                     <AnimatedPressable
-                        style={{ width: '48%', alignItems: 'center', gap: 8, backgroundColor: '#1e293b', borderRadius: 14, paddingVertical: 16, borderWidth: 1, borderColor: '#334155' }}
+                        style={{ width: '48%', backgroundColor: '#1e293b', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' }}
                         onPress={() => navigation.navigate('Messages')}
                     >
-                        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(99,102,241,0.12)', justifyContent: 'center', alignItems: 'center' }}>
+                        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(99,102,241,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
                             <MaterialIcons name="chat" size={20} color="#818cf8" />
                         </View>
-                        <Text style={{ color: '#e2e8f0', fontSize: 11, fontWeight: '600' }} numberOfLines={1}>💬 Message Admin</Text>
+                        <Text style={{ color: '#e2e8f0', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>Message Admin</Text>
                     </AnimatedPressable>
+
                     <AnimatedPressable
-                        style={{ width: '48%', alignItems: 'center', gap: 8, backgroundColor: '#1e293b', borderRadius: 14, paddingVertical: 16, borderWidth: 1, borderColor: '#334155' }}
-                        onPress={() => navigation.navigate('Schedule')}
+                        style={{ width: '48%', backgroundColor: '#1e293b', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' }}
+                        onPress={() => {
+                            if (todaySchedule.length > 0) {
+                                setSelectedClassId(todaySchedule[0].id);
+                                setSelectedClassName(todaySchedule[0].subject);
+                                setShowRequestModal(true);
+                            }
+                        }}
                     >
-                        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(59,130,246,0.12)', justifyContent: 'center', alignItems: 'center' }}>
-                            <MaterialIcons name="calendar-month" size={20} color="#60a5fa" />
+                        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
+                            <MaterialIcons name="calendar-today" size={20} color="#60a5fa" />
                         </View>
-                        <Text style={{ color: '#e2e8f0', fontSize: 11, fontWeight: '600' }} numberOfLines={1}>📅 My Schedule</Text>
+                        <Text style={{ color: '#e2e8f0', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>My Schedule</Text>
                     </AnimatedPressable>
+
                     <AnimatedPressable
-                        style={{ width: '48%', alignItems: 'center', gap: 8, backgroundColor: '#1e293b', borderRadius: 14, paddingVertical: 16, borderWidth: 1, borderColor: '#334155' }}
+                        style={{ width: '48%', backgroundColor: '#1e293b', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' }}
                         onPress={() => setShowReportRoom(true)}
                     >
-                        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.12)', justifyContent: 'center', alignItems: 'center' }}>
+                        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
                             <MaterialIcons name="report-problem" size={20} color="#f59e0b" />
                         </View>
-                        <Text style={{ color: '#e2e8f0', fontSize: 11, fontWeight: '600' }} numberOfLines={1}>📝 Report Issue</Text>
+                        <Text style={{ color: '#e2e8f0', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>Report Issue</Text>
                     </AnimatedPressable>
+
                     <AnimatedPressable
-                        style={{ width: '48%', alignItems: 'center', gap: 8, backgroundColor: '#1e293b', borderRadius: 14, paddingVertical: 16, borderWidth: 1, borderColor: '#334155' }}
+                        style={{ width: '48%', backgroundColor: '#1e293b', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' }}
                         onPress={() => setShowEventModal(true)}
                     >
-                        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.12)', justifyContent: 'center', alignItems: 'center' }}>
+                        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
                             <MaterialIcons name="event" size={20} color="#34d399" />
                         </View>
-                        <Text style={{ color: '#e2e8f0', fontSize: 11, fontWeight: '600' }}>📌 Create Event</Text>
+                        <Text style={{ color: '#e2e8f0', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>Create Event</Text>
                     </AnimatedPressable>
                 </View>
 
@@ -486,8 +495,8 @@ const TeacherDashboard: React.FC = () => {
 
             {/* Schedule Change Request Modal */}
             <Modal visible={showRequestModal} animationType="slide" transparent>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowRequestModal(false)}>
+                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                             <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.white }}>Request Schedule Change</Text>
                             <AnimatedPressable onPress={() => setShowRequestModal(false)}>
@@ -497,12 +506,12 @@ const TeacherDashboard: React.FC = () => {
                         <Text style={{ color: Colors.slate400, marginBottom: 16 }}>For: {selectedClassName}</Text>
 
                         <Text style={{ fontSize: 10, fontWeight: '600', color: Colors.slate400, letterSpacing: 1.5, marginBottom: 6 }}>REQUEST TYPE</Text>
-                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
                             {(['reschedule', 'cancel', 'swap'] as const).map(t => (
-                                <AnimatedPressable key={t} onPress={() => setRequestType(t)}
-                                    style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: requestType === t ? Colors.primary : '#334155', backgroundColor: requestType === t ? 'rgba(59,130,246,0.1)' : 'transparent' }}>
-                                    <Text style={{ fontSize: 12, fontWeight: '500', color: requestType === t ? Colors.primary : Colors.slate400 }}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
-                                </AnimatedPressable>
+                                <Pressable key={t} onPress={() => setRequestType(t)}
+                                    style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: requestType === t ? Colors.primary : '#334155', backgroundColor: requestType === t ? 'rgba(59,130,246,0.1)' : 'transparent' }}>
+                                    <Text style={{ fontSize: 13, fontWeight: '600', color: requestType === t ? Colors.primary : Colors.slate400 }}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
+                                </Pressable>
                             ))}
                         </View>
 
@@ -519,14 +528,14 @@ const TeacherDashboard: React.FC = () => {
                             )}
                         </AnimatedPressable>
                     </View>
-                </View>
+                </Pressable>
             </Modal>
 
             {/* Announcements Modal */}
             <Modal visible={showAnnouncements} animationType="slide" transparent>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' }}>
-                    <SafeAreaView style={{ flex: 1 }}>
-                        <View style={{ flex: 1, backgroundColor: '#0f172a', marginTop: 40, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowAnnouncements(false)}>
+                    <SafeAreaView style={{ flex: 1 }} pointerEvents="box-none">
+                        <View style={{ flex: 1, backgroundColor: '#0f172a', marginTop: 40, borderTopLeftRadius: 24, borderTopRightRadius: 24 }} onStartShouldSetResponder={() => true}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#1e293b' }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                     <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(251,146,60,0.15)', justifyContent: 'center', alignItems: 'center' }}>
@@ -573,7 +582,7 @@ const TeacherDashboard: React.FC = () => {
                             </ScrollView>
                         </View>
                     </SafeAreaView>
-                </View>
+                </Pressable>
             </Modal>
 
             {/* Teacher FAB */}
@@ -584,9 +593,8 @@ const TeacherDashboard: React.FC = () => {
 
             {/* Quick Actions Modal */}
             <Modal visible={showQuickActions} animationType="slide" transparent>
-                <AnimatedPressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={() => setShowQuickActions(false)}>
-                    <View style={{ flex: 1 }} />
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 }}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }} onPress={() => setShowQuickActions(false)}>
+                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ alignItems: 'center', marginBottom: 16 }}>
                             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#475569' }} />
                         </View>
@@ -648,13 +656,13 @@ const TeacherDashboard: React.FC = () => {
                             <MaterialIcons name="chevron-right" size={20} color={Colors.slate600} />
                         </AnimatedPressable>
                     </View>
-                </AnimatedPressable>
+                </Pressable>
             </Modal>
 
             {/* Report Room Issue Modal */}
             <Modal visible={showReportRoom} animationType="slide" transparent>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowReportRoom(false)}>
+                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center' }}>
@@ -674,7 +682,7 @@ const TeacherDashboard: React.FC = () => {
                         />
                         <Text style={{ fontSize: 10, fontWeight: '600', color: Colors.slate400, letterSpacing: 1.5, marginBottom: 6 }}>ISSUE DESCRIPTION</Text>
                         <TextInput
-                            style={{ backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: Colors.white, fontSize: 14, height: 80, textAlignVertical: 'top' }}
+                            style={{ backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: Colors.white, fontSize: 14, height: 100, textAlignVertical: 'top', marginBottom: 20 }}
                             value={reportIssue} onChangeText={setReportIssue}
                             placeholder="Describe the issue (e.g. broken projector, no AC, door lock issue)" placeholderTextColor="#6b7280" multiline
                         />
@@ -714,13 +722,13 @@ const TeacherDashboard: React.FC = () => {
                             )}
                         </AnimatedPressable>
                     </View>
-                </View>
+                </Pressable>
             </Modal>
 
             {/* Message Admin Modal */}
             <Modal visible={showMessageAdmin} animationType="slide" transparent>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowMessageAdmin(false)}>
+                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(16,185,129,0.15)', justifyContent: 'center', alignItems: 'center' }}>
@@ -734,7 +742,7 @@ const TeacherDashboard: React.FC = () => {
                         </View>
                         <Text style={{ fontSize: 10, fontWeight: '600', color: Colors.slate400, letterSpacing: 1.5, marginBottom: 6 }}>YOUR MESSAGE</Text>
                         <TextInput
-                            style={{ backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: Colors.white, fontSize: 14, height: 100, textAlignVertical: 'top' }}
+                            style={{ backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: Colors.white, fontSize: 14, height: 120, textAlignVertical: 'top', marginBottom: 20 }}
                             value={adminMessage} onChangeText={setAdminMessage}
                             placeholder="Type your message for the admin (room concern, schedule question, etc.)" placeholderTextColor="#6b7280" multiline
                         />
@@ -763,12 +771,12 @@ const TeacherDashboard: React.FC = () => {
                             )}
                         </AnimatedPressable>
                     </View>
-                </View>
+                </Pressable>
             </Modal>
             {/* Teacher Announcement Modal */}
             <Modal visible={showTeacherAnnounce} animationType="slide" transparent>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowTeacherAnnounce(false)}>
+                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, maxHeight: '90%' }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center' }}>
@@ -782,7 +790,7 @@ const TeacherDashboard: React.FC = () => {
                         </View>
 
                         <Text style={{ fontSize: 10, fontWeight: '600', color: Colors.slate400, letterSpacing: 1.5, marginBottom: 6 }}>SELECT SECTION</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
                             {sections.map((sec: any) => (
                                 <AnimatedPressable key={sec.id} onPress={() => setAnnSection(sec.name)}
                                     style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: annSection === sec.name ? '#6366f1' : '#0f172a', borderWidth: 1, borderColor: annSection === sec.name ? '#6366f1' : '#334155', marginRight: 8 }}>
@@ -793,18 +801,18 @@ const TeacherDashboard: React.FC = () => {
 
                         <Text style={{ fontSize: 10, fontWeight: '600', color: Colors.slate400, letterSpacing: 1.5, marginBottom: 6 }}>TITLE</Text>
                         <TextInput
-                            style={{ backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: Colors.white, fontSize: 14, marginBottom: 12 }}
+                            style={{ backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: Colors.white, fontSize: 14, marginBottom: 20 }}
                             value={annTitle} onChangeText={setAnnTitle}
                             placeholder="e.g. Class Cancelled, Room Change" placeholderTextColor="#6b7280"
                         />
                         <Text style={{ fontSize: 10, fontWeight: '600', color: Colors.slate400, letterSpacing: 1.5, marginBottom: 6 }}>MESSAGE</Text>
                         <TextInput
-                            style={{ backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: Colors.white, fontSize: 14, height: 80, textAlignVertical: 'top' }}
+                            style={{ backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: Colors.white, fontSize: 14, height: 100, textAlignVertical: 'top', marginBottom: 20 }}
                             value={annContent} onChangeText={setAnnContent}
                             placeholder="Describe your announcement" placeholderTextColor="#6b7280" multiline
                         />
                         <Text style={{ fontSize: 10, fontWeight: '600', color: Colors.slate400, letterSpacing: 1.5, marginBottom: 6 }}>AUTO-EXPIRE AFTER</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
                             {[{ label: '1 Hour', val: '1h' }, { label: '6 Hours', val: '6h' }, { label: '12 Hours', val: '12h' }, { label: '1 Day', val: '1d' }, { label: '3 Days', val: '3d' }, { label: '7 Days', val: '7d' }, { label: 'Never', val: 'never' }].map(opt => (
                                 <AnimatedPressable key={opt.val} onPress={() => setAnnExpiry(opt.val)}
                                     style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: annExpiry === opt.val ? '#f59e0b' : '#0f172a', borderWidth: 1, borderColor: annExpiry === opt.val ? '#f59e0b' : '#334155', marginRight: 8 }}>
@@ -882,13 +890,13 @@ const TeacherDashboard: React.FC = () => {
                             </View>
                         )}
                     </View>
-                </View>
+                </Pressable>
             </Modal>
 
             {/* Edit Announcement Modal */}
             <Modal visible={!!editingAnn} animationType="fade" transparent>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', paddingHorizontal: 24 }}>
-                    <View style={{ backgroundColor: '#1e293b', borderRadius: 20, padding: 24 }}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', paddingHorizontal: 24 }} onPress={() => setEditingAnn(null)}>
+                    <View style={{ backgroundColor: '#1e293b', borderRadius: 20, padding: 24 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                             <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.white }}>Edit Announcement</Text>
                             <AnimatedPressable onPress={() => setEditingAnn(null)}>
@@ -918,13 +926,13 @@ const TeacherDashboard: React.FC = () => {
                             <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '600' }}>Save Changes</Text>
                         </AnimatedPressable>
                     </View>
-                </View>
+                </Pressable>
             </Modal>
 
             {/* Create Event Modal */}
             <Modal visible={showEventModal} animationType="slide" transparent>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}>
+                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowEventModal(false)}>
+                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.white }}>Create Event</Text>
                             <AnimatedPressable onPress={() => setShowEventModal(false)}>
@@ -1018,7 +1026,7 @@ const TeacherDashboard: React.FC = () => {
                             )}
                         </AnimatedPressable>
                     </View>
-                </View>
+                </Pressable>
             </Modal>
         </SafeAreaView>
     );

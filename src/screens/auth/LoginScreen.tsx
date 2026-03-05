@@ -85,7 +85,7 @@ const LoginScreen: React.FC = () => {
                 <View style={styles.logoSection}>
                     <View style={styles.logoContainer}>
                         <Image
-                            source={require('../../../assets/UseThis.png')}
+                            source={require('../../../assets/icon-removebg-preview.png')}
                             style={{ width: 100, height: 100, borderRadius: 20 }}
                             resizeMode="contain"
                         />

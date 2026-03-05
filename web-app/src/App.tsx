@@ -57,7 +57,7 @@ const RoleRedirect: React.FC = () => {
   return <Navigate to={`/${basePath}`} replace />;
 };
 
-// Login guard — redirect if already logged in
+// Login guard - redirect if already logged in
 const LoginGuard: React.FC = () => {
   const { session, role, isLoading } = useAuth();
   if (isLoading) return <div className="loading-screen"><div className="spinner" style={{ width: 40, height: 40 }} /></div>;
@@ -85,7 +85,7 @@ function App() {
           {/* Root redirect */}
           <Route path="/" element={<RoleRedirect />} />
 
-          {/* Admin routes — accessible by all admin sub-roles */}
+          {/* Admin routes - accessible by all admin sub-roles */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={adminRoles}><Layout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
             <Route path="users" element={<AdminManageUsers />} />

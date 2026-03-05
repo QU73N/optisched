@@ -216,7 +216,7 @@ const AppSettings: React.FC = () => {
                 <AnimatedPressable style={styles.backBtn}>
                     <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
                 </AnimatedPressable>
-                <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>⚙️ Settings</Text>
+                <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Settings</Text>
                 <View style={{ width: 32 }} />
             </View>
 
@@ -252,7 +252,7 @@ const AppSettings: React.FC = () => {
                 </AnimatedPressable>
 
                 {/* Account & Security */}
-                <Text style={styles.sectionLabel}>🔒 ACCOUNT & SECURITY</Text>
+                <Text style={styles.sectionLabel}>ACCOUNT & SECURITY</Text>
                 <View style={styles.card}>
                     <AnimatedPressable style={styles.settingRow} onPress={() => setShowPasswordModal(true)}>
                         <View style={styles.settingLeft}>
@@ -287,7 +287,7 @@ const AppSettings: React.FC = () => {
                 </View>
 
                 {/* Notifications */}
-                <Text style={styles.sectionLabel}>🔔 NOTIFICATIONS</Text>
+                <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
                 <View style={styles.card}>
                     <View style={styles.settingRow}>
                         <View style={styles.settingLeft}>
@@ -309,7 +309,7 @@ const AppSettings: React.FC = () => {
                 </View>
 
                 {/* Appearance */}
-                <Text style={styles.sectionLabel}>🎨 APPEARANCE</Text>
+                <Text style={styles.sectionLabel}>APPEARANCE</Text>
                 <View style={styles.card}>
                     <View style={styles.themeRow}>
                         {themes.map(t => (
@@ -332,7 +332,7 @@ const AppSettings: React.FC = () => {
                 </View>
 
                 {/* Legal */}
-                <Text style={styles.sectionLabel}>📄 LEGAL</Text>
+                <Text style={styles.sectionLabel}>LEGAL</Text>
                 <View style={styles.card}>
                     <AnimatedPressable style={styles.settingRow} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/privacy.html')}>
                         <View style={styles.settingLeft}>

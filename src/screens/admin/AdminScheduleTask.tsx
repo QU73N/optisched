@@ -156,7 +156,7 @@ const AdminScheduleTask: React.FC = () => {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <Text style={styles.headerTitle}>📝 Admin Tasks</Text>
+                    <Text style={styles.headerTitle}>Admin Tasks</Text>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                     <AnimatedPressable onPress={handleSortBy}>

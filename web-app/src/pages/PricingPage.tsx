@@ -106,7 +106,7 @@ const PricingPage: React.FC = () => {
 
             <div className="pricing-footer">
                 <p>All plans include unlimited users. <strong>Contact us</strong> for enterprise pricing.</p>
-                <p style={{ fontSize: 12, marginTop: 8, opacity: 0.6 }}>© 2026 OptiSched — STI College Meycauayan</p>
+                <p style={{ fontSize: 12, marginTop: 8, opacity: 0.6 }}>© 2026 OptiSched - STI College Meycauayan</p>
             </div>
         </div>
     );

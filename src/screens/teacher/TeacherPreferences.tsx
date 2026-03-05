@@ -174,7 +174,7 @@ const TeacherPreferences: React.FC = () => {
             {/* Header */}
             <View style={styles.header}>
                 <View style={{ width: 32 }} />
-                <Text style={styles.headerTitle}>⚙️ Preferences</Text>
+                <Text style={styles.headerTitle}>Preferences</Text>
                 <AnimatedPressable onPress={handleSave} disabled={saving}>
                     {saving ? (
                         <ActivityIndicator size="small" color={Colors.primary} />
@@ -202,7 +202,7 @@ const TeacherPreferences: React.FC = () => {
                 </View>
 
                 {/* Working Days */}
-                <Text style={styles.sectionLabel}>📅 PREFERRED WORKING DAYS</Text>
+                <Text style={styles.sectionLabel}>PREFERRED WORKING DAYS</Text>
                 <View style={styles.daysGrid}>
                     {days.map(day => (
                         <AnimatedPressable
@@ -245,7 +245,7 @@ const TeacherPreferences: React.FC = () => {
                 </View>
 
                 {/* Preferred Subjects */}
-                <Text style={styles.sectionLabel}>📚 PREFERRED SUBJECTS</Text>
+                <Text style={styles.sectionLabel}>PREFERRED SUBJECTS</Text>
                 <View style={styles.card}>
                     {preferredSubjectIds.length > 0 ? (
                         <View style={styles.prefTagsRow}>
@@ -266,7 +266,7 @@ const TeacherPreferences: React.FC = () => {
                 </View>
 
                 {/* Preferred Rooms */}
-                <Text style={styles.sectionLabel}>🏫 PREFERRED ROOMS</Text>
+                <Text style={styles.sectionLabel}>PREFERRED ROOMS</Text>
                 <View style={styles.card}>
                     {preferredRoomIds.length > 0 ? (
                         <View style={styles.prefTagsRow}>
@@ -287,7 +287,7 @@ const TeacherPreferences: React.FC = () => {
                 </View>
 
                 {/* Notes */}
-                <Text style={styles.sectionLabel}>📝 ADDITIONAL NOTES</Text>
+                <Text style={styles.sectionLabel}>ADDITIONAL NOTES</Text>
                 <View style={styles.card}>
                     <TextInput
                         style={styles.notesInput}

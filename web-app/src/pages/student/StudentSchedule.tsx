@@ -56,7 +56,7 @@ const StudentSchedule: React.FC = () => {
                 <div>
                     <h1 className="dashboard-title">My Schedule</h1>
                     <p className="dashboard-subtitle">
-                        {profile?.program && profile?.section ? `${profile.program} — Section ${profile.section}` : 'Class schedule'}
+                        {profile?.program && profile?.section ? `${profile.program} - Section ${profile.section}` : 'Class schedule'}
                     </p>
                 </div>
             </div>

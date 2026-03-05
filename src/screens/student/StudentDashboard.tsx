@@ -237,7 +237,7 @@ const StudentDashboard: React.FC = () => {
                                 ? `${todaySchedule.length} classes tomorrow`
                                 : todaySchedule.length > 0
                                     ? `${todaySchedule.filter(s => s.status === 'upcoming').length} upcoming classes`
-                                    : 'Enjoy your day off! 🎉'}
+                                    : 'Enjoy your day off!'}
                         </Text>
                     </View>
                 )}
@@ -248,7 +248,7 @@ const StudentDashboard: React.FC = () => {
                         <View style={[styles.quickLinkIcon, { backgroundColor: 'rgba(251,146,60,0.15)' }]}>
                             <MaterialIcons name="campaign" size={24} color="#fb923c" />
                         </View>
-                        <Text style={styles.quickLinkTitle}>📢 Announcements</Text>
+                        <Text style={styles.quickLinkTitle}>Announcements</Text>
                         {announcements.length > 0 && (
                             <View style={styles.quickLinkBadge}>
                                 <Text style={styles.quickLinkBadgeText}>{announcements.length} new</Text>
@@ -259,7 +259,7 @@ const StudentDashboard: React.FC = () => {
                         <View style={[styles.quickLinkIcon, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
                             <MaterialIcons name="calendar-month" size={24} color="#60a5fa" />
                         </View>
-                        <Text style={styles.quickLinkTitle}>📅 Full Schedule</Text>
+                        <Text style={styles.quickLinkTitle}>Full Schedule</Text>
                         <Text style={styles.quickLinkSub}>View all days</Text>
                     </AnimatedPressable>
                 </View>

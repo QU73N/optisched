@@ -1,7 +1,7 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    View, Text, ScrollView,  StyleSheet,
+    View, Text, ScrollView, StyleSheet,
     TextInput, ActivityIndicator, Image, FlatList, Alert
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -108,7 +108,7 @@ const TeacherToTeacherChat: React.FC = () => {
         try {
             const payload = {
                 sender_id: profile.id,
-                receiver_id: selectedTeacher.profile_id,
+                receiver_id: selectedTeacher.id,
                 sender_name: profile.full_name || 'Teacher',
                 receiver_name: selectedTeacher.full_name,
                 message: input.trim(),
@@ -274,9 +274,9 @@ const styles = StyleSheet.create({
     headerSub: { fontSize: 13, color: Colors.slate500, marginTop: 2 },
     teacherItem: {
         flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e293b',
-        borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#334155'
+        borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#334155'
     },
-    avatar: { width: 44, height: 44, borderRadius: 22 },
+    avatar: { width: 48, height: 48, borderRadius: 24 },
     avatarPlaceholder: { backgroundColor: '#6366f1', justifyContent: 'center', alignItems: 'center' },
     avatarLetter: { color: Colors.white, fontSize: 18, fontWeight: '700' },
     teacherName: { fontSize: 15, fontWeight: '600', color: Colors.white },

@@ -1,8 +1,8 @@
-// TypeScript interfaces for all database entities — shared with the mobile app
+// TypeScript interfaces for all database entities - shared with the mobile app
 
 export type UserRole = 'admin' | 'power_admin' | 'system_admin' | 'schedule_admin' | 'schedule_manager' | 'teacher' | 'student';
 
-// 'admin' is legacy — treated as power_admin in code
+// 'admin' is legacy - treated as power_admin in code
 export const ADMIN_ROLES: UserRole[] = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'];
 export const POWER_ADMIN_ROLES: UserRole[] = ['admin', 'power_admin'];
 

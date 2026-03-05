@@ -434,7 +434,7 @@ const AlertsConflicts: React.FC = () => {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.headerTop}>
-                    <Text style={styles.headerTitle}>⚠️ Alerts & Conflicts</Text>
+                    <Text style={styles.headerTitle}>Alerts & Conflicts</Text>
                     <AnimatedPressable onPress={handleRefresh}>
                         <MaterialIcons name="refresh" size={24} color={Colors.slate400} />
                     </AnimatedPressable>

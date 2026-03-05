@@ -25,7 +25,7 @@ const Layout: React.FC = () => {
     const isPowerAdmin = role ? POWER_ADMIN_ROLES.includes(role as UserRole) : false;
     const isAnyAdmin = role ? ADMIN_ROLES.includes(role as UserRole) : false;
 
-    // Power Admin / legacy admin — full access
+    // Power Admin / legacy admin - full access
     const powerAdminLinks = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/users', icon: Users, label: 'User Management' },
@@ -41,7 +41,7 @@ const Layout: React.FC = () => {
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 
-    // System Admin — user management only, no schedule access
+    // System Admin - user management only, no schedule access
     const systemAdminLinks = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/users', icon: Users, label: 'User Management' },
@@ -50,7 +50,7 @@ const Layout: React.FC = () => {
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 
-    // Schedule Admin — approves schedules, views all, manual/auto overrides
+    // Schedule Admin - approves schedules, views all, manual/auto overrides
     const scheduleAdminLinks = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
@@ -61,7 +61,7 @@ const Layout: React.FC = () => {
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 
-    // Schedule Manager (Program Heads) — creates schedules
+    // Schedule Manager (Program Heads) - creates schedules
     const scheduleManagerLinks = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
@@ -125,7 +125,7 @@ const Layout: React.FC = () => {
             >
                 <div className="sidebar-header">
                     <div className="sidebar-logo">
-                        <img src="/logo.png" alt="OptiSched" width={28} height={28} style={{ objectFit: 'contain' }} />
+                        <img src="/logo.png" alt="OptiSched" />
                     </div>
                     <div className="sidebar-brand">
                         <h2>OptiSched</h2>

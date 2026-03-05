@@ -105,7 +105,7 @@ const AdminDashboard: React.FC = () => {
         try {
             const { error } = await supabase
                 .from('schedule_change_requests')
-                .update({ status, admin_notes: notes || null, updated_at: new Date().toISOString() })
+                .update({ status, admin_notes: notes || null })
                 .eq('id', id);
 
             if (error) {

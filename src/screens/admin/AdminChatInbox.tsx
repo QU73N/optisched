@@ -346,7 +346,7 @@ const AdminChatInbox: React.FC = () => {
                     <MaterialIcons name="forum" size={22} color="#818cf8" />
                 </View>
                 <View style={{ flex: 1 }}>
-                    <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>💬 Messages</Text>
+                    <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Messages</Text>
                     <Text style={[styles.headerSub, { color: colors.textSecondary }]}>Teacher conversations & requests</Text>
                 </View>
                 {resetRequests.length > 0 && (

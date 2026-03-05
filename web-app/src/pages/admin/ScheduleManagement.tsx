@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { CalendarDays, Clock, MapPin, Filter, ChevronDown, Search } from 'lucide-react';
+import { Clock, MapPin, Search } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 interface ScheduleRow {

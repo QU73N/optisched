@@ -20,12 +20,12 @@ interface ChatMessage {
 }
 
 const AI_SUGGESTIONS = [
-    '🔍 Detect schedule conflicts',
-    '🔄 Fix schedule automatically',
-    '📊 Analyze room utilization',
-    '⚖️ Check teacher workload balance',
-    '📅 Show my schedule',
-    '📋 Show unassigned subjects',
+    'Detect schedule conflicts',
+    'Fix schedule automatically',
+    'Analyze room utilization',
+    'Check teacher workload balance',
+    'Show my schedule',
+    'Show unassigned subjects',
 ];
 
 const AIScheduleChat: React.FC = () => {

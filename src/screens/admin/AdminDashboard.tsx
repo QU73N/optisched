@@ -235,10 +235,10 @@ const AdminDashboard: React.FC = () => {
                     <View style={styles.heroContent}>
                         <View style={styles.heroLabelRow}>
                             <View style={styles.heroBadge}>
-                                <Text style={styles.heroBadgeText}>📊 Schedule Overview</Text>
+                                <Text style={styles.heroBadgeText}>Schedule Overview</Text>
                             </View>
                         </View>
-                        <Text style={styles.heroTitle}>🏫 Current Schedule</Text>
+                        <Text style={styles.heroTitle}>Current Schedule</Text>
                         <Text style={styles.heroSubtitle}>STI College Meycauayan</Text>
                         <View style={styles.heroStats}>
                             <View>
@@ -262,7 +262,7 @@ const AdminDashboard: React.FC = () => {
                         <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(251,146,60,0.15)' }]}>
                             <MaterialIcons name="campaign" size={20} color="#fb923c" />
                         </View>
-                        <Text style={styles.quickActionText} numberOfLines={1}>📢 Announce</Text>
+                        <Text style={styles.quickActionText} numberOfLines={1}>Announce</Text>
                     </AnimatedPressable>
                     <AnimatedPressable style={styles.quickAction} onPress={() => navigation.navigate('AI')}>
                         <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(99,102,241,0.15)' }]}>
@@ -281,7 +281,7 @@ const AdminDashboard: React.FC = () => {
                 {/* Upcoming Events */}
                 {upcomingEvents.length > 0 && (
                     <View style={{ marginBottom: 16 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#94a3b8', letterSpacing: 1.5, marginBottom: 8 }}>📆 UPCOMING EVENTS</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#94a3b8', letterSpacing: 1.5, marginBottom: 8 }}>UPCOMING EVENTS</Text>
                         {upcomingEvents.map((evt: any) => {
                             const isToday = evt.event_date === todayStr;
                             const dateLabel = isToday ? 'Today' : new Date(evt.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -405,7 +405,7 @@ const AdminDashboard: React.FC = () => {
                 {/* Recent Announcements */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionLabel}>📢 Recent Announcements</Text>
+                        <Text style={styles.sectionLabel}>Recent Announcements</Text>
                         <AnimatedPressable onPress={() => setShowAnnouncementModal(true)}>
                             <Text style={styles.viewAllText}>+ New</Text>
                         </AnimatedPressable>

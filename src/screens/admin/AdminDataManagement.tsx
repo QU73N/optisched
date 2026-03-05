@@ -48,9 +48,9 @@ const AdminDataManagement: React.FC = () => {
     const [secCount, setSecCount] = useState('30');
 
     const tabs: { key: TabName; label: string; icon: string; count: number }[] = [
-        { key: 'subjects', label: '📚 Subjects', icon: 'menu-book', count: subjects.length },
-        { key: 'rooms', label: '🏫 Rooms', icon: 'meeting-room', count: rooms.length },
-        { key: 'sections', label: '👥 Sections', icon: 'groups', count: sections.length },
+        { key: 'subjects', label: 'Subjects', icon: 'menu-book', count: subjects.length },
+        { key: 'rooms', label: 'Rooms', icon: 'meeting-room', count: rooms.length },
+        { key: 'sections', label: 'Sections', icon: 'groups', count: sections.length },
     ];
 
     const resetFields = () => {

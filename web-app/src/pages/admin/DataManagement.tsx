@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Database, BookOpen, MapPin, Users, Plus, Trash2, X, Loader2, Layers } from 'lucide-react';
+import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 type Tab = 'rooms' | 'subjects' | 'sections';

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { CalendarDays, Clock, MapPin, BookOpen } from 'lucide-react';
+import { Clock, MapPin } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 interface ScheduleItem {

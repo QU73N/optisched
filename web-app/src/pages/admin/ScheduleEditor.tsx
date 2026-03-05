@@ -128,7 +128,7 @@ const ScheduleEditor: React.FC = () => {
         ? schedules
         : schedules.filter(s => s.day_of_week === filterDay);
 
-    const getTimeSlotIndex = (time: string) => TIME_SLOTS.indexOf(time);
+
 
     return (
         <div className="dashboard fade-in">

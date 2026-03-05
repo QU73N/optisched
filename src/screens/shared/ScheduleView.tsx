@@ -1,8 +1,8 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-    View, Text, ScrollView,  StyleSheet,
-    ActivityIndicator, Dimensions, Modal
+    View, Text, ScrollView, StyleSheet,
+    ActivityIndicator, Dimensions, Modal, Pressable
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -41,6 +41,8 @@ const ScheduleView: React.FC = () => {
     const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline');
     const [selectedItem, setSelectedItem] = useState<typeof scheduleItems[0] | null>(null);
     const [weekOffset, setWeekOffset] = useState(0);
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [pickerMonthOffset, setPickerMonthOffset] = useState(0);
 
     // Refresh "now" every minute to keep dates current
     useEffect(() => {
@@ -238,6 +240,93 @@ const ScheduleView: React.FC = () => {
 
     const CONTENT_WIDTH = SCREEN_WIDTH - 56 - 20 - 48; // reserve 48px for event indicators
 
+    const renderDatePicker = () => {
+        const firstDay = new Date(now.getFullYear(), now.getMonth() + pickerMonthOffset, 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + pickerMonthOffset + 1, 0);
+        const startingDayOfWeek = firstDay.getDay();
+        const daysInMonth = lastDay.getDate();
+
+        const days = [];
+        for (let i = 0; i < startingDayOfWeek; i++) days.push(null);
+        for (let i = 1; i <= daysInMonth; i++) days.push(i);
+
+        const monthName = firstDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+        return (
+            <Modal visible={showDatePicker} transparent animationType="fade">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                    <View style={{ width: '100%', maxWidth: 360, backgroundColor: '#1e293b', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#334155' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <AnimatedPressable onPress={() => setPickerMonthOffset(o => o - 1)} style={{ padding: 8 }}>
+                                <MaterialIcons name="chevron-left" size={24} color={Colors.white} />
+                            </AnimatedPressable>
+                            <Text style={{ color: Colors.white, fontSize: 16, fontWeight: '700' }}>{monthName}</Text>
+                            <AnimatedPressable onPress={() => setPickerMonthOffset(o => o + 1)} style={{ padding: 8 }}>
+                                <MaterialIcons name="chevron-right" size={24} color={Colors.white} />
+                            </AnimatedPressable>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+                                <Text key={d} style={{ flex: 1, textAlign: 'center', color: Colors.slate400, fontSize: 13, fontWeight: '600' }}>{d}</Text>
+                            ))}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                            {days.map((d, i) => (
+                                <View key={i} style={{ width: '14.28%', aspectRatio: 1, padding: 2 }}>
+                                    {d && (
+                                        <AnimatedPressable
+                                            style={{ flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 8, backgroundColor: 'rgba(99,102,241,0.05)' }}
+                                            onPress={() => {
+                                                const selectedDate = new Date(firstDay.getFullYear(), firstDay.getMonth(), d);
+
+                                                // Calculate weeks difference
+                                                // First, find the "Monday" of the selected date's week
+                                                const selDayOfWeek = selectedDate.getDay();
+                                                const selMondayOffset = selDayOfWeek === 0 ? 1 : 1 - selDayOfWeek;
+                                                const selMonday = new Date(selectedDate);
+                                                selMonday.setDate(selectedDate.getDate() + selMondayOffset);
+                                                selMonday.setHours(0, 0, 0, 0);
+
+                                                const currDayOfWeek = now.getDay();
+                                                const currMondayOffset = currDayOfWeek === 0 ? 1 : 1 - currDayOfWeek;
+                                                const currMonday = new Date(now);
+                                                currMonday.setDate(now.getDate() + currMondayOffset);
+                                                currMonday.setHours(0, 0, 0, 0);
+
+                                                const diffTime = selMonday.getTime() - currMonday.getTime();
+                                                const diffWeeks = Math.round(diffTime / (1000 * 60 * 60 * 24 * 7));
+
+                                                setWeekOffset(diffWeeks);
+
+                                                // In OptiSched, 0=Mon, 5=Sat. If they click Sunday (0), we snap to Monday.
+                                                let targetDay = selDayOfWeek === 0 ? 0 : selDayOfWeek - 1;
+                                                setSelectedDay(targetDay);
+
+                                                setShowDatePicker(false);
+                                                // reset for next time they open
+                                                setTimeout(() => setPickerMonthOffset(0), 300);
+                                            }}
+                                        >
+                                            <Text style={{ color: Colors.white, fontSize: 14, fontWeight: '500' }}>{d}</Text>
+                                        </AnimatedPressable>
+                                    )}
+                                </View>
+                            ))}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
+                            <AnimatedPressable onPress={() => { setShowDatePicker(false); setPickerMonthOffset(0); }} style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}>
+                                <Text style={{ color: Colors.slate300, fontWeight: '600' }}>Cancel</Text>
+                            </AnimatedPressable>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        );
+    };
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
@@ -270,6 +359,9 @@ const ScheduleView: React.FC = () => {
                                 <Text style={{ color: '#818cf8', fontSize: 11, fontWeight: '600' }}>Today</Text>
                             </AnimatedPressable>
                         )}
+                        <AnimatedPressable onPress={() => setShowDatePicker(true)} style={{ padding: 5, backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 8 }}>
+                            <MaterialIcons name="calendar-today" size={18} color="#818cf8" />
+                        </AnimatedPressable>
                         <AnimatedPressable onPress={() => setWeekOffset(w => w + 1)} style={{ padding: 5, backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 8 }}>
                             <MaterialIcons name="chevron-right" size={18} color="#818cf8" />
                         </AnimatedPressable>
@@ -282,7 +374,7 @@ const ScheduleView: React.FC = () => {
                         const isActive = selectedDay === index;
                         const isTodayItem = currentDayIdx > 0 && currentDayIdx < 7 && index === currentDayIdx - 1;
                         return (
-                            <AnimatedPressable
+                            <Pressable
                                 key={day}
                                 style={[styles.calendarDay, isActive && styles.calendarDayActive]}
                                 onPress={() => setSelectedDay(index)}
@@ -290,7 +382,7 @@ const ScheduleView: React.FC = () => {
                                 <Text style={[styles.calendarDayLabel, isActive && styles.calendarDayLabelActive]}>{day}</Text>
                                 <Text style={[styles.calendarDate, isActive && styles.calendarDateActive]}>{dates[index].date}</Text>
                                 {isTodayItem && !isActive && <View style={styles.todayDot} />}
-                            </AnimatedPressable>
+                            </Pressable>
                         );
                     })}
                 </View>
@@ -371,7 +463,7 @@ const ScheduleView: React.FC = () => {
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <View style={{ flex: 1 }}>
                                             <Text style={[styles.blockSubject, { color: item.color.text }]} numberOfLines={1}>{item.subject}</Text>
-                                            <Text style={styles.blockCode} numberOfLines={1}>{item.code}{item.section ? ` • ${item.section}` : ''}</Text>
+                                            <Text style={[styles.blockCode, { color: item.color.text + '99' }]} numberOfLines={1}>{item.code}{item.section ? ` • ${item.section}` : ''}</Text>
                                         </View>
                                         {totalCols <= 2 && (
                                             <View style={[styles.timeBadge, { backgroundColor: item.color.solid + '30' }]}>
@@ -381,12 +473,12 @@ const ScheduleView: React.FC = () => {
                                     </View>
                                     {height > 55 && (
                                         <View style={{ flexDirection: 'row', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                                            <View style={styles.blockMeta}><MaterialIcons name="schedule" size={10} color={Colors.slate500} /><Text style={styles.blockMetaText}>{formatTime(item.startTime)}-{formatTime(item.endTime)}</Text></View>
-                                            <View style={styles.blockMeta}><MaterialIcons name="meeting-room" size={10} color={Colors.slate500} /><Text style={styles.blockMetaText}>{item.room}</Text></View>
+                                            <View style={styles.blockMeta}><MaterialIcons name="schedule" size={10} color={item.color.text + '99'} /><Text style={[styles.blockMetaText, { color: item.color.text + '99' }]}>{formatTime(item.startTime)}-{formatTime(item.endTime)}</Text></View>
+                                            <View style={styles.blockMeta}><MaterialIcons name="meeting-room" size={10} color={item.color.text + '99'} /><Text style={[styles.blockMetaText, { color: item.color.text + '99' }]}>{item.room}</Text></View>
                                         </View>
                                     )}
                                     {height > 75 && (
-                                        <View style={[styles.blockMeta, { marginTop: 2 }]}><MaterialIcons name="person" size={10} color={Colors.slate500} /><Text style={styles.blockMetaText} numberOfLines={1}>{item.instructor}</Text></View>
+                                        <View style={[styles.blockMeta, { marginTop: 2 }]}><MaterialIcons name="person" size={10} color={item.color.text + '99'} /><Text style={[styles.blockMetaText, { color: item.color.text + '99' }]} numberOfLines={1}>{item.instructor}</Text></View>
                                     )}
                                 </AnimatedPressable>
                             );
@@ -511,6 +603,7 @@ const ScheduleView: React.FC = () => {
                     </AnimatedPressable>
                 </AnimatedPressable>
             </Modal>
+            {renderDatePicker()}
         </SafeAreaView>
     );
 };

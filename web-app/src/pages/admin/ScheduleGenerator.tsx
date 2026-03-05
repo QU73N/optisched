@@ -138,7 +138,7 @@ const ScheduleGenerator: React.FC = () => {
                             }
                         }
                     }
-                    if (!placed) errors.push(`Could not place "${sub.name}" — all slots full`);
+                    if (!placed) errors.push(`Could not place "${sub.name}" - all slots full`);
                 }
 
                 const thisResult: GenResult = { total: shuffled.length, placed: entries.length, conflicts: 0, entries, errors };

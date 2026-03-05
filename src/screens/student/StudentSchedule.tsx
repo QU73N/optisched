@@ -209,7 +209,7 @@ const StudentSchedule: React.FC = () => {
             <View style={styles.header}>
                 <View style={styles.headerTop}>
                     <View>
-                        <Text style={styles.greeting}>📅 My Schedule</Text>
+                        <Text style={styles.greeting}>My Schedule</Text>
                         <Text style={styles.headerSub}>{currentMonth}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

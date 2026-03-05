@@ -3,6 +3,7 @@ import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
 import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 
 // Screens
@@ -42,7 +43,7 @@ const OptiSchedDarkTheme = {
 // Screen shown to admin users
 const AdminWebOnlyScreen = () => (
     <View style={styles.adminWebOnly}>
-        <Text style={styles.adminWebOnlyIcon}>🌐</Text>
+        <MaterialIcons name="language" size={60} color={Colors.primary} />
         <Text style={styles.adminWebOnlyTitle}>Web App Only</Text>
         <Text style={styles.adminWebOnlyText}>
             Admin features are only available on the web app.{'\n\n'}

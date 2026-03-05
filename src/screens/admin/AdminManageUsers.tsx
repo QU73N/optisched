@@ -312,7 +312,7 @@ const AdminManageUsers: React.FC = () => {
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>👥 User Management</Text>
+                <Text style={styles.headerTitle}>User Management</Text>
                 <AnimatedPressable style={styles.addBtn} onPress={() => setShowModal(true)}>
                     <MaterialIcons name="person-add" size={20} color={Colors.white} />
                     <Text style={styles.addBtnText}>Add User</Text>

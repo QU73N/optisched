@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Session, User } from '@supabase/supabase-js';
 import type { Profile, UserRole } from '../types/database';
@@ -24,7 +25,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => {
         // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+            if (error) {
+                console.warn('Session recovery failed:', error.message);
+                // Invalid refresh token - clear session and redirect to login
+                supabase.auth.signOut();
+                setSession(null);
+                setUser(null);
+                setProfile(null);
+                setRole(null);
+                setIsLoading(false);
+                return;
+            }
             setSession(session);
             setUser(session?.user ?? null);
             if (session?.user) {
