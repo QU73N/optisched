@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
 const ThemeToggle: React.FC = () => {
-    const [theme, setTheme] = useState(() => localStorage.getItem('optisched-theme') || 'dark');
+    const [theme, setTheme] = useState(() => localStorage.getItem('optisched-theme') || 'light');
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);

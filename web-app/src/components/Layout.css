@@ -18,7 +18,7 @@
     z-index: 50;
     overflow-y: auto;
     overflow-x: hidden;
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Collapsed sidebar */
@@ -32,9 +32,8 @@
 .sidebar-collapsed .sidebar-logout {
     opacity: 0;
     pointer-events: none;
-    width: 0;
-    overflow: hidden;
-    transition: opacity 0.15s ease;
+    visibility: hidden;
+    transition: opacity 0.15s ease, visibility 0s 0.15s;
 }
 
 .sidebar:not(.sidebar-collapsed) .sidebar-brand,
@@ -43,23 +42,22 @@
 .sidebar:not(.sidebar-collapsed) .sidebar-logout {
     opacity: 1;
     pointer-events: auto;
-    width: auto;
-    transition: opacity 0.25s ease 0.1s;
+    visibility: visible;
+    transition: opacity 0.2s ease 0.08s, visibility 0s 0s;
 }
 
 .sidebar-header {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 20px 20px 24px;
+    padding: 20px 10px 24px 10px;
     border-bottom: 1px solid var(--border-default);
     white-space: nowrap;
     overflow: hidden;
 }
 
 .sidebar-collapsed .sidebar-header {
-    justify-content: center;
-    padding: 20px 14px 24px;
+    padding: 20px 10px 24px 10px;
 }
 
 .sidebar-logo {
@@ -72,6 +70,7 @@
     background: transparent;
     color: white;
     flex-shrink: 0;
+    margin-left: 0;
 }
 
 .sidebar-logo img {
@@ -95,7 +94,7 @@
 /* ========== NAV LINKS ========== */
 .sidebar-nav {
     flex: 1;
-    padding: 12px 12px;
+    padding: 12px 10px;
     display: flex;
     flex-direction: column;
     gap: 1px;
@@ -126,24 +125,24 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 12px;
+    padding: 10px 12px 10px 14px;
     border-radius: var(--radius-md);
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 500;
-    transition: all var(--transition-fast);
+    transition: background var(--transition-fast), color var(--transition-fast);
     text-decoration: none;
     white-space: nowrap;
     overflow: hidden;
 }
 
 .sidebar-collapsed .sidebar-link {
-    justify-content: center;
-    padding: 10px;
+    padding: 10px 12px 10px 14px;
 }
 
 .sidebar-link svg {
     flex-shrink: 0;
+    min-width: 18px;
 }
 
 .sidebar-link:hover {
@@ -166,15 +165,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 16px 20px;
+    padding: 16px 10px 20px 10px;
     border-top: 1px solid var(--border-default);
     overflow: hidden;
     white-space: nowrap;
 }
 
 .sidebar-collapsed .sidebar-footer {
-    justify-content: center;
-    padding: 16px 14px 20px;
+    padding: 16px 10px 20px 10px;
 }
 
 .sidebar-user {
@@ -183,6 +181,7 @@
     gap: 10px;
     flex: 1;
     min-width: 0;
+    margin-left: 4px;
 }
 
 .sidebar-avatar {

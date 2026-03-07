@@ -4,10 +4,10 @@
     "slug": "optisched",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo-white.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/logo-white.png",
       "resizeMode": "contain",
       "backgroundColor": "#0f172a"
     },
@@ -18,12 +18,12 @@
       "package": "com.optisched.app",
       "adaptiveIcon": {
         "backgroundColor": "#1d4ed8",
-        "foregroundImage": "./assets/icon.png"
+        "foregroundImage": "./assets/logo-white.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/logo-white.png"
     },
     "extra": {
       "eas": {

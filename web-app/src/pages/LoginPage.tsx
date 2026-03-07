@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Lock, Mail, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react';
@@ -11,6 +11,12 @@ const LoginPage: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [theme] = useState(() => localStorage.getItem('optisched-theme') || 'light');
+
+    useEffect(() => {
+        // Apply theme on mount
+        document.documentElement.setAttribute('data-theme', theme);
+    }, [theme]);
 
     // Forgot password state
     const [showForgot, setShowForgot] = useState(false);
@@ -55,8 +61,8 @@ const LoginPage: React.FC = () => {
             } else {
                 setForgotSent(true);
             }
-        } catch (err: any) {
-            setForgotError(err?.message || 'Failed to send reset email');
+        } catch (err: unknown) {
+            setForgotError((err as Error)?.message || 'Failed to send reset email');
         }
         setForgotLoading(false);
     };
@@ -69,7 +75,7 @@ const LoginPage: React.FC = () => {
                 <div className="login-container fade-in">
                     <div className="login-logo-section">
                         <div className="login-logo">
-                            <img src="/logo.png" alt="OptiSched" width={56} height={56} style={{ objectFit: 'contain' }} />
+                            <img src={theme === 'light' ? '/logo-with-text.png' : '/logo-white-with-text.png'} alt="OptiSched" width={176} height={176} style={{ objectFit: 'contain' }} />
                         </div>
                         <h1 className="login-title">Reset Password</h1>
                         <p className="login-subtitle">
@@ -151,13 +157,10 @@ const LoginPage: React.FC = () => {
             <div className="login-container fade-in">
                 <div className="login-logo-section">
                     <div className="login-logo">
-                        <img src="/logo.png" alt="OptiSched" width={56} height={56} style={{ objectFit: 'contain' }} />
+                        <img src={theme === 'light' ? '/logo-with-text.png' : '/logo-white-with-text.png'} alt="OptiSched" width={192} height={192} style={{ objectFit: 'contain' }} />
                     </div>
-                    <h1 className="login-title">OptiSched</h1>
                     <p className="login-subtitle">
                         Smart Scheduling, Simple Solutions
-                        <br />
-                        <span>STI College Meycauayan</span>
                     </p>
                 </div>
 
@@ -246,3 +249,6 @@ const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
+
+
+

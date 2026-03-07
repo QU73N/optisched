@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { User, Bell, Shield, Palette, LogOut } from 'lucide-react';
 import '../admin/Dashboard.css';
@@ -14,10 +14,15 @@ const AppSettings: React.FC = () => {
     });
 
     const [appearance, setAppearance] = useState({
-        theme: 'dark',
+        theme: localStorage.getItem('optisched-theme') || 'light',
         compactMode: false,
         showAnimations: true,
     });
+
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', appearance.theme);
+        localStorage.setItem('optisched-theme', appearance.theme);
+    }, [appearance.theme]);
 
     const toggleNotif = (key: keyof typeof notifications) => {
         setNotifications(prev => ({ ...prev, [key]: !prev[key] }));

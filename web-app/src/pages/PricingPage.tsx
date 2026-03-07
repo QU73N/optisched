@@ -42,7 +42,7 @@ const PricingPage: React.FC = () => {
                     Back
                 </button>
                 <div className="pricing-logo">
-                    <img src="/logo.png" alt="OptiSched" width={36} height={36} />
+                    <img src="/logo-white.png" alt="OptiSched" width={36} height={36} />
                     <span>OptiSched</span>
                 </div>
             </header>

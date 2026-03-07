@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ADMIN_ROLES, POWER_ADMIN_ROLES, ROLE_DISPLAY_NAMES } from '../types/database';
@@ -9,13 +9,29 @@ import {
     History, Edit
 } from 'lucide-react';
 import FloatingOptiBot from './FloatingOptiBot';
-import ThemeToggle from './ThemeToggle';
 import './Layout.css';
 
 const Layout: React.FC = () => {
     const { profile, role, signOut } = useAuth();
     const navigate = useNavigate();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+    const [theme, setTheme] = useState(() => localStorage.getItem('optisched-theme') || 'light');
+
+    useEffect(() => {
+        const handleStorageChange = () => {
+            setTheme(localStorage.getItem('optisched-theme') || 'light');
+        };
+        window.addEventListener('storage', handleStorageChange);
+        const observer = new MutationObserver(() => {
+            const newTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            setTheme(newTheme);
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+            observer.disconnect();
+        };
+    }, []);
 
     const handleSignOut = async () => {
         await signOut();
@@ -125,7 +141,7 @@ const Layout: React.FC = () => {
             >
                 <div className="sidebar-header">
                     <div className="sidebar-logo">
-                        <img src="/logo.png" alt="OptiSched" />
+                        <img src={theme === 'light' ? '/logo.png' : '/logo-white.png'} alt="OptiSched" />
                     </div>
                     <div className="sidebar-brand">
                         <h2>OptiSched</h2>
@@ -161,12 +177,9 @@ const Layout: React.FC = () => {
                             <span className={getRoleBadgeClass()} style={{ fontSize: 8 }}>{displayRole}</span>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <ThemeToggle />
-                        <button className="sidebar-logout" onClick={handleSignOut} title="Sign Out">
-                            <LogOut size={18} />
-                        </button>
-                    </div>
+                    <button className="sidebar-logout" onClick={handleSignOut} title="Sign Out">
+                        <LogOut size={18} />
+                    </button>
                 </div>
             </aside>
 
