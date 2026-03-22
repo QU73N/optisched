@@ -108,7 +108,7 @@ const TeacherToTeacherChat: React.FC = () => {
         try {
             const payload = {
                 sender_id: profile.id,
-                receiver_id: selectedTeacher.id,
+                receiver_id: selectedTeacher.profile_id,
                 sender_name: profile.full_name || 'Teacher',
                 receiver_name: selectedTeacher.full_name,
                 message: input.trim(),
