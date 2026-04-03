@@ -14,7 +14,13 @@ import ScheduleViews from './pages/admin/ScheduleViews';
 import CommunicationHub from './pages/shared/CommunicationHub';
 import AuditLog from './pages/admin/AuditLog';
 import ScheduleEditor from './pages/admin/ScheduleEditor';
+import FacultyHub from './pages/admin/FacultyHub';
+import AIScheduleChat from './pages/admin/AIScheduleChat';
+import AdminScheduleTasks from './pages/admin/AdminScheduleTasks';
 import AppSettings from './pages/shared/AppSettings';
+import OptiBotPage from './pages/shared/OptiBotPage';
+import TeacherToTeacherChat from './pages/teacher/TeacherToTeacherChat';
+import TeacherChatHub from './pages/teacher/TeacherChatHub';
 
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import TeacherSchedule from './pages/teacher/TeacherSchedule';
@@ -98,6 +104,10 @@ function App() {
             <Route path="messages" element={<CommunicationHub />} />
             <Route path="audit" element={<AuditLog />} />
             <Route path="editor" element={<ScheduleEditor />} />
+            <Route path="faculty" element={<FacultyHub />} />
+            <Route path="ai-chat" element={<AIScheduleChat />} />
+            <Route path="tasks" element={<AdminScheduleTasks />} />
+            <Route path="optibot" element={<OptiBotPage />} />
             <Route path="settings" element={<AppSettings />} />
 
           </Route>
@@ -107,7 +117,9 @@ function App() {
             <Route index element={<TeacherDashboard />} />
             <Route path="schedule" element={<TeacherSchedule />} />
             <Route path="preferences" element={<TeacherPreferences />} />
-            <Route path="chat" element={<CommunicationHub />} />
+            <Route path="chat" element={<TeacherChatHub />} />
+            <Route path="peer-chat" element={<TeacherToTeacherChat />} />
+            <Route path="optibot" element={<OptiBotPage />} />
             <Route path="settings" element={<AppSettings />} />
           </Route>
 
@@ -115,6 +127,7 @@ function App() {
           <Route path="/student" element={<ProtectedRoute allowedRoles={['student']}><Layout /></ProtectedRoute>}>
             <Route index element={<StudentDashboard />} />
             <Route path="schedule" element={<StudentSchedule />} />
+            <Route path="optibot" element={<OptiBotPage />} />
             <Route path="settings" element={<AppSettings />} />
           </Route>
 

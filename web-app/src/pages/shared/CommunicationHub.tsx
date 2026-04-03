@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { Send, Users, Search, ArrowLeft, MessageSquare } from 'lucide-react';
+import { Send, Users, Search, ArrowLeft, MessageSquare, KeyRound } from 'lucide-react';
+import PasswordResetManager from '../admin/PasswordResetManager';
 import '../admin/Dashboard.css';
 
 interface Message {
@@ -41,7 +42,7 @@ const CommunicationHub: React.FC = () => {
     const [newMessage, setNewMessage] = useState('');
     const [search, setSearch] = useState('');
     const [sending, setSending] = useState(false);
-    const [sidebarTab, setSidebarTab] = useState<'conversations' | 'teachers'>('conversations');
+    const [sidebarTab, setSidebarTab] = useState<'conversations' | 'teachers' | 'resets'>('conversations');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isAdmin = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'].includes(profile?.role || '');
 
@@ -243,6 +244,20 @@ const CommunicationHub: React.FC = () => {
                             <Users size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
                             All Teachers
                         </button>
+                        {isAdmin && (
+                            <button
+                                onClick={() => setSidebarTab('resets')}
+                                style={{
+                                    flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
+                                    background: sidebarTab === 'resets' ? '#f59e0b' : 'var(--bg-secondary)',
+                                    color: sidebarTab === 'resets' ? '#fff' : 'var(--text-secondary)',
+                                    fontWeight: 600, fontSize: 12, transition: 'all 150ms ease',
+                                }}
+                            >
+                                <KeyRound size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                                Resets
+                            </button>
+                        )}
                     </div>
 
                     {/* Search */}
@@ -256,7 +271,9 @@ const CommunicationHub: React.FC = () => {
 
                     {/* Content */}
                     <div style={{ flex: 1, overflowY: 'auto' }}>
-                        {sidebarTab === 'conversations' ? (
+                        {sidebarTab === 'resets' && isAdmin ? (
+                            <PasswordResetManager />
+                        ) : sidebarTab === 'conversations' ? (
                             /* Conversations Tab */
                             filteredThreads.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>

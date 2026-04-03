@@ -1,154 +1,312 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Clock, Save, Loader2 } from 'lucide-react';
-import '../admin/Dashboard.css';
+import { useAuth } from '../../contexts/AuthContext';
+import { Save, Clock, Calendar, BookOpen, CheckCircle, Loader2, MapPin } from 'lucide-react';
 
-const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const timeSlots = ['Morning (7:00 - 12:00)', 'Afternoon (12:00 - 17:00)', 'Evening (17:00 - 21:00)'];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const TIME_SLOTS = [
+    '7:00', '7:30', '8:00', '8:30', '9:00', '9:30', '10:00', '10:30',
+    '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+    '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'
+];
 
 const TeacherPreferences: React.FC = () => {
     const { profile } = useAuth();
-    const [preferences, setPreferences] = useState<Record<string, string[]>>({});
-    const [maxHours, setMaxHours] = useState(40);
+
+    const [availability, setAvailability] = useState<Record<string, boolean>>({});
+    const [preferredDays, setPreferredDays] = useState<string[]>([]);
+    const [preferredTimeStart, setPreferredTimeStart] = useState('8:00');
+    const [preferredTimeEnd, setPreferredTimeEnd] = useState('17:00');
+    const [maxClassesPerDay, setMaxClassesPerDay] = useState(5);
+    const [maxConsecutiveClasses, setMaxConsecutiveClasses] = useState(3);
+    const [preferredSubjects, setPreferredSubjects] = useState<string[]>([]);
+    const [preferredRooms, setPreferredRooms] = useState<string[]>([]);
     const [notes, setNotes] = useState('');
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    const [allSubjects, setAllSubjects] = useState<any[]>([]);
+    const [allRooms, setAllRooms] = useState<any[]>([]);
 
     useEffect(() => {
-        if (profile?.id) loadPreferences();
+        const fetchData = async () => {
+            const [subRes, roomRes] = await Promise.all([
+                supabase.from('subjects').select('name'),
+                supabase.from('rooms').select('name')
+            ]);
+            if (subRes.data) setAllSubjects(subRes.data);
+            if (roomRes.data) setAllRooms(roomRes.data);
+        };
+        fetchData();
+    }, []);
+
+    // Load existing preferences
+    useEffect(() => {
+        const fetchPreferences = async () => {
+            if (!profile?.id) return;
+            setLoading(true);
+            try {
+                const { data } = await supabase
+                    .from('teacher_preferences')
+                    .select('*')
+                    .eq('teacher_id', profile.id)
+                    .single();
+
+                if (data) {
+                    setAvailability(data.availability || {});
+                    setPreferredDays(data.preferred_days || []);
+                    setPreferredTimeStart(data.preferred_time_start || '8:00');
+                    setPreferredTimeEnd(data.preferred_time_end || '17:00');
+                    setMaxClassesPerDay(data.max_classes_per_day || 5);
+                    setMaxConsecutiveClasses(data.max_consecutive_classes || 3);
+                    setPreferredSubjects(data.preferred_subjects || []);
+                    setPreferredRooms(data.preferred_rooms || []);
+                    setNotes(data.notes || '');
+                }
+            } catch (err) {
+                // No preferences yet
+            }
+            setLoading(false);
+        };
+        fetchPreferences();
     }, [profile]);
 
-    const loadPreferences = async () => {
-        try {
-            const { data: teacher } = await supabase
-                .from('teachers').select('id, max_hours').eq('profile_id', profile!.id).single();
-            if (teacher) {
-                setMaxHours(teacher.max_hours || 40);
-                const { data: prefs } = await supabase
-                    .from('teacher_preferences').select('*').eq('teacher_id', teacher.id);
-                if (prefs && prefs.length > 0) {
-                    const parsed = prefs[0];
-                    setPreferences(parsed.preferred_slots || {});
-                    setNotes(parsed.notes || '');
-                }
-            }
-        } catch (err) { console.error(err); }
+    const toggleAvailability = (day: string, time: string) => {
+        const key = `${day}-${time}`;
+        setAvailability(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const toggleSlot = (day: string, slot: string) => {
-        setPreferences(prev => {
-            const curr = prev[day] || [];
-            return { ...prev, [day]: curr.includes(slot) ? curr.filter(s => s !== slot) : [...curr, slot] };
-        });
+    const toggleDay = (day: string) => {
+        setPreferredDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
+    };
+
+    const toggleSubject = (subName: string) => {
+        setPreferredSubjects(prev => prev.includes(subName) ? prev.filter(s => s !== subName) : [...prev, subName]);
+    };
+
+    const toggleRoom = (roomName: string) => {
+        setPreferredRooms(prev => prev.includes(roomName) ? prev.filter(r => r !== roomName) : [...prev, roomName]);
     };
 
     const handleSave = async () => {
+        if (!profile?.id) return;
         setSaving(true);
         try {
-            const { data: teacher } = await supabase
-                .from('teachers').select('id').eq('profile_id', profile!.id).single();
-            if (teacher) {
-                await supabase.from('teacher_preferences').upsert({
-                    teacher_id: teacher.id,
-                    preferred_slots: preferences,
-                    notes,
-                    updated_at: new Date().toISOString(),
-                }, { onConflict: 'teacher_id' });
-                await supabase.from('teachers').update({ max_hours: maxHours }).eq('id', teacher.id);
-            }
+            await supabase.from('teacher_preferences').upsert({
+                teacher_id: profile.id,
+                availability,
+                preferred_days: preferredDays,
+                preferred_time_start: preferredTimeStart,
+                preferred_time_end: preferredTimeEnd,
+                max_classes_per_day: maxClassesPerDay,
+                max_consecutive_classes: maxConsecutiveClasses,
+                preferred_subjects: preferredSubjects,
+                preferred_rooms: preferredRooms,
+                notes,
+                last_updated: new Date().toISOString()
+            });
             setSaved(true);
-            setTimeout(() => setSaved(false), 2500);
-        } catch (err) { console.error(err); }
-        finally { setSaving(false); }
+            setTimeout(() => setSaved(false), 3000);
+        } catch (err: any) {
+            window.alert('Error saving: ' + err.message);
+        } finally { setSaving(false); }
     };
 
+    if (loading) {
+        return <div className="loading-center"><div className="spinner" /></div>;
+    }
+
     return (
-        <div className="dashboard fade-in">
-            <div className="dashboard-header">
+        <div className="prefs-page">
+            <div className="page-header">
                 <div>
-                    <h1 className="dashboard-title">Preferences</h1>
-                    <p className="dashboard-subtitle">Set your teaching time preferences</p>
+                    <h1>Teaching Preferences</h1>
+                    <p className="subtitle">Set your schedule availability and preferences</p>
                 </div>
-                <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                    {saving ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
-                    {saved ? 'Saved!' : 'Save Preferences'}
+                <button className={`save-btn ${saved ? 'saved' : ''}`} onClick={handleSave} disabled={saving}>
+                    {saving ? <><Loader2 size={16} className="spin" /> Saving...</> : saved ? <><CheckCircle size={16} /> Saved!</> : <><Save size={16} /> Save Preferences</>}
                 </button>
             </div>
 
-            {/* Max Hours */}
-            <div className="card" style={{ marginBottom: 20 }}>
-                <h3 className="card-title">Maximum Weekly Hours</h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <input className="input" type="number" min={4} max={60} value={maxHours} onChange={e => setMaxHours(parseInt(e.target.value))} style={{ width: 100 }} />
-                    <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>hours per week</span>
+            <div className="prefs-grid">
+                {/* Section 1: Preferred Days */}
+                <div className="pref-section glass-panel">
+                    <h3><Calendar size={18} color="#60a5fa" /> Preferred Days</h3>
+                    <p className="helper-text">Select the days you prefer to teach</p>
+                    <div className="days-grid">
+                        {DAYS.map(day => (
+                            <button key={day} className={`day-btn ${preferredDays.includes(day) ? 'active' : ''}`} onClick={() => toggleDay(day)}>
+                                {day}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-            </div>
 
-            {/* Availability Grid */}
-            <div className="card" style={{ marginBottom: 20 }}>
-                <h3 className="card-title">
-                    <Clock size={18} style={{ verticalAlign: 'middle', marginRight: 8, color: 'var(--accent-primary)' }} />
-                    Preferred Time Slots
-                </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16 }}>
-                    Select the time slots when you prefer to teach. Green = preferred.
-                </p>
+                {/* Section 2: Time Range */}
+                <div className="pref-section glass-panel">
+                    <h3><Clock size={18} color="#10b981" /> Time Preferences</h3>
+                    <div className="time-range-row">
+                        <div className="time-item">
+                            <label>Earliest Start</label>
+                            <select value={preferredTimeStart} onChange={e => setPreferredTimeStart(e.target.value)}>
+                                {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <div className="time-item">
+                            <label>Latest End</label>
+                            <select value={preferredTimeEnd} onChange={e => setPreferredTimeEnd(e.target.value)}>
+                                {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                </div>
 
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ borderCollapse: 'separate', borderSpacing: 4 }}>
-                        <thead>
-                            <tr>
-                                <th style={{ padding: '8px 12px', minWidth: 100 }}>Day</th>
-                                {timeSlots.map(s => <th key={s} style={{ padding: '8px 12px', minWidth: 160, textAlign: 'center' }}>{s}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {dayOrder.map(day => (
-                                <tr key={day}>
-                                    <td style={{ fontWeight: 600, padding: '8px 12px' }}>{day}</td>
-                                    {timeSlots.map(slot => {
-                                        const selected = (preferences[day] || []).includes(slot);
-                                        return (
-                                            <td key={slot} style={{ padding: 4 }}>
-                                                <button
-                                                    onClick={() => toggleSlot(day, slot)}
-                                                    style={{
-                                                        width: '100%', padding: '12px 8px', borderRadius: 'var(--radius-sm)',
-                                                        cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: 'var(--font-family)',
-                                                        transition: 'all 150ms ease',
-                                                        background: selected ? 'rgba(16,185,129,0.2)' : 'var(--bg-secondary)',
-                                                        color: selected ? '#34d399' : 'var(--text-muted)',
-                                                        border: selected ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--border-default)',
-                                                    }}
-                                                >
-                                                    {selected ? 'Preferred' : 'Available'}
-                                                </button>
-                                            </td>
-                                        );
-                                    })}
+                {/* Section 3: Workload */}
+                <div className="pref-section glass-panel">
+                    <h3><BookOpen size={18} color="#a78bfa" /> Workload Constraints</h3>
+                    <div className="workload-controls">
+                        <div className="workload-item">
+                            <label>Max Classes/Day</label>
+                            <div className="stepper">
+                                <button onClick={() => setMaxClassesPerDay(prev => Math.max(1, prev - 1))}>−</button>
+                                <span>{maxClassesPerDay}</span>
+                                <button onClick={() => setMaxClassesPerDay(prev => Math.min(10, prev + 1))}>+</button>
+                            </div>
+                        </div>
+                        <div className="workload-item">
+                            <label>Max Consecutive</label>
+                            <div className="stepper">
+                                <button onClick={() => setMaxConsecutiveClasses(prev => Math.max(1, prev - 1))}>−</button>
+                                <span>{maxConsecutiveClasses}</span>
+                                <button onClick={() => setMaxConsecutiveClasses(prev => Math.min(8, prev + 1))}>+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Section 4: Preferred Subjects */}
+                <div className="pref-section glass-panel">
+                    <h3><BookOpen size={18} color="#f59e0b" /> Preferred Subjects</h3>
+                    <p className="helper-text">Select subjects you'd prefer to teach</p>
+                    <div className="chip-grid">
+                        {allSubjects.map((s: any) => (
+                            <button key={s.name} className={`pref-chip ${preferredSubjects.includes(s.name) ? 'active' : ''}`} onClick={() => toggleSubject(s.name)}>
+                                {s.name}
+                            </button>
+                        ))}
+                        {allSubjects.length === 0 && <span className="text-muted">No subjects available</span>}
+                    </div>
+                </div>
+
+                {/* Section 5: Preferred Rooms */}
+                <div className="pref-section glass-panel">
+                    <h3><MapPin size={18} color="#ec4899" /> Preferred Rooms</h3>
+                    <p className="helper-text">Select rooms you'd prefer to use</p>
+                    <div className="chip-grid">
+                        {allRooms.map((r: any) => (
+                            <button key={r.name} className={`pref-chip ${preferredRooms.includes(r.name) ? 'active' : ''}`} onClick={() => toggleRoom(r.name)}>
+                                {r.name}
+                            </button>
+                        ))}
+                        {allRooms.length === 0 && <span className="text-muted">No rooms available</span>}
+                    </div>
+                </div>
+
+                {/* Section 6: Availability Grid */}
+                <div className="pref-section full-width glass-panel">
+                    <h3><Calendar size={18} color="#06b6d4" /> Availability Grid</h3>
+                    <p className="helper-text">Click cells to mark when you're available (green = available)</p>
+                    <div className="avail-grid-wrapper">
+                        <table className="avail-grid">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    {DAYS.map(day => <th key={day}>{day.slice(0, 3)}</th>)}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {TIME_SLOTS.filter((_, i) => i % 2 === 0).map(time => (
+                                    <tr key={time}>
+                                        <td className="time-label">{time}</td>
+                                        {DAYS.map(day => {
+                                            const key = `${day}-${time}`;
+                                            const isAvail = availability[key];
+                                            return (
+                                                <td key={day} className={`avail-cell ${isAvail ? 'available' : ''}`} onClick={() => toggleAvailability(day, time)} />
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
 
-            {/* Notes */}
-            <div className="card">
-                <h3 className="card-title">Additional Notes</h3>
-                <textarea
-                    className="input"
-                    rows={4}
-                    placeholder="Any special requests or notes for the scheduler..."
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    style={{ resize: 'vertical' }}
-                />
+                {/* Notes */}
+                <div className="pref-section full-width glass-panel">
+                    <h3>Additional Notes</h3>
+                    <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any additional scheduling preferences or constraints..." rows={3} />
+                </div>
             </div>
 
             <style>{`
+                .prefs-page { display: flex; flex-direction: column; gap: 1.5rem; }
+                .page-header { display: flex; justify-content: space-between; align-items: flex-end; }
+                .subtitle { color: var(--text-secondary); margin-top: 0.25rem; }
+
+                .save-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 10px; background: var(--brand-primary); color: white; border: none; cursor: pointer; font-weight: 500; transition: all 0.2s; }
+                .save-btn:hover { opacity: 0.9; }
+                .save-btn:disabled { opacity: 0.5; }
+                .save-btn.saved { background: #10b981; }
+
+                .prefs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+                .pref-section { padding: 1.5rem; }
+                .pref-section h3 { display: flex; align-items: center; gap: 0.5rem; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+                .pref-section.full-width { grid-column: 1 / -1; }
+                .helper-text { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 1rem; }
+
+                .days-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+                .day-btn { padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid var(--border-light); background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.85rem; transition: all 0.2s; }
+                .day-btn.active { background: rgba(59,130,246,0.15); border-color: var(--brand-primary); color: var(--brand-primary); }
+
+                .time-range-row { display: flex; gap: 1rem; }
+                .time-item { flex: 1; }
+                .time-item label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; display: block; }
+                .time-item select { width: 100%; padding: 0.6rem 0.75rem; background: rgba(15,23,42,0.8); border: 1px solid var(--border-light); border-radius: 8px; color: white; }
+
+                .workload-controls { display: flex; flex-direction: column; gap: 1rem; }
+                .workload-item { display: flex; justify-content: space-between; align-items: center; }
+                .workload-item label { font-size: 0.85rem; color: var(--text-secondary); }
+                .stepper { display: flex; align-items: center; gap: 0; border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden; }
+                .stepper button { width: 36px; height: 36px; background: rgba(255,255,255,0.05); border: none; color: white; cursor: pointer; font-size: 1.2rem; }
+                .stepper button:hover { background: rgba(255,255,255,0.1); }
+                .stepper span { width: 40px; text-align: center; font-weight: 600; }
+
+                .chip-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+                .pref-chip { padding: 0.4rem 0.875rem; border-radius: 20px; border: 1px solid var(--border-light); background: transparent; color: var(--text-secondary); font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
+                .pref-chip.active { background: rgba(139,92,246,0.15); border-color: #8b5cf6; color: #a78bfa; }
+
+                .avail-grid-wrapper { overflow-x: auto; }
+                .avail-grid { width: 100%; border-collapse: separate; border-spacing: 2px; }
+                .avail-grid th { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; padding: 6px 4px; text-align: center; }
+                .time-label { font-size: 0.7rem; color: var(--text-muted); padding: 4px 8px; white-space: nowrap; }
+                .avail-cell { width: 60px; height: 28px; background: rgba(255,255,255,0.03); border-radius: 4px; cursor: pointer; transition: background 0.15s; }
+                .avail-cell:hover { background: rgba(255,255,255,0.08); }
+                .avail-cell.available { background: rgba(16,185,129,0.3); }
+
+                .pref-section textarea { width: 100%; padding: 0.75rem 1rem; background: rgba(15,23,42,0.8); border: 1px solid var(--border-light); border-radius: 10px; color: white; font-size: 0.9rem; resize: vertical; outline: none; }
+                .pref-section textarea:focus { border-color: var(--brand-primary); }
+
+                .loading-center { display: flex; align-items: center; justify-content: center; height: 50vh; }
+                .text-muted { color: var(--text-muted); font-size: 0.85rem; }
+
+                @keyframes spin { to { transform: rotate(360deg); } }
                 .spin { animation: spin 1s linear infinite; }
+
+                @media (max-width: 1024px) {
+                    .prefs-grid { grid-template-columns: 1fr; }
+                }
             `}</style>
         </div>
     );

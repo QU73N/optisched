@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { CREATABLE_ROLES, ROLE_DISPLAY_NAMES, POWER_ADMIN_ROLES } from '../../types/database';
+import { CREATABLE_ROLES, ROLE_DISPLAY_NAMES, POWER_ADMIN_ROLES, SELECTABLE_ROLE_DISPLAY } from '../../types/database';
 import type { UserRole } from '../../types/database';
 import { UserPlus, Trash2, Search, X, Loader2, Edit3, KeyRound, Eye, EyeOff } from 'lucide-react';
 import '../admin/Dashboard.css';
@@ -529,9 +529,13 @@ const AdminManageUsers: React.FC = () => {
                         <div className="modal-form">
                             <div className="field">
                                 <label className="field-label">ROLE</label>
-                                <select className="input" value={editForm.role} onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))} style={{ appearance: 'auto' }}>
-                                    {Object.entries(ROLE_DISPLAY_NAMES).map(([key, label]) => (
-                                        <option key={key} value={key}>{label}</option>
+                                <select className="input" value={editForm.role}
+                                    onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}
+                                    style={{ appearance: 'auto' }}
+                                    disabled={POWER_ADMIN_ROLES.includes(editUser.role as any)}
+                                >
+                                    {SELECTABLE_ROLE_DISPLAY.map(r => (
+                                        <option key={r.value} value={r.value}>{r.label}</option>
                                     ))}
                                 </select>
                             </div>

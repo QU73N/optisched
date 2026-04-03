@@ -16,6 +16,16 @@ export const ROLE_DISPLAY_NAMES: Record<UserRole, string> = {
     student: 'Student',
 };
 
+// Roles visible in role selectors (deduplicated: admin treated as power_admin)
+export const SELECTABLE_ROLE_DISPLAY: { value: UserRole; label: string }[] = [
+    { value: 'power_admin', label: 'Power User' },
+    { value: 'system_admin', label: 'System Administrator' },
+    { value: 'schedule_admin', label: 'Schedule Administrator' },
+    { value: 'schedule_manager', label: 'Schedule Manager' },
+    { value: 'teacher', label: 'Teacher' },
+    { value: 'student', label: 'Student' },
+];
+
 // Helper: what roles can this role create?
 export const CREATABLE_ROLES: Record<string, UserRole[]> = {
     admin: ['system_admin', 'schedule_admin', 'schedule_manager', 'teacher', 'student'],

@@ -5,8 +5,8 @@ import { ADMIN_ROLES, POWER_ADMIN_ROLES, ROLE_DISPLAY_NAMES } from '../types/dat
 import type { UserRole } from '../types/database';
 import {
     LayoutDashboard, Users, CalendarDays, AlertTriangle, Settings,
-    MessageSquare, LogOut, Database, ClipboardList, BarChart3, Eye,
-    History, Edit
+    MessageSquare, LogOut, Database, ClipboardList,
+    Edit, Wand2, UserCheck
 } from 'lucide-react';
 import FloatingOptiBot from './FloatingOptiBot';
 import './Layout.css';
@@ -44,36 +44,34 @@ const Layout: React.FC = () => {
     // Power Admin / legacy admin - full access
     const powerAdminLinks = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
-        { to: '/admin/users', icon: Users, label: 'User Management' },
+        { to: '/admin/users', icon: Users, label: 'Users' },
         { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
-        { to: '/admin/data', icon: Database, label: 'Data Management' },
-        { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts' },
-        { to: '/admin/constraints', icon: Settings, label: 'Constraints' },
-        { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
-        { to: '/admin/views', icon: Eye, label: 'Schedule Views' },
-        { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
-        { to: '/admin/audit', icon: History, label: 'Audit Log' },
+        { to: '/admin/data', icon: Database, label: 'Data' },
         { to: '/admin/editor', icon: Edit, label: 'Editor' },
+        { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts' },
+        { to: '/admin/faculty', icon: UserCheck, label: 'Faculty' },
+        { to: '/admin/tasks', icon: ClipboardList, label: 'Tasks' },
+        { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
+        { to: '/admin/optibot', icon: Wand2, label: 'OptiBot' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 
     // System Admin - user management only, no schedule access
     const systemAdminLinks = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
-        { to: '/admin/users', icon: Users, label: 'User Management' },
+        { to: '/admin/users', icon: Users, label: 'Users' },
         { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
-        { to: '/admin/audit', icon: History, label: 'Audit Log' },
+        { to: '/admin/optibot', icon: Wand2, label: 'OptiBot' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 
-    // Schedule Admin - approves schedules, views all, manual/auto overrides
+    // Schedule Admin - approves schedules, views all
     const scheduleAdminLinks = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
         { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts' },
-        { to: '/admin/views', icon: Eye, label: 'Schedule Views' },
-        { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
         { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
+        { to: '/admin/optibot', icon: Wand2, label: 'OptiBot' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 
@@ -81,10 +79,11 @@ const Layout: React.FC = () => {
     const scheduleManagerLinks = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
-        { to: '/admin/data', icon: Database, label: 'Data Management' },
+        { to: '/admin/data', icon: Database, label: 'Data' },
         { to: '/admin/editor', icon: Edit, label: 'Editor' },
         { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts' },
         { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
+        { to: '/admin/optibot', icon: Wand2, label: 'OptiBot' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 
@@ -93,12 +92,14 @@ const Layout: React.FC = () => {
         { to: '/teacher/schedule', icon: CalendarDays, label: 'My Schedule' },
         { to: '/teacher/preferences', icon: ClipboardList, label: 'Preferences' },
         { to: '/teacher/chat', icon: MessageSquare, label: 'Messages' },
+        { to: '/teacher/optibot', icon: Wand2, label: 'OptiBot' },
         { to: '/teacher/settings', icon: Settings, label: 'Settings' },
     ];
 
     const studentLinks = [
         { to: '/student', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/student/schedule', icon: CalendarDays, label: 'My Schedule' },
+        { to: '/student/optibot', icon: Wand2, label: 'OptiBot' },
         { to: '/student/settings', icon: Settings, label: 'Settings' },
     ];
 
