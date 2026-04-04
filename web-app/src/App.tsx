@@ -31,7 +31,7 @@ import './index.css';
 
 // Protected route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ children, allowedRoles }) => {
-  const { session, role, isLoading } = useAuth();
+  const { session, role, roles, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -45,31 +45,40 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   }
 
   if (!session) return <Navigate to="/login" replace />;
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
-    return <Navigate to={`/${role}`} replace />;
+  // Multi-role: check if ANY of the user's roles matches the allowedRoles
+  if (allowedRoles && role) {
+    const userRoles = roles.length > 0 ? roles : [role];
+    const hasAccess = userRoles.some(r => allowedRoles.includes(r));
+    if (!hasAccess) {
+      return <Navigate to={`/${role}`} replace />;
+    }
   }
   return <>{children}</>;
 };
 
-// Redirect based on role
 const RoleRedirect: React.FC = () => {
-  const { role, isLoading, session } = useAuth();
+  const { role, roles, isLoading, session } = useAuth();
   if (isLoading) return <div className="loading-screen"><div className="spinner" style={{ width: 40, height: 40 }} /></div>;
   if (!session) return <Navigate to="/login" replace />;
 
   // Map all admin sub-roles to /admin
   const adminRoles = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'];
-  const basePath = adminRoles.includes(role || '') ? 'admin' : (role || 'student');
+  const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
+  const hasAdmin = allRoles.some(r => adminRoles.includes(r));
+  // Primary role determines default redirect; teacher with admin sub-role still starts at /teacher
+  const basePath = role === 'teacher' ? 'teacher' : (hasAdmin ? 'admin' : (role || 'student'));
   return <Navigate to={`/${basePath}`} replace />;
 };
 
 // Login guard - redirect if already logged in
 const LoginGuard: React.FC = () => {
-  const { session, role, isLoading } = useAuth();
+  const { session, role, roles, isLoading } = useAuth();
   if (isLoading) return <div className="loading-screen"><div className="spinner" style={{ width: 40, height: 40 }} /></div>;
   if (session && role) {
     const adminRoles = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'];
-    const basePath = adminRoles.includes(role) ? 'admin' : role;
+    const allRoles = roles.length > 0 ? roles : [role];
+    const hasAdmin = allRoles.some(r => adminRoles.includes(r));
+    const basePath = role === 'teacher' ? 'teacher' : (hasAdmin ? 'admin' : role);
     return <Navigate to={`/${basePath}`} replace />;
   }
   return <LoginPage />;
@@ -112,7 +121,7 @@ function App() {
 
           </Route>
 
-          {/* Teacher routes */}
+          {/* Teacher routes - also accessible by multi-role users with teacher role */}
           <Route path="/teacher" element={<ProtectedRoute allowedRoles={['teacher']}><Layout /></ProtectedRoute>}>
             <Route index element={<TeacherDashboard />} />
             <Route path="schedule" element={<TeacherSchedule />} />

@@ -188,14 +188,14 @@ const StudentDashboard: React.FC = () => {
 
                 .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
                 .stat-card { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 1.25rem; text-align: center; }
-                .stat-num { font-size: 1.75rem; font-weight: 700; color: white; }
+                .stat-num { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); }
                 .stat-label { font-size: 0.8rem; color: var(--text-muted); }
 
                 .dash-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; }
                 .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; }
 
                 .schedule-list { padding: 0; overflow: hidden; }
-                .class-card { display: flex; border-bottom: 1px solid rgba(255,255,255,0.04); }
+                .class-card { display: flex; border-bottom: 1px solid var(--border-default); }
                 .class-card:last-child { border-bottom: none; }
                 .class-stripe { width: 4px; flex-shrink: 0; }
                 .class-body { flex: 1; padding: 1rem 1.25rem; }
@@ -204,18 +204,18 @@ const StudentDashboard: React.FC = () => {
                 .status-badge { padding: 3px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; }
                 .class-details { display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-secondary); flex-wrap: wrap; }
                 .class-details span { display: flex; align-items: center; gap: 4px; }
-                .progress-bar { height: 3px; background: rgba(255,255,255,0.06); border-radius: 3px; margin-top: 0.75rem; overflow: hidden; }
+                .progress-bar { height: 3px; background: var(--bg-elevated); border-radius: 3px; margin-top: 0.75rem; overflow: hidden; }
                 .progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
 
                 .ann-list, .events-list { padding: 0; overflow: hidden; }
-                .ann-item { display: flex; gap: 0.75rem; padding: 0.875rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+                .ann-item { display: flex; gap: 0.75rem; padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
                 .ann-item:last-child { border-bottom: none; }
                 .ann-dot { width: 4px; border-radius: 2px; flex-shrink: 0; }
                 .ann-content { flex: 1; }
                 .ann-content strong { font-size: 0.9rem; display: block; margin-bottom: 2px; }
                 .ann-content p { font-size: 0.8rem; color: var(--text-secondary); margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-                .event-item { padding: 0.875rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+                .event-item { padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
                 .event-item:last-child { border-bottom: none; }
                 .event-info { display: flex; flex-direction: column; gap: 2px; }
                 .event-info strong { font-size: 0.9rem; }

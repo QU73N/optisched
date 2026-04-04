@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { supabase, supabaseAdmin } from '../../lib/supabase';
+import { POWER_ADMIN_ROLES, hasAnyRole } from '../../types/database';
 import {
     Users, CalendarDays, AlertTriangle, BookOpen, TrendingUp, Clock,
     Inbox, CheckCircle, XCircle, Megaphone, Trash2, Edit3,
@@ -25,11 +26,29 @@ interface ResetRequest {
 }
 
 const AdminDashboard: React.FC = () => {
-    const { profile } = useAuth();
+    const { profile, roles } = useAuth();
     const [stats, setStats] = useState({ totalUsers: 0, teachers: 0, students: 0, schedules: 0, conflicts: 0, rooms: 0 });
+
+    // Role detection
+    const isPowerAdmin = hasAnyRole(roles, POWER_ADMIN_ROLES);
+    const isSystemAdmin = roles.includes('system_admin');
+    const isScheduleAdmin = roles.includes('schedule_admin');
+    const isScheduleManager = roles.includes('schedule_manager');
+
+    // What this role can see
+    const canSeeUserStats = isPowerAdmin || isSystemAdmin;
+    const canSeeScheduleStats = isPowerAdmin || isScheduleAdmin || isScheduleManager;
+    const canSeeRequests = isPowerAdmin || isScheduleAdmin;
+    const canSeeResets = isPowerAdmin || isSystemAdmin;
+    const canSeeEvents = isPowerAdmin || isScheduleAdmin || isScheduleManager;
+    const canPostAnnouncements = isPowerAdmin || isSystemAdmin || isScheduleAdmin;
+    const canCreateEvents = isPowerAdmin || isScheduleAdmin || isScheduleManager;
     const [loading, setLoading] = useState(true);
     const [requests, setRequests] = useState<ChangeRequest[]>([]);
     const [requestsLoading, setRequestsLoading] = useState(true);
+    const [resolvingRequest, setResolvingRequest] = useState<ChangeRequest | null>(null);
+    const [resolveAction, setResolveAction] = useState<'approved' | 'rejected'>('approved');
+    const [resolveNotes, setResolveNotes] = useState('');
 
     // Announcements
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -51,7 +70,7 @@ const AdminDashboard: React.FC = () => {
     const [evStart, setEvStart] = useState('08:00');
     const [evEnd, setEvEnd] = useState('09:00');
     const [evRoom, setEvRoom] = useState('');
-    const [rooms, setRooms] = useState<{id: string; name: string}[]>([]);
+    const [rooms, setRooms] = useState<{ id: string; name: string }[]>([]);
     const [postingEvent, setPostingEvent] = useState(false);
 
     // Messages
@@ -101,12 +120,13 @@ const AdminDashboard: React.FC = () => {
 
     const fetchRequests = async () => {
         try {
-            const { data } = await supabase.from('schedule_change_requests').select('*').order('created_at', { ascending: false }).limit(20);
+            const client = supabaseAdmin || supabase;
+            const { data } = await client.from('schedule_change_requests').select('*').order('created_at', { ascending: false }).limit(20);
             if (data) {
                 const ids = [...new Set(data.map(r => r.teacher_id).filter(Boolean))];
                 let map: Record<string, string> = {};
                 if (ids.length > 0) {
-                    const { data: p } = await supabase.from('profiles').select('id, full_name').in('id', ids);
+                    const { data: p } = await client.from('profiles').select('id, full_name').in('id', ids);
                     p?.forEach(pr => { map[pr.id] = pr.full_name || 'Unknown'; });
                 }
                 setRequests(data.map(r => ({ ...r, teacher_name: map[r.teacher_id] || 'Teacher' })));
@@ -136,7 +156,13 @@ const AdminDashboard: React.FC = () => {
     };
 
     const fetchMessages = async () => {
-        const { data } = await supabase.from('admin_messages').select('*').eq('direction', 'teacher_to_admin').order('created_at', { ascending: false }).limit(5);
+        const client = supabaseAdmin || supabase;
+        const { data } = await client.from('admin_messages')
+            .select('*')
+            .eq('direction', 'teacher_to_admin')
+            .or(`recipient_id.is.null,recipient_id.eq.${profile?.id}`)
+            .order('created_at', { ascending: false })
+            .limit(5);
         setRecentMessages(data || []);
     };
 
@@ -145,14 +171,19 @@ const AdminDashboard: React.FC = () => {
         setResetRequests((data || []) as ResetRequest[]);
     };
 
-    const handleRequestAction = async (id: string, status: 'approved' | 'rejected') => {
+    const handleRequestAction = async (id: string, status: 'approved' | 'rejected', notes: string) => {
         setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
-        const { error } = await supabase.from('schedule_change_requests').update({ status }).eq('id', id);
+        const client = supabaseAdmin || supabase;
+        const { error } = await client.from('schedule_change_requests').update({ status, admin_notes: notes }).eq('id', id);
         if (error) { setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'pending' } : r)); alert('Error: ' + error.message); }
+        setResolvingRequest(null);
+        setResolveNotes('');
     };
 
     const handleDismissRequest = async (id: string) => {
         setRequests(prev => prev.filter(r => r.id !== id));
+        const client = supabaseAdmin || supabase;
+        await client.from('schedule_change_requests').delete().eq('id', id);
     };
 
     const handlePostAnnouncement = async () => {
@@ -163,7 +194,12 @@ const AdminDashboard: React.FC = () => {
             if (editingAnn) {
                 await supabase.from('announcements').update({ title: `${prefix} ${annTitle}`, content: annContent, priority: annPriority, target_section: annSection }).eq('id', editingAnn.id);
             } else {
-                await supabase.from('announcements').insert({ title: `${prefix} ${annTitle}`, content: annContent, priority: annPriority, target_section: annSection, created_by: profile?.id });
+                const { error } = await supabase.from('announcements').insert({
+                    title: `${prefix} ${annTitle}`, content: annContent, priority: annPriority,
+                    target_section: annSection, author_id: profile?.id,
+                    author_name: profile?.full_name || 'Admin',
+                });
+                if (error) { alert('Failed to post: ' + error.message); setPostingAnn(false); return; }
             }
             setShowAnnModal(false); setAnnTitle(''); setAnnContent(''); setAnnPriority('normal'); setAnnSection('All Sections'); setEditingAnn(null);
             fetchAnnouncements();
@@ -230,23 +266,25 @@ const AdminDashboard: React.FC = () => {
     };
 
     const pendingRequests = requests.filter(r => r.status === 'pending');
-    const prioStyles: Record<string, {bg: string; color: string}> = {
+    const prioStyles: Record<string, { bg: string; color: string }> = {
         urgent: { bg: 'rgba(239,68,68,0.12)', color: '#ef4444' },
         important: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
         normal: { bg: 'rgba(59,130,246,0.12)', color: '#3b82f6' },
     };
 
-    const statCards = [
-        { label: 'Total Users', value: stats.totalUsers, icon: Users, color: '#6366f1' },
-        { label: 'Teachers', value: stats.teachers, icon: BookOpen, color: '#3b82f6' },
-        { label: 'Students', value: stats.students, icon: TrendingUp, color: '#10b981' },
-        { label: 'Schedules', value: stats.schedules, icon: CalendarDays, color: '#8b5cf6' },
-        { label: 'Conflicts', value: stats.conflicts, icon: AlertTriangle, color: '#f59e0b' },
-        { label: 'Rooms', value: stats.rooms, icon: Clock, color: '#06b6d4' },
+    // Build stat cards based on role
+    const allStatCards = [
+        { label: 'Total Users', value: stats.totalUsers, icon: Users, color: '#6366f1', show: canSeeUserStats },
+        { label: 'Teachers', value: stats.teachers, icon: BookOpen, color: '#3b82f6', show: canSeeUserStats },
+        { label: 'Students', value: stats.students, icon: TrendingUp, color: '#10b981', show: canSeeUserStats },
+        { label: 'Schedules', value: stats.schedules, icon: CalendarDays, color: '#8b5cf6', show: canSeeScheduleStats },
+        { label: 'Conflicts', value: stats.conflicts, icon: AlertTriangle, color: '#f59e0b', show: canSeeScheduleStats },
+        { label: 'Rooms', value: stats.rooms, icon: Clock, color: '#06b6d4', show: canSeeScheduleStats || canSeeUserStats },
     ];
+    const statCards = allStatCards.filter(c => c.show);
 
     const getStatusBadge = (status: string) => {
-        const m: Record<string, {bg: string; color: string; label: string}> = {
+        const m: Record<string, { bg: string; color: string; label: string }> = {
             pending: { bg: 'rgba(251,191,36,0.15)', color: '#fbbf24', label: 'PENDING' },
             approved: { bg: 'rgba(34,197,94,0.15)', color: '#22c55e', label: 'APPROVED' },
             rejected: { bg: 'rgba(239,68,68,0.15)', color: '#ef4444', label: 'REJECTED' },
@@ -254,24 +292,41 @@ const AdminDashboard: React.FC = () => {
         return m[status] || m.pending;
     };
 
+    // Dashboard title based on role
+    const dashboardTitle = isPowerAdmin ? 'Admin Dashboard'
+        : isSystemAdmin ? 'System Administration'
+            : isScheduleAdmin ? 'Schedule Administration'
+                : isScheduleManager ? 'Schedule Management'
+                    : 'Dashboard';
+
+    const dashboardSubtitle = isPowerAdmin ? 'Full system overview'
+        : isSystemAdmin ? 'User management and system health'
+            : isScheduleAdmin ? 'Schedule approval and conflict resolution'
+                : isScheduleManager ? 'Schedule creation and data management'
+                    : 'Overview';
+
     return (
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Admin Dashboard</h1>
+                    <h1 className="dashboard-title">{dashboardTitle}</h1>
                     <p className="dashboard-subtitle">
-                        System overview
-                        {pendingRequests.length > 0 && <span style={{ color: '#fbbf24', marginLeft: 8 }}>• {pendingRequests.length} pending</span>}
-                        {resetRequests.length > 0 && <span style={{ color: '#f59e0b', marginLeft: 8 }}>• {resetRequests.length} password reset{resetRequests.length > 1 ? 's' : ''}</span>}
+                        {dashboardSubtitle}
+                        {canSeeRequests && pendingRequests.length > 0 && <span style={{ color: '#fbbf24', marginLeft: 8 }}>• {pendingRequests.length} pending</span>}
+                        {canSeeResets && resetRequests.length > 0 && <span style={{ color: '#f59e0b', marginLeft: 8 }}>• {resetRequests.length} password reset{resetRequests.length > 1 ? 's' : ''}</span>}
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-primary" style={{ fontSize: 13, padding: '6px 14px' }} onClick={() => { setEditingAnn(null); setAnnTitle(''); setAnnContent(''); setShowAnnModal(true); }}>
-                        <Megaphone size={14} /> Post Announcement
-                    </button>
-                    <button className="btn btn-secondary" style={{ fontSize: 13, padding: '6px 14px' }} onClick={() => setShowEventModal(true)}>
-                        <CalendarPlus size={14} /> Add Event
-                    </button>
+                    {canPostAnnouncements && (
+                        <button className="btn btn-primary" style={{ fontSize: 13, padding: '6px 14px' }} onClick={() => { setEditingAnn(null); setAnnTitle(''); setAnnContent(''); setShowAnnModal(true); }}>
+                            <Megaphone size={14} /> Post Announcement
+                        </button>
+                    )}
+                    {canCreateEvents && (
+                        <button className="btn btn-secondary" style={{ fontSize: 13, padding: '6px 14px' }} onClick={() => setShowEventModal(true)}>
+                            <CalendarPlus size={14} /> Add Event
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -289,8 +344,8 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="dashboard-grid">
-                {/* Password Reset Requests */}
-                {resetRequests.length > 0 && (
+                {/* Password Reset Requests — visible to Power Admin and System Admin */}
+                {canSeeResets && resetRequests.length > 0 && (
                     <div className="card" style={{ borderLeft: '3px solid #f59e0b' }}>
                         <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <KeyRound size={18} color="#f59e0b" /> Password Reset Requests
@@ -315,8 +370,8 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
 
-                {/* Teacher Requests */}
-                <div className="card">
+                {/* Teacher Requests — visible to Power Admin and Schedule Admin */}
+                {canSeeRequests && <div className="card">
                     <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Inbox size={18} /> Teacher Requests
                         {pendingRequests.length > 0 && <span className="badge" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', fontSize: 11 }}>{pendingRequests.length} pending</span>}
@@ -333,21 +388,21 @@ const AdminDashboard: React.FC = () => {
                                     <div key={req.id} style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '10px 14px', borderLeft: `3px solid ${badge.color}` }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                                             <span style={{ fontSize: 13, fontWeight: 600 }}>{req.teacher_name}</span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span className="badge" style={{ background: badge.bg, color: badge.color, fontSize: 10, fontWeight: 700 }}>{badge.label}</span>
-                                            {req.status !== 'pending' && (
-                                                <button onClick={() => handleDismissRequest(req.id)} title="Dismiss" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, borderRadius: 4, display: 'flex', alignItems: 'center' }}>
-                                                    <X size={14} />
-                                                </button>
-                                            )}
-                                        </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span className="badge" style={{ background: badge.bg, color: badge.color, fontSize: 10, fontWeight: 700 }}>{badge.label}</span>
+                                                {req.status !== 'pending' && (
+                                                    <button onClick={() => handleDismissRequest(req.id)} title="Dismiss" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, borderRadius: 4, display: 'flex', alignItems: 'center' }}>
+                                                        <X size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{req.request_type}</div>
                                         <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0' }}>{req.reason}</p>
                                         {req.status === 'pending' && (
                                             <div style={{ display: 'flex', gap: 6 }}>
-                                                <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 11 }} onClick={() => handleRequestAction(req.id, 'approved')}><CheckCircle size={12} /> Approve</button>
-                                                <button className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: 11, color: '#ef4444' }} onClick={() => handleRequestAction(req.id, 'rejected')}><XCircle size={12} /> Reject</button>
+                                                <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 11 }} onClick={() => { setResolvingRequest(req); setResolveAction('approved'); }}><CheckCircle size={12} /> Approve</button>
+                                                <button className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: 11, color: '#ef4444' }} onClick={() => { setResolvingRequest(req); setResolveAction('rejected'); }}><XCircle size={12} /> Reject</button>
                                             </div>
                                         )}
                                         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{new Date(req.created_at).toLocaleString()}</span>
@@ -356,7 +411,7 @@ const AdminDashboard: React.FC = () => {
                             })}
                         </div>
                     )}
-                </div>
+                </div>}
 
                 {/* Announcements */}
                 <div className="card">
@@ -391,8 +446,8 @@ const AdminDashboard: React.FC = () => {
                     )}
                 </div>
 
-                {/* Upcoming Events */}
-                <div className="card">
+                {/* Upcoming Events — visible to Power Admin, Schedule Admin, Schedule Manager */}
+                {canSeeEvents && <div className="card">
                     <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <CalendarPlus size={18} /> Upcoming Events
                         <span className="badge" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', fontSize: 11 }}>{events.length}</span>
@@ -409,13 +464,13 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0' }}>{ev.description}</p>
                                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                        {new Date(ev.event_date).toLocaleDateString()} • {ev.start_time?.slice(0,5)} - {ev.end_time?.slice(0,5)} {ev.room_name && `• ${ev.room_name}`}
+                                        {new Date(ev.event_date).toLocaleDateString()} • {ev.start_time?.slice(0, 5)} - {ev.end_time?.slice(0, 5)} {ev.room_name && `• ${ev.room_name}`}
                                     </div>
                                 </div>
                             ))}
                         </div>
                     )}
-                </div>
+                </div>}
 
                 {/* Recent Messages */}
                 <div className="card">
@@ -516,6 +571,30 @@ const AdminDashboard: React.FC = () => {
                             <button className="btn btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={handleCreateEvent} disabled={postingEvent}>
                                 {postingEvent ? <><Loader2 size={14} className="spin" /> Creating...</> : 'Create Event'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Resolve Request Modal */}
+            {resolvingRequest && (
+                <div className="modal-overlay" onClick={() => setResolvingRequest(null)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <h3 style={{ margin: 0 }}>{resolveAction === 'approved' ? 'Approve' : 'Reject'} Request</h3>
+                            <button onClick={() => setResolvingRequest(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
+                        </div>
+                        <div className="modal-form">
+                            <label>Admin Note (Required to Reply)</label>
+                            <textarea className="input" value={resolveNotes} onChange={e => setResolveNotes(e.target.value)} placeholder="Type a message to the teacher regarding this decision..." rows={4} style={{ resize: 'vertical' }} />
+                            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                                <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setResolvingRequest(null)}>Cancel</button>
+                                <button className={resolveAction === 'approved' ? 'btn btn-primary' : 'btn btn-secondary'} style={{ flex: 1, backgroundColor: resolveAction === 'rejected' ? 'var(--accent-error)' : undefined, color: resolveAction === 'rejected' ? 'white' : undefined }}
+                                    disabled={!resolveNotes.trim()}
+                                    onClick={() => handleRequestAction(resolvingRequest.id, resolveAction, resolveNotes.trim())}>
+                                    Confirm {resolveAction === 'approved' ? 'Approval' : 'Rejection'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

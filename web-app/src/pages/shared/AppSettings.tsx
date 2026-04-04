@@ -235,35 +235,35 @@ const AppSettings: React.FC = () => {
                 .settings-section h2 { font-size: 1.25rem; margin-bottom: 0.5rem; }
                 .section-desc { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
 
-                .profile-card-settings { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; padding: 1.25rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-light); border-radius: 14px; }
+                .profile-card-settings { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 14px; }
                 .profile-avatar-settings { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; color: white; flex-shrink: 0; }
                 .profile-card-settings h3 { margin: 0 0 4px; }
                 .role-badge-settings { background: rgba(139,92,246,0.15); color: #a78bfa; padding: 3px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.5px; }
 
                 .s-form-group { margin-bottom: 1.25rem; }
                 .s-form-group label { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; display: block; }
-                .s-form-group input { width: 100%; padding: 0.75rem 1rem; background: rgba(15,23,42,0.5); border: 1px solid var(--border-light); border-radius: 10px; color: var(--text-primary); font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
-                .s-form-group input:focus { border-color: var(--brand-primary); }
+                .s-form-group input { width: 100%; padding: 0.75rem 1rem; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 10px; color: var(--text-primary); font-size: 0.9rem; outline: none; transition: border-color 0.2s; font-family: var(--font-family); }
+                .s-form-group input:focus { border-color: var(--accent-primary); }
                 .s-form-group input:disabled { opacity: 0.5; cursor: not-allowed; }
 
                 .password-input-wrap { position: relative; }
                 .password-input-wrap input { padding-right: 44px; }
                 .eye-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px; }
 
-                .s-save-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 10px; background: var(--brand-primary); color: white; border: none; cursor: pointer; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; margin-top: 0.5rem; }
+                .s-save-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 10px; background: var(--accent-primary); color: white; border: none; cursor: pointer; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; margin-top: 0.5rem; }
                 .s-save-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
                 .s-save-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
                 .s-save-btn.saved { background: #10b981; }
 
                 .toggle-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
-                .toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-light); border-radius: 12px; transition: background 0.2s; }
-                .toggle-item:hover { background: rgba(255,255,255,0.04); }
+                .toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 12px; transition: background 0.2s; }
+                .toggle-item:hover { background: var(--bg-hover); }
                 .toggle-info { display: flex; align-items: center; gap: 0.75rem; }
                 .toggle-info strong { font-size: 0.9rem; display: block; }
                 .toggle-info p { font-size: 0.8rem; color: var(--text-muted); margin: 2px 0 0; }
 
-                .toggle-switch { width: 48px; height: 26px; border-radius: 13px; background: rgba(255,255,255,0.1); border: none; cursor: pointer; position: relative; transition: background 0.3s; padding: 2px; flex-shrink: 0; }
-                .toggle-switch.on { background: var(--brand-primary); }
+                .toggle-switch { width: 48px; height: 26px; border-radius: 13px; background: var(--bg-elevated); border: none; cursor: pointer; position: relative; transition: background 0.3s; padding: 2px; flex-shrink: 0; }
+                .toggle-switch.on { background: var(--accent-primary); }
                 .toggle-thumb { width: 22px; height: 22px; border-radius: 50%; background: white; transition: transform 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
                 .toggle-switch.on .toggle-thumb { transform: translateX(22px); }
 

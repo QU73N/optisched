@@ -6,23 +6,23 @@
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
     cursor: pointer;
     z-index: 1000;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-lg);
     transition: all 0.3s ease;
     overflow: hidden;
-    color: #94a3b8;
+    color: var(--text-secondary);
 }
 
 .floating-optibot-btn:hover {
     transform: scale(1.1);
-    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.4);
-    color: #c4b5fd;
+    box-shadow: var(--shadow-xl);
+    color: var(--accent-primary-hover);
 }
 
 .floating-optibot-btn img {
@@ -87,11 +87,11 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: #1e293b;
+    background: var(--bg-surface);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #94a3b8;
+    color: var(--text-secondary);
 }
 
 .optibot-panel-header-icon img {

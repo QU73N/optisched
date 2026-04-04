@@ -5,7 +5,7 @@ import { useSchedules, useAnnouncements, useScheduleChangeRequests, useSections 
 import { useCustomEvents } from '../../hooks/useCustomEvents';
 import {
     Calendar, Clock, CheckCircle, BookOpen, Users, MessageSquare,
-    AlertTriangle, Plus, Send, X, Megaphone, MapPin
+    AlertTriangle, Plus, Send, X, Megaphone, MapPin, ArrowRightLeft, FileText
 } from 'lucide-react';
 
 const TeacherDashboard: React.FC = () => {
@@ -56,6 +56,19 @@ const TeacherDashboard: React.FC = () => {
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 30000);
         return () => clearInterval(timer);
+    }, []);
+
+    // Admins for messaging
+    const [allAdmins, setAllAdmins] = useState<any[]>([]);
+    useEffect(() => {
+        const fetchAdmins = async () => {
+            const { data } = await supabase.from('profiles').select('id, full_name, role').in('role', ['admin', 'power_admin', 'schedule_manager', 'schedule_admin']);
+            if (data && data.length > 0) {
+                setAllAdmins(data);
+                setSelectedAdminId(data[0].id); // Default to specific admin
+            }
+        };
+        fetchAdmins();
     }, []);
 
     const todaySchedule = useMemo(() => {
@@ -112,8 +125,8 @@ const TeacherDashboard: React.FC = () => {
     const [reportIssue, setReportIssue] = useState('');
     const [sendingReport, setSendingReport] = useState(false);
 
-    // Admin message
     const [adminMessage, setAdminMessage] = useState('');
+    const [selectedAdminId, setSelectedAdminId] = useState('');
     const [sendingMessage, setSendingMessage] = useState(false);
 
     // Announce
@@ -130,7 +143,7 @@ const TeacherDashboard: React.FC = () => {
     const [creatingEvent, setCreatingEvent] = useState(false);
 
     const handleSubmitRequest = async () => {
-        if (!requestReason.trim() || !profile?.id) return;
+        if (!requestReason.trim() || !profile?.id || !selectedAdminId) return;
         setSubmitting(true);
         try {
             await submitRequest({
@@ -139,6 +152,16 @@ const TeacherDashboard: React.FC = () => {
                 request_type: requestType,
                 reason: requestReason.trim()
             });
+
+            // Auto-send a message to the specifically selected admin so they can converse about it
+            await supabase.from('admin_messages').insert({
+                message: `Schedule Change Request Submitted: ${requestType.toUpperCase()}\n\nReason: ${requestReason.trim()}`,
+                sender_id: profile.id,
+                sender_name: profile.full_name || 'Teacher',
+                direction: 'teacher_to_admin',
+                recipient_id: selectedAdminId
+            });
+
             setShowRequestModal(false);
             setRequestReason('');
         } catch (err: any) {
@@ -166,12 +189,13 @@ const TeacherDashboard: React.FC = () => {
     };
 
     const handleSendAdminMessage = async () => {
-        if (!adminMessage.trim()) return;
+        if (!adminMessage.trim() || !selectedAdminId) return;
         setSendingMessage(true);
         try {
             await supabase.from('admin_messages').insert({
                 message: adminMessage.trim(), sender_id: profile?.id,
-                sender_name: profile?.full_name || 'Teacher', direction: 'teacher_to_admin'
+                sender_name: profile?.full_name || 'Teacher', direction: 'teacher_to_admin',
+                recipient_id: selectedAdminId
             });
             setShowMessageAdmin(false); setAdminMessage('');
         } catch (err: any) {
@@ -269,6 +293,10 @@ const TeacherDashboard: React.FC = () => {
                     {/* Quick Actions */}
                     <div className="section-header"><h3>Quick Actions</h3></div>
                     <div className="quick-actions">
+                        <button className="action-btn glass-panel" onClick={() => setShowRequestModal(true)}>
+                            <div className="action-icon" style={{ background: 'rgba(59,130,246,0.12)' }}><ArrowRightLeft size={18} color="#60a5fa" /></div>
+                            <span>Request Change</span>
+                        </button>
                         <button className="action-btn glass-panel" onClick={() => setShowMessageAdmin(true)}>
                             <div className="action-icon" style={{ background: 'rgba(99,102,241,0.12)' }}><MessageSquare size={18} color="#818cf8" /></div>
                             <span>Message Admin</span>
@@ -327,32 +355,30 @@ const TeacherDashboard: React.FC = () => {
                         })}
                     </div>
 
-                    {/* My Requests */}
-                    {myRequests.length > 0 && (
-                        <>
-                            <div className="section-header" style={{ marginTop: '1.5rem' }}><h3>My Requests</h3></div>
-                            <div className="requests-list glass-panel">
-                                {myRequests.slice(0, 3).map((req: any) => {
-                                    const sc: Record<string, { bg: string; text: string; label: string }> = {
-                                        pending: { bg: 'rgba(251,191,36,0.12)', text: '#fbbf24', label: 'PENDING' },
-                                        approved: { bg: 'rgba(34,197,94,0.12)', text: '#22c55e', label: 'APPROVED' },
-                                        rejected: { bg: 'rgba(239,68,68,0.12)', text: '#ef4444', label: 'REJECTED' },
-                                    };
-                                    const s = sc[req.status] || sc.pending;
-                                    return (
-                                        <div key={req.id} className="req-item">
-                                            <div className="req-top">
-                                                <span className="req-type">{req.request_type}</span>
-                                                <span className="req-badge" style={{ background: s.bg, color: s.text }}>{s.label}</span>
-                                            </div>
-                                            <p className="req-reason">{req.reason}</p>
-                                            {req.admin_notes && <p className="req-notes">Admin: {req.admin_notes}</p>}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </>
-                    )}
+                    {/* My Requests — always visible */}
+                    <div className="section-header" style={{ marginTop: '1.5rem' }}><h3>My Requests</h3></div>
+                    <div className="requests-list glass-panel">
+                        {myRequests.length === 0 ? (
+                            <div className="empty-state sm"><FileText size={24} className="empty-icon" /><p>No requests yet</p></div>
+                        ) : myRequests.slice(0, 5).map((req: any) => {
+                            const sc: Record<string, { bg: string; text: string; label: string }> = {
+                                pending: { bg: 'rgba(251,191,36,0.12)', text: '#fbbf24', label: 'PENDING' },
+                                approved: { bg: 'rgba(34,197,94,0.12)', text: '#22c55e', label: 'APPROVED' },
+                                rejected: { bg: 'rgba(239,68,68,0.12)', text: '#ef4444', label: 'REJECTED' },
+                            };
+                            const s = sc[req.status] || sc.pending;
+                            return (
+                                <div key={req.id} className="req-item">
+                                    <div className="req-top">
+                                        <span className="req-type">{req.request_type}</span>
+                                        <span className="req-badge" style={{ background: s.bg, color: s.text }}>{s.label}</span>
+                                    </div>
+                                    <p className="req-reason">{req.reason}</p>
+                                    {req.admin_notes && <p className="req-notes">Admin: {req.admin_notes}</p>}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
 
@@ -363,6 +389,12 @@ const TeacherDashboard: React.FC = () => {
                     <div className="modal-box glass-panel" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h3>Request Schedule Change</h3><button onClick={() => setShowRequestModal(false)}><X size={20} /></button></div>
                         <div className="modal-body">
+                            <label>Send Request To (Required)</label>
+                            <select className="input" value={selectedAdminId} onChange={e => setSelectedAdminId(e.target.value)} style={{ marginBottom: 12, padding: '10px' }}>
+                                {allAdmins.map(adm => (
+                                    <option key={adm.id} value={adm.id}>{adm.full_name || 'Admin'} - {adm.role.replace('_', ' ').toUpperCase()}</option>
+                                ))}
+                            </select>
                             <label>Request Type</label>
                             <div className="btn-group">
                                 {(['reschedule', 'cancel', 'swap'] as const).map(t => (
@@ -371,7 +403,7 @@ const TeacherDashboard: React.FC = () => {
                             </div>
                             <label>Reason</label>
                             <textarea value={requestReason} onChange={e => setRequestReason(e.target.value)} placeholder="Explain why you need this change..." rows={3} />
-                            <button className="btn-primary full" onClick={handleSubmitRequest} disabled={submitting}>{submitting ? 'Submitting...' : 'Submit to Admin'}</button>
+                            <button className="btn-primary full" onClick={handleSubmitRequest} disabled={submitting || !selectedAdminId}>{submitting ? 'Submitting...' : 'Submit to Admin'}</button>
                         </div>
                     </div>
                 </div>
@@ -399,6 +431,12 @@ const TeacherDashboard: React.FC = () => {
                     <div className="modal-box glass-panel" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h3>Message Admin</h3><button onClick={() => setShowMessageAdmin(false)}><X size={20} /></button></div>
                         <div className="modal-body">
+                            <label>Select Admin (Required)</label>
+                            <select className="input" value={selectedAdminId} onChange={e => setSelectedAdminId(e.target.value)} style={{ marginBottom: 12, padding: '10px' }}>
+                                {allAdmins.map(adm => (
+                                    <option key={adm.id} value={adm.id}>{adm.full_name || 'Admin'} - {adm.role.replace('_', ' ').toUpperCase()}</option>
+                                ))}
+                            </select>
                             <label>Your Message</label>
                             <textarea value={adminMessage} onChange={e => setAdminMessage(e.target.value)} placeholder="Type your message..." rows={4} />
                             <button className="btn-success full" onClick={handleSendAdminMessage} disabled={sendingMessage}><Send size={16} /> {sendingMessage ? 'Sending...' : 'Send Message'}</button>
@@ -452,7 +490,7 @@ const TeacherDashboard: React.FC = () => {
 
                 .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
                 .stat-card { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 1.25rem; text-align: center; }
-                .stat-num { font-size: 1.75rem; font-weight: 700; color: white; }
+                .stat-num { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); }
                 .stat-label { font-size: 0.8rem; color: var(--text-muted); }
 
                 .dash-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; }
@@ -461,8 +499,8 @@ const TeacherDashboard: React.FC = () => {
                 .badge-info { background: rgba(59,130,246,0.15); color: #60a5fa; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; }
 
                 .schedule-list { padding: 0; overflow: hidden; }
-                .class-card { display: flex; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.2s; }
-                .class-card:hover { background: rgba(255,255,255,0.02); }
+                .class-card { display: flex; border-bottom: 1px solid var(--border-default); cursor: pointer; transition: background 0.2s; }
+                .class-card:hover { background: var(--bg-hover); }
                 .class-card:last-child { border-bottom: none; }
                 .class-stripe { width: 4px; flex-shrink: 0; }
                 .class-body { flex: 1; padding: 1rem 1.25rem; }
@@ -471,7 +509,7 @@ const TeacherDashboard: React.FC = () => {
                 .status-badge { padding: 3px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; }
                 .class-details { display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-secondary); }
                 .class-details span { display: flex; align-items: center; gap: 4px; }
-                .progress-bar { height: 3px; background: rgba(255,255,255,0.06); border-radius: 3px; margin-top: 0.75rem; overflow: hidden; }
+                .progress-bar { height: 3px; background: var(--bg-elevated); border-radius: 3px; margin-top: 0.75rem; overflow: hidden; }
                 .progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
 
                 .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
@@ -480,19 +518,19 @@ const TeacherDashboard: React.FC = () => {
                 .action-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
                 .events-list, .announcements-list, .requests-list { padding: 0; overflow: hidden; }
-                .event-item { display: flex; justify-content: space-between; align-items: center; padding: 0.875rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+                .event-item { display: flex; justify-content: space-between; align-items: center; padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
                 .event-item:last-child { border-bottom: none; }
                 .event-info { display: flex; flex-direction: column; gap: 2px; }
                 .event-info strong { font-size: 0.9rem; }
 
-                .ann-item { display: flex; gap: 0.75rem; padding: 0.875rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+                .ann-item { display: flex; gap: 0.75rem; padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
                 .ann-item:last-child { border-bottom: none; }
                 .ann-dot { width: 4px; border-radius: 2px; flex-shrink: 0; }
                 .ann-content { flex: 1; }
                 .ann-content strong { font-size: 0.9rem; display: block; margin-bottom: 2px; }
                 .ann-content p { font-size: 0.8rem; color: var(--text-secondary); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-                .req-item { padding: 0.875rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+                .req-item { padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
                 .req-item:last-child { border-bottom: none; }
                 .req-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
                 .req-type { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; }
@@ -513,24 +551,24 @@ const TeacherDashboard: React.FC = () => {
 
                 /* Modals */
                 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-                .modal-box { width: 100%; max-width: 480px; padding: 0; overflow: hidden; background: #0f172a; border: 1px solid var(--border-light); border-radius: 16px; }
-                .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-light); }
+                .modal-box { width: 100%; max-width: 480px; padding: 0; overflow: hidden; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 16px; box-shadow: var(--shadow-xl); }
+                .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-default); }
                 .modal-header h3 { font-size: 1.1rem; font-weight: 600; }
                 .modal-header button { background: none; border: none; color: var(--text-muted); cursor: pointer; }
                 .modal-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
                 .modal-body label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
-                .modal-body input, .modal-body textarea { width: 100%; padding: 0.75rem 1rem; background: rgba(15,23,42,0.8); border: 1px solid var(--border-light); border-radius: 10px; color: white; font-size: 0.9rem; resize: vertical; }
-                .modal-body input:focus, .modal-body textarea:focus { outline: none; border-color: var(--brand-primary); }
+                .modal-body input, .modal-body textarea { width: 100%; padding: 0.75rem 1rem; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 10px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; font-family: var(--font-family); }
+                .modal-body input:focus, .modal-body textarea:focus { outline: none; border-color: var(--accent-primary); }
 
                 .btn-group { display: flex; gap: 0.5rem; }
-                .btn-tab { flex: 1; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-light); background: transparent; color: var(--text-secondary); font-size: 0.85rem; cursor: pointer; transition: all 0.2s; }
-                .btn-tab.active { background: rgba(59,130,246,0.1); border-color: var(--brand-primary); color: var(--brand-primary); }
+                .btn-tab { flex: 1; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary); font-size: 0.85rem; cursor: pointer; transition: all 0.2s; }
+                .btn-tab.active { background: rgba(59,130,246,0.1); border-color: var(--accent-primary); color: var(--accent-primary); }
 
                 .chip-group { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-                .chip { padding: 0.4rem 1rem; border-radius: 20px; border: 1px solid var(--border-light); background: transparent; color: var(--text-secondary); font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
+                .chip { padding: 0.4rem 1rem; border-radius: 20px; border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary); font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
                 .chip.active { background: #6366f1; border-color: #6366f1; color: white; }
 
-                .btn-primary { background: var(--brand-primary); color: white; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 500; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s; }
+                .btn-primary { background: var(--gradient-primary); color: white; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 500; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s; }
                 .btn-primary:hover { opacity: 0.9; }
                 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
                 .btn-warning { background: #f59e0b; color: white; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 500; border: none; cursor: pointer; transition: all 0.2s; }

@@ -33,7 +33,7 @@ interface TeacherProfile {
 }
 
 const CommunicationHub: React.FC = () => {
-    const { profile } = useAuth();
+    const { profile, roles } = useAuth();
     const [messages, setMessages] = useState<Message[]>([]);
     const [threads, setThreads] = useState<Thread[]>([]);
     const [allTeachers, setAllTeachers] = useState<TeacherProfile[]>([]);
@@ -44,7 +44,7 @@ const CommunicationHub: React.FC = () => {
     const [sending, setSending] = useState(false);
     const [sidebarTab, setSidebarTab] = useState<'conversations' | 'teachers' | 'resets'>('conversations');
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const isAdmin = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'].includes(profile?.role || '');
+    const isAdmin = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'].some(r => roles.includes(r as any));
 
     useEffect(() => {
         fetchMessages();
@@ -63,11 +63,20 @@ const CommunicationHub: React.FC = () => {
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, selectedThread]);
 
     const fetchAllTeachers = async () => {
-        const { data } = await supabase
+        let query = supabase
             .from('profiles')
             .select('id, full_name, avatar_url, role')
-            .in('role', ['teacher', 'admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'])
             .order('full_name', { ascending: true });
+
+        // If current user is a teacher, only show specific admin positions: admin (power user) and schedule manager
+        if (!isAdmin) {
+            query = query.in('role', ['admin', 'power_admin', 'schedule_manager']);
+        } else {
+            // Admins see everyone
+            query = query.in('role', ['teacher', 'admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager']);
+        }
+
+        const { data } = await query;
 
         if (data) {
             // Filter out the current user
@@ -82,8 +91,11 @@ const CommunicationHub: React.FC = () => {
             .order('created_at', { ascending: true });
 
         // If teacher, only get their own messages
-        if (!['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'].includes(profile?.role || '')) {
+        if (!isAdmin) {
             query = query.or(`sender_id.eq.${profile?.id},recipient_id.eq.${profile?.id}`);
+        } else {
+            // If admin, only get messages sent to ALL admins (null), or specific to them, or sent by them
+            query = query.or(`recipient_id.is.null,recipient_id.eq.${profile?.id},sender_id.eq.${profile?.id}`);
         }
 
         const { data } = await query;
@@ -103,8 +115,8 @@ const CommunicationHub: React.FC = () => {
 
             if (m.sender_id === profile?.id) {
                 // I sent it - the thread is with the recipient
-                otherPersonId = m.recipient_id || 'admin';
-                otherPersonName = m.recipient_id ? '' : 'Admin'; // we'll resolve names below
+                otherPersonId = m.recipient_id || 'system_admin_placeholder';
+                otherPersonName = m.recipient_id ? '' : 'System Admin (Legacy)'; // we'll resolve names below
             } else {
                 // Someone sent it to me
                 otherPersonId = m.sender_id;
@@ -151,8 +163,11 @@ const CommunicationHub: React.FC = () => {
     const getThreadMessages = () => {
         if (!selectedThread) return [];
         return messages.filter(m => {
-            return (m.sender_id === selectedThread && (m.recipient_id === profile?.id || !m.recipient_id)) ||
-                (m.sender_id === profile?.id && m.recipient_id === selectedThread) ||
+            const actualSender = m.sender_id;
+            const actualRecipient = m.recipient_id || 'system_admin_placeholder';
+
+            return (actualSender === selectedThread && (m.recipient_id === profile?.id || !m.recipient_id)) ||
+                (m.sender_id === profile?.id && actualRecipient === selectedThread) ||
                 // Fallback for old direction-based messages
                 (isAdmin && m.sender_id === selectedThread) ||
                 (isAdmin && m.sender_id === profile?.id && m.direction === 'admin_to_teacher');
@@ -197,12 +212,12 @@ const CommunicationHub: React.FC = () => {
     const threadMsgs = getThreadMessages();
 
     return (
-        <div className="dashboard fade-in" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div className="dashboard-header" style={{ flexShrink: 0 }}>
+        <div className="dashboard fade-in" style={{ height: 'calc(100vh - 64px)', marginTop: '-32px', marginBottom: '-32px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div className="dashboard-header" style={{ flexShrink: 0, padding: '32px 0 16px 0' }}>
                 <div>
                     <h1 className="dashboard-title">Messages</h1>
                     <p className="dashboard-subtitle">
-                        {isAdmin ? `${threads.length} conversations • ${allTeachers.length} teachers` : `Chat with admin & ${allTeachers.length} teachers`}
+                        {isAdmin ? `${threads.length} conversations • ${allTeachers.length} teachers` : `Chat with admin`}
                     </p>
                 </div>
             </div>
@@ -242,7 +257,7 @@ const CommunicationHub: React.FC = () => {
                             }}
                         >
                             <Users size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-                            All Teachers
+                            {isAdmin ? 'All Teachers' : 'Admins'}
                         </button>
                         {isAdmin && (
                             <button
@@ -264,7 +279,7 @@ const CommunicationHub: React.FC = () => {
                     <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
                         <div style={{ position: 'relative' }}>
                             <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                            <input className="input" placeholder={sidebarTab === 'conversations' ? "Search conversations..." : "Search teachers..."} value={search} onChange={e => setSearch(e.target.value)}
+                            <input className="input" placeholder={sidebarTab === 'conversations' ? "Search conversations..." : (isAdmin ? "Search teachers..." : "Search admins...")} value={search} onChange={e => setSearch(e.target.value)}
                                 style={{ paddingLeft: 36, fontSize: 13, padding: '8px 12px 8px 36px' }} />
                         </div>
                     </div>
@@ -279,7 +294,7 @@ const CommunicationHub: React.FC = () => {
                                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                                     <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                                     <p style={{ fontSize: 13 }}>No conversations yet</p>
-                                    <p style={{ fontSize: 11, marginTop: 4 }}>Go to "All Teachers" to start a chat</p>
+                                    <p style={{ fontSize: 11, marginTop: 4 }}>Go to "{isAdmin ? 'All Teachers' : 'Admins'}" to start a chat</p>
                                 </div>
                             ) : filteredThreads.map(t => (
                                 <div key={t.senderId}
@@ -331,7 +346,7 @@ const CommunicationHub: React.FC = () => {
                             filteredTeachers.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                                     <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                                    <p style={{ fontSize: 13 }}>No teachers found</p>
+                                    <p style={{ fontSize: 13 }}>{isAdmin ? 'No teachers found' : 'No admins found'}</p>
                                 </div>
                             ) : filteredTeachers.map(teacher => {
                                 const existingThread = threads.find(t => t.senderId === teacher.id);
@@ -452,7 +467,7 @@ const CommunicationHub: React.FC = () => {
                         <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                             <Users size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
                             <p style={{ fontSize: 16, fontWeight: 600 }}>Select a conversation</p>
-                            <p style={{ fontSize: 13, marginTop: 4 }}>Choose from existing chats or browse "All Teachers" to start a new conversation</p>
+                            <p style={{ fontSize: 13, marginTop: 4 }}>Choose from existing chats or browse "{isAdmin ? 'All Teachers' : 'Admins'}" to start a new conversation</p>
                         </div>
                     </div>
                 )}

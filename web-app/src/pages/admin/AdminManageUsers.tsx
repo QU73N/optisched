@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { CREATABLE_ROLES, ROLE_DISPLAY_NAMES, POWER_ADMIN_ROLES, SELECTABLE_ROLE_DISPLAY } from '../../types/database';
+import { CREATABLE_ROLES, ROLE_DISPLAY_NAMES, POWER_ADMIN_ROLES, SELECTABLE_ROLE_DISPLAY, TEACHER_ADDABLE_ROLES } from '../../types/database';
 import type { UserRole } from '../../types/database';
 import { UserPlus, Trash2, Search, X, Loader2, Edit3, KeyRound, Eye, EyeOff } from 'lucide-react';
 import '../admin/Dashboard.css';
@@ -49,6 +49,7 @@ const AdminManageUsers: React.FC = () => {
     });
     const [editSaving, setEditSaving] = useState(false);
     const [editError, setEditError] = useState<string | null>(null);
+    const [editAdditionalRoles, setEditAdditionalRoles] = useState<string[]>([]);
 
     // Reset password
     const [showResetModal, setShowResetModal] = useState(false);
@@ -212,6 +213,14 @@ const AdminManageUsers: React.FC = () => {
         });
         setEditError(null);
         setShowEditModal(true);
+        // Load additional roles from auth user_metadata
+        if (supabaseAdmin) {
+            supabaseAdmin.auth.admin.getUserById(user.id).then(({ data }) => {
+                setEditAdditionalRoles((data?.user?.user_metadata?.additional_roles as string[]) || []);
+            }).catch(() => setEditAdditionalRoles([]));
+        } else {
+            setEditAdditionalRoles([]);
+        }
     };
 
     const handleEditSave = async () => {
@@ -222,7 +231,7 @@ const AdminManageUsers: React.FC = () => {
             const client = supabaseAdmin || supabase;
             const updateData: any = {
                 full_name: editForm.full_name,
-                role: editForm.role,
+                role: editForm.role, // Single valid enum value
                 department: editForm.department || null,
                 program: editForm.program || null,
                 year_level: editForm.year_level ? parseInt(editForm.year_level) : null,
@@ -231,10 +240,16 @@ const AdminManageUsers: React.FC = () => {
             // Update email if changed
             if (editForm.email !== editUser.email) {
                 updateData.email = editForm.email;
-                // Also update auth email if admin client available
                 if (supabaseAdmin) {
                     await supabaseAdmin.auth.admin.updateUserById(editUser.id, { email: editForm.email });
                 }
+            }
+            // Save additional roles in user_metadata
+            if (supabaseAdmin) {
+                const additionalToSave = editForm.role === 'teacher' ? editAdditionalRoles : [];
+                await supabaseAdmin.auth.admin.updateUserById(editUser.id, {
+                    user_metadata: { additional_roles: additionalToSave },
+                });
             }
             const { error } = await client.from('profiles').update(updateData).eq('id', editUser.id);
             if (error) throw error;
@@ -527,18 +542,69 @@ const AdminManageUsers: React.FC = () => {
                             <button className="btn btn-ghost" onClick={() => setShowEditModal(false)}><X size={20} /></button>
                         </div>
                         <div className="modal-form">
-                            <div className="field">
-                                <label className="field-label">ROLE</label>
-                                <select className="input" value={editForm.role}
-                                    onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}
-                                    style={{ appearance: 'auto' }}
-                                    disabled={POWER_ADMIN_ROLES.includes(editUser.role as any)}
-                                >
-                                    {SELECTABLE_ROLE_DISPLAY.map(r => (
-                                        <option key={r.value} value={r.value}>{r.label}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            {(() => {
+                                const isPowerUser = POWER_ADMIN_ROLES.includes(editUser.role as any);
+                                const isStudentPrimary = editForm.role === 'student';
+                                const isTeacherPrimary = editForm.role === 'teacher';
+
+                                const primaryOptions = SELECTABLE_ROLE_DISPLAY.filter(r => {
+                                    if (isTeacherPrimary && TEACHER_ADDABLE_ROLES.includes(r.value)) return false;
+                                    return true;
+                                });
+
+                                const handlePrimaryChange = (newPrimary: string) => {
+                                    setEditForm(p => ({ ...p, role: newPrimary }));
+                                    // Clear additional roles when switching away from teacher
+                                    if (newPrimary !== 'teacher') setEditAdditionalRoles([]);
+                                };
+
+                                const handleToggleAdditional = (addRole: string) => {
+                                    setEditAdditionalRoles(prev => {
+                                        if (prev.includes(addRole)) return prev.filter(r => r !== addRole);
+                                        return [...prev, addRole];
+                                    });
+                                };
+
+                                return (
+                                    <>
+                                        <div className="field">
+                                            <label className="field-label">PRIMARY ROLE</label>
+                                            <select className="input" value={editForm.role}
+                                                onChange={e => handlePrimaryChange(e.target.value)}
+                                                style={{ appearance: 'auto' }}
+                                                disabled={isPowerUser}
+                                            >
+                                                {primaryOptions.map(r => (
+                                                    <option key={r.value} value={r.value}>{r.label}</option>
+                                                ))}
+                                            </select>
+                                            {isPowerUser && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>Power User role cannot be changed</span>}
+                                        </div>
+
+                                        {isTeacherPrimary && (
+                                            <div className="field">
+                                                <label className="field-label">ADDITIONAL ROLES</label>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                    {TEACHER_ADDABLE_ROLES.map(ar => (
+                                                        <label key={ar} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: editAdditionalRoles.includes(ar) ? 'rgba(59,130,246,0.1)' : 'var(--bg-secondary)', border: editAdditionalRoles.includes(ar) ? '1px solid rgba(59,130,246,0.3)' : '1px solid var(--border-default)', transition: 'all 0.2s' }}>
+                                                            <input type="checkbox" checked={editAdditionalRoles.includes(ar)} onChange={() => handleToggleAdditional(ar)} style={{ accentColor: 'var(--accent-primary)' }} />
+                                                            <div>
+                                                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{ROLE_DISPLAY_NAMES[ar]}</div>
+                                                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{ar === 'schedule_admin' ? 'Can approve/reject schedules' : 'Can create & manage schedules'}</div>
+                                                            </div>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                                <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Teachers can also hold schedule management roles</span>
+                                            </div>
+                                        )}
+
+                                        {isStudentPrimary && (
+                                            <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '4px 0' }}>Students cannot have multiple roles.</div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                             <div className="field">
                                 <label className="field-label">FULL NAME</label>
                                 <input className="input" value={editForm.full_name} onChange={e => setEditForm(p => ({ ...p, full_name: e.target.value }))} />

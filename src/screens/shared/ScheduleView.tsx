@@ -484,29 +484,53 @@ const ScheduleView: React.FC = () => {
                             );
                         })}
 
-                        {/* Custom event indicators — right-edge markers */}
+                        {/* Custom events — rendered as full-width blocks with distinct styling */}
                         {dayEvents.filter(e => e.start_time && e.end_time).map(evt => {
                             const startMin = timeToMinutes(evt.start_time!) - START_HOUR * 60;
                             const endMin = timeToMinutes(evt.end_time!) - START_HOUR * 60;
                             if (startMin < 0 || endMin < 0) return null;
                             const top = (startMin / 60) * HOUR_HEIGHT + 14;
-                            const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT - 4, 24);
+                            const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT - 4, 40);
                             return (
                                 <View key={`evt-${evt.id}`} style={{
                                     position: 'absolute',
                                     top, height,
-                                    right: 6,
-                                    width: 38,
-                                    backgroundColor: 'rgba(16,185,129,0.2)',
-                                    borderLeftWidth: 2,
+                                    left: 56,
+                                    right: 0,
+                                    backgroundColor: 'rgba(16,185,129,0.12)',
+                                    borderLeftWidth: 3,
                                     borderLeftColor: '#10b981',
-                                    borderRadius: 4,
-                                    paddingHorizontal: 3,
-                                    paddingVertical: 2,
-                                    zIndex: 5,
+                                    borderRadius: 12,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(16,185,129,0.25)',
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 8,
+                                    zIndex: 2,
                                     overflow: 'hidden',
                                 }}>
-                                    <Text style={{ color: '#34d399', fontSize: 7, fontWeight: '700' }} numberOfLines={2}>{evt.title}</Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ color: '#34d399', fontSize: 13, fontWeight: '700' }} numberOfLines={1}>{evt.title}</Text>
+                                            {evt.description ? <Text style={{ color: '#6ee7b7', fontSize: 10, marginTop: 2 }} numberOfLines={1}>{evt.description}</Text> : null}
+                                        </View>
+                                        <View style={{ backgroundColor: 'rgba(16,185,129,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                            <Text style={{ color: '#34d399', fontSize: 8, fontWeight: '800', letterSpacing: 0.5 }}>EVENT</Text>
+                                        </View>
+                                    </View>
+                                    {height > 50 && (
+                                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                                <MaterialIcons name="schedule" size={10} color="#6ee7b799" />
+                                                <Text style={{ fontSize: 10, color: '#6ee7b799' }}>{evt.start_time?.slice(0, 5)} - {evt.end_time?.slice(0, 5)}</Text>
+                                            </View>
+                                            {evt.room ? (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                                    <MaterialIcons name="meeting-room" size={10} color="#6ee7b799" />
+                                                    <Text style={{ fontSize: 10, color: '#6ee7b799' }}>{evt.room}</Text>
+                                                </View>
+                                            ) : null}
+                                        </View>
+                                    )}
                                 </View>
                             );
                         })}

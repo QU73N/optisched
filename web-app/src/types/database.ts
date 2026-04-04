@@ -36,6 +36,35 @@ export const CREATABLE_ROLES: Record<string, UserRole[]> = {
     teacher: [],
     student: [],
 };
+// Multi-role: primary role stays in `role` column (single valid enum).
+// Additional roles stored in auth user_metadata.additional_roles (string[]).
+// Teachers can ALSO be: schedule_admin, schedule_manager
+// Teachers CANNOT be: admin, power_admin, system_admin, student
+// Students CANNOT have multi-role
+export const TEACHER_ADDABLE_ROLES: UserRole[] = ['schedule_admin', 'schedule_manager'];
+
+// Build a full roles array from primary role + additional roles
+export function getAllRoles(primaryRole: string | null | undefined, additionalRoles?: string[]): UserRole[] {
+    const roles: UserRole[] = [];
+    if (primaryRole) roles.push(primaryRole as UserRole);
+    if (additionalRoles) {
+        for (const r of additionalRoles) {
+            if (r && !roles.includes(r as UserRole)) roles.push(r as UserRole);
+        }
+    }
+    return roles;
+}
+
+// Check if a roles array includes a specific role
+export function hasRole(allRoles: UserRole[], check: UserRole): boolean {
+    return allRoles.includes(check);
+}
+
+// Check if any of the roles match
+export function hasAnyRole(allRoles: UserRole[], checks: UserRole[]): boolean {
+    return checks.some(c => allRoles.includes(c));
+}
+
 export type EmploymentType = 'full-time' | 'part-time';
 export type RoomType = 'lecture' | 'laboratory' | 'gymnasium' | 'computer_lab';
 export type SubjectType = 'lecture' | 'laboratory';

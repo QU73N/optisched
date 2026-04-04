@@ -3,10 +3,10 @@
 
 import { supabase, supabaseAdmin } from '../lib/supabase';
 
-// === API Keys ===
-const GEMINI_API_KEY = 'AIzaSyD3EnaaPrcEfmYIwNWIHeB-BoXWQlYxvp8';
-const GROQ_API_KEY = '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';
-const OPENROUTER_API_KEY = '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';
+// === API Keys (read from .env — never commit keys to source) ===
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
 
 // === API URLs ===
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -37,6 +37,8 @@ Do NOT be overly restrictive. If the question could reasonably be about school o
 
 ### 4. Professional Tone
 Maintain a professional but friendly tone. Be helpful and informative.
+Do NOT use emojis or emoticons in your responses — keep formatting clean and text-based.
+Use bullet points, numbered lists, and clear section headers instead of decorative characters.
 
 ### 5. Language Support
 You can respond in both **English** and **Tagalog (Filipino)**.
@@ -95,12 +97,13 @@ Available actions (ADMIN ONLY):
 - delete_room: $$ACTION{"action":"delete_room","params":{"name":"Room 101"}}$$
 - create_section: $$ACTION{"action":"create_section","params":{"name":"BSIT-301","year_level":3,"program":"BSIT"}}$$
 - delete_section: $$ACTION{"action":"delete_section","params":{"name":"BSIT-301"}}$$
-- update_profile: $$ACTION{"action":"update_profile","params":{"user_email":"user@email.com","updates":{"full_name":"...","role":"..."}}}$$
+- update_profile: $$ACTION{"action":"update_profile","params":{"user_email":"user@email.com","updates":{"full_name":"...","role":"...","email":"new@email.com"}}}$$
 
 Rules for actions:
 - CRITICAL: If asked to create a student account and the user DID NOT specify their program, year_level, or section, DO NOT issue the create_user action. Instead, ask for those details first.
 - You MUST use REAL dates, REAL times, REAL names - never use placeholders like YYYY-MM-DD
 - If the user is not an admin, refuse: "Only administrators can perform system actions."
+- CRITICAL: Email addresses MUST always contain "@". Example: "lastname@meycauayan.sti.edu.ph" NOT "lastname.meycauayan.sti.edu.ph". Double-check every email you generate.
 
 Keep responses concise, professional, and formatted with clear structure using bullet points or numbered lists when applicable.`;
 
@@ -590,9 +593,28 @@ async function executeAction(action: string, params: Record<string, any>): Promi
                 if (!updates || !user_email) return { success: false, message: 'Missing user_email or updates.' };
                 const { data: found } = await dbClient.from('profiles').select('id').eq('email', user_email).single();
                 if (!found) return { success: false, message: `No user found with email "${user_email}".` };
+
+                // If email is being changed, update Supabase Auth first
+                if (updates.email && updates.email !== user_email) {
+                    // Validate email format
+                    if (!updates.email.includes('@') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updates.email)) {
+                        return { success: false, message: `Invalid email format: "${updates.email}". Email must contain "@" (e.g. user@domain.com).` };
+                    }
+                    const adminClient = supabaseAdmin || supabase;
+                    try {
+                        const { error: authError } = await adminClient.auth.admin.updateUserById(found.id, {
+                            email: updates.email,
+                            email_confirm: true,
+                        });
+                        if (authError) return { success: false, message: `Failed to update auth email: ${authError.message}` };
+                    } catch (e: any) {
+                        return { success: false, message: `Auth email update failed: ${e.message}` };
+                    }
+                }
+
                 const { error } = await dbClient.from('profiles').update(updates).eq('id', found.id);
                 if (error) return { success: false, message: error.message };
-                return { success: true, message: `Profile updated for ${user_email}.` };
+                return { success: true, message: `Profile updated for ${user_email}.${updates.email ? ` Email changed to ${updates.email} — user can now log in with the new email.` : ''}` };
             }
 
             default:
