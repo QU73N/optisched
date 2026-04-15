@@ -14,7 +14,6 @@ import './Layout.css';
 const Layout: React.FC = () => {
     const { profile, role, roles, signOut } = useAuth();
     const navigate = useNavigate();
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [theme, setTheme] = useState(() => localStorage.getItem('optisched-theme') || 'light');
 
     useEffect(() => {
@@ -171,11 +170,7 @@ const Layout: React.FC = () => {
 
     return (
         <div className="layout">
-            <aside
-                className={`sidebar ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
-                onMouseEnter={() => setSidebarCollapsed(false)}
-                onMouseLeave={() => setSidebarCollapsed(true)}
-            >
+            <aside className="sidebar">
                 <div className="sidebar-header">
                     <div className="sidebar-logo">
                         <img src={theme === 'light' ? '/logo.png' : '/logo-white.png'} alt="OptiSched" />
@@ -211,7 +206,7 @@ const Layout: React.FC = () => {
                         </div>
                         <div className="sidebar-user-info">
                             <span className="sidebar-user-name">{profile?.full_name || 'User'}</span>
-                            <span className={getRoleBadgeClass()} style={{ fontSize: 8, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{displayRole}</span>
+                            <span className={getRoleBadgeClass()} style={{ fontSize: 9, padding: '1px 0', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', lineHeight: 1.4 }}>{displayRole}</span>
                         </div>
                     </div>
                     <button className="sidebar-logout" onClick={handleSignOut} title="Sign Out">
@@ -220,7 +215,7 @@ const Layout: React.FC = () => {
                 </div>
             </aside>
 
-            <main className={`main-content ${sidebarCollapsed ? 'main-content-expanded' : ''}`}>
+            <main className="main-content">
                 <Outlet />
             </main>
 

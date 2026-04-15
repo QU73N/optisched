@@ -49,14 +49,14 @@ const lightColors: ThemeColors = {
 const THEME_KEY = 'optisched_theme';
 
 const ThemeContext = createContext<ThemeContextType>({
-    themeMode: 'dark',
+    themeMode: 'light',
     setThemeMode: () => { },
-    colors: darkColors,
+    colors: lightColors,
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const systemScheme = useColorScheme();
-    const [themeMode, setThemeModeState] = useState<ThemeMode>('dark');
+    const [themeMode, setThemeModeState] = useState<ThemeMode>('light');
 
     useEffect(() => {
         AsyncStorage.getItem(THEME_KEY).then(saved => {

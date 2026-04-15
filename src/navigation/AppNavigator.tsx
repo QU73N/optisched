@@ -64,7 +64,10 @@ const AppNavigator: React.FC = () => {
     }
 
     return (
-        <NavigationContainer theme={OptiSchedDarkTheme}>
+        <NavigationContainer
+            theme={OptiSchedDarkTheme}
+            documentTitle={{ formatter: () => 'OptiSched' }}
+        >
             <Stack.Navigator
                 screenOptions={{
                     headerShown: false,
