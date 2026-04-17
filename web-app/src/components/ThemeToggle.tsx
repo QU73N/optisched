@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Sun, Moon } from 'lucide-react';
+
+const THEME_TRANSITION_MS = 450;
 
 const ThemeToggle: React.FC = () => {
     const [theme, setTheme] = useState(() => localStorage.getItem('optisched-theme') || 'light');
@@ -9,9 +11,17 @@ const ThemeToggle: React.FC = () => {
         localStorage.setItem('optisched-theme', theme);
     }, [theme]);
 
+    const toggleTheme = useCallback(() => {
+        document.documentElement.setAttribute('data-transitioning-theme', '');
+        setTheme(t => t === 'dark' ? 'light' : 'dark');
+        setTimeout(() => {
+            document.documentElement.removeAttribute('data-transitioning-theme');
+        }, THEME_TRANSITION_MS);
+    }, []);
+
     return (
         <button
-            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            onClick={toggleTheme}
             title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             style={{
                 background: 'none',

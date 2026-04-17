@@ -15,8 +15,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
-        radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+    background: radial-gradient(ellipse 80% 60% at 20% 20%, rgba(59, 130, 246, 0.06) 0%, transparent 55%),
+        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(14, 165, 233, 0.04) 0%, transparent 55%);
     z-index: 0;
     pointer-events: none;
 }
@@ -113,8 +113,8 @@
 }
 
 .pricing-card-premium {
-    border-color: rgba(99, 102, 241, 0.4);
-    background: linear-gradient(135deg, var(--bg-surface), rgba(99, 102, 241, 0.06));
+    border-color: var(--border-accent);
+    background: linear-gradient(135deg, var(--bg-surface), var(--accent-primary-subtle));
 }
 
 .pricing-card-badge {
@@ -132,8 +132,8 @@
 }
 
 .pricing-badge-premium {
-    background: rgba(99, 102, 241, 0.15);
-    color: #818cf8;
+    background: var(--accent-primary-subtle);
+    color: var(--accent-primary);
 }
 
 .pricing-card-popular {
@@ -209,11 +209,11 @@
 .pricing-btn-premium {
     background: var(--gradient-primary);
     color: white;
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.25);
 }
 
 .pricing-btn-premium:hover {
-    box-shadow: 0 6px 24px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 24px rgba(37, 99, 235, 0.3);
     transform: translateY(-1px);
 }
 

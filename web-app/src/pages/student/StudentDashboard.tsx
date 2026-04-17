@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSchedules, useAnnouncements } from '../../hooks/useSupabase';
 import { useCustomEvents } from '../../hooks/useCustomEvents';
 import { Calendar, Clock, BookOpen, Megaphone, MapPin, Users } from 'lucide-react';
+import '../admin/Dashboard.css';
 
 const StudentDashboard: React.FC = () => {
     const { profile } = useAuth();
@@ -86,152 +87,140 @@ const StudentDashboard: React.FC = () => {
         upcoming: { bg: 'rgba(59,130,246,0.1)', text: '#60a5fa', label: 'Next' }
     };
 
+    const ongoingClass = todaySchedule.find(s => s.status === 'ongoing');
+    const nextClass = todaySchedule.find(s => s.status === 'upcoming');
+
     return (
-        <div className="student-dash">
+        <div className="dashboard fade-in">
             {/* Greeting */}
-            <div className="greeting-row">
+            <div className="dash-greeting">
                 <div>
-                    <h2>Welcome back, {profile?.full_name?.split(',')[0] || profile?.full_name?.split(' ')[0] || 'Student'}</h2>
-                    <p className="text-muted">{profile?.section ? `Section ${profile.section}` : 'Your daily schedule overview'}</p>
+                    <h2>{ongoingClass ? <><span className="dash-live-dot" />In Class Now</> : `Welcome back, ${profile?.full_name?.split(',')[0] || profile?.full_name?.split(' ')[0] || 'Student'}`}</h2>
+                    <p>{ongoingClass ? `${ongoingClass.subject} with ${ongoingClass.teacher} in ${ongoingClass.room}` : nextClass ? `Next class: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}` : profile?.section ? `Section ${profile.section}` : 'Your daily schedule overview'}</p>
                 </div>
-                <span className="day-badge">{isOffDay ? 'Tomorrow: Monday' : scheduleDayName}</span>
+                <span className="dash-day-badge">{isOffDay ? 'Tomorrow: Monday' : scheduleDayName}</span>
             </div>
 
             {/* Stats */}
-            <div className="stats-row">
-                <div className="stat-card glass-panel"><BookOpen size={20} color="#60a5fa" /><span className="stat-num">{loading ? '...' : todaySchedule.length}</span><span className="stat-label">Classes Today</span></div>
-                <div className="stat-card glass-panel"><Clock size={20} color="#10b981" /><span className="stat-num">{todaySchedule.filter(s => s.status === 'ongoing').length}</span><span className="stat-label">In Progress</span></div>
-                <div className="stat-card glass-panel"><Megaphone size={20} color="#f59e0b" /><span className="stat-num">{announcements.length}</span><span className="stat-label">Announcements</span></div>
-                <div className="stat-card glass-panel"><Calendar size={20} color="#a78bfa" /><span className="stat-num">{upcomingEvents.length}</span><span className="stat-label">Events</span></div>
+            <div className="stats-grid">
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><BookOpen size={16} color="#60a5fa" /></div>
+                    </div>
+                    <div className="stat-number">{loading ? '...' : todaySchedule.length}</div>
+                    <div className="stat-label">Classes Today</div>
+                </div>
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.1)' }}><Clock size={16} color="#10b981" /></div>
+                    </div>
+                    <div className="stat-number">{todaySchedule.filter(s => s.status === 'ongoing').length}</div>
+                    <div className="stat-label">In Progress</div>
+                </div>
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.1)' }}><Megaphone size={16} color="#f59e0b" /></div>
+                    </div>
+                    <div className="stat-number">{announcements.length}</div>
+                    <div className="stat-label">Announcements</div>
+                </div>
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(167,139,250,0.1)' }}><Calendar size={16} color="#a78bfa" /></div>
+                    </div>
+                    <div className="stat-number">{upcomingEvents.length}</div>
+                    <div className="stat-label">Events</div>
+                </div>
             </div>
 
-            <div className="dash-grid">
-                {/* Schedule */}
-                <div className="dash-section">
-                    <h3 className="section-title">Today's Schedule</h3>
-                    <div className="schedule-list glass-panel">
-                        {loading ? (
-                            <div className="empty-state"><div className="spinner" /></div>
-                        ) : todaySchedule.length === 0 ? (
-                            <div className="empty-state"><Calendar size={40} className="empty-icon" /><p>No classes scheduled today</p></div>
-                        ) : todaySchedule.map(item => {
-                            const sty = statusStyles[item.status];
-                            return (
-                                <div key={item.id} className="class-card">
-                                    <div className="class-stripe" style={{ background: item.color }} />
-                                    <div className="class-body">
-                                        <div className="class-top">
-                                            <h4>{item.subject}</h4>
-                                            <span className="status-badge" style={{ background: sty.bg, color: sty.text }}>{sty.label}</span>
+            {/* Main two-column layout */}
+            <div className="dash-two-col">
+                {/* Left — Schedule */}
+                <div className="dash-col">
+                    <div>
+                        <div className="dash-section-header">
+                            <h3><Calendar size={15} /> Today's Schedule</h3>
+                            {todaySchedule.length > 0 && <span className="dash-section-count">{todaySchedule.length}</span>}
+                        </div>
+                        <div className="dash-schedule-panel">
+                            {loading ? (
+                                <div className="dash-panel-empty"><div className="spinner" /></div>
+                            ) : todaySchedule.length === 0 ? (
+                                <div className="dash-panel-empty"><Calendar size={36} /><p>No classes scheduled today</p></div>
+                            ) : todaySchedule.map(item => {
+                                const sty = statusStyles[item.status];
+                                return (
+                                    <div key={item.id} className={`dash-class-card${item.status === 'ongoing' ? ' is-ongoing' : ''}`}>
+                                        <div className="dash-class-stripe" style={{ background: item.color }} />
+                                        <div className="dash-class-body">
+                                            <div className="dash-class-top">
+                                                <span className="dash-class-subject">{item.status === 'ongoing' && <span className="dash-live-dot" />}{item.subject}</span>
+                                                <span className="dash-class-status" style={{ background: sty.bg, color: sty.text }}>{sty.label}</span>
+                                            </div>
+                                            <div className="dash-class-details">
+                                                <span><Users size={13} /> {item.teacher}</span>
+                                                <span><MapPin size={13} /> {item.room}</span>
+                                                <span><Clock size={13} /> {item.time}</span>
+                                            </div>
+                                            {item.status === 'ongoing' && (
+                                                <div className="dash-progress"><div className="dash-progress-fill" style={{ width: `${item.progress}%`, background: item.color }} /></div>
+                                            )}
                                         </div>
-                                        <div className="class-details">
-                                            <span><Users size={14} /> {item.teacher}</span>
-                                            <span><MapPin size={14} /> {item.room}</span>
-                                            <span><Clock size={14} /> {item.time}</span>
-                                        </div>
-                                        {item.status === 'ongoing' && (
-                                            <div className="progress-bar"><div className="progress-fill" style={{ width: `${item.progress}%`, background: item.color }} /></div>
-                                        )}
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
-                {/* Right column */}
-                <div className="dash-right">
+                {/* Right — Announcements + Events */}
+                <div className="dash-col">
                     {/* Announcements */}
-                    <h3 className="section-title">Announcements</h3>
-                    <div className="ann-list glass-panel">
-                        {announcements.length === 0 ? (
-                            <div className="empty-state sm"><Megaphone size={24} className="empty-icon" /><p>No announcements</p></div>
-                        ) : announcements.slice(0, 5).map((ann: any) => {
-                            const dotColor = ann.priority === 'urgent' ? '#ef4444' : ann.priority === 'important' ? '#f59e0b' : '#22c55e';
-                            return (
-                                <div key={ann.id} className="ann-item">
-                                    <div className="ann-dot" style={{ background: dotColor }} />
-                                    <div className="ann-content">
-                                        <strong>{ann.title}</strong>
-                                        <p>{ann.content}</p>
-                                        <span className="text-xs text-muted">{ann.author_name} • {ann.created_at ? new Date(ann.created_at).toLocaleDateString() : ''}</span>
+                    <div>
+                        <div className="dash-section-header">
+                            <h3><Megaphone size={15} /> Announcements</h3>
+                            {announcements.length > 0 && <span className="dash-section-count">{announcements.length}</span>}
+                        </div>
+                        <div className="dash-schedule-panel">
+                            {announcements.length === 0 ? (
+                                <div className="dash-panel-empty compact"><Megaphone size={24} /><p>No announcements</p></div>
+                            ) : announcements.slice(0, 5).map((ann: any) => {
+                                const dotColor = ann.priority === 'urgent' ? '#ef4444' : ann.priority === 'important' ? '#f59e0b' : '#22c55e';
+                                return (
+                                    <div key={ann.id} className="dash-ann-item">
+                                        <div className="dash-ann-dot" style={{ background: dotColor }} />
+                                        <div className="dash-ann-body">
+                                            <div className="dash-ann-title">{ann.title}</div>
+                                            <p className="dash-ann-text">{ann.content}</p>
+                                            <span className="dash-ann-meta">{ann.author_name} · {ann.created_at ? new Date(ann.created_at).toLocaleDateString() : ''}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
 
-                    {/* Events */}
+                    {/* Upcoming Events */}
                     {upcomingEvents.length > 0 && (
-                        <>
-                            <h3 className="section-title" style={{ marginTop: '1.5rem' }}>Upcoming Events</h3>
-                            <div className="events-list glass-panel">
+                        <div>
+                            <div className="dash-section-header">
+                                <h3><Calendar size={15} /> Upcoming Events</h3>
+                                <span className="dash-section-count">{upcomingEvents.length}</span>
+                            </div>
+                            <div className="dash-schedule-panel">
                                 {upcomingEvents.slice(0, 5).map((evt: any) => (
-                                    <div key={evt.id} className="event-item">
-                                        <div className="event-info">
-                                            <strong>{evt.title}</strong>
-                                            <span className="text-sm text-muted">{new Date(evt.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {evt.creator_name}</span>
+                                    <div key={evt.id} className="dash-event-item">
+                                        <div className="dash-event-info">
+                                            <span className="dash-event-title">{evt.title}</span>
+                                            <span className="dash-event-meta">{new Date(evt.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {evt.creator_name}</span>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        </>
+                        </div>
                     )}
                 </div>
             </div>
-
-            <style>{`
-                .student-dash { display: flex; flex-direction: column; gap: 1.5rem; }
-                .greeting-row { display: flex; justify-content: space-between; align-items: flex-end; }
-                .greeting-row h2 { font-size: 1.5rem; }
-                .day-badge { background: rgba(139,92,246,0.15); color: #a78bfa; padding: 6px 16px; border-radius: 20px; font-size: 0.85rem; font-weight: 500; }
-
-                .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
-                .stat-card { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 1.25rem; text-align: center; }
-                .stat-num { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); }
-                .stat-label { font-size: 0.8rem; color: var(--text-muted); }
-
-                .dash-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; }
-                .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; }
-
-                .schedule-list { padding: 0; overflow: hidden; }
-                .class-card { display: flex; border-bottom: 1px solid var(--border-default); }
-                .class-card:last-child { border-bottom: none; }
-                .class-stripe { width: 4px; flex-shrink: 0; }
-                .class-body { flex: 1; padding: 1rem 1.25rem; }
-                .class-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-                .class-top h4 { font-size: 1rem; font-weight: 600; }
-                .status-badge { padding: 3px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; }
-                .class-details { display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-secondary); flex-wrap: wrap; }
-                .class-details span { display: flex; align-items: center; gap: 4px; }
-                .progress-bar { height: 3px; background: var(--bg-elevated); border-radius: 3px; margin-top: 0.75rem; overflow: hidden; }
-                .progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
-
-                .ann-list, .events-list { padding: 0; overflow: hidden; }
-                .ann-item { display: flex; gap: 0.75rem; padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
-                .ann-item:last-child { border-bottom: none; }
-                .ann-dot { width: 4px; border-radius: 2px; flex-shrink: 0; }
-                .ann-content { flex: 1; }
-                .ann-content strong { font-size: 0.9rem; display: block; margin-bottom: 2px; }
-                .ann-content p { font-size: 0.8rem; color: var(--text-secondary); margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-
-                .event-item { padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
-                .event-item:last-child { border-bottom: none; }
-                .event-info { display: flex; flex-direction: column; gap: 2px; }
-                .event-info strong { font-size: 0.9rem; }
-
-                .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; color: var(--text-muted); gap: 0.5rem; }
-                .empty-state.sm { padding: 1.5rem; }
-                .empty-icon { opacity: 0.3; }
-                .text-sm { font-size: 0.8rem; }
-                .text-xs { font-size: 0.7rem; }
-                .text-muted { color: var(--text-muted); }
-
-                @media (max-width: 1024px) {
-                    .stats-row { grid-template-columns: repeat(2, 1fr); }
-                    .dash-grid { grid-template-columns: 1fr; }
-                }
-            `}</style>
         </div>
     );
 };

@@ -7,6 +7,7 @@ import {
     Calendar, Clock, CheckCircle, BookOpen, Users, MessageSquare,
     AlertTriangle, Plus, Send, X, Megaphone, MapPin, ArrowRightLeft, FileText
 } from 'lucide-react';
+import '../admin/Dashboard.css';
 
 const TeacherDashboard: React.FC = () => {
     const { profile } = useAuth();
@@ -241,345 +242,312 @@ const TeacherDashboard: React.FC = () => {
 
     const myRequests = requests.filter((r: any) => r.teacher_id === profile?.id);
 
+    const ongoingClass = todaySchedule.find(s => s.status === 'ongoing');
+    const nextClass = todaySchedule.find(s => s.status === 'upcoming');
+
     return (
-        <div className="teacher-dash">
-            {/* Stats Row */}
-            <div className="stats-row">
-                <div className="stat-card glass-panel"><BookOpen size={20} color="#60a5fa" /><span className="stat-num">{loading ? '...' : todaySchedule.length}</span><span className="stat-label">Classes Today</span></div>
-                <div className="stat-card glass-panel"><CheckCircle size={20} color="#10b981" /><span className="stat-num">{todaySchedule.filter(s => s.status === 'finished').length}</span><span className="stat-label">Completed</span></div>
-                <div className="stat-card glass-panel"><Users size={20} color="#a78bfa" /><span className="stat-num">{schedules.length}</span><span className="stat-label">Total Entries</span></div>
-                <div className="stat-card glass-panel"><Megaphone size={20} color="#f59e0b" /><span className="stat-num">{announcements.length}</span><span className="stat-label">Announcements</span></div>
+        <div className="dashboard fade-in">
+            {/* Greeting */}
+            <div className="dash-greeting">
+                <div>
+                    <h2>{ongoingClass ? <><span className="dash-live-dot" />Teaching Now</> : `Welcome back, ${profile?.full_name?.split(',')[0] || profile?.full_name?.split(' ')[0] || 'Teacher'}`}</h2>
+                    <p>{ongoingClass ? `${ongoingClass.subject} — ${ongoingClass.section} in ${ongoingClass.room}` : nextClass ? `Next: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}` : isOffDay ? 'Enjoy your day off' : 'No more classes today'}</p>
+                </div>
+                <span className="dash-day-badge">{isOffDay ? 'Tomorrow: Monday' : scheduleDayName}</span>
             </div>
 
-            <div className="dash-grid">
-                {/* Today's Schedule */}
-                <div className="dash-section">
-                    <div className="section-header">
-                        <h3>Today's Classes</h3>
-                        <span className="badge-info">{isOffDay ? 'Monday (Tomorrow)' : scheduleDayName}</span>
+            {/* Stats */}
+            <div className="stats-grid">
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><BookOpen size={16} color="#60a5fa" /></div>
                     </div>
-                    <div className="schedule-list glass-panel">
-                        {loading ? (
-                            <div className="empty-state"><div className="spinner" /></div>
-                        ) : todaySchedule.length === 0 ? (
-                            <div className="empty-state"><Calendar size={40} className="empty-icon" /><p>No classes today</p></div>
-                        ) : todaySchedule.map(item => {
-                            const sty = statusStyles[item.status];
-                            return (
-                                <div key={item.id} className="class-card" onClick={() => { setShowRequestModal(true); }}>
-                                    <div className="class-stripe" style={{ background: item.color }} />
-                                    <div className="class-body">
-                                        <div className="class-top">
-                                            <h4>{item.subject}</h4>
-                                            <span className="status-badge" style={{ background: sty.bg, color: sty.text }}>{sty.label}</span>
+                    <div className="stat-number">{loading ? '...' : todaySchedule.length}</div>
+                    <div className="stat-label">Classes Today</div>
+                </div>
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.1)' }}><CheckCircle size={16} color="#10b981" /></div>
+                    </div>
+                    <div className="stat-number">{todaySchedule.filter(s => s.status === 'finished').length}</div>
+                    <div className="stat-label">Completed</div>
+                </div>
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(167,139,250,0.1)' }}><Users size={16} color="#a78bfa" /></div>
+                    </div>
+                    <div className="stat-number">{schedules.length}</div>
+                    <div className="stat-label">Total Entries</div>
+                </div>
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.1)' }}><Megaphone size={16} color="#f59e0b" /></div>
+                    </div>
+                    <div className="stat-number">{announcements.length}</div>
+                    <div className="stat-label">Announcements</div>
+                </div>
+            </div>
+
+            {/* Main two-column layout */}
+            <div className="dash-two-col">
+                {/* Left — Today's Schedule */}
+                <div className="dash-col">
+                    <div>
+                        <div className="dash-section-header">
+                            <h3><Calendar size={15} /> Today's Classes</h3>
+                            {todaySchedule.length > 0 && <span className="dash-section-count">{todaySchedule.length}</span>}
+                        </div>
+                        <div className="dash-schedule-panel">
+                            {loading ? (
+                                <div className="dash-panel-empty"><div className="spinner" /></div>
+                            ) : todaySchedule.length === 0 ? (
+                                <div className="dash-panel-empty"><Calendar size={36} /><p>No classes scheduled</p></div>
+                            ) : todaySchedule.map(item => {
+                                const sty = statusStyles[item.status];
+                                return (
+                                    <div key={item.id} className={`dash-class-card${item.status === 'ongoing' ? ' is-ongoing' : ''}`}>
+                                        <div className="dash-class-stripe" style={{ background: item.color }} />
+                                        <div className="dash-class-body">
+                                            <div className="dash-class-top">
+                                                <span className="dash-class-subject">{item.status === 'ongoing' && <span className="dash-live-dot" />}{item.subject}</span>
+                                                <span className="dash-class-status" style={{ background: sty.bg, color: sty.text }}>{sty.label}</span>
+                                            </div>
+                                            <div className="dash-class-details">
+                                                <span><MapPin size={13} /> {item.room}</span>
+                                                <span><Clock size={13} /> {item.time}</span>
+                                                <span><Users size={13} /> {item.section}</span>
+                                            </div>
+                                            {item.status === 'ongoing' && (
+                                                <div className="dash-progress"><div className="dash-progress-fill" style={{ width: `${item.progress}%`, background: item.color }} /></div>
+                                            )}
                                         </div>
-                                        <div className="class-details">
-                                            <span><MapPin size={14} /> {item.room}</span>
-                                            <span><Clock size={14} /> {item.time}</span>
-                                            <span><Users size={14} /> {item.section}</span>
-                                        </div>
-                                        {item.status === 'ongoing' && (
-                                            <div className="progress-bar"><div className="progress-fill" style={{ width: `${item.progress}%`, background: item.color }} /></div>
-                                        )}
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* My Requests */}
+                    <div>
+                        <div className="dash-section-header">
+                            <h3><FileText size={15} /> My Requests</h3>
+                            {myRequests.length > 0 && <span className="dash-section-count">{myRequests.length}</span>}
+                        </div>
+                        <div className="dash-schedule-panel">
+                            {myRequests.length === 0 ? (
+                                <div className="dash-panel-empty compact"><FileText size={24} /><p>No requests yet</p></div>
+                            ) : myRequests.slice(0, 5).map((req: any) => {
+                                const sc: Record<string, { bg: string; text: string; label: string }> = {
+                                    pending: { bg: 'rgba(251,191,36,0.12)', text: '#fbbf24', label: 'PENDING' },
+                                    approved: { bg: 'rgba(34,197,94,0.12)', text: '#22c55e', label: 'APPROVED' },
+                                    rejected: { bg: 'rgba(239,68,68,0.12)', text: '#ef4444', label: 'REJECTED' },
+                                };
+                                const s = sc[req.status] || sc.pending;
+                                return (
+                                    <div key={req.id} className="dash-req-item">
+                                        <div className="dash-req-top">
+                                            <span className="dash-req-type">{req.request_type}</span>
+                                            <span className="dash-req-badge" style={{ background: s.bg, color: s.text }}>{s.label}</span>
+                                        </div>
+                                        <p className="dash-req-reason">{req.reason}</p>
+                                        {req.admin_notes && <p className="dash-req-notes">Admin: {req.admin_notes}</p>}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
-                {/* Right Column */}
-                <div className="dash-right">
+                {/* Right — Actions, Events, Announcements */}
+                <div className="dash-col">
                     {/* Quick Actions */}
-                    <div className="section-header"><h3>Quick Actions</h3></div>
-                    <div className="quick-actions">
-                        <button className="action-btn glass-panel" onClick={() => setShowRequestModal(true)}>
-                            <div className="action-icon" style={{ background: 'rgba(59,130,246,0.12)' }}><ArrowRightLeft size={18} color="#60a5fa" /></div>
-                            <span>Request Change</span>
-                        </button>
-                        <button className="action-btn glass-panel" onClick={() => setShowMessageAdmin(true)}>
-                            <div className="action-icon" style={{ background: 'rgba(99,102,241,0.12)' }}><MessageSquare size={18} color="#818cf8" /></div>
-                            <span>Message Admin</span>
-                        </button>
-                        <button className="action-btn glass-panel" onClick={() => setShowReportRoom(true)}>
-                            <div className="action-icon" style={{ background: 'rgba(245,158,11,0.12)' }}><AlertTriangle size={18} color="#f59e0b" /></div>
-                            <span>Report Issue</span>
-                        </button>
-                        <button className="action-btn glass-panel" onClick={() => setShowAnnounceModal(true)}>
-                            <div className="action-icon" style={{ background: 'rgba(59,130,246,0.12)' }}><Megaphone size={18} color="#60a5fa" /></div>
-                            <span>Announce</span>
-                        </button>
-                        <button className="action-btn glass-panel" onClick={() => setShowEventModal(true)}>
-                            <div className="action-icon" style={{ background: 'rgba(16,185,129,0.12)' }}><Plus size={18} color="#34d399" /></div>
-                            <span>Create Event</span>
-                        </button>
+                    <div>
+                        <div className="dash-section-header"><h3>Quick Actions</h3></div>
+                        <div className="dash-quick-actions">
+                            <button className="dash-action-btn" onClick={() => setShowRequestModal(true)}>
+                                <div className="dash-action-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><ArrowRightLeft size={16} color="#60a5fa" /></div>
+                                Request Change
+                            </button>
+                            <button className="dash-action-btn" onClick={() => setShowMessageAdmin(true)}>
+                                <div className="dash-action-icon" style={{ background: 'rgba(99,102,241,0.1)' }}><MessageSquare size={16} color="#818cf8" /></div>
+                                Message Admin
+                            </button>
+                            <button className="dash-action-btn" onClick={() => setShowReportRoom(true)}>
+                                <div className="dash-action-icon" style={{ background: 'rgba(245,158,11,0.1)' }}><AlertTriangle size={16} color="#f59e0b" /></div>
+                                Report Issue
+                            </button>
+                            <button className="dash-action-btn" onClick={() => setShowAnnounceModal(true)}>
+                                <div className="dash-action-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><Megaphone size={16} color="#60a5fa" /></div>
+                                Announce
+                            </button>
+                            <button className="dash-action-btn" onClick={() => setShowEventModal(true)}>
+                                <div className="dash-action-icon" style={{ background: 'rgba(16,185,129,0.1)' }}><Plus size={16} color="#34d399" /></div>
+                                Create Event
+                            </button>
+                        </div>
                     </div>
 
                     {/* Upcoming Events */}
                     {upcomingEvents.length > 0 && (
-                        <>
-                            <div className="section-header" style={{ marginTop: '1.5rem' }}><h3>Upcoming Events</h3></div>
-                            <div className="events-list glass-panel">
-                                {upcomingEvents.slice(0, 3).map((evt: any) => (
-                                    <div key={evt.id} className="event-item">
-                                        <div className="event-info">
-                                            <strong>{evt.title}</strong>
-                                            <span className="text-sm text-muted">{new Date(evt.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        <div>
+                            <div className="dash-section-header">
+                                <h3><Calendar size={15} /> Upcoming Events</h3>
+                                <span className="dash-section-count">{upcomingEvents.length}</span>
+                            </div>
+                            <div className="dash-schedule-panel">
+                                {upcomingEvents.slice(0, 4).map((evt: any) => (
+                                    <div key={evt.id} className="dash-event-item">
+                                        <div className="dash-event-info">
+                                            <span className="dash-event-title">{evt.title}</span>
+                                            <span className="dash-event-meta">{new Date(evt.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                                         </div>
                                         {evt.created_by === profile?.id && (
-                                            <button className="btn-icon-sm" onClick={() => deleteEvent(evt.id)}><X size={14} /></button>
+                                            <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => deleteEvent(evt.id)}><X size={14} /></button>
                                         )}
                                     </div>
                                 ))}
                             </div>
-                        </>
+                        </div>
                     )}
 
-                    {/* Recent Announcements */}
-                    <div className="section-header" style={{ marginTop: '1.5rem' }}><h3>Recent Announcements</h3></div>
-                    <div className="announcements-list glass-panel">
-                        {announcements.length === 0 ? (
-                            <div className="empty-state sm"><Megaphone size={24} className="empty-icon" /><p>No announcements</p></div>
-                        ) : announcements.slice(0, 3).map((ann: any) => {
-                            const dotColor = ann.priority === 'urgent' ? '#ef4444' : ann.priority === 'important' ? '#f59e0b' : '#22c55e';
-                            return (
-                                <div key={ann.id} className="ann-item">
-                                    <div className="ann-dot" style={{ background: dotColor }} />
-                                    <div className="ann-content">
-                                        <strong>{ann.title}</strong>
-                                        <p>{ann.content}</p>
-                                        <span className="text-xs text-muted">{ann.created_at ? new Date(ann.created_at).toLocaleDateString() : ''}</span>
+                    {/* Announcements */}
+                    <div>
+                        <div className="dash-section-header">
+                            <h3><Megaphone size={15} /> Recent Announcements</h3>
+                        </div>
+                        <div className="dash-schedule-panel">
+                            {announcements.length === 0 ? (
+                                <div className="dash-panel-empty compact"><Megaphone size={24} /><p>No announcements</p></div>
+                            ) : announcements.slice(0, 4).map((ann: any) => {
+                                const dotColor = ann.priority === 'urgent' ? '#ef4444' : ann.priority === 'important' ? '#f59e0b' : '#22c55e';
+                                return (
+                                    <div key={ann.id} className="dash-ann-item">
+                                        <div className="dash-ann-dot" style={{ background: dotColor }} />
+                                        <div className="dash-ann-body">
+                                            <div className="dash-ann-title">{ann.title}</div>
+                                            <p className="dash-ann-text">{ann.content}</p>
+                                            <span className="dash-ann-meta">{ann.created_at ? new Date(ann.created_at).toLocaleDateString() : ''}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {/* My Requests — always visible */}
-                    <div className="section-header" style={{ marginTop: '1.5rem' }}><h3>My Requests</h3></div>
-                    <div className="requests-list glass-panel">
-                        {myRequests.length === 0 ? (
-                            <div className="empty-state sm"><FileText size={24} className="empty-icon" /><p>No requests yet</p></div>
-                        ) : myRequests.slice(0, 5).map((req: any) => {
-                            const sc: Record<string, { bg: string; text: string; label: string }> = {
-                                pending: { bg: 'rgba(251,191,36,0.12)', text: '#fbbf24', label: 'PENDING' },
-                                approved: { bg: 'rgba(34,197,94,0.12)', text: '#22c55e', label: 'APPROVED' },
-                                rejected: { bg: 'rgba(239,68,68,0.12)', text: '#ef4444', label: 'REJECTED' },
-                            };
-                            const s = sc[req.status] || sc.pending;
-                            return (
-                                <div key={req.id} className="req-item">
-                                    <div className="req-top">
-                                        <span className="req-type">{req.request_type}</span>
-                                        <span className="req-badge" style={{ background: s.bg, color: s.text }}>{s.label}</span>
-                                    </div>
-                                    <p className="req-reason">{req.reason}</p>
-                                    {req.admin_notes && <p className="req-notes">Admin: {req.admin_notes}</p>}
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* ---- MODALS ---- */}
-            {/* Schedule Change Request */}
             {showRequestModal && (
                 <div className="modal-overlay" onClick={() => setShowRequestModal(false)}>
-                    <div className="modal-box glass-panel" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header"><h3>Request Schedule Change</h3><button onClick={() => setShowRequestModal(false)}><X size={20} /></button></div>
-                        <div className="modal-body">
-                            <label>Send Request To (Required)</label>
-                            <select className="input" value={selectedAdminId} onChange={e => setSelectedAdminId(e.target.value)} style={{ marginBottom: 12, padding: '10px' }}>
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="dash-modal-header">
+                            <h3>Request Schedule Change</h3>
+                            <button className="dash-modal-close" onClick={() => setShowRequestModal(false)}><X size={18} /></button>
+                        </div>
+                        <div className="dash-modal-body">
+                            <label>Send Request To</label>
+                            <select value={selectedAdminId} onChange={e => setSelectedAdminId(e.target.value)}>
                                 {allAdmins.map(adm => (
-                                    <option key={adm.id} value={adm.id}>{adm.full_name || 'Admin'} - {adm.role.replace('_', ' ').toUpperCase()}</option>
+                                    <option key={adm.id} value={adm.id}>{adm.full_name || 'Admin'} – {adm.role.replace('_', ' ').toUpperCase()}</option>
                                 ))}
                             </select>
                             <label>Request Type</label>
-                            <div className="btn-group">
+                            <div className="dash-btn-group">
                                 {(['reschedule', 'cancel', 'swap'] as const).map(t => (
-                                    <button key={t} className={`btn-tab ${requestType === t ? 'active' : ''}`} onClick={() => setRequestType(t)}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
+                                    <button key={t} className={`dash-btn-tab ${requestType === t ? 'active' : ''}`} onClick={() => setRequestType(t)}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
                                 ))}
                             </div>
                             <label>Reason</label>
                             <textarea value={requestReason} onChange={e => setRequestReason(e.target.value)} placeholder="Explain why you need this change..." rows={3} />
-                            <button className="btn-primary full" onClick={handleSubmitRequest} disabled={submitting || !selectedAdminId}>{submitting ? 'Submitting...' : 'Submit to Admin'}</button>
+                            <button className="dash-modal-btn dash-modal-btn-primary" onClick={handleSubmitRequest} disabled={submitting || !selectedAdminId}>{submitting ? 'Submitting...' : 'Submit to Admin'}</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Report Room Issue */}
             {showReportRoom && (
                 <div className="modal-overlay" onClick={() => setShowReportRoom(false)}>
-                    <div className="modal-box glass-panel" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header"><h3>Report Room Issue</h3><button onClick={() => setShowReportRoom(false)}><X size={20} /></button></div>
-                        <div className="modal-body">
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="dash-modal-header">
+                            <h3>Report Room Issue</h3>
+                            <button className="dash-modal-close" onClick={() => setShowReportRoom(false)}><X size={18} /></button>
+                        </div>
+                        <div className="dash-modal-body">
                             <label>Room Name</label>
                             <input value={reportRoom} onChange={e => setReportRoom(e.target.value)} placeholder="e.g. Lab 204, Room 305" />
                             <label>Issue Description</label>
                             <textarea value={reportIssue} onChange={e => setReportIssue(e.target.value)} placeholder="Describe the issue..." rows={3} />
-                            <button className="btn-warning full" onClick={handleReportRoom} disabled={sendingReport}>{sendingReport ? 'Submitting...' : 'Submit Report'}</button>
+                            <button className="dash-modal-btn dash-modal-btn-warning" onClick={handleReportRoom} disabled={sendingReport}>{sendingReport ? 'Submitting...' : 'Submit Report'}</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Message Admin */}
             {showMessageAdmin && (
                 <div className="modal-overlay" onClick={() => setShowMessageAdmin(false)}>
-                    <div className="modal-box glass-panel" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header"><h3>Message Admin</h3><button onClick={() => setShowMessageAdmin(false)}><X size={20} /></button></div>
-                        <div className="modal-body">
-                            <label>Select Admin (Required)</label>
-                            <select className="input" value={selectedAdminId} onChange={e => setSelectedAdminId(e.target.value)} style={{ marginBottom: 12, padding: '10px' }}>
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="dash-modal-header">
+                            <h3>Message Admin</h3>
+                            <button className="dash-modal-close" onClick={() => setShowMessageAdmin(false)}><X size={18} /></button>
+                        </div>
+                        <div className="dash-modal-body">
+                            <label>Select Admin</label>
+                            <select value={selectedAdminId} onChange={e => setSelectedAdminId(e.target.value)}>
                                 {allAdmins.map(adm => (
-                                    <option key={adm.id} value={adm.id}>{adm.full_name || 'Admin'} - {adm.role.replace('_', ' ').toUpperCase()}</option>
+                                    <option key={adm.id} value={adm.id}>{adm.full_name || 'Admin'} – {adm.role.replace('_', ' ').toUpperCase()}</option>
                                 ))}
                             </select>
                             <label>Your Message</label>
                             <textarea value={adminMessage} onChange={e => setAdminMessage(e.target.value)} placeholder="Type your message..." rows={4} />
-                            <button className="btn-success full" onClick={handleSendAdminMessage} disabled={sendingMessage}><Send size={16} /> {sendingMessage ? 'Sending...' : 'Send Message'}</button>
+                            <button className="dash-modal-btn dash-modal-btn-success" onClick={handleSendAdminMessage} disabled={sendingMessage}><Send size={15} /> {sendingMessage ? 'Sending...' : 'Send Message'}</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Announce to Section */}
             {showAnnounceModal && (
                 <div className="modal-overlay" onClick={() => setShowAnnounceModal(false)}>
-                    <div className="modal-box glass-panel" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header"><h3>Announce to Section</h3><button onClick={() => setShowAnnounceModal(false)}><X size={20} /></button></div>
-                        <div className="modal-body">
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="dash-modal-header">
+                            <h3>Announce to Section</h3>
+                            <button className="dash-modal-close" onClick={() => setShowAnnounceModal(false)}><X size={18} /></button>
+                        </div>
+                        <div className="dash-modal-body">
                             <label>Select Section</label>
-                            <div className="chip-group">
+                            <div className="dash-chip-group">
                                 {sections.map((sec: any) => (
-                                    <button key={sec.id} className={`chip ${annSection === sec.name ? 'active' : ''}`} onClick={() => setAnnSection(sec.name)}>{sec.name}</button>
+                                    <button key={sec.id} className={`dash-chip ${annSection === sec.name ? 'active' : ''}`} onClick={() => setAnnSection(sec.name)}>{sec.name}</button>
                                 ))}
                             </div>
                             <label>Title</label>
                             <input value={annTitle} onChange={e => setAnnTitle(e.target.value)} placeholder="e.g. Class Cancelled" />
                             <label>Message</label>
                             <textarea value={annContent} onChange={e => setAnnContent(e.target.value)} placeholder="Write your announcement..." rows={3} />
-                            <button className="btn-primary full" onClick={handleAnnounce} disabled={sendingAnn}>{sendingAnn ? 'Posting...' : 'Post Announcement'}</button>
+                            <button className="dash-modal-btn dash-modal-btn-primary" onClick={handleAnnounce} disabled={sendingAnn}>{sendingAnn ? 'Posting...' : 'Post Announcement'}</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Create Event */}
             {showEventModal && (
                 <div className="modal-overlay" onClick={() => setShowEventModal(false)}>
-                    <div className="modal-box glass-panel" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header"><h3>Create Event</h3><button onClick={() => setShowEventModal(false)}><X size={20} /></button></div>
-                        <div className="modal-body">
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="dash-modal-header">
+                            <h3>Create Event</h3>
+                            <button className="dash-modal-close" onClick={() => setShowEventModal(false)}><X size={18} /></button>
+                        </div>
+                        <div className="dash-modal-body">
                             <label>Event Title</label>
                             <input value={eventTitle} onChange={e => setEventTitle(e.target.value)} placeholder="e.g. Review Session" />
                             <label>Date</label>
                             <input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
                             <label>Description (Optional)</label>
                             <textarea value={eventDesc} onChange={e => setEventDesc(e.target.value)} placeholder="Add details..." rows={2} />
-                            <button className="btn-success full" onClick={handleCreateEvent} disabled={creatingEvent}>{creatingEvent ? 'Creating...' : 'Create Event'}</button>
+                            <button className="dash-modal-btn dash-modal-btn-success" onClick={handleCreateEvent} disabled={creatingEvent}>{creatingEvent ? 'Creating...' : 'Create Event'}</button>
                         </div>
                     </div>
                 </div>
             )}
-
-            <style>{`
-                .teacher-dash { display: flex; flex-direction: column; gap: 1.5rem; }
-
-                .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
-                .stat-card { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 1.25rem; text-align: center; }
-                .stat-num { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); }
-                .stat-label { font-size: 0.8rem; color: var(--text-muted); }
-
-                .dash-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; }
-                .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
-                .section-header h3 { font-size: 1.1rem; font-weight: 600; }
-                .badge-info { background: rgba(59,130,246,0.15); color: #60a5fa; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; }
-
-                .schedule-list { padding: 0; overflow: hidden; }
-                .class-card { display: flex; border-bottom: 1px solid var(--border-default); cursor: pointer; transition: background 0.2s; }
-                .class-card:hover { background: var(--bg-hover); }
-                .class-card:last-child { border-bottom: none; }
-                .class-stripe { width: 4px; flex-shrink: 0; }
-                .class-body { flex: 1; padding: 1rem 1.25rem; }
-                .class-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-                .class-top h4 { font-size: 1rem; font-weight: 600; }
-                .status-badge { padding: 3px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; }
-                .class-details { display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-secondary); }
-                .class-details span { display: flex; align-items: center; gap: 4px; }
-                .progress-bar { height: 3px; background: var(--bg-elevated); border-radius: 3px; margin-top: 0.75rem; overflow: hidden; }
-                .progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
-
-                .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-                .action-btn { display: flex; align-items: center; gap: 0.75rem; padding: 1rem; border: none; background: transparent; cursor: pointer; transition: all 0.2s; text-align: left; width: 100%; color: var(--text-primary); font-size: 0.85rem; font-weight: 500; }
-                .action-btn:hover { transform: translateY(-1px); }
-                .action-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-
-                .events-list, .announcements-list, .requests-list { padding: 0; overflow: hidden; }
-                .event-item { display: flex; justify-content: space-between; align-items: center; padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
-                .event-item:last-child { border-bottom: none; }
-                .event-info { display: flex; flex-direction: column; gap: 2px; }
-                .event-info strong { font-size: 0.9rem; }
-
-                .ann-item { display: flex; gap: 0.75rem; padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
-                .ann-item:last-child { border-bottom: none; }
-                .ann-dot { width: 4px; border-radius: 2px; flex-shrink: 0; }
-                .ann-content { flex: 1; }
-                .ann-content strong { font-size: 0.9rem; display: block; margin-bottom: 2px; }
-                .ann-content p { font-size: 0.8rem; color: var(--text-secondary); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-                .req-item { padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-default); }
-                .req-item:last-child { border-bottom: none; }
-                .req-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
-                .req-type { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; }
-                .req-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700; }
-                .req-reason { font-size: 0.85rem; color: var(--text-secondary); margin: 4px 0 0; }
-                .req-notes { font-size: 0.8rem; color: #60a5fa; font-style: italic; margin: 4px 0 0; }
-
-                .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; color: var(--text-muted); gap: 0.5rem; }
-                .empty-state.sm { padding: 1.5rem; }
-                .empty-icon { opacity: 0.3; }
-
-                .text-sm { font-size: 0.8rem; }
-                .text-xs { font-size: 0.7rem; }
-                .text-muted { color: var(--text-muted); }
-
-                .btn-icon-sm { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; }
-                .btn-icon-sm:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
-
-                /* Modals */
-                .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-                .modal-box { width: 100%; max-width: 480px; padding: 0; overflow: hidden; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 16px; box-shadow: var(--shadow-xl); }
-                .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-default); }
-                .modal-header h3 { font-size: 1.1rem; font-weight: 600; }
-                .modal-header button { background: none; border: none; color: var(--text-muted); cursor: pointer; }
-                .modal-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
-                .modal-body label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
-                .modal-body input, .modal-body textarea { width: 100%; padding: 0.75rem 1rem; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 10px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; font-family: var(--font-family); }
-                .modal-body input:focus, .modal-body textarea:focus { outline: none; border-color: var(--accent-primary); }
-
-                .btn-group { display: flex; gap: 0.5rem; }
-                .btn-tab { flex: 1; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary); font-size: 0.85rem; cursor: pointer; transition: all 0.2s; }
-                .btn-tab.active { background: rgba(59,130,246,0.1); border-color: var(--accent-primary); color: var(--accent-primary); }
-
-                .chip-group { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-                .chip { padding: 0.4rem 1rem; border-radius: 20px; border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary); font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
-                .chip.active { background: #6366f1; border-color: #6366f1; color: white; }
-
-                .btn-primary { background: var(--gradient-primary); color: white; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 500; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s; }
-                .btn-primary:hover { opacity: 0.9; }
-                .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-                .btn-warning { background: #f59e0b; color: white; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 500; border: none; cursor: pointer; transition: all 0.2s; }
-                .btn-success { background: #10b981; color: white; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 500; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s; }
-                .full { width: 100%; margin-top: 0.5rem; }
-
-                @media (max-width: 1024px) {
-                    .stats-row { grid-template-columns: repeat(2, 1fr); }
-                    .dash-grid { grid-template-columns: 1fr; }
-                }
-            `}</style>
         </div>
     );
 };
