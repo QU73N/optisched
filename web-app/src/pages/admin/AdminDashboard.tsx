@@ -6,7 +6,7 @@ import {
     Users, CalendarDays, AlertTriangle, BookOpen, TrendingUp, Clock,
     Inbox, CheckCircle, XCircle, Megaphone, Trash2, Edit3,
     X, Loader2, KeyRound, MessageSquare, CalendarPlus,
-    Activity, BarChart3, PieChart as PieIcon, Shield, Zap, Calendar
+    Activity, BarChart3, PieChart as PieIcon, Shield
 } from 'lucide-react';
 import {
     AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -48,7 +48,6 @@ const AdminDashboard: React.FC = () => {
     const canSeeEvents = isPowerAdmin || isScheduleAdmin || isScheduleManager;
     const canPostAnnouncements = isPowerAdmin || isSystemAdmin || isScheduleAdmin;
     const canCreateEvents = isPowerAdmin || isScheduleAdmin || isScheduleManager;
-    const [loading, setLoading] = useState(true);
     const [requests, setRequests] = useState<ChangeRequest[]>([]);
     const [requestsLoading, setRequestsLoading] = useState(true);
     const [resolvingRequest, setResolvingRequest] = useState<ChangeRequest | null>(null);
@@ -120,7 +119,6 @@ const AdminDashboard: React.FC = () => {
                 rooms: roomsR.count || 0,
             });
         } catch { /* ignore */ }
-        setLoading(false);
     };
 
     const fetchRequests = async () => {
@@ -185,12 +183,6 @@ const AdminDashboard: React.FC = () => {
         setResolveNotes('');
     };
 
-    const handleDismissRequest = async (id: string) => {
-        setRequests(prev => prev.filter(r => r.id !== id));
-        const client = supabaseAdmin || supabase;
-        await client.from('schedule_change_requests').delete().eq('id', id);
-    };
-
     const handlePostAnnouncement = async () => {
         if (!annTitle.trim()) return;
         setPostingAnn(true);
@@ -241,12 +233,6 @@ const AdminDashboard: React.FC = () => {
             fetchEvents();
         } catch (e: any) { alert('Error: ' + e.message); }
         setPostingEvent(false);
-    };
-
-    const handleDeleteEvent = async (id: string) => {
-        if (!window.confirm('Delete event?')) return;
-        await supabase.from('custom_events').delete().eq('id', id);
-        fetchEvents();
     };
 
     const handleApproveReset = async (req: ResetRequest) => {
@@ -512,401 +498,344 @@ const AdminDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* ===== CHARTS ROW 1: Weekly Activity + Request Volume + Room Usage ===== */}
-            <div className="dash-row-3" style={{ marginBottom: 14 }}>
-                {/* Weekly Activity */}
-                <div className="dash-card dash-stagger">
-                    <div className="dash-card-header">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <div className="dash-card-title"><Activity size={16} /> Weekly Activity</div>
-                            <span className="dash-card-subtitle">Schedule & request trends</span>
+            {/* ===== MAIN DASHBOARD LAYOUT ===== */}
+            <div className="admin-dash-main">
+                {/* LEFT COLUMN */}
+                <div className="admin-dash-left">
+                    {/* ROW 1: STATS STRIP */}
+                    <div className="stats-grid">
+                        {statCards.map((card, idx) => (
+                            <div key={idx} className={`stat-card ${card.warning ? 'stat-warning' : ''}`}>
+                                <div className="stat-icon" style={{ color: card.color }}>
+                                    <card.icon size={20} />
+                                </div>
+                                <div className="stat-value">{card.value}</div>
+                        <div className="stat-label">{card.label}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* ROW 2: ACTION & COMMUNICATION */}
+                    <div className="admin-dash-row-2">
+                        {/* Password Reset Requests */}
+                        {canSeeResets && resetRequests.length > 0 && (
+                            <div className="dash-card dash-stagger">
+                                <div className="dash-card-header">
+                                    <div className="dash-card-title"><KeyRound size={16} /> Password Resets</div>
+                                    <span className="dash-card-badge" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>{resetRequests.length}</span>
+                                </div>
+                                <div className="dash-list">
+                                    {resetRequests.slice(0, 3).map(r => (
+                                        <div key={r.id} className="dash-list-item">
+                                            <div className="dash-list-item-accent" style={{ background: '#f59e0b' }} />
+                                            <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
+                                                <div className="dash-list-item-title">{r.email}</div>
+                                                <div className="dash-list-item-meta">{r.requested_at ? new Date(r.requested_at).toLocaleString() : 'Just now'}</div>
+                                                <div className="dash-list-item-actions">
+                                                    <button className="btn btn-primary" onClick={() => handleApproveReset(r)}><CheckCircle size={12} /></button>
+                                                    <button className="btn btn-secondary" style={{ color: '#ef4444' }} onClick={() => handleDenyReset(r)}><XCircle size={12} /></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Teacher Requests */}
+                        {canSeeRequests && (
+                            <div className="dash-card dash-stagger">
+                                <div className="dash-card-header">
+                                    <div className="dash-card-title"><Inbox size={16} /> Teacher Requests</div>
+                                    {pendingRequests.length > 0 && <span className="dash-card-badge" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>{pendingRequests.length}</span>}
+                                </div>
+                                {requestsLoading ? (
+                                    <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><div className="spinner" /></div>
+                                ) : requests.length === 0 ? (
+                                    <div className="dash-empty"><Inbox size={28} /><div>No requests</div></div>
+                                ) : (
+                                    <div className="dash-list">
+                                        {requests.slice(0, 5).map(req => {
+                                            const badge = getStatusBadge(req.status);
+                                            return (
+                                                <div key={req.id} className="dash-list-item">
+                                                    <div className="dash-list-item-accent" style={{ background: badge.color }} />
+                                                    <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <div className="dash-list-item-title">{req.teacher_name}</div>
+                                                            <span className="dash-status-badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+                                                        </div>
+                                                        <div className="dash-list-item-meta" style={{ textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em', fontSize: 11 }}>{req.request_type}</div>
+                                                        {req.status === 'pending' && (
+                                                            <div className="dash-list-item-actions">
+                                                                <button className="btn btn-primary" onClick={() => { setResolvingRequest(req); setResolveAction('approved'); }}><CheckCircle size={12} /></button>
+                                                                <button className="btn btn-secondary" style={{ color: '#ef4444' }} onClick={() => { setResolvingRequest(req); setResolveAction('rejected'); }}><XCircle size={12} /></button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Announcements */}
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><Megaphone size={16} /> Announcements</div>
+                                <span className="dash-card-badge" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>{announcements.length}</span>
+                            </div>
+                            {announcements.length === 0 ? (
+                                <div className="dash-empty"><Megaphone size={28} /><div>No announcements</div></div>
+                            ) : (
+                                <div className="dash-list">
+                                    {announcements.slice(0, 4).map(ann => {
+                                        const prio = prioStyles[ann.priority] || prioStyles.normal;
+                                        return (
+                                            <div key={ann.id} className="dash-list-item">
+                                                <div className="dash-list-item-accent" style={{ background: prio.color }} />
+                                                <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div className="dash-list-item-title">{ann.title}</div>
+                                                        <div style={{ display: 'flex', gap: 2 }}>
+                                                            <button className="dash-icon-btn" onClick={() => openEditAnn(ann)}><Edit3 size={13} /></button>
+                                                            <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => handleDeleteAnn(ann.id)}><Trash2 size={13} /></button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="dash-list-item-desc">{ann.content}</div>
+                                                    <span className="dash-status-badge" style={{ background: prio.bg, color: prio.color, fontSize: 10 }}>{ann.priority.toUpperCase()}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
-                        <div className="dash-time-selector">
-                            <select
-                                className="dash-time-select"
-                                value={weeklyTimeRange}
-                                onChange={(e) => setWeeklyTimeRange(e.target.value as any)}
-                            >
-                                {timeRangeOptions.map(option => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
+
+                        {/* Upcoming Events */}
+                        {canSeeEvents && (
+                            <div className="dash-card dash-stagger">
+                                <div className="dash-card-header">
+                                    <div className="dash-card-title"><CalendarPlus size={16} /> Events</div>
+                                    <span className="dash-card-badge" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>{events.length}</span>
+                                </div>
+                                {events.length === 0 ? (
+                                    <div className="dash-empty"><CalendarPlus size={28} /><div>No events</div></div>
+                                ) : (
+                                    <div className="dash-list">
+                                        {events.slice(0, 4).map(ev => (
+                                            <div key={ev.id} className="dash-list-item">
+                                                <div className="dash-list-item-accent" style={{ background: '#10b981' }} />
+                                                <div className="dash-list-item-icon" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                                                    <CalendarDays size={14} />
+                                                </div>
+                                                <div className="dash-list-item-body">
+                                                    <div className="dash-list-item-title">{ev.title}</div>
+                                                    <div className="dash-list-item-meta">
+                                                        {new Date(ev.event_date).toLocaleDateString()} • {ev.start_time?.slice(0, 5)} – {ev.end_time?.slice(0, 5)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Messages */}
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><MessageSquare size={16} /> Messages</div>
+                                {recentMessages.length > 0 && <span className="dash-card-badge" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>{recentMessages.length}</span>}
+                            </div>
+                            {recentMessages.length === 0 ? (
+                                <div className="dash-empty"><MessageSquare size={28} /><div>No messages</div></div>
+                            ) : (
+                                <div className="dash-list">
+                                    {recentMessages.slice(0, 4).map(m => (
+                                        <div key={m.id} className="dash-list-item">
+                                            <div className="dash-list-item-accent" style={{ background: '#6366f1' }} />
+                                            <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
+                                                <div className="dash-list-item-title">{m.sender_name}</div>
+                                                <div className="dash-list-item-desc">{m.message?.slice(0, 80)}{m.message?.length > 80 ? '…' : ''}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <a href="/admin/messages" className="btn btn-secondary" style={{ fontSize: 12, padding: '8px', textAlign: 'center', marginTop: 8, borderRadius: 'var(--radius-md)' }}>View All</a>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ROW 3: OPERATIONAL SUPPORT */}
+                    <div className="admin-dash-row-3">
+                        {/* Users */}
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><PieIcon size={16} /> Users</div>
+                                <span className="dash-card-badge" style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>{stats.totalUsers}</span>
+                            </div>
+                            <div className="dash-chart-wrap-sm">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={userDistribution} cx="50%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={3} dataKey="value" stroke="none">
+                                            {userDistribution.map((entry, i) => (
+                                                <Cell key={i} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip content={<ChartTooltipContent />} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                                {userDistribution.map(u => (
+                                    <div key={u.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: u.color }} />
+                                            <span style={{ color: 'var(--text-secondary)' }}>{u.name}</span>
+                                        </div>
+                                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{u.value}</span>
+                                    </div>
                                 ))}
-                            </select>
+                            </div>
                         </div>
-                    </div>
-                    <div className="dash-chart-wrap-sm">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={filteredWeeklyActivity} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="gSchedules" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="gRequests" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.25} />
-                                        <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                                <XAxis dataKey="day" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                <Tooltip content={<ChartTooltipContent />} />
-                                <Area type="monotone" dataKey="schedules" stroke="#3b82f6" strokeWidth={2} fill="url(#gSchedules)" name="Schedules" />
-                                <Area type="monotone" dataKey="requests" stroke="#f59e0b" strokeWidth={2} fill="url(#gRequests)" name="Requests" />
-                                <Area type="monotone" dataKey="conflicts" stroke="#ef4444" strokeWidth={1.5} fill="none" name="Conflicts" strokeDasharray="4 4" />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div className="dash-chart-stats">
-                        <div className="dash-chart-stat">
-                            <div className="dash-chart-stat-value">{stats.schedules}</div>
-                            <div className="dash-chart-stat-label">Schedules</div>
-                        </div>
-                        <div className="dash-chart-stat">
-                            <div className="dash-chart-stat-value">{requests.length}</div>
-                            <div className="dash-chart-stat-label">Requests</div>
-                        </div>
-                        <div className="dash-chart-stat">
-                            <div className="dash-chart-stat-value" style={{ color: stats.conflicts > 0 ? '#ef4444' : undefined }}>{stats.conflicts}</div>
-                            <div className="dash-chart-stat-label">Conflicts</div>
+
+                        {/* System Status */}
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><Shield size={16} /> System Status</div>
+                                <span className="dash-card-badge" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Online</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div className="status-item">
+                                    <div className="status-dot status-online" />
+                                    <span>Database</span>
+                                </div>
+                                <div className="status-item">
+                                    <div className="status-dot status-online" />
+                                    <span>Real-time sync</span>
+                                </div>
+                                <div className="status-item">
+                                    <div className="status-dot status-online" />
+                                    <span>Authentication</span>
+                                </div>
+                                <div className="status-item">
+                                    <div className="status-dot status-online" />
+                                    <span>Storage</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Request Volume */}
-                {canSeeRequests && (
+                {/* RIGHT COLUMN: GRAPHS */}
+                <div className="admin-dash-right">
+
+                    {/* Weekly Activity */}
                     <div className="dash-card dash-stagger">
                         <div className="dash-card-header">
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                <div className="dash-card-title"><TrendingUp size={16} /> Request Volume</div>
-                                <span className="dash-card-subtitle">Over time</span>
-                            </div>
+                            <div className="dash-card-title"><Activity size={16} /> Weekly Activity</div>
                             <div className="dash-time-selector">
                                 <select
                                     className="dash-time-select"
-                                    value={requestTimeRange}
-                                    onChange={(e) => setRequestTimeRange(e.target.value as any)}
+                                    value={weeklyTimeRange}
+                                    onChange={(e) => setWeeklyTimeRange(e.target.value as any)}
                                 >
                                     {timeRangeOptions.map(option => (
-                                        <option key={option.value} value={option.value}>
-                                            {option.label}
-                                        </option>
+                                        <option key={option.value} value={option.value}>{option.label}</option>
                                     ))}
                                 </select>
                             </div>
                         </div>
-                        <div className="dash-chart-wrap-sm">
+                        <div className="dash-chart-wrap">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={filteredRequestVolume} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                <AreaChart data={filteredWeeklyActivity} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="gSchedules" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="gRequests" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.25} />
+                                            <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                                    <XAxis dataKey="month" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                                    <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                                    <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                                     <Tooltip content={<ChartTooltipContent />} />
-                                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
-                                    <Bar dataKey="approved" name="Approved" fill="#22c55e" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
-                                    <Bar dataKey="rejected" name="Rejected" fill="#ef4444" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
-                                    <Bar dataKey="pending" name="Pending" fill="#f59e0b" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
-                                </BarChart>
+                                    <Area type="monotone" dataKey="schedules" stroke="#3b82f6" strokeWidth={2} fill="url(#gSchedules)" name="Schedules" />
+                                    <Area type="monotone" dataKey="requests" stroke="#f59e0b" strokeWidth={2} fill="url(#gRequests)" name="Requests" />
+                                    <Area type="monotone" dataKey="conflicts" stroke="#ef4444" strokeWidth={1.5} fill="none" name="Conflicts" strokeDasharray="4 4" />
+                                </AreaChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
-                )}
 
-                {/* Room Utilization */}
-                <div className="dash-card dash-stagger">
-                    <div className="dash-card-header">
-                        <div className="dash-card-title"><BarChart3 size={16} /> Room Usage</div>
-                        <span className="dash-card-badge" style={{ background: 'rgba(6,182,212,0.12)', color: '#06b6d4' }}>{stats.rooms} rooms</span>
-                    </div>
-                    <div className="dash-chart-wrap-sm">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={roomUtilization} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                                <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                                <Tooltip content={<ChartTooltipContent />} />
-                                <Bar dataKey="usage" name="Usage %" radius={[4, 4, 0, 0]}>
-                                    {roomUtilization.map((entry, i) => (
-                                        <Cell key={i} fill={entry.usage > 80 ? '#ef4444' : entry.usage > 60 ? '#f59e0b' : '#22c55e'} fillOpacity={0.8} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-                        Avg: <strong style={{ color: 'var(--text-primary)' }}>{roomUtilization.length > 0 ? Math.round(roomUtilization.reduce((a, b) => a + b.usage, 0) / roomUtilization.length) : 0}%</strong> utilization
-                    </div>
-                </div>
-            </div>
-
-            {/* ===== MAIN CONTENT GRID (Urgent Items: Requests, Announcements, Events, Messages) ===== */}
-            <div className="dashboard-grid" style={{ marginBottom: 14 }}>
-                {/* Password Reset Requests */}
-                {canSeeResets && resetRequests.length > 0 && (
-                    <div className="dash-card dash-stagger">
-                        <div className="dash-card-header">
-                            <div className="dash-card-title"><KeyRound size={16} /> Password Resets</div>
-                            <span className="dash-card-badge" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>{resetRequests.length}</span>
-                        </div>
-                        <div className="dash-list">
-                            {resetRequests.map(r => (
-                                <div key={r.id} className="dash-list-item">
-                                    <div className="dash-list-item-accent" style={{ background: '#f59e0b' }} />
-                                    <div className="dash-list-item-icon" style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
-                                        <KeyRound size={14} />
-                                    </div>
-                                    <div className="dash-list-item-body">
-                                        <div className="dash-list-item-title">{r.email}</div>
-                                        <div className="dash-list-item-meta">{r.requested_at ? new Date(r.requested_at).toLocaleString() : 'Just now'}</div>
-                                        <div className="dash-list-item-actions">
-                                            <button className="btn btn-primary" onClick={() => handleApproveReset(r)}><CheckCircle size={12} /> Approve</button>
-                                            <button className="btn btn-secondary" style={{ color: '#ef4444' }} onClick={() => handleDenyReset(r)}><XCircle size={12} /> Deny</button>
-                                        </div>
-                                    </div>
+                    {/* Request Volume */}
+                    {canSeeRequests && (
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><TrendingUp size={16} /> Request Volume</div>
+                                <div className="dash-time-selector">
+                                    <select
+                                        className="dash-time-select"
+                                        value={requestTimeRange}
+                                        onChange={(e) => setRequestTimeRange(e.target.value as any)}
+                                    >
+                                        {timeRangeOptions.map(option => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Teacher Requests */}
-                {canSeeRequests && (
-                    <div className="dash-card dash-stagger">
-                        <div className="dash-card-header">
-                            <div className="dash-card-title"><Inbox size={16} /> Teacher Requests</div>
-                            {pendingRequests.length > 0 && <span className="dash-card-badge" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>{pendingRequests.length} pending</span>}
-                        </div>
-                        {requestsLoading ? (
-                            <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><div className="spinner" /></div>
-                        ) : requests.length === 0 ? (
-                            <div className="dash-empty"><Inbox size={28} /><div>No requests yet</div></div>
-                        ) : (
-                            <div className="dash-list">
-                                {requests.slice(0, 8).map(req => {
-                                    const badge = getStatusBadge(req.status);
-                                    return (
-                                        <div key={req.id} className="dash-list-item">
-                                            <div className="dash-list-item-accent" style={{ background: badge.color }} />
-                                            <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <div className="dash-list-item-title">{req.teacher_name}</div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                        <span className="dash-status-badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
-                                                        {req.status !== 'pending' && (
-                                                            <button className="dash-icon-btn" onClick={() => handleDismissRequest(req.id)} title="Dismiss"><X size={13} /></button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="dash-list-item-meta" style={{ textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>{req.request_type}</div>
-                                                <div className="dash-list-item-desc">{req.reason}</div>
-                                                {req.status === 'pending' && (
-                                                    <div className="dash-list-item-actions">
-                                                        <button className="btn btn-primary" onClick={() => { setResolvingRequest(req); setResolveAction('approved'); }}><CheckCircle size={12} /> Approve</button>
-                                                        <button className="btn btn-secondary" style={{ color: '#ef4444' }} onClick={() => { setResolvingRequest(req); setResolveAction('rejected'); }}><XCircle size={12} /> Reject</button>
-                                                    </div>
-                                                )}
-                                                <div className="dash-list-item-meta" style={{ marginTop: 4 }}>{new Date(req.created_at).toLocaleString()}</div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
                             </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Announcements */}
-                <div className="dash-card dash-stagger">
-                    <div className="dash-card-header">
-                        <div className="dash-card-title"><Megaphone size={16} /> Announcements</div>
-                        <span className="dash-card-badge" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>{announcements.length}</span>
-                    </div>
-                    {announcements.length === 0 ? (
-                        <div className="dash-empty"><Megaphone size={28} /><div>No announcements yet</div></div>
-                    ) : (
-                        <div className="dash-list">
-                            {announcements.map(ann => {
-                                const prio = prioStyles[ann.priority] || prioStyles.normal;
-                                return (
-                                    <div key={ann.id} className="dash-list-item">
-                                        <div className="dash-list-item-accent" style={{ background: prio.color }} />
-                                        <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div className="dash-list-item-title">{ann.title}</div>
-                                                <div style={{ display: 'flex', gap: 2 }}>
-                                                    <button className="dash-icon-btn" onClick={() => openEditAnn(ann)}><Edit3 size={13} /></button>
-                                                    <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => handleDeleteAnn(ann.id)}><Trash2 size={13} /></button>
-                                                </div>
-                                            </div>
-                                            <div className="dash-list-item-desc">{ann.content}</div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                                                <span className="dash-status-badge" style={{ background: prio.bg, color: prio.color }}>{ann.priority.toUpperCase()}</span>
-                                                <span className="dash-list-item-meta">{new Date(ann.created_at).toLocaleDateString()}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            <div className="dash-chart-wrap">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={filteredRequestVolume} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+                                        <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                                        <Tooltip content={<ChartTooltipContent />} />
+                                        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                                        <Bar dataKey="approved" name="Approved" fill="#22c55e" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
+                                        <Bar dataKey="rejected" name="Rejected" fill="#ef4444" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
+                                        <Bar dataKey="pending" name="Pending" fill="#f59e0b" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     )}
-                </div>
 
-                {/* Upcoming Events */}
-                {canSeeEvents && (
+                    {/* Room Utilization */}
                     <div className="dash-card dash-stagger">
                         <div className="dash-card-header">
-                            <div className="dash-card-title"><CalendarPlus size={16} /> Upcoming Events</div>
-                            <span className="dash-card-badge" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>{events.length}</span>
+                            <div className="dash-card-title"><BarChart3 size={16} /> Room Usage</div>
+                            <span className="dash-card-badge" style={{ background: 'rgba(6,182,212,0.12)', color: '#06b6d4' }}>{stats.rooms}</span>
                         </div>
-                        {events.length === 0 ? (
-                            <div className="dash-empty"><CalendarPlus size={28} /><div>No upcoming events</div></div>
-                        ) : (
-                            <div className="dash-list">
-                                {events.map(ev => (
-                                    <div key={ev.id} className="dash-list-item">
-                                        <div className="dash-list-item-accent" style={{ background: '#10b981' }} />
-                                        <div className="dash-list-item-icon" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
-                                            <CalendarDays size={14} />
-                                        </div>
-                                        <div className="dash-list-item-body">
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div className="dash-list-item-title">{ev.title}</div>
-                                                <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => handleDeleteEvent(ev.id)}><Trash2 size={13} /></button>
-                                            </div>
-                                            {ev.description && <div className="dash-list-item-desc">{ev.description}</div>}
-                                            <div className="dash-list-item-meta">
-                                                {new Date(ev.event_date).toLocaleDateString()} • {ev.start_time?.slice(0, 5)} – {ev.end_time?.slice(0, 5)} {ev.room_name && `• ${ev.room_name}`}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Recent Messages */}
-                <div className="dash-card dash-stagger">
-                    <div className="dash-card-header">
-                        <div className="dash-card-title"><MessageSquare size={16} /> Recent Messages</div>
-                        {recentMessages.length > 0 && <span className="dash-card-badge" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>{recentMessages.length}</span>}
-                    </div>
-                    {recentMessages.length === 0 ? (
-                        <div className="dash-empty"><MessageSquare size={28} /><div>No messages</div></div>
-                    ) : (
-                        <div className="dash-list">
-                            {recentMessages.map(m => (
-                                <div key={m.id} className="dash-list-item">
-                                    <div className="dash-list-item-accent" style={{ background: '#6366f1' }} />
-                                    <div className="dash-list-item-icon" style={{ background: 'rgba(99,102,241,0.12)', color: '#6366f1' }}>
-                                        <MessageSquare size={14} />
-                                    </div>
-                                    <div className="dash-list-item-body">
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div className="dash-list-item-title">{m.sender_name}</div>
-                                            <span className="dash-list-item-meta">{new Date(m.created_at).toLocaleString()}</span>
-                                        </div>
-                                        <div className="dash-list-item-desc">{m.message?.slice(0, 120)}{m.message?.length > 120 ? '…' : ''}</div>
-                                    </div>
-                                </div>
-                            ))}
-                            <a href="/admin/messages" className="btn btn-secondary" style={{ fontSize: 12, padding: '8px', textAlign: 'center', marginTop: 4, borderRadius: 'var(--radius-md)' }}>View All Messages</a>
+                        <div className="dash-chart-wrap">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={roomUtilization} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+                                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                                    <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} domain={[0, 100]} />
+                                    <Tooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="usage" name="Usage %" radius={[4, 4, 0, 0]}>
+                                        {roomUtilization.map((entry, i) => (
+                                            <Cell key={i} fill={entry.usage > 80 ? '#ef4444' : entry.usage > 60 ? '#f59e0b' : '#22c55e'} fillOpacity={0.8} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
                         </div>
-                    )}
-                </div>
-            </div>
-
-            {/* ===== CHARTS ROW 2: Quick Stats + Users + System Status ===== */}
-            <div className="dash-row-3" style={{ marginBottom: 14 }}>
-                {/* Quick Stats Summary */}
-                <div className="dash-card dash-stagger">
-                    <div className="dash-card-header">
-                        <div className="dash-card-title"><Zap size={16} /> Quick Stats</div>
-                        <span className="dash-card-subtitle">System overview</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}><Calendar size={16} /></div>
-                                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Total Schedules</span>
-                            </div>
-                            <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{stats.schedules}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}><Inbox size={16} /></div>
-                                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Pending Requests</span>
-                            </div>
-                            <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{pendingRequests.length}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}><AlertTriangle size={16} /></div>
-                                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Active Conflicts</span>
-                            </div>
-                            <span style={{ fontSize: 18, fontWeight: 700, color: stats.conflicts > 0 ? '#ef4444' : 'var(--text-primary)' }}>{stats.conflicts}</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* User Distribution Pie */}
-                <div className="dash-card dash-stagger">
-                    <div className="dash-card-header">
-                        <div className="dash-card-title"><PieIcon size={16} /> Users</div>
-                        <span className="dash-card-badge" style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>{stats.totalUsers}</span>
-                    </div>
-                    <div className="dash-chart-wrap-sm">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie data={userDistribution} cx="50%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={3} dataKey="value" stroke="none">
-                                    {userDistribution.map((entry, i) => (
-                                        <Cell key={i} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip content={<ChartTooltipContent />} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                        {userDistribution.map(u => (
-                            <div key={u.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: u.color, display: 'inline-block' }} />
-                                    <span style={{ color: 'var(--text-secondary)' }}>{u.name}</span>
-                                </div>
-                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{u.value}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* System Status */}
-                <div className="dash-card dash-stagger">
-                    <div className="dash-card-header">
-                        <div className="dash-card-title"><Shield size={16} /> System Status</div>
-                        <span className="dash-card-badge" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Online</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <div className="status-item">
-                            <div className="status-dot status-online" />
-                            <span>Database connected</span>
-                        </div>
-                        <div className="status-item">
-                            <div className="status-dot status-online" />
-                            <span>Real-time sync active</span>
-                        </div>
-                        <div className="status-item">
-                            <div className="status-dot status-online" />
-                            <span>Authentication service</span>
-                        </div>
-                        <div className="status-item">
-                            <div className="status-dot status-online" />
-                            <span>Storage service</span>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
+                            Avg: <strong style={{ color: 'var(--text-primary)' }}>{roomUtilization.length > 0 ? Math.round(roomUtilization.reduce((a, b) => a + b.usage, 0) / roomUtilization.length) : 0}%</strong>
                         </div>
                     </div>
                 </div>
             </div>
+
 
             {/* ===== MODALS ===== */}
             {/* Announcement Modal */}

@@ -205,6 +205,40 @@
     grid-column: 1 / -1;
 }
 
+/* ========== ADMIN DASHBOARD LAYOUT ========== */
+.admin-dash-main {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 16px;
+    align-items: start;
+}
+
+.admin-dash-left {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.admin-dash-right {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+}
+
+.admin-dash-row-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+}
+
+.admin-dash-row-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+}
+
 /* ========== CARD SYSTEM ========== */
 .dash-card {
     background: var(--bg-surface);
@@ -1202,6 +1236,7 @@
 @media (min-width: 1100px) and (max-width: 1399px) {
     .dash-chart-wrap { height: 220px; }
     .dash-chart-wrap-sm { height: 160px; }
+    .admin-dash-main { grid-template-columns: 1fr 340px; }
 }
 
 /* Laptop / small desktop (<1100px) */
@@ -1209,6 +1244,7 @@
     .dash-row-2 { grid-template-columns: 1fr 1fr; }
     .dash-row-2-overview { flex-direction: row; flex-wrap: wrap; }
     .dash-chart-wrap { height: 200px; }
+    .admin-dash-main { grid-template-columns: 1fr 320px; }
 }
 
 /* Tablet (<900px) — 9:16 portrait optimization */
@@ -1224,6 +1260,8 @@
     .dash-chart-wrap-sm { height: 160px; }
     .dash-two-col { grid-template-columns: 1fr; }
     .dash-greeting { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .admin-dash-main { grid-template-columns: 1fr; }
+    .admin-dash-right { position: static; }
 }
 
 /* Phone (<600px) — mobile portrait */
