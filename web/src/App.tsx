@@ -13,7 +13,7 @@ import Analytics from './pages/admin/Analytics';
 import ScheduleViews from './pages/admin/ScheduleViews';
 import CommunicationHub from './pages/shared/CommunicationHub';
 import AuditLog from './pages/admin/AuditLog';
-import ScheduleEditor from './pages/admin/ScheduleEditor';
+import ScheduleGenerate from './pages/admin/ScheduleGenerate';
 import FacultyHub from './pages/admin/FacultyHub';
 import AIScheduleChat from './pages/admin/AIScheduleChat';
 import AdminScheduleTasks from './pages/admin/AdminScheduleTasks';
@@ -112,7 +112,7 @@ function App() {
             <Route path="views" element={<ScheduleViews />} />
             <Route path="messages" element={<CommunicationHub />} />
             <Route path="audit" element={<AuditLog />} />
-            <Route path="editor" element={<ScheduleEditor />} />
+            <Route path="generate" element={<ScheduleGenerate />} />
             <Route path="faculty" element={<FacultyHub />} />
             <Route path="ai-chat" element={<AIScheduleChat />} />
             <Route path="tasks" element={<AdminScheduleTasks />} />

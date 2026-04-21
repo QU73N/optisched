@@ -10,6 +10,7 @@ import {
     Clock, Scale, KeyRound, Workflow, Check,
     FolderTree, Building2, ArrowUp,
 } from 'lucide-react';
+import { AuroraBackground } from '@/components/ui/aurora-background';
 import './LandingPage.css';
 
 /* ============================================================
@@ -1358,29 +1359,31 @@ const LandingPage: React.FC = () => {
     const closeLogin = useCallback(() => setLoginOpen(false), []);
 
     return (
-        <div className="landing">
+        <AuroraBackground className="landing">
             <div className="lp-grid-bg" aria-hidden="true" />
             <div className="lp-ambient" aria-hidden="true" />
 
-            <Navigation onLogin={openLogin} onScrollTo={scrollTo} theme={theme} onToggleTheme={toggle} />
+            <div className="lp-page-content">
+                <Navigation onLogin={openLogin} onScrollTo={scrollTo} theme={theme} onToggleTheme={toggle} />
 
-            <main>
-                <HeroSection onLogin={openLogin} onScrollTo={scrollTo} />
-                <TrustStrip />
-                <ProblemSolution />
-                <FeaturesBento />
-                <WorkflowSection />
-                <RolesSection />
-                <SecuritySection />
-                <CrossPlatformSection />
-                <FinalCTA onLogin={openLogin} />
-            </main>
+                <main>
+                    <HeroSection onLogin={openLogin} onScrollTo={scrollTo} />
+                    <TrustStrip />
+                    <ProblemSolution />
+                    <FeaturesBento />
+                    <WorkflowSection />
+                    <RolesSection />
+                    <SecuritySection />
+                    <CrossPlatformSection />
+                    <FinalCTA onLogin={openLogin} />
+                </main>
 
-            <Footer onLogin={openLogin} onScrollTo={scrollTo} theme={theme} />
+                <Footer onLogin={openLogin} onScrollTo={scrollTo} theme={theme} />
+            </div>
 
             <LoginModal open={loginOpen} onClose={closeLogin} theme={theme} />
             <ScrollToTop />
-        </div>
+        </AuroraBackground>
     );
 };
 

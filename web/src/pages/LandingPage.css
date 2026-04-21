@@ -509,6 +509,7 @@
   line-height: 1.65;
   max-width: 540px;
   margin-bottom: 32px;
+  text-align: justify;
 }
 
 .lp-hero-cta {
@@ -1941,9 +1942,23 @@
 
 /* ============ FINAL CTA ============ */
 .lp-final {
-  padding: 120px 0 96px;
   position: relative;
   z-index: 1;
+  padding: 0;
+}
+
+.lp-final-aurora {
+  padding: 120px 0 96px;
+  width: 100%;
+}
+
+.lp-final-inner {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .lp-final-aurora { padding: 80px 0 64px; }
 }
 
 .lp-final-card {

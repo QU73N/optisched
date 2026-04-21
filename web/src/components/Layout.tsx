@@ -6,7 +6,7 @@ import { ADMIN_ROLES, POWER_ADMIN_ROLES, ROLE_DISPLAY_NAMES, hasAnyRole } from '
 import {
     LayoutDashboard, Users, CalendarDays, AlertTriangle, Settings,
     MessageSquare, LogOut, Database, ClipboardList,
-    Edit, UserCheck
+    Sparkles, UserCheck
 } from 'lucide-react';
 import FloatingOptiBot from './FloatingOptiBot';
 import './Layout.css';
@@ -46,7 +46,7 @@ const Layout: React.FC = () => {
         { to: '/admin/users', icon: Users, label: 'Users' },
         { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
         { to: '/admin/data', icon: Database, label: 'Data' },
-        { to: '/admin/editor', icon: Edit, label: 'Editor' },
+        { to: '/admin/generate', icon: Sparkles, label: 'Generate' },
         { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts' },
         { to: '/admin/faculty', icon: UserCheck, label: 'Faculty' },
         { to: '/admin/tasks', icon: ClipboardList, label: 'Tasks' },
@@ -79,7 +79,7 @@ const Layout: React.FC = () => {
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
         { to: '/admin/data', icon: Database, label: 'Data' },
-        { to: '/admin/editor', icon: Edit, label: 'Editor' },
+        { to: '/admin/generate', icon: Sparkles, label: 'Generate' },
         { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts' },
         { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
 
