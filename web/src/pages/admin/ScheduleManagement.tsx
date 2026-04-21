@@ -25,6 +25,7 @@ interface Entity {
     id: string;
     label: string;
     sub?: string;
+    details?: string[];
     match: (s: ScheduleRow) => boolean;
 }
 
@@ -48,7 +49,17 @@ const slotIndex = (t: string) => {
     return Math.max(0, Math.min(TOTAL_SLOTS, Math.round(mins / SLOT_MINUTES)));
 };
 
-const formatTime = (t: string) => (t || '').slice(0, 5);
+const formatTime = (t: string) => {
+    if (!t) return '';
+    const timeFormat = localStorage.getItem('optisched-time-format') || '24h';
+    const [h, m] = t.split(':').map(Number);
+    if (timeFormat === '12h') {
+        const period = h >= 12 ? 'PM' : 'AM';
+        const hour = h % 12 || 12;
+        return `${hour}:${m.toString().padStart(2, '0')} ${period}`;
+    }
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+};
 
 const colorForKey = (key: string) => {
     let h = 0;
@@ -128,7 +139,12 @@ const ScheduleManagement: React.FC = () => {
         return rooms.map(r => ({
             id: r.id,
             label: r.name,
-            sub: `Type: ${r.type || 'General'} · Floor: ${r.floor ?? 'N/A'} · Capacity: ${r.capacity ?? 'N/A'}`,
+            sub: `${r.type || 'General'} · Floor ${r.floor ?? 'N/A'} · Capacity ${r.capacity ?? 'N/A'}`,
+            details: [
+                `Type: ${r.type || 'General'}`,
+                `Floor: ${r.floor ?? 'N/A'}`,
+                `Capacity: ${r.capacity ?? 'N/A'}`,
+            ],
             match: (sc: ScheduleRow) => sc.room?.id === r.id,
         }));
     }, [category, sections, teachers, rooms]);
@@ -267,7 +283,15 @@ const ScheduleManagement: React.FC = () => {
                                         onClick={() => setSelected(e)}
                                     >
                                         <div className="sm-entity-title">{e.label}</div>
-                                        {e.sub && <div className="sm-entity-sub">{e.sub}</div>}
+                                        {e.details ? (
+                                            <div className="sm-entity-sub">
+                                                {e.details.map((detail, idx) => (
+                                                    <div key={idx}>{detail}</div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            e.sub && <div className="sm-entity-sub">{e.sub}</div>
+                                        )}
                                         <div className="sm-entity-meta">
                                             <span className="sm-entity-meta-dot" />
                                             {count} {count === 1 ? 'session' : 'sessions'}
@@ -308,7 +332,15 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                         {entity.label}
                     </div>
-                    {entity.sub && <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>{entity.sub}</div>}
+                    {entity.details ? (
+                        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.6 }}>
+                            {entity.details.map((detail, idx) => (
+                                <div key={idx}>{detail}</div>
+                            ))}
+                        </div>
+                    ) : (
+                        entity.sub && <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>{entity.sub}</div>
+                    )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                     {schedules.length} {schedules.length === 1 ? 'session' : 'sessions'} this week
@@ -333,13 +365,14 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                         {Array.from({ length: TOTAL_SLOTS }).map((_, slot) => {
                             const hour = START_HOUR + Math.floor(slot / 2);
                             const isHour = slot % 2 === 0;
+                            const timeStr = `${hour.toString().padStart(2, '0')}:00`;
                             return (
                                 <div
                                     key={`time-${slot}`}
                                     className="sm-cal-time"
                                     style={{ gridColumn: 1, gridRow: slot + 2 }}
                                 >
-                                    {isHour ? `${hour.toString().padStart(2, '0')}:00` : ''}
+                                    {isHour ? formatTime(timeStr) : ''}
                                 </div>
                             );
                         })}

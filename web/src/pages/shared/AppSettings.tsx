@@ -20,6 +20,11 @@ const AppSettings: React.FC = () => {
         return document.documentElement.getAttribute('data-theme') || localStorage.getItem('optisched-theme') || 'light';
     });
 
+    // Time format
+    const [timeFormat, setTimeFormat] = useState<'12h' | '24h'>(() => {
+        return (localStorage.getItem('optisched-time-format') as '12h' | '24h') || '24h';
+    });
+
     // Notifications
     const [emailNotifs, setEmailNotifs] = useState(true);
     const [scheduleNotifs, setScheduleNotifs] = useState(true);
@@ -57,8 +62,8 @@ const AppSettings: React.FC = () => {
             await supabase.from('profiles').update({ full_name: fullName }).eq('id', profile.id);
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
-        } catch (err: any) {
-            window.alert('Error: ' + err.message);
+        } catch (err: unknown) {
+            window.alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
         } finally { setSaving(false); }
     };
 
@@ -77,8 +82,8 @@ const AppSettings: React.FC = () => {
             if (error) throw error;
             window.alert('Password updated successfully');
             setNewPassword(''); setConfirmPassword('');
-        } catch (err: any) {
-            window.alert('Error: ' + err.message);
+        } catch (err: unknown) {
+            window.alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
         } finally { setChangingPassword(false); }
     };
 
@@ -198,7 +203,7 @@ const AppSettings: React.FC = () => {
                     {activeTab === 'appearance' && (
                         <div className="settings-section">
                             <h2>Appearance</h2>
-                            <p className="section-desc">Choose your preferred visual theme.</p>
+                            <p className="section-desc">Choose your preferred visual theme and time format.</p>
                             <div className="theme-cards">
                                 <button className={`theme-card ${theme === 'dark' ? 'active' : ''}`} onClick={() => applyTheme('dark')}>
                                     <div className="theme-preview dark-preview">
@@ -216,6 +221,21 @@ const AppSettings: React.FC = () => {
                                     <span>Light Mode</span>
                                     {theme === 'light' && <span className="theme-active-badge">Active</span>}
                                 </button>
+                            </div>
+                            <div style={{ marginTop: 24 }}>
+                                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Time Format</h3>
+                                <div className="theme-cards">
+                                    <button className={`theme-card ${timeFormat === '24h' ? 'active' : ''}`} onClick={() => { setTimeFormat('24h'); localStorage.setItem('optisched-time-format', '24h'); }}>
+                                        <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)' }}>24h</span>
+                                        <span>24-Hour Format</span>
+                                        {timeFormat === '24h' && <span className="theme-active-badge">Active</span>}
+                                    </button>
+                                    <button className={`theme-card ${timeFormat === '12h' ? 'active' : ''}`} onClick={() => { setTimeFormat('12h'); localStorage.setItem('optisched-time-format', '12h'); }}>
+                                        <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)' }}>12h</span>
+                                        <span>12-Hour Format</span>
+                                        {timeFormat === '12h' && <span className="theme-active-badge">Active</span>}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
