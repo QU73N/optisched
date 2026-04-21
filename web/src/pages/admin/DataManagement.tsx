@@ -39,7 +39,7 @@ interface Section {
 const DataManagement: React.FC = () => {
     const { role, roles } = useAuth();
     const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
-    const canEdit = hasAnyRole(allRoles, ['schedule_manager', 'schedule_admin', 'power_admin', 'system_admin']);
+    const canEdit = hasAnyRole(allRoles, ['admin', 'schedule_manager', 'schedule_admin', 'power_admin', 'system_admin']);
     const [tab, setTab] = useState<Tab>('rooms');
     const [rooms, setRooms] = useState<Room[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
