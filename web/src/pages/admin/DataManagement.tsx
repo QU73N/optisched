@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasAnyRole } from '../../types/database';
-import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock } from 'lucide-react';
+import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 type Tab = 'rooms' | 'subjects' | 'sections';
@@ -52,10 +52,19 @@ const DataManagement: React.FC = () => {
     const [showAddSection, setShowAddSection] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    // Edit modals
+    const [showEditRoom, setShowEditRoom] = useState(false);
+    const [showEditSubject, setShowEditSubject] = useState(false);
+    const [showEditSection, setShowEditSection] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+
     // Form state
     const [newRoom, setNewRoom] = useState({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1 });
     const [newSubject, setNewSubject] = useState({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false });
     const [newSection, setNewSection] = useState({ name: '', program: '', year_level: 1, student_count: 30 });
+    const [editRoom, setEditRoom] = useState({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1 });
+    const [editSubject, setEditSubject] = useState({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false });
+    const [editSection, setEditSection] = useState({ name: '', program: '', year_level: 1, student_count: 30 });
 
     const fetchAll = async () => {
         setLoading(true);
@@ -105,6 +114,66 @@ const DataManagement: React.FC = () => {
     const handleDelete = async (table: string, id: string, label: string) => {
         if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
         await supabase.from(table).delete().eq('id', id);
+        fetchAll();
+    };
+
+    const openEditRoom = (room: Room) => {
+        setEditRoom({ name: room.name, capacity: room.capacity, type: room.type, building: room.building, floor: room.floor });
+        setEditingId(room.id);
+        setShowEditRoom(true);
+    };
+
+    const openEditSubject = (subject: Subject) => {
+        setEditSubject({
+            code: subject.code,
+            name: subject.name,
+            units: subject.units,
+            type: subject.type,
+            duration_hours: subject.duration_hours,
+            program: subject.program,
+            year_level: subject.year_level,
+            requires_lab: (subject as any).requires_lab || false,
+        });
+        setEditingId(subject.id);
+        setShowEditSubject(true);
+    };
+
+    const openEditSection = (section: Section) => {
+        setEditSection({ name: section.name, program: section.program, year_level: section.year_level, student_count: section.student_count });
+        setEditingId(section.id);
+        setShowEditSection(true);
+    };
+
+    const handleEditRoom = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSaving(true);
+        await supabase.from('rooms').update({ ...editRoom }).eq('id', editingId);
+        setShowEditRoom(false);
+        setEditRoom({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1 });
+        setEditingId(null);
+        setSaving(false);
+        fetchAll();
+    };
+
+    const handleEditSubject = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSaving(true);
+        await supabase.from('subjects').update(editSubject).eq('id', editingId);
+        setShowEditSubject(false);
+        setEditSubject({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false });
+        setEditingId(null);
+        setSaving(false);
+        fetchAll();
+    };
+
+    const handleEditSection = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSaving(true);
+        await supabase.from('sections').update(editSection).eq('id', editingId);
+        setShowEditSection(false);
+        setEditSection({ name: '', program: '', year_level: 1, student_count: 30 });
+        setEditingId(null);
+        setSaving(false);
         fetchAll();
     };
 
@@ -171,7 +240,10 @@ const DataManagement: React.FC = () => {
                                             <td><span className="badge" style={{ background: r.is_available ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: r.is_available ? '#34d399' : '#ef4444' }}>{r.is_available ? 'AVAILABLE' : 'UNAVAILABLE'}</span></td>
                                             <td>
                                                 {canEdit ? (
-                                                    <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('rooms', r.id, r.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                    <div style={{ display: 'flex', gap: 4 }}>
+                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => openEditRoom(r)}><Edit size={15} style={{ color: 'var(--text-secondary)' }} /></button>
+                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('rooms', r.id, r.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                    </div>
                                                 ) : (
                                                     <Lock size={15} style={{ color: 'var(--text-muted)' }} />
                                                 )}
@@ -201,7 +273,10 @@ const DataManagement: React.FC = () => {
                                             <td>{s.duration_hours}h</td>
                                             <td>
                                                 {canEdit ? (
-                                                    <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('subjects', s.id, s.code)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                    <div style={{ display: 'flex', gap: 4 }}>
+                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => openEditSubject(s)}><Edit size={15} style={{ color: 'var(--text-secondary)' }} /></button>
+                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('subjects', s.id, s.code)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                    </div>
                                                 ) : (
                                                     <Lock size={15} style={{ color: 'var(--text-muted)' }} />
                                                 )}
@@ -228,7 +303,10 @@ const DataManagement: React.FC = () => {
                                             <td>{s.student_count}</td>
                                             <td>
                                                 {canEdit ? (
-                                                    <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('sections', s.id, s.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                    <div style={{ display: 'flex', gap: 4 }}>
+                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => openEditSection(s)}><Edit size={15} style={{ color: 'var(--text-secondary)' }} /></button>
+                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('sections', s.id, s.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                    </div>
                                                 ) : (
                                                     <Lock size={15} style={{ color: 'var(--text-muted)' }} />
                                                 )}
@@ -308,6 +386,76 @@ const DataManagement: React.FC = () => {
                             </div>
                             <div className="field"><label className="field-label">STUDENT COUNT</label><input className="input" type="number" min={1} value={newSection.student_count} onChange={e => setNewSection(p => ({ ...p, student_count: parseInt(e.target.value) }))} /></div>
                             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Section'}</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Room Modal */}
+            {showEditRoom && (
+                <div className="modal-overlay" onClick={() => setShowEditRoom(false)}>
+                    <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header"><h2>Edit Room</h2><button className="btn btn-ghost" onClick={() => setShowEditRoom(false)}><X size={20} /></button></div>
+                        <form onSubmit={handleEditRoom} className="modal-form">
+                            <div className="field"><label className="field-label">ROOM NAME</label><input className="input" required placeholder="e.g. Lab 201" value={editRoom.name} onChange={e => setEditRoom(p => ({ ...p, name: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">BUILDING</label><input className="input" required placeholder="e.g. Main Building" value={editRoom.building} onChange={e => setEditRoom(p => ({ ...p, building: e.target.value }))} /></div>
+                            <div style={{ display: 'flex', gap: 12 }}>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">FLOOR</label><input className="input" type="number" min={1} value={editRoom.floor} onChange={e => setEditRoom(p => ({ ...p, floor: parseInt(e.target.value) }))} /></div>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">CAPACITY</label><input className="input" type="number" min={1} value={editRoom.capacity} onChange={e => setEditRoom(p => ({ ...p, capacity: parseInt(e.target.value) }))} /></div>
+                            </div>
+                            <div className="field"><label className="field-label">TYPE</label>
+                                <select className="input" value={editRoom.type} onChange={e => setEditRoom(p => ({ ...p, type: e.target.value }))}>
+                                    <option value="lecture">Lecture</option><option value="laboratory">Laboratory</option><option value="computer_lab">Computer Lab</option><option value="gymnasium">Gymnasium</option>
+                                </select>
+                            </div>
+                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Subject Modal */}
+            {showEditSubject && (
+                <div className="modal-overlay" onClick={() => setShowEditSubject(false)}>
+                    <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header"><h2>Edit Subject</h2><button className="btn btn-ghost" onClick={() => setShowEditSubject(false)}><X size={20} /></button></div>
+                        <form onSubmit={handleEditSubject} className="modal-form">
+                            <div style={{ display: 'flex', gap: 12 }}>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">CODE</label><input className="input" required placeholder="e.g. CS101" value={editSubject.code} onChange={e => setEditSubject(p => ({ ...p, code: e.target.value }))} /></div>
+                                <div className="field" style={{ flex: 2 }}><label className="field-label">NAME</label><input className="input" required placeholder="Introduction to Computing" value={editSubject.name} onChange={e => setEditSubject(p => ({ ...p, name: e.target.value }))} /></div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 12 }}>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">UNITS</label><input className="input" type="number" min={1} max={6} value={editSubject.units} onChange={e => setEditSubject(p => ({ ...p, units: parseInt(e.target.value) }))} /></div>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">HOURS</label><input className="input" type="number" min={1} max={6} value={editSubject.duration_hours} onChange={e => setEditSubject(p => ({ ...p, duration_hours: parseInt(e.target.value) }))} /></div>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">TYPE</label><select className="input" value={editSubject.type} onChange={e => setEditSubject(p => ({ ...p, type: e.target.value }))}><option value="lecture">Lecture</option><option value="laboratory">Laboratory</option></select></div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 12 }}>
+                                <div className="field" style={{ flex: 2 }}><label className="field-label">PROGRAM</label><input className="input" required placeholder="e.g. BSIT" value={editSubject.program} onChange={e => setEditSubject(p => ({ ...p, program: e.target.value }))} /></div>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">YEAR LEVEL</label><input className="input" type="number" min={1} max={12} value={editSubject.year_level} onChange={e => setEditSubject(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>
+                                <input type="checkbox" checked={editSubject.requires_lab} onChange={e => setEditSubject(p => ({ ...p, requires_lab: e.target.checked }))} />
+                                Requires Lab Room
+                            </label>
+                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Section Modal */}
+            {showEditSection && (
+                <div className="modal-overlay" onClick={() => setShowEditSection(false)}>
+                    <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header"><h2>Edit Section</h2><button className="btn btn-ghost" onClick={() => setShowEditSection(false)}><X size={20} /></button></div>
+                        <form onSubmit={handleEditSection} className="modal-form">
+                            <div className="field"><label className="field-label">SECTION NAME</label><input className="input" required placeholder="e.g. BSIT-1A" value={editSection.name} onChange={e => setEditSection(p => ({ ...p, name: e.target.value }))} /></div>
+                            <div style={{ display: 'flex', gap: 12 }}>
+                                <div className="field" style={{ flex: 2 }}><label className="field-label">PROGRAM</label><input className="input" required placeholder="e.g. BSIT" value={editSection.program} onChange={e => setEditSection(p => ({ ...p, program: e.target.value }))} /></div>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">YEAR LEVEL</label><input className="input" type="number" min={1} max={12} value={editSection.year_level} onChange={e => setEditSection(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
+                            </div>
+                            <div className="field"><label className="field-label">STUDENT COUNT</label><input className="input" type="number" min={1} value={editSection.student_count} onChange={e => setEditSection(p => ({ ...p, student_count: parseInt(e.target.value) }))} /></div>
+                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>
                 </div>
