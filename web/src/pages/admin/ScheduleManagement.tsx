@@ -78,7 +78,7 @@ const ScheduleManagement: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('published');
     const [sections, setSections] = useState<{ id: string; name: string; program: string | null; year_level: number | null }[]>([]);
     const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
-    const [rooms, setRooms] = useState<{ id: string; name: string; building: string | null; type: string | null; capacity: number | null }[]>([]);
+    const [rooms, setRooms] = useState<{ id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null }[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -89,7 +89,7 @@ const ScheduleManagement: React.FC = () => {
                     .order('start_time'),
                 supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
                 supabase.from('teachers').select('id, profile:profiles(full_name)').order('id'),
-                supabase.from('rooms').select('id, name, building, type, capacity').order('name'),
+                supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
             ]);
             setSchedules((schedRes.data as unknown as ScheduleRow[]) || []);
             setSections((secRes.data as unknown as typeof sections) || []);
@@ -123,7 +123,7 @@ const ScheduleManagement: React.FC = () => {
         return rooms.map(r => ({
             id: r.id,
             label: r.name,
-            sub: [r.building, r.type, r.capacity ? `${r.capacity} seats` : null].filter(Boolean).join(' · ') || 'Room',
+            sub: `Type: ${r.type || 'General'} · Floor: ${r.floor ?? 'N/A'} · Capacity: ${r.capacity ?? 'N/A'}`,
             match: (sc: ScheduleRow) => sc.room?.id === r.id,
         }));
     }, [category, sections, teachers, rooms]);

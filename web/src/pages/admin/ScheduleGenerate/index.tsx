@@ -56,7 +56,7 @@ const ScheduleGenerate: React.FC = () => {
             const [sub, t, r, sec, sch] = await Promise.all([
                 supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id'),
                 supabase.from('teachers').select('id, max_hours, profile:profiles(full_name)'),
-                supabase.from('rooms').select('id, name, capacity, type, building, is_available'),
+                supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available'),
                 supabase.from('sections').select('id, name, program, year_level, student_count'),
                 supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at'),
             ]);

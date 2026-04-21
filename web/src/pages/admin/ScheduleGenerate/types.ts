@@ -34,6 +34,7 @@ export interface Room {
     capacity: number | null;
     type: string | null;
     building: string | null;
+    floor: number | null;
     is_available: boolean | null;
 }
 

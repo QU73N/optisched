@@ -204,10 +204,11 @@ Blue academic family with colors like:
 ## 10. Room Management
 
 ### 10.1 Room Types
-- **Common rooms:** May be used by any subject
-- **Special rooms:** May also be used by any subject, but special subjects that require them must get priority
-- **Hard constraint:** Special subjects can only be assigned to special rooms
-- Special rooms are flexible for general use, but reserved preferentially for special subjects when conflicts exist
+- **Common rooms:** Rooms wherein any subject can be taught. These are general-purpose classrooms without specialized equipment.
+- **Special rooms:** Rooms that have equipment a specific subject needs (e.g., computer labs, science labs, studios, workshops). These are reserved preferentially for subjects that require them.
+- **Hard constraint:** Special subjects (subjects with `requires_lab = true` or marked as requiring special equipment) can only be assigned to special rooms.
+- **Soft constraint:** Special rooms are less likely to be used by common subjects (subjects that don't need special rooms). This maximizes room availability for subjects that actually require the specialized equipment.
+- When conflicts exist, the scheduler prioritizes special subjects for special rooms, leaving common rooms available for general use.
 
 ### 10.2 Room Constraints
 - **Hard constraint:** Room capacity must always be greater than or equal to section size
