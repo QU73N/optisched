@@ -1,15 +1,49 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { hasAnyRole } from '../../types/database';
+import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 type Tab = 'rooms' | 'subjects' | 'sections';
 
+interface Room {
+    id: string;
+    name: string;
+    building: string;
+    floor: number;
+    type: string;
+    capacity: number;
+    is_available: boolean;
+}
+
+interface Subject {
+    id: string;
+    code: string;
+    name: string;
+    units: number;
+    type: string;
+    program: string;
+    year_level: number;
+    duration_hours: number;
+}
+
+interface Section {
+    id: string;
+    name: string;
+    program: string;
+    year_level: number;
+    student_count: number;
+}
+
 const DataManagement: React.FC = () => {
+    const { role, roles } = useAuth();
+    const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
+    const canEdit = hasAnyRole(allRoles, ['schedule_manager', 'schedule_admin', 'power_admin', 'system_admin']);
     const [tab, setTab] = useState<Tab>('rooms');
-    const [rooms, setRooms] = useState<any[]>([]);
-    const [subjects, setSubjects] = useState<any[]>([]);
-    const [sections, setSections] = useState<any[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [sections, setSections] = useState<Section[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Add modals
@@ -23,8 +57,6 @@ const DataManagement: React.FC = () => {
     const [newSubject, setNewSubject] = useState({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false });
     const [newSection, setNewSection] = useState({ name: '', program: '', year_level: 1, student_count: 30 });
 
-    useEffect(() => { fetchAll(); }, []);
-
     const fetchAll = async () => {
         setLoading(true);
         const [r, s, sec] = await Promise.all([
@@ -37,6 +69,8 @@ const DataManagement: React.FC = () => {
         setSections(sec.data || []);
         setLoading(false);
     };
+
+    useEffect(() => { fetchAll(); }, []);
 
     const handleAddRoom = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -91,12 +125,16 @@ const DataManagement: React.FC = () => {
             <div className="dashboard-header">
                 <div>
                     <h1 className="dashboard-title">Data Management</h1>
-                    <p className="dashboard-subtitle">Manage rooms, subjects, and sections</p>
+                    <p className="dashboard-subtitle">
+                        {canEdit ? 'Manage rooms, subjects, and sections' : 'View rooms, subjects, and sections'}
+                    </p>
                 </div>
-                <button className="btn btn-primary" onClick={getAddAction()}>
-                    <Plus size={16} />
-                    Add {tab === 'rooms' ? 'Room' : tab === 'subjects' ? 'Subject' : 'Section'}
-                </button>
+                {canEdit && (
+                    <button className="btn btn-primary" onClick={getAddAction()}>
+                        <Plus size={16} />
+                        Add {tab === 'rooms' ? 'Room' : tab === 'subjects' ? 'Subject' : 'Section'}
+                    </button>
+                )}
             </div>
 
             {/* Tabs */}
@@ -131,7 +169,13 @@ const DataManagement: React.FC = () => {
                                             <td><span className="badge" style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>{r.type?.toUpperCase()}</span></td>
                                             <td>{r.capacity}</td>
                                             <td><span className="badge" style={{ background: r.is_available ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: r.is_available ? '#34d399' : '#ef4444' }}>{r.is_available ? 'AVAILABLE' : 'UNAVAILABLE'}</span></td>
-                                            <td><button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('rooms', r.id, r.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button></td>
+                                            <td>
+                                                {canEdit ? (
+                                                    <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('rooms', r.id, r.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                ) : (
+                                                    <Lock size={15} style={{ color: 'var(--text-muted)' }} />
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
                                     {rooms.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No rooms added yet.</td></tr>}
@@ -155,7 +199,13 @@ const DataManagement: React.FC = () => {
                                             <td>{s.program}</td>
                                             <td>{s.year_level}</td>
                                             <td>{s.duration_hours}h</td>
-                                            <td><button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('subjects', s.id, s.code)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button></td>
+                                            <td>
+                                                {canEdit ? (
+                                                    <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('subjects', s.id, s.code)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                ) : (
+                                                    <Lock size={15} style={{ color: 'var(--text-muted)' }} />
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
                                     {subjects.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No subjects added yet.</td></tr>}
@@ -176,7 +226,13 @@ const DataManagement: React.FC = () => {
                                             <td>{s.program}</td>
                                             <td>{s.year_level >= 11 ? `Grade ${s.year_level}` : `Year ${s.year_level}`}</td>
                                             <td>{s.student_count}</td>
-                                            <td><button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('sections', s.id, s.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button></td>
+                                            <td>
+                                                {canEdit ? (
+                                                    <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('sections', s.id, s.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                ) : (
+                                                    <Lock size={15} style={{ color: 'var(--text-muted)' }} />
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
                                     {sections.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No sections added yet.</td></tr>}

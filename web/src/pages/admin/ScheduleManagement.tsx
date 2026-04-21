@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { ArrowLeft, GraduationCap, MapPin, Search, Users } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { ADMIN_ROLES } from '../../types/database';
+import { ArrowLeft, GraduationCap, MapPin, Search, Users, Lock } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 type Category = 'sections' | 'teachers' | 'rooms';
@@ -70,6 +72,9 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
 ];
 
 const ScheduleManagement: React.FC = () => {
+    const { role, roles } = useAuth();
+    const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
+    const isAdmin = allRoles.some(r => ADMIN_ROLES.includes(r));
     const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [category, setCategory] = useState<Category>('sections');
@@ -164,6 +169,16 @@ const ScheduleManagement: React.FC = () => {
         }
         return counts;
     }, [schedules]);
+
+    if (!isAdmin) {
+        return (
+            <div className="dashboard fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 80 }}>
+                <Lock size={48} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
+                <h2 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>Access Denied</h2>
+                <p style={{ color: 'var(--text-muted)' }}>Schedule Management is only available to administrators.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="dashboard fade-in">
