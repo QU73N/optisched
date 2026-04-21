@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
-import LoginPage from './pages/LoginPage';
+import LandingPage from './pages/LandingPage';
 import PricingPage from './pages/PricingPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminManageUsers from './pages/admin/AdminManageUsers';
@@ -81,7 +81,7 @@ const LoginGuard: React.FC = () => {
     const basePath = role === 'teacher' ? 'teacher' : (hasAdmin ? 'admin' : role);
     return <Navigate to={`/${basePath}`} replace />;
   }
-  return <LoginPage />;
+  return <LandingPage />;
 };
 
 

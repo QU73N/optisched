@@ -2,9 +2,12 @@
 
 # dependencies
 node_modules/
+mobile/node_modules/
+web/node_modules/
 
 # Expo
 .expo/
+mobile/.expo/
 dist/
 web-build/
 expo-env.d.ts
@@ -21,6 +24,10 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
+# Vite
+web/dist/
+web/.vite/
+
 # debug
 npm-debug.*
 yarn-debug.*
@@ -33,10 +40,22 @@ yarn-error.*
 # local env files
 .env*.local
 .env
+mobile/.env
+web/.env
 
 # typescript
 *.tsbuildinfo
 
+# logs
+*.log
+ts_errors.log
+
 # generated native folders
 /ios
 /android
+mobile/ios/
+mobile/android/
+
+# IDE
+.vscode/
+.idea/
