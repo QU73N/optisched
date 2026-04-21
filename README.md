@@ -6,6 +6,13 @@ An academic scheduling platform for institutions with fixed block schedules, rol
 
 ```
 optisched/
+├── assets/                    # Shared assets (logos, icons, images)
+│   ├── logo.png
+│   ├── logo-white.png
+│   ├── logo-with-text.png
+│   ├── logo-white-with-text.png
+│   ├── favicon.png
+│   └── ...
 ├── docs/                      # All documentation
 │   ├── PRD.md                 # Product Requirements Document
 │   ├── BRAND_SYSTEM.md        # Brand guidelines and design system
@@ -20,11 +27,9 @@ optisched/
 │   ├── app.json
 │   ├── eas.json
 │   ├── src/
-│   ├── assets/
 │   └── package.json
 ├── web/                       # Vite + React web application
 │   ├── src/
-│   ├── public/
 │   ├── package.json
 │   └── vite.config.ts
 ├── web-static/                # Static web pages
