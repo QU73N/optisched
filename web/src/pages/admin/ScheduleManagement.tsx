@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { ADMIN_ROLES } from '../../types/database';
-import { ArrowLeft, GraduationCap, MapPin, Search, Users, Lock } from 'lucide-react';
+import { ArrowLeft, GraduationCap, MapPin, Search, Users, Lock, Scissors, Merge, MoreVertical, X } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 type Category = 'sections' | 'teachers' | 'rooms';
@@ -96,28 +96,29 @@ const ScheduleManagement: React.FC = () => {
     const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
     const [rooms, setRooms] = useState<{ id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null }[]>([]);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            const [schedRes, secRes, tchRes, roomRes] = await Promise.all([
-                supabase.from('schedules')
-                    .select('id, day_of_week, start_time, end_time, status, semester, academic_year, subject:subjects(name, code), teacher:teachers(id, profile:profiles(full_name)), room:rooms(id, name, building), section:sections(id, name, program)')
-                    .order('start_time'),
-                supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
-                supabase.from('teachers').select('id, profile:profiles(full_name)').order('id'),
-                supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
-            ]);
-            setSchedules((schedRes.data as unknown as ScheduleRow[]) || []);
-            setSections((secRes.data as unknown as typeof sections) || []);
-            setTeachers(
-                ((tchRes.data as unknown as { id: string; profile: { full_name: string } | null }[]) || [])
-                    .map(t => ({ id: t.id, full_name: t.profile?.full_name || 'Unnamed' }))
-            );
-            setRooms((roomRes.data as unknown as typeof rooms) || []);
-            setLoading(false);
-        };
-        fetchData();
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        const [schedRes, secRes, tchRes, roomRes] = await Promise.all([
+            supabase.from('schedules')
+                .select('id, day_of_week, start_time, end_time, status, semester, academic_year, subject:subjects(name, code), teacher:teachers(id, profile:profiles(full_name)), room:rooms(id, name, building), section:sections(id, name, program)')
+                .order('start_time'),
+            supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
+            supabase.from('teachers').select('id, profile:profiles(full_name)').order('id'),
+            supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
+        ]);
+        setSchedules((schedRes.data as unknown as ScheduleRow[]) || []);
+        setSections((secRes.data as unknown as typeof sections) || []);
+        setTeachers(
+            ((tchRes.data as unknown as { id: string; profile: { full_name: string } | null }[]) || [])
+                .map(t => ({ id: t.id, full_name: t.profile?.full_name || 'Unnamed' }))
+        );
+        setRooms((roomRes.data as unknown as typeof rooms) || []);
+        setLoading(false);
     }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const entities: Entity[] = useMemo(() => {
         if (category === 'sections') {
@@ -253,6 +254,9 @@ const ScheduleManagement: React.FC = () => {
                     entity={selected}
                     schedules={selectedSchedules}
                     onBack={() => setSelected(null)}
+                    onUpdate={() => {
+                        fetchData();
+                    }}
                 />
             ) : (
                 <>
@@ -311,15 +315,172 @@ interface ScheduleDetailProps {
     entity: Entity;
     schedules: ScheduleRow[];
     onBack: () => void;
+    onUpdate?: () => void;
 }
 
-const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBack }) => {
+const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBack, onUpdate }) => {
+    const { role, roles } = useAuth();
+    const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
+    const canEdit = allRoles.some(r => ADMIN_ROLES.includes(r));
+
+    const [draggedEvent, setDraggedEvent] = useState<{ event: typeof events[0]; originalDay: number; originalStart: number } | null>(null);
+    const [selectedEvent, setSelectedEvent] = useState<typeof events[0] | null>(null);
+    const [showMenu, setShowMenu] = useState(false);
+    const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
+    const [splitModal, setSplitModal] = useState(false);
+    const [splitCount, setSplitCount] = useState(2);
+
     const events = schedules.map(s => {
         const dayIdx = dayOrder.indexOf(s.day_of_week);
         const start = slotIndex(s.start_time);
         const end = slotIndex(s.end_time);
         return { s, dayIdx, start, span: Math.max(1, end - start) };
     }).filter(e => e.dayIdx >= 0);
+
+    const handleDragStart = (e: React.DragEvent, event: typeof events[0]) => {
+        if (!canEdit) return;
+        e.dataTransfer.effectAllowed = 'move';
+        setDraggedEvent({ event, originalDay: event.dayIdx, originalStart: event.start });
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        if (!canEdit) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleDrop = async (e: React.DragEvent, targetDay: number, targetSlot: number) => {
+        if (!canEdit || !draggedEvent) return;
+        e.preventDefault();
+
+        const { event, originalDay, originalStart } = draggedEvent;
+        const dayOffset = targetDay - originalDay;
+        const slotOffset = targetSlot - originalStart;
+
+        if (dayOffset === 0 && slotOffset === 0) {
+            setDraggedEvent(null);
+            return;
+        }
+
+        const newStartMinutes = timeToMinutes(event.s.start_time) + (dayOffset * 24 * 60) + (slotOffset * SLOT_MINUTES);
+        const newEndMinutes = timeToMinutes(event.s.end_time) + (dayOffset * 24 * 60) + (slotOffset * SLOT_MINUTES);
+
+        const newStartHour = Math.floor(newStartMinutes / 60);
+        const newStartMin = newStartMinutes % 60;
+        const newEndHour = Math.floor(newEndMinutes / 60);
+        const newEndMin = newEndMinutes % 60;
+
+        const newStartTime = `${newStartHour.toString().padStart(2, '0')}:${newStartMin.toString().padStart(2, '0')}`;
+        const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${newEndMin.toString().padStart(2, '0')}`;
+        const newDayOfWeek = dayOrder[targetDay % dayOrder.length];
+
+        try {
+            await supabase.from('schedules').update({
+                day_of_week: newDayOfWeek,
+                start_time: newStartTime,
+                end_time: newEndTime,
+            }).eq('id', event.s.id);
+            onUpdate?.();
+        } catch (err) {
+            console.error('Error moving schedule:', err);
+            alert('Failed to move schedule');
+        }
+
+        setDraggedEvent(null);
+    };
+
+    const handleContextMenu = (e: React.MouseEvent, event: typeof events[0]) => {
+        if (!canEdit) return;
+        e.preventDefault();
+        setSelectedEvent(event);
+        setMenuPosition({ x: e.clientX, y: e.clientY });
+        setShowMenu(true);
+    };
+
+    const handleSplit = async () => {
+        if (!selectedEvent || splitCount < 2) return;
+
+        const totalMinutes = timeToMinutes(selectedEvent.s.end_time) - timeToMinutes(selectedEvent.s.start_time);
+        const segmentMinutes = totalMinutes / splitCount;
+
+        try {
+            await supabase.from('schedules').delete().eq('id', selectedEvent.s.id);
+
+            for (let i = 0; i < splitCount; i++) {
+                const startMinutes = timeToMinutes(selectedEvent.s.start_time) + (i * segmentMinutes);
+                const endMinutes = startMinutes + segmentMinutes;
+                const startHour = Math.floor(startMinutes / 60);
+                const startMin = Math.round(startMinutes % 60);
+                const endHour = Math.floor(endMinutes / 60);
+                const endMin = Math.round(endMinutes % 60);
+
+                await supabase.from('schedules').insert({
+                    day_of_week: selectedEvent.s.day_of_week,
+                    start_time: `${startHour.toString().padStart(2, '0')}:${startMin.toString().padStart(2, '0')}`,
+                    end_time: `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`,
+                    status: selectedEvent.s.status,
+                    semester: selectedEvent.s.semester,
+                    academic_year: selectedEvent.s.academic_year,
+                    teacher_id: selectedEvent.s.teacher ? selectedEvent.s.teacher.id : null,
+                    room_id: selectedEvent.s.room ? selectedEvent.s.room.id : null,
+                    section_id: selectedEvent.s.section ? selectedEvent.s.section.id : null,
+                });
+            }
+
+            onUpdate?.();
+            setSplitModal(false);
+            setShowMenu(false);
+        } catch (err) {
+            console.error('Error splitting schedule:', err);
+            alert('Failed to split schedule');
+        }
+    };
+
+    const handleCombine = async () => {
+        if (!selectedEvent) return;
+
+        const sameDayEvents = events.filter(
+            e => e.dayIdx === selectedEvent.dayIdx && e.s.id !== selectedEvent.s.id
+        );
+
+        if (sameDayEvents.length === 0) {
+            alert('No other events on the same day to combine with');
+            return;
+        }
+
+        const allEvents = [selectedEvent, ...sameDayEvents].sort((a, b) => a.start - b.start);
+        const lastEvent = allEvents[allEvents.length - 1];
+
+        try {
+            for (const e of allEvents) {
+                if (e.s.id !== selectedEvent.s.id) {
+                    await supabase.from('schedules').delete().eq('id', e.s.id);
+                }
+            }
+
+            await supabase.from('schedules').update({
+                end_time: lastEvent.s.end_time,
+            }).eq('id', selectedEvent.s.id);
+
+            onUpdate?.();
+            setShowMenu(false);
+        } catch (err) {
+            console.error('Error combining schedules:', err);
+            alert('Failed to combine schedules');
+        }
+    };
+
+    const handleClickOutside = () => {
+        setShowMenu(false);
+        setMenuPosition(null);
+    };
+
+    useEffect(() => {
+        if (showMenu) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
+    }, [showMenu]);
 
     return (
         <div>
@@ -384,6 +545,8 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                                     key={`bg-${day}-${slot}`}
                                     className="sm-cal-cell sm-cal-slot"
                                     style={{ gridColumn: di + 2, gridRow: slot + 2 }}
+                                    onDragOver={handleDragOver}
+                                    onDrop={(e) => handleDrop(e, di, slot)}
                                 />
                             ))
                         )}
@@ -399,8 +562,11 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                                 }}
                             >
                                 <div
-                                    className={`sm-cal-event ${colorForKey(ev.s.subject?.code || ev.s.id)}`}
+                                    className={`sm-cal-event ${colorForKey(ev.s.subject?.code || ev.s.id)} ${canEdit ? 'sm-cal-event-draggable' : ''}`}
                                     title={`${ev.s.subject?.name || ''} · ${formatTime(ev.s.start_time)}–${formatTime(ev.s.end_time)}`}
+                                    draggable={canEdit}
+                                    onDragStart={(e) => handleDragStart(e, ev)}
+                                    onContextMenu={(e) => handleContextMenu(e, ev)}
                                 >
                                     <div className="sm-cal-event-title">
                                         {ev.s.subject?.code || ev.s.subject?.name || 'Session'}
@@ -411,9 +577,86 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                                     <div className="sm-cal-event-time">
                                         {formatTime(ev.s.start_time)}–{formatTime(ev.s.end_time)}
                                     </div>
+                                    {canEdit && (
+                                        <div className="sm-cal-event-edit-hint">
+                                            <MoreVertical size={12} />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
+
+                        {/* Context Menu */}
+                        {showMenu && menuPosition && selectedEvent && (
+                            <div
+                                className="sm-context-menu"
+                                style={{ position: 'fixed', left: menuPosition.x, top: menuPosition.y, zIndex: 1000 }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <button
+                                    className="sm-context-menu-item"
+                                    onClick={() => {
+                                        setSplitModal(true);
+                                        setShowMenu(false);
+                                    }}
+                                >
+                                    <Scissors size={14} />
+                                    Split Session
+                                </button>
+                                <button
+                                    className="sm-context-menu-item"
+                                    onClick={handleCombine}
+                                >
+                                    <Merge size={14} />
+                                    Combine Sessions
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Split Modal */}
+                        {splitModal && (
+                            <div className="modal-overlay" onClick={() => setSplitModal(false)}>
+                                <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                        <h2 style={{ fontSize: 18, fontWeight: 600 }}>Split Session</h2>
+                                        <button
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                                            onClick={() => setSplitModal(false)}
+                                        >
+                                            <X size={20} />
+                                        </button>
+                                    </div>
+                                    <div className="modal-form">
+                                        <label>Number of sessions</label>
+                                        <input
+                                            type="number"
+                                            min="2"
+                                            max="10"
+                                            value={splitCount}
+                                            onChange={(e) => setSplitCount(Math.max(2, Math.min(10, parseInt(e.target.value) || 2)))}
+                                            className="input"
+                                        />
+                                        <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 8 }}>
+                                            This will split the session into {splitCount} equal parts.
+                                        </p>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={() => setSplitModal(false)}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={handleSplit}
+                                        >
+                                            Split
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -422,3 +665,77 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
 };
 
 export default ScheduleManagement;
+
+/* Context Menu and Draggable Styles */
+const styles = `
+.sm-cal-event-draggable {
+    cursor: grab;
+    transition: box-shadow 0.15s ease;
+}
+
+.sm-cal-event-draggable:active {
+    cursor: grabbing;
+}
+
+.sm-cal-event-draggable:hover {
+    box-shadow: 0 2px 8px rgba(73, 136, 196, 0.3);
+}
+
+.sm-cal-event-edit-hint {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.sm-cal-event-draggable:hover .sm-cal-event-edit-hint {
+    opacity: 1;
+}
+
+.sm-context-menu {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 4px;
+    min-width: 160px;
+    z-index: 1000;
+}
+
+.sm-context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.1s ease;
+    text-align: left;
+    font-family: var(--font-sans);
+}
+
+.sm-context-menu-item:hover {
+    background: var(--bg-hover);
+}
+
+.sm-context-menu-item:first-child {
+    margin-top: 0;
+}
+
+.sm-context-menu-item:last-child {
+    margin-bottom: 0;
+}
+`;
+
+if (typeof document !== 'undefined') {
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = styles;
+    document.head.appendChild(styleSheet);
+}
