@@ -1,4 +1,5 @@
-/* Dashboard — Premium Admin Dashboard v3
+/* Dashboard — Modern Redesign v4
+   Shared by Admin / Teacher / Student dashboards.
    ========================================= */
 
 /* --- Stagger entrance animation --- */
@@ -36,24 +37,24 @@
     justify-content: space-between;
     align-items: flex-end;
     gap: 16px;
-    margin-bottom: 24px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid var(--border-default);
+    margin-bottom: 22px;
+    padding-bottom: 0;
+    border-bottom: none;
 }
 
 .dashboard-title {
     font-family: var(--font-display);
-    font-size: 24px;
-    font-weight: 700;
+    font-size: 28px;
+    font-weight: 800;
     color: var(--text-primary);
-    letter-spacing: -0.03em;
-    line-height: 1.15;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
 }
 
 .dashboard-subtitle {
-    font-size: 13px;
+    font-size: 13.5px;
     color: var(--text-secondary);
-    margin-top: 4px;
+    margin-top: 6px;
     line-height: 1.5;
 }
 
@@ -80,39 +81,60 @@
 /* ========== STAT CARDS (KPI Strip) ========== */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 10px;
-    margin-bottom: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
 }
 
 .stat-card {
     position: relative;
     overflow: hidden;
-    border-radius: var(--radius-lg);
-    padding: 14px 16px;
+    border-radius: var(--radius-xl, 16px);
+    padding: 18px 20px 16px;
     background: var(--bg-surface);
     border: 1px solid var(--border-default);
-    transition: all 180ms var(--ease-out);
+    transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out), border-color 220ms ease;
     cursor: default;
+    isolation: isolate;
 }
 
 .stat-card::before {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: var(--stat-accent, var(--accent-primary));
+    inset: 0;
+    background: radial-gradient(120% 90% at 100% 0%, var(--stat-accent, var(--accent-primary)) 0%, transparent 55%);
     opacity: 0;
-    transition: opacity 180ms ease;
+    transition: opacity 240ms ease;
+    pointer-events: none;
+    z-index: -1;
+    mix-blend-mode: multiply;
+}
+
+.stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--stat-accent, var(--accent-primary));
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 260ms var(--ease-out);
 }
 
 .stat-card:hover {
     border-color: var(--border-subtle);
-    box-shadow: var(--shadow-sm);
-    transform: translateY(-1px);
+    box-shadow: 0 8px 24px -12px rgba(15, 40, 84, 0.25), 0 2px 6px -2px rgba(15, 40, 84, 0.08);
+    transform: translateY(-2px);
 }
 
-.stat-card:hover::before { opacity: 1; }
+.stat-card:hover::before { opacity: 0.08; }
+.stat-card:hover::after { transform: scaleX(1); }
+
+[data-theme="dark"] .stat-card::before { mix-blend-mode: screen; }
+[data-theme="dark"] .stat-card:hover::before { opacity: 0.12; }
+[data-theme="dark"] .stat-card:hover {
+    box-shadow: 0 8px 28px -14px rgba(0, 0, 0, 0.6), 0 2px 6px -2px rgba(0, 0, 0, 0.3);
+}
 
 /* Conflict emphasis — pulsing border + warning tint */
 .stat-card.stat-warning {
@@ -132,37 +154,43 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
 }
 
 .stat-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
-    border-radius: var(--radius-md);
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
     font-size: 0;
-    transition: transform 180ms var(--ease-out);
+    transition: transform 220ms var(--ease-out), box-shadow 220ms ease;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-.stat-card:hover .stat-icon { transform: scale(1.05); }
+[data-theme="light"] .stat-icon {
+    box-shadow: inset 0 0 0 1px rgba(15, 40, 84, 0.04);
+}
+
+.stat-card:hover .stat-icon { transform: scale(1.08) rotate(-2deg); }
 
 .stat-number {
     font-family: var(--font-display);
-    font-size: 28px;
-    font-weight: 700;
+    font-size: 32px;
+    font-weight: 800;
     color: var(--text-primary);
-    letter-spacing: -0.03em;
+    letter-spacing: -0.035em;
     line-height: 1;
-    margin-bottom: 3px;
+    margin-bottom: 5px;
+    font-variant-numeric: tabular-nums;
 }
 
 .stat-label {
     font-size: 11px;
     color: var(--text-muted);
-    font-weight: 500;
-    letter-spacing: 0.02em;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
@@ -243,34 +271,41 @@
 .dash-card {
     background: var(--bg-surface);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-lg);
-    padding: 20px;
-    transition: border-color 200ms ease, box-shadow 200ms ease;
+    border-radius: var(--radius-xl, 16px);
+    padding: 22px;
+    transition: border-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
     overflow: hidden;
     position: relative;
 }
 
-.dash-card:hover { border-color: var(--border-subtle); }
+.dash-card:hover {
+    border-color: var(--border-subtle);
+    box-shadow: 0 6px 20px -12px rgba(15, 40, 84, 0.18);
+}
+
+[data-theme="dark"] .dash-card:hover {
+    box-shadow: 0 6px 24px -14px rgba(0, 0, 0, 0.5);
+}
 
 .dash-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: 18px;
 }
 
 .dash-card-title {
     font-family: var(--font-display);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     color: var(--text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 9px;
 }
 
-.dash-card-title svg { opacity: 0.5; }
+.dash-card-title svg { opacity: 0.6; color: var(--accent-primary); }
 
 .dash-card-badge {
     font-size: 10.5px;
@@ -345,17 +380,18 @@
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    padding: 12px 14px;
-    border-radius: var(--radius-md);
+    padding: 13px 15px;
+    border-radius: var(--radius-lg);
     background: var(--bg-elevated);
     border: 1px solid transparent;
-    transition: all 160ms ease;
+    transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
     position: relative;
 }
 
 .dash-list-item:hover {
     border-color: var(--border-default);
     background: var(--bg-hover);
+    transform: translateX(2px);
 }
 
 .dash-list-item-accent {
@@ -607,47 +643,71 @@
     letter-spacing: -0.01em;
 }
 
-/* ========== GREETING (Teacher / Student) ========== */
+/* ========== GREETING (Teacher / Student) — HERO ========== */
 .dash-greeting {
+    position: relative;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 16px;
-    margin-bottom: 20px;
-    padding: 20px 24px;
-    background: var(--bg-surface);
+    margin-bottom: 24px;
+    padding: 26px 28px;
+    background:
+        radial-gradient(120% 140% at 100% 0%, rgba(73, 136, 196, 0.14) 0%, transparent 55%),
+        radial-gradient(80% 120% at 0% 100%, rgba(28, 77, 141, 0.10) 0%, transparent 60%),
+        var(--bg-surface);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-lg);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.dash-greeting::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, #4988c4, #1c4d8d);
+    border-radius: 4px 0 0 4px;
+}
+
+[data-theme="light"] .dash-greeting {
+    background:
+        radial-gradient(120% 140% at 100% 0%, rgba(73, 136, 196, 0.12) 0%, transparent 55%),
+        radial-gradient(80% 120% at 0% 100%, rgba(28, 77, 141, 0.06) 0%, transparent 60%),
+        #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 40, 84, 0.04);
 }
 
 .dash-greeting h2 {
     font-family: var(--font-display);
-    font-size: 20px;
-    font-weight: 700;
+    font-size: 24px;
+    font-weight: 800;
     color: var(--text-primary);
-    letter-spacing: -0.02em;
-    line-height: 1.3;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
 .dash-greeting p {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-secondary);
-    margin-top: 2px;
+    margin-top: 6px;
     line-height: 1.5;
 }
 
 .dash-day-badge {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--accent-primary);
-    background: var(--accent-primary-subtle);
-    padding: 5px 12px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--text-on-accent);
+    background: linear-gradient(135deg, #1c4d8d, #4988c4);
+    padding: 7px 14px;
     border-radius: var(--radius-full);
     white-space: nowrap;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 12px -4px rgba(28, 77, 141, 0.45);
 }
 
 /* ========== LIVE DOT (pulsing indicator) ========== */
@@ -692,16 +752,30 @@
 
 .dash-section-header h3 {
     font-family: var(--font-display);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     color: var(--text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    position: relative;
+    padding-left: 10px;
 }
 
-.dash-section-header h3 svg { opacity: 0.5; }
+.dash-section-header h3::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 16px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, var(--accent-primary), var(--accent-primary-hover, var(--accent-primary)));
+}
+
+.dash-section-header h3 svg { opacity: 0.65; color: var(--accent-primary); }
 
 .dash-section-count {
     font-size: 10.5px;
@@ -742,30 +816,32 @@
     display: flex;
     background: var(--bg-surface);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-lg);
+    border-radius: 14px;
     overflow: hidden;
-    transition: border-color 160ms ease, box-shadow 160ms ease;
+    transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+    position: relative;
 }
 
 .dash-class-card:hover {
     border-color: var(--border-subtle);
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 6px 18px -10px rgba(15, 40, 84, 0.22);
+    transform: translateY(-1px);
 }
 
 .dash-class-card.is-ongoing {
-    border-color: rgba(34, 197, 94, 0.25);
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.35);
+    background: linear-gradient(90deg, rgba(34, 197, 94, 0.04), transparent 45%), var(--bg-surface);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.1), 0 6px 18px -10px rgba(34, 197, 94, 0.2);
 }
 
 .dash-class-stripe {
-    width: 4px;
+    width: 5px;
     flex-shrink: 0;
-    border-radius: 4px 0 0 4px;
 }
 
 .dash-class-body {
     flex: 1;
-    padding: 13px 16px;
+    padding: 15px 18px;
     min-width: 0;
 }
 
@@ -819,17 +895,33 @@
 
 /* ========== PROGRESS BAR ========== */
 .dash-progress {
-    height: 3px;
+    height: 5px;
     background: var(--bg-elevated);
     border-radius: var(--radius-full);
-    margin-top: 10px;
+    margin-top: 12px;
     overflow: hidden;
+    position: relative;
 }
 
 .dash-progress-fill {
     height: 100%;
     border-radius: var(--radius-full);
     transition: width 1s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.dash-progress-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%);
+    animation: progressShine 2s ease-in-out infinite;
+}
+
+@keyframes progressShine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
 }
 
 /* ========== QUICK ACTIONS ========== */
@@ -842,48 +934,69 @@
 .dash-action-btn {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
+    gap: 11px;
+    padding: 14px 16px;
     background: var(--bg-surface);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-lg);
+    border-radius: 14px;
     color: var(--text-primary);
     font-size: 12.5px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 160ms var(--ease-out);
+    transition: transform 200ms var(--ease-out), border-color 200ms ease, box-shadow 200ms ease, background 200ms ease;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+}
+
+.dash-action-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--accent-primary-subtle), transparent 70%);
+    opacity: 0;
+    transition: opacity 220ms ease;
+    pointer-events: none;
 }
 
 .dash-action-btn:hover {
     border-color: var(--accent-primary);
-    color: var(--accent-primary);
-    background: var(--accent-primary-subtle);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px -10px rgba(28, 77, 141, 0.35);
 }
 
+.dash-action-btn:hover::before { opacity: 1; }
+
+.dash-action-btn:hover .dash-action-icon { transform: scale(1.08); }
+
 .dash-action-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--radius-md);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    transition: transform 220ms var(--ease-out);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 /* ========== ANNOUNCEMENT ITEMS ========== */
 .dash-ann-item {
     display: flex;
-    gap: 10px;
-    padding: 12px 14px;
+    gap: 11px;
+    padding: 13px 15px;
     background: var(--bg-surface);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    transition: border-color 150ms ease;
+    border-radius: 12px;
+    transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
-.dash-ann-item:hover { border-color: var(--border-subtle); }
+.dash-ann-item:hover {
+    border-color: var(--border-subtle);
+    transform: translateX(2px);
+    box-shadow: 0 4px 12px -8px rgba(15, 40, 84, 0.15);
+}
 
 .dash-ann-dot {
     width: 8px;
@@ -927,14 +1040,18 @@
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    padding: 11px 14px;
+    padding: 12px 15px;
     background: var(--bg-surface);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    transition: border-color 150ms ease;
+    border-radius: 12px;
+    transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
-.dash-event-item:hover { border-color: var(--border-subtle); }
+.dash-event-item:hover {
+    border-color: var(--accent-primary);
+    transform: translateX(2px);
+    box-shadow: 0 4px 12px -8px rgba(28, 77, 141, 0.25);
+}
 
 .dash-event-info { flex: 1; min-width: 0; }
 
@@ -955,14 +1072,18 @@
 
 /* ========== REQUEST ITEMS ========== */
 .dash-req-item {
-    padding: 12px 14px;
+    padding: 13px 15px;
     background: var(--bg-surface);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    transition: border-color 150ms ease;
+    border-radius: 12px;
+    transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
-.dash-req-item:hover { border-color: var(--border-subtle); }
+.dash-req-item:hover {
+    border-color: var(--border-subtle);
+    transform: translateX(2px);
+    box-shadow: 0 4px 12px -8px rgba(15, 40, 84, 0.15);
+}
 
 .dash-req-top {
     display: flex;
@@ -1266,10 +1387,13 @@
 
 /* Phone (<600px) — mobile portrait */
 @media (max-width: 599px) {
-    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-    .stat-card { padding: 12px 14px; }
-    .stat-number { font-size: 22px; }
-    .stat-icon { width: 30px; height: 30px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stat-card { padding: 14px 15px 13px; border-radius: 14px; }
+    .stat-number { font-size: 24px; }
+    .dashboard-title { font-size: 22px; }
+    .dash-greeting { padding: 20px 20px; border-radius: 16px; }
+    .dash-greeting h2 { font-size: 20px; }
+    .stat-icon { width: 32px; height: 32px; }
     .stat-icon svg { width: 14px; height: 14px; }
     .stat-card-header { margin-bottom: 8px; }
     .dash-card { padding: 14px; }
