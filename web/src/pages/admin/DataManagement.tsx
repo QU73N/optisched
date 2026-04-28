@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasAnyRole } from '../../types/database';
-import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit } from 'lucide-react';
+import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit, Folder } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 type Tab = 'rooms' | 'subjects' | 'sections';
@@ -15,6 +15,11 @@ interface Room {
     type: string;
     capacity: number;
     is_available: boolean;
+    weight: number;
+    priority_note: string | null;
+    owner_id: string | null;
+    is_public: boolean;
+    shared_with: string[];
 }
 
 interface Subject {
@@ -26,6 +31,12 @@ interface Subject {
     program: string;
     year_level: number;
     duration_hours: number;
+    requires_lab: boolean;
+    weight: number;
+    priority_note: string | null;
+    owner_id: string | null;
+    is_public: boolean;
+    shared_with: string[];
 }
 
 interface Section {
@@ -34,6 +45,17 @@ interface Section {
     program: string;
     year_level: number;
     student_count: number;
+    parent_id: string | null;
+    weight: number;
+    path: string;
+    node_type: 'group' | 'section';
+    is_active: boolean;
+    description: string | null;
+    metadata: Record<string, unknown>;
+    sort_order: number;
+    owner_id: string | null;
+    is_public: boolean;
+    shared_with: string[];
 }
 
 const DataManagement: React.FC = () => {
@@ -59,12 +81,12 @@ const DataManagement: React.FC = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
 
     // Form state
-    const [newRoom, setNewRoom] = useState({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1 });
-    const [newSubject, setNewSubject] = useState({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false });
-    const [newSection, setNewSection] = useState({ name: '', program: '', year_level: 1, student_count: 30 });
-    const [editRoom, setEditRoom] = useState({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1 });
-    const [editSubject, setEditSubject] = useState({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false });
-    const [editSection, setEditSection] = useState({ name: '', program: '', year_level: 1, student_count: 30 });
+    const [newRoom, setNewRoom] = useState({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [newSubject, setNewSubject] = useState({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [newSection, setNewSection] = useState({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null as string | null, weight: 50, node_type: 'section' as 'group' | 'section', description: '', sort_order: 0, owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [editRoom, setEditRoom] = useState({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [editSubject, setEditSubject] = useState({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [editSection, setEditSection] = useState({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null as string | null, weight: 50, node_type: 'section' as 'group' | 'section', description: '', sort_order: 0, owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
 
     const fetchAll = async () => {
         setLoading(true);
@@ -86,7 +108,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('rooms').insert({ ...newRoom, is_available: true, equipment: [] });
         setShowAddRoom(false);
-        setNewRoom({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1 });
+        setNewRoom({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
         setSaving(false);
         fetchAll();
     };
@@ -96,7 +118,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('subjects').insert(newSubject);
         setShowAddSubject(false);
-        setNewSubject({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false });
+        setNewSubject({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
         setSaving(false);
         fetchAll();
     };
@@ -106,7 +128,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('sections').insert(newSection);
         setShowAddSection(false);
-        setNewSection({ name: '', program: '', year_level: 1, student_count: 30 });
+        setNewSection({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null, weight: 50, node_type: 'section', description: '', sort_order: 0, owner_id: null, is_public: false, shared_with: [] });
         setSaving(false);
         fetchAll();
     };
@@ -118,7 +140,7 @@ const DataManagement: React.FC = () => {
     };
 
     const openEditRoom = (room: Room) => {
-        setEditRoom({ name: room.name, capacity: room.capacity, type: room.type, building: room.building, floor: room.floor });
+        setEditRoom({ name: room.name, capacity: room.capacity, type: room.type, building: room.building, floor: room.floor, weight: room.weight, priority_note: room.priority_note || '', owner_id: room.owner_id, is_public: room.is_public, shared_with: room.shared_with });
         setEditingId(room.id);
         setShowEditRoom(true);
     };
@@ -132,14 +154,19 @@ const DataManagement: React.FC = () => {
             duration_hours: subject.duration_hours,
             program: subject.program,
             year_level: subject.year_level,
-            requires_lab: (subject as any).requires_lab || false,
+            requires_lab: subject.requires_lab || false,
+            weight: subject.weight,
+            priority_note: subject.priority_note || '',
+            owner_id: subject.owner_id,
+            is_public: subject.is_public,
+            shared_with: subject.shared_with,
         });
         setEditingId(subject.id);
         setShowEditSubject(true);
     };
 
     const openEditSection = (section: Section) => {
-        setEditSection({ name: section.name, program: section.program, year_level: section.year_level, student_count: section.student_count });
+        setEditSection({ name: section.name, program: section.program, year_level: section.year_level, student_count: section.student_count, parent_id: section.parent_id, weight: section.weight, node_type: section.node_type, description: section.description || '', sort_order: section.sort_order, owner_id: section.owner_id, is_public: section.is_public, shared_with: section.shared_with });
         setEditingId(section.id);
         setShowEditSection(true);
     };
@@ -149,7 +176,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('rooms').update({ ...editRoom }).eq('id', editingId);
         setShowEditRoom(false);
-        setEditRoom({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1 });
+        setEditRoom({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
         setEditingId(null);
         setSaving(false);
         fetchAll();
@@ -160,7 +187,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('subjects').update(editSubject).eq('id', editingId);
         setShowEditSubject(false);
-        setEditSubject({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false });
+        setEditSubject({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
         setEditingId(null);
         setSaving(false);
         fetchAll();
@@ -171,7 +198,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('sections').update(editSection).eq('id', editingId);
         setShowEditSection(false);
-        setEditSection({ name: '', program: '', year_level: 1, student_count: 30 });
+        setEditSection({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null, weight: 50, node_type: 'section', description: '', sort_order: 0, owner_id: null, is_public: false, shared_with: [] });
         setEditingId(null);
         setSaving(false);
         fetchAll();
@@ -293,27 +320,36 @@ const DataManagement: React.FC = () => {
                     {tab === 'sections' && (
                         <div className="table-container">
                             <table>
-                                <thead><tr><th>Name</th><th>Program</th><th>Year Level</th><th>Students</th><th style={{ width: 60 }}></th></tr></thead>
+                                <thead><tr><th>Name</th><th>Type</th><th>Parent</th><th>Program</th><th>Year Level</th><th>Students</th><th>Weight</th><th style={{ width: 60 }}></th></tr></thead>
                                 <tbody>
-                                    {sections.map(s => (
-                                        <tr key={s.id}>
-                                            <td style={{ fontWeight: 600 }}>{s.name}</td>
-                                            <td>{s.program}</td>
-                                            <td>{s.year_level >= 11 ? `Grade ${s.year_level}` : `Year ${s.year_level}`}</td>
-                                            <td>{s.student_count}</td>
-                                            <td>
-                                                {canEdit ? (
-                                                    <div style={{ display: 'flex', gap: 4 }}>
-                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => openEditSection(s)}><Edit size={15} style={{ color: 'var(--text-secondary)' }} /></button>
-                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('sections', s.id, s.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
-                                                    </div>
-                                                ) : (
-                                                    <Lock size={15} style={{ color: 'var(--text-muted)' }} />
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {sections.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No sections added yet.</td></tr>}
+                                    {sections.map(s => {
+                                        const parent = sections.find(p => p.id === s.parent_id);
+                                        return (
+                                            <tr key={s.id}>
+                                                <td style={{ fontWeight: 600 }}>
+                                                    {s.node_type === 'group' && <Folder size={14} style={{ marginRight: 6, color: '#818cf8' }} />}
+                                                    {s.name}
+                                                </td>
+                                                <td><span className="badge" style={{ background: s.node_type === 'group' ? 'rgba(139,92,246,0.15)' : 'rgba(16,185,129,0.15)', color: s.node_type === 'group' ? '#a78bfa' : '#34d399' }}>{s.node_type?.toUpperCase()}</span></td>
+                                                <td>{parent ? parent.name : '-'}</td>
+                                                <td>{s.program || '-'}</td>
+                                                <td>{s.year_level >= 11 ? `Grade ${s.year_level}` : `Year ${s.year_level}`}</td>
+                                                <td>{s.student_count || '-'}</td>
+                                                <td>{s.weight}</td>
+                                                <td>
+                                                    {canEdit ? (
+                                                        <div style={{ display: 'flex', gap: 4 }}>
+                                                            <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => openEditSection(s)}><Edit size={15} style={{ color: 'var(--text-secondary)' }} /></button>
+                                                            <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('sections', s.id, s.name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
+                                                        </div>
+                                                    ) : (
+                                                        <Lock size={15} style={{ color: 'var(--text-muted)' }} />
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {sections.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No sections added yet.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -338,6 +374,8 @@ const DataManagement: React.FC = () => {
                                     <option value="lecture">Lecture</option><option value="laboratory">Laboratory</option><option value="computer_lab">Computer Lab</option><option value="gymnasium">Gymnasium</option>
                                 </select>
                             </div>
+                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={newRoom.weight} onChange={e => setNewRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={newRoom.priority_note} onChange={e => setNewRoom(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
                             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Room'}</button>
                         </form>
                     </div>
@@ -367,6 +405,8 @@ const DataManagement: React.FC = () => {
                                 <input type="checkbox" checked={newSubject.requires_lab} onChange={e => setNewSubject(p => ({ ...p, requires_lab: e.target.checked }))} />
                                 Requires Lab Room
                             </label>
+                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={newSubject.weight} onChange={e => setNewSubject(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={newSubject.priority_note} onChange={e => setNewSubject(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
                             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Subject'}</button>
                         </form>
                     </div>
@@ -385,6 +425,23 @@ const DataManagement: React.FC = () => {
                                 <div className="field" style={{ flex: 1 }}><label className="field-label">YEAR LEVEL</label><input className="input" type="number" min={1} max={12} value={newSection.year_level} onChange={e => setNewSection(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
                             </div>
                             <div className="field"><label className="field-label">STUDENT COUNT</label><input className="input" type="number" min={1} value={newSection.student_count} onChange={e => setNewSection(p => ({ ...p, student_count: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">NODE TYPE</label>
+                                <select className="input" value={newSection.node_type} onChange={e => setNewSection(p => ({ ...p, node_type: e.target.value as 'group' | 'section' }))}>
+                                    <option value="section">Section (actual student group)</option>
+                                    <option value="group">Group (folder for organization)</option>
+                                </select>
+                            </div>
+                            <div className="field"><label className="field-label">PARENT SECTION</label>
+                                <select className="input" value={newSection.parent_id || ''} onChange={e => setNewSection(p => ({ ...p, parent_id: e.target.value || null }))}>
+                                    <option value="">None (root level)</option>
+                                    {sections.filter(s => s.node_type === 'group' || s.node_type === 'section').map(s => (
+                                        <option key={s.id} value={s.id}>{s.name} ({s.node_type})</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={newSection.weight} onChange={e => setNewSection(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">SORT ORDER</label><input className="input" type="number" min={0} value={newSection.sort_order} onChange={e => setNewSection(p => ({ ...p, sort_order: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">DESCRIPTION</label><textarea className="input" rows={2} value={newSection.description} onChange={e => setNewSection(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." /></div>
                             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Section'}</button>
                         </form>
                     </div>
@@ -408,6 +465,8 @@ const DataManagement: React.FC = () => {
                                     <option value="lecture">Lecture</option><option value="laboratory">Laboratory</option><option value="computer_lab">Computer Lab</option><option value="gymnasium">Gymnasium</option>
                                 </select>
                             </div>
+                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={editRoom.weight} onChange={e => setEditRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={editRoom.priority_note} onChange={e => setEditRoom(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
                             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>
@@ -437,6 +496,8 @@ const DataManagement: React.FC = () => {
                                 <input type="checkbox" checked={editSubject.requires_lab} onChange={e => setEditSubject(p => ({ ...p, requires_lab: e.target.checked }))} />
                                 Requires Lab Room
                             </label>
+                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={editSubject.weight} onChange={e => setEditSubject(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={editSubject.priority_note} onChange={e => setEditSubject(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
                             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>
@@ -455,6 +516,23 @@ const DataManagement: React.FC = () => {
                                 <div className="field" style={{ flex: 1 }}><label className="field-label">YEAR LEVEL</label><input className="input" type="number" min={1} max={12} value={editSection.year_level} onChange={e => setEditSection(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
                             </div>
                             <div className="field"><label className="field-label">STUDENT COUNT</label><input className="input" type="number" min={1} value={editSection.student_count} onChange={e => setEditSection(p => ({ ...p, student_count: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">NODE TYPE</label>
+                                <select className="input" value={editSection.node_type} onChange={e => setEditSection(p => ({ ...p, node_type: e.target.value as 'group' | 'section' }))}>
+                                    <option value="section">Section (actual student group)</option>
+                                    <option value="group">Group (folder for organization)</option>
+                                </select>
+                            </div>
+                            <div className="field"><label className="field-label">PARENT SECTION</label>
+                                <select className="input" value={editSection.parent_id || ''} onChange={e => setEditSection(p => ({ ...p, parent_id: e.target.value || null }))}>
+                                    <option value="">None (root level)</option>
+                                    {sections.filter(s => s.id !== editingId && (s.node_type === 'group' || s.node_type === 'section')).map(s => (
+                                        <option key={s.id} value={s.id}>{s.name} ({s.node_type})</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={editSection.weight} onChange={e => setEditSection(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">SORT ORDER</label><input className="input" type="number" min={0} value={editSection.sort_order} onChange={e => setEditSection(p => ({ ...p, sort_order: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">DESCRIPTION</label><textarea className="input" rows={2} value={editSection.description} onChange={e => setEditSection(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." /></div>
                             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>

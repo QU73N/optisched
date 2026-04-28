@@ -41,7 +41,7 @@ const AdminOverride: React.FC = () => {
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const isPower = profile?.role === 'power_admin' || profile?.role === 'system_admin';
+    const isPower = profile?.role === 'power_admin' || profile?.role === 'system_admin' || profile?.role === 'admin';
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -57,7 +57,7 @@ const AdminOverride: React.FC = () => {
 
     useEffect(() => {
         if (isPower) load();
-    }, [isPower, load]);
+    }, [isPower, load]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const activate = async () => {
         if (!profile?.id) return;

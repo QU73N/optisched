@@ -12,6 +12,9 @@ Run these after the base schema from `migrated/000_migration.sql`:
 2. **002_create_client_error_logs.sql** - Client error logging table and RPC
 3. **003_create_performance_indexes.sql** - Performance indexes for hot-path queries
 4. **004_create_retention_policy.sql** - Retention policy and archive tables
+5. **005_create_section_hierarchy.sql** - Section hierarchy with folder-style grouping and weights
+6. **006_create_schedule_versioning.sql** - Schedule versioning with history, compare, and rollback
+7. **007_create_priority_system.sql** - Priority system with configurable weighting
 
 ### Migrated Directory (Base Schema & Features)
 
@@ -45,7 +48,7 @@ Run these in order for a fresh installation:
 
 ### For Fresh Installation
 
-Run files in order from `migrated/000_migration.sql` through `migrated/014_seed_real_data.sql`, then run the root directory migrations `001` through `005`.
+Run files in order from `migrated/000_migration.sql` through `migrated/014_seed_real_data.sql`, then run the root directory migrations `001` through `007`.
 
 ### For Existing Database
 

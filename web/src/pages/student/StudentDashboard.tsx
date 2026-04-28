@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSchedules, useAnnouncements } from '../../hooks/useSupabase';
 import { useCustomEvents } from '../../hooks/useCustomEvents';
-import { Calendar, Clock, BookOpen, Megaphone, MapPin, Users, BarChart3, CheckCircle, PieChart as PieIcon } from 'lucide-react';
+import { Calendar, Clock, BookOpen, Megaphone, MapPin, Users, PieChart as PieIcon } from 'lucide-react';
 import {
-    BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie
 } from 'recharts';
+import { ChartTooltip } from '../../components/ChartTooltip';
 import { supabase } from '../../lib/supabase';
 import '../admin/Dashboard.css';
 
@@ -109,19 +110,6 @@ const StudentDashboard: React.FC = () => {
     const ongoingClass = todaySchedule.find(s => s.status === 'ongoing');
     const nextClass = todaySchedule.find(s => s.status === 'upcoming');
 
-    // Chart data
-    // S2: Weekly load by day (real)
-    const weeklyLoad = useMemo(() => {
-        const order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const map: Record<string, number> = Object.fromEntries(order.map(d => [d, 0]));
-        weekSectionSchedules.forEach((s: any) => {
-            if (s.day_of_week && s.day_of_week in map) map[s.day_of_week]++;
-        });
-        return order.map(d => ({ day: d.slice(0, 3), count: map[d], isToday: d === scheduleDayName }));
-    }, [weekSectionSchedules, scheduleDayName]);
-    const weeklyTotal = weeklyLoad.reduce((s, d) => s + d.count, 0);
-    const peakDay = weeklyLoad.reduce((m, d) => d.count > m.count ? d : m, { day: '-', count: 0, isToday: false });
-
     // S3: Subject distribution by total weekly hours (top 5)
     const subjectDistribution = useMemo(() => {
         const hours: Record<string, number> = {};
@@ -141,26 +129,6 @@ const StudentDashboard: React.FC = () => {
         return top5;
     }, [weekSectionSchedules]);
     const subjectTotal = subjectDistribution.reduce((s, d) => s + d.value, 0);
-
-    // Day progress (counts)
-    const dayProgress = useMemo(() => {
-        const finished = todaySchedule.filter(s => s.status === 'finished').length;
-        const ongoing = todaySchedule.filter(s => s.status === 'ongoing').length;
-        const upcoming = todaySchedule.filter(s => s.status === 'upcoming').length;
-        return { finished, ongoing, upcoming, total: finished + ongoing + upcoming };
-    }, [todaySchedule]);
-
-    const ChartTooltip = ({ active, payload, label }: any) => {
-        if (!active || !payload?.length) return null;
-        return (
-            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', boxShadow: 'var(--shadow-lg)', fontSize: 12 }}>
-                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{label || payload[0].name}</div>
-                {payload.map((p: any, i: number) => (
-                    <div key={i} style={{ color: 'var(--text-secondary)' }}>{p.name}: <strong style={{ color: 'var(--text-primary)' }}>{p.value}</strong></div>
-                ))}
-            </div>
-        );
-    };
 
     return (
         <div className="dashboard fade-in">
@@ -247,33 +215,7 @@ const StudentDashboard: React.FC = () => {
 
                 {/* Right column. Charts, announcements, events */}
                 <div className="dash-col">
-                    {/* S2: Weekly load (real, by day-of-week) */}
-                    {weeklyTotal > 0 && (
-                        <div>
-                            <div className="dash-section-header">
-                                <h3><BarChart3 size={15} /> Weekly Schedule Load</h3>
-                                <span className="dash-section-count" title={`Peak: ${peakDay.day}`}>{weeklyTotal}</span>
-                            </div>
-                            <div className="dash-chart-card" role="img" aria-label={`Weekly class load. Peak day: ${peakDay.day} with ${peakDay.count} classes`}>
-                                <ResponsiveContainer width="100%" height={140}>
-                                    <BarChart data={weeklyLoad} margin={{ top: 6, right: 6, left: -24, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-                                        <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
-                                        <Bar dataKey="count" name="Classes" radius={[4, 4, 0, 0]}>
-                                            {weeklyLoad.map((d, i) => (
-                                                <Cell key={i} fill={d.isToday ? '#10b981' : '#60a5fa'} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>
-                                    Heaviest: <strong style={{ color: 'var(--text-primary)' }}>{peakDay.day}</strong> ({peakDay.count} classes) · today in green
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {/* S2: Weekly load moved to siderail */}
 
                     {/* S3: Subject Distribution (top 5 by hours) */}
                     {subjectTotal > 0 && (

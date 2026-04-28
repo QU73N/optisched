@@ -49,14 +49,19 @@ OptiSched supports **6 distinct roles**. Roles are hierarchical in trust level b
 | 6 | **Student** | View-only | Views own and section-level approved schedules, upcoming classes, breaks, announcements. No multi-role. |
 
 ### 3.1 Multi-Role Support
-- A **Teacher** may additionally hold `schedule_manager` or `schedule_admin` role. When this happens, the sidebar exposes the extra tabs, but their primary dashboard remains the Teacher dashboard unless they navigate explicitly.
-- **Students** cannot have additional roles.
-- **Admin-tier roles** (Power Admin, System Admin, Schedule Admin, Schedule Manager) cannot be added on top of each other; each is a single primary role.
+- A **Teacher** may additionally hold `schedule_manager` and/or `schedule_admin` role (can hold all three simultaneously).
+- A **Schedule Manager** may additionally hold `schedule_admin` role (and teacher role if applicable).
+- A **Schedule Admin** may additionally hold `schedule_manager` role (and teacher role if applicable).
+- When a user has multiple roles, clicking the role badge in the UI opens a role selector panel to switch between roles. The sidebar tabs update based on the selected role.
+- **Students** cannot have additional roles (student only).
+- **Power Admin** and **System Admin** cannot have additional roles (single primary role only for security reasons).
 
 ### 3.2 Permission Rules Engine
 System Admins configure runtime permission rules stored in a `system_rules` table. Example rules:
 - `teachers_can_see_student_schedules` : boolean
-- `schedule_managers_require_approval` : boolean (if `false`, managers may publish directly)
+- `schedule_managers_can_create_without_approval` : boolean (if `true`, managers can create and publish schedules without approval)
+- `schedule_managers_can_edit_without_approval` : boolean (if `true`, managers can edit published schedules without re-approval)
+- `schedule_managers_access_all_data` : boolean (if `true`, managers access all data; if `false`, only their assigned department data)
 - `students_can_see_teacher_names` : boolean
 - `teachers_can_message_admins` : boolean
 - `per_user_overrides` : JSONB keyed by user ID for granular overrides
@@ -144,6 +149,8 @@ Blue academic family with colors like:
 - Submits for approval (or publishes directly if Rules Engine allows)
 - Shares elements; marks public/private
 - Cannot approve own output unless Rules Engine grants direct-publish
+- Assigned to departments by System Admin or Schedule Admin
+- Data access scope determined by `schedule_managers_access_all_data` rule (all data vs department-only)
 
 ### 6.5 Teachers
 - Views only their own approved schedules
@@ -214,28 +221,38 @@ Legend: ● = full access · ◐ = view-only · — = no access
 
 ## 8. Teacher Management
 
-### 8.1 Availability
+### 8.1 Department Assignment
+- Teachers are assigned to departments (e.g., IT Area, Mathematics, Science, Arts)
+- Departments represent subject-related areas or coordinators
+- System Admin and Schedule Admin can assign teachers to departments
+- Department assignment is used for:
+  - Organizing teachers by subject area
+  - Scoping Schedule Manager data access (if `schedule_managers_access_all_data` is false)
+- Rooms and sections are NOT assigned to departments (they are shared resources)
+
+### 8.2 Availability
 - Teacher availability is not gathered inside OptiSched itself
 - Schedule Managers collect availability outside the system through personal communication, institutional forms, or other methods
 - Managers input availability into OptiSched
 - **Hard constraint:** Teachers must never be assigned outside their availability
 
-### 8.2 Teacher Roles
-- Each teacher can have one role only
-- Teacher role defines:
+### 8.3 Teacher Roles
+- Each teacher has a teacher employment type (full-time, part-time, etc.)
+- Teacher employment type defines:
   - Max hours per day
   - Max hours per week
   - Load rules
 - Supports deloading, especially for teachers who are also administrators
+- Note: Teachers may additionally hold schedule_manager or schedule_admin roles (see §3.1)
 
-### 8.3 Faculty Load Calculation
+### 8.4 Faculty Load Calculation
 - System must calculate faculty load automatically
 - System should show whether a teacher is:
   - Overloaded
   - Underloaded
   - Within target range
 
-### 8.4 Teaching Constraints
+### 8.5 Teaching Constraints
 - **Hard constraint:** Must enforce maximum consecutive teaching hours per day
 - **Soft constraint:** Should try to spread teacher load evenly throughout the week
 
@@ -250,7 +267,9 @@ Legend: ● = full access · ◐ = view-only · — = no access
 
 ### 9.2 Hours and Sessions
 - Subjects can have required weekly hours
-- Subjects can support split sessions
+- Schedules use blocks (time blocks that can be separated, combined, etc.)
+- System Admin can configure default block length (called "session length")
+- Subjects can support split sessions (blocks can be split into multiple parts)
 - Preferred split (when applicable): 1 hour 30 minutes per part
 - Schedule Managers must be able to manually adjust required hours per week or per month
 
@@ -418,19 +437,38 @@ Legend: ● = full access · ◐ = view-only · — = no access
 ### 15.1 Workflow States
 - Draft
 - Submitted
-- Approved
+- Approved (instantly distributed to teachers and students)
 - Published
-- Locked
+- Archived (manual archive by Schedule Manager or Schedule Admin to start over)
+- Rejected (rejected by Schedule Admin with reason)
+
+**Note:** All status transitions are logged with who performed the action and timestamp for security and audit purposes.
 
 ### 15.2 Workflow Steps
-1. Schedule Managers generate schedules
-2. Administrators review them
-3. Administrators approve them before they reach users
-4. Users only receive schedules after approval
-5. Power Admin can intervene in emergencies
+1. Schedule Manager creates a schedule (draft)
+2. Schedule Manager submits schedule for approval (unless `schedule_managers_can_create_without_approval` is true)
+3. Schedule Admin or Power Admin reviews and approves the schedule
+4. Upon approval, schedule status changes to "Approved" and is instantly distributed to teachers and students
+5. If Schedule Manager needs to make adjustments:
+   - Schedule Manager edits the schedule
+   - Schedule Manager submits adjustment for approval (unless `schedule_managers_can_edit_without_approval` is true)
+   - Schedule Admin or Power Admin reviews and approves the adjustment
+   - Upon approval, adjustment is instantly distributed to teachers and students
+6. Schedule Managers or Schedule Admins can archive schedules to start over
+7. Power Admin can intervene in emergencies
+
+**Note:** System Admin cannot approve schedules (separation of concerns).
 
 ### 15.3 Logging
 - Every state transition should be logged
+- All status changes record who performed the action and timestamp
+
+### 15.4 Schedule Deletion
+- Schedules use soft deletion (marked as deleted but retained in database)
+- Only Schedule Admin and Power Admin can delete schedules
+- System Admin cannot delete schedules (separation of concerns)
+- Soft-deleted schedules are automatically permanently deleted after 30 days if not recovered
+- Schedule Managers cannot delete schedules (must archive instead)
 
 ---
 
@@ -649,10 +687,12 @@ The product is acceptable when:
 - Light Blue: `#4988C4`
 - Pale Blue: `#BDE8F5`
 
-### 26.2 Known Schema Debt (to reconcile)
-- `profiles.role` CHECK currently `'admin'|'teacher'|'student'` in `database_schema.sql`. Live DB must allow `power_admin`, `system_admin`, `schedule_admin`, `schedule_manager`. A new migration SQL file should extend the CHECK (per rule, existing SQL is not edited; new file will be created).
-- `custom_events.creator_role` CHECK only allows `'admin'|'teacher'`. Should be extended to include all admin sub-roles + schedule_manager.
-- `schedules.status` CHECK currently `'draft'|'published'|'archived'`. Approval workflow (§15) needs an additional `'submitted'` state to distinguish "awaiting approval" from "draft".
+### 26.2 Schema Status
+- All required roles are implemented in database_schema.sql: `power_admin`, `system_admin`, `schedule_admin`, `schedule_manager`, `teacher`, `student`
+- All required schedule status values are implemented: `draft`, `submitted`, `approved`, `published`, `archived`, `rejected`
+- All status transitions are logged with who performed the action and timestamp (approved_by, approved_at, rejected_by, rejected_at, etc.)
+- Soft deletion is implemented with deleted_at and deleted_by columns for 30-day automatic cleanup
+- Edit control is handled through RLS policies based on role and schedule status (no separate locking system)
 
 ### 26.3 Required New Tables (for this revision)
 - `system_rules` — Permission Rules Engine storage

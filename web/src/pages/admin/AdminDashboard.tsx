@@ -11,7 +11,7 @@ import {
     Users, CalendarDays, AlertTriangle, BookOpen, TrendingUp, Clock,
     Inbox, CheckCircle, XCircle, Megaphone, Trash2, Edit3,
     X, Loader2, KeyRound, MessageSquare, CalendarPlus,
-    Activity, BarChart3, Shield
+    Activity, BarChart3
 } from 'lucide-react';
 import {
     LineChart, Line, BarChart, Bar, Cell,
@@ -27,7 +27,6 @@ const AdminDashboard: React.FC = () => {
     const [deltas, setDeltas] = useState<DashboardDeltas>({ schedules: 0, conflicts: 0, requests: 0 });
     // Chart datasets, all derived from real data
     const [conflictsTrend, setConflictsTrend] = useState<ConflictsTrend[]>([]);
-    const [schedulesByDay, setSchedulesByDay] = useState<{ day: string; count: number }[]>([]);
     const [roomLoad, setRoomLoad] = useState<{ name: string; count: number }[]>([]);
     const [requestFunnel, setRequestFunnel] = useState({ approved: 0, rejected: 0, pending: 0 });
 
@@ -132,13 +131,6 @@ const AdminDashboard: React.FC = () => {
                 if (key in trendMap) trendMap[key]++;
             });
             setConflictsTrend(Object.entries(trendMap).map(([date, count]) => ({ date, count })));
-            // Schedules by day-of-week
-            const dayOrder = DASHBOARD_CONFIG.CHART.SCHEDULE_DAYS;
-            const dayMap: Record<string, number> = Object.fromEntries(dayOrder.map(d => [d, 0]));
-            (schedulesFull.data || []).forEach((s: any) => {
-                if (s.day_of_week && s.day_of_week in dayMap) dayMap[s.day_of_week]++;
-            });
-            setSchedulesByDay(dayOrder.map(d => ({ day: d.slice(0, DASHBOARD_CONFIG.CHART.DAY_ABBREVIATION_LENGTH), count: dayMap[d] })));
             // Room load (top 8)
             const roomMap: Record<string, number> = {};
             (schedulesFull.data || []).forEach((s: any) => {
@@ -574,55 +566,7 @@ const AdminDashboard: React.FC = () => {
 
                     {/* ROW 3: OPERATIONAL SUPPORT */}
                     <div className="admin-dash-row-3">
-                        {/* Schedules per day-of-week (real data) */}
-                        {canSeeScheduleStats && (
-                            <div className="dash-card dash-stagger">
-                                <div className="dash-card-header">
-                                    <div className="dash-card-title"><CalendarDays size={16} /> Load by Day</div>
-                                    <span className="dash-card-badge dash-badge-info">{stats.schedules}</span>
-                                </div>
-                                <div className="dash-chart-wrap-sm" role="img" aria-label="Schedule count per day of week">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={schedulesByDay} margin={{ top: 6, right: 8, left: -22, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-                                            <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                            <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                                            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
-                                            <Bar dataKey="count" name="Schedules" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                                <div className="dash-meta-text" style={{ marginTop: 6, textAlign: 'center' }}>
-                                    Peak day: <strong className="dash-text-primary">{schedulesByDay.reduce((m, d) => d.count > m.count ? d : m, { day: '-', count: 0 }).day}</strong>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* System Status */}
-                        <div className="dash-card dash-stagger">
-                            <div className="dash-card-header">
-                                <div className="dash-card-title"><Shield size={16} /> System Status</div>
-                                <span className="dash-card-badge dash-badge-success">Online</span>
-                            </div>
-                            <div className="dash-flex-col dash-gap-10">
-                                <div className="status-item">
-                                    <div className="status-dot status-online" />
-                                    <span>Database</span>
-                                </div>
-                                <div className="status-item">
-                                    <div className="status-dot status-online" />
-                                    <span>Real-time sync</span>
-                                </div>
-                                <div className="status-item">
-                                    <div className="status-dot status-online" />
-                                    <span>Authentication</span>
-                                </div>
-                                <div className="status-item">
-                                    <div className="status-dot status-online" />
-                                    <span>Storage</span>
-                                </div>
-                            </div>
-                        </div>
+                        {/* Charts moved to siderail */}
                     </div>
                 </div>
 

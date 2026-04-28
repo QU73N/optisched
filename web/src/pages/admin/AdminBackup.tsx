@@ -61,7 +61,7 @@ const AdminBackup: React.FC = () => {
     const [note, setNote] = useState('');
     const [error, setError] = useState<string | null>(null);
 
-    const isPower = profile?.role === 'power_admin' || profile?.role === 'system_admin';
+    const isPower = profile?.role === 'power_admin' || profile?.role === 'system_admin' || profile?.role === 'admin';
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -75,7 +75,7 @@ const AdminBackup: React.FC = () => {
         setLoading(false);
     }, []);
 
-    useEffect(() => { if (isPower) load(); }, [isPower, load]);
+    useEffect(() => { if (isPower) load(); }, [isPower, load]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const createJob = async () => {
         if (!profile?.id) return;

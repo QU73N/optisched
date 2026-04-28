@@ -12,7 +12,9 @@ export type RuleKey =
     | 'teachers_can_see_student_schedules'
     | 'students_can_see_teacher_names'
     | 'students_can_see_classmates'
-    | 'schedule_managers_require_approval'
+    | 'schedule_managers_can_create_without_approval'
+    | 'schedule_managers_can_edit_without_approval'
+    | 'schedule_managers_access_all_data'
     | 'schedule_managers_can_edit_others_drafts'
     | 'teachers_can_message_admins'
     | 'teachers_can_message_other_teachers'
@@ -25,7 +27,11 @@ export type RuleKey =
     | 'require_2fa_for_admins'
     | 'audit_log_retention_days'
     | 'activity_log_retention_days'
-    | 'auto_archive_old_schedules_days';
+    | 'auto_archive_old_schedules_days'
+    | 'default_session_length_minutes'
+    | 'idle_timeout_minutes_by_role'
+    | 'idle_timeout_grace_seconds'
+    | 'idle_reauth_roles';
 
 // Role rank used for hierarchy checks (mirrors SQL role_rank())
 export const ROLE_RANK: Record<string, number> = {
@@ -58,6 +64,14 @@ export function usePermissions() {
     const [rulesLoaded, setRulesLoaded] = useState(false);
 
     useEffect(() => {
+        // Skip the network round-trip when the user is signed out (e.g. during
+        // logout). Without this, profile?.id flipping to undefined would still
+        // trigger an unauthenticated fetch and re-set rules state, causing
+        // an extra render storm exactly when the app is tearing down.
+        if (!profile?.id) {
+            setRulesLoaded(false);
+            return;
+        }
         let cancelled = false;
         const fetchRules = async () => {
             try {
@@ -84,23 +98,21 @@ export function usePermissions() {
             }
 
             // per-user overrides (only for current user; admins fetch others elsewhere)
-            if (profile?.id) {
-                try {
-                    const { data } = await supabase
-                        .from('user_permission_overrides')
-                        .select('rule_key, rule_value, expires_at')
-                        .eq('user_id', profile.id);
-                    if (cancelled) return;
-                    const now = Date.now();
-                    const uo: SystemRulesMap = {};
-                    (data || []).forEach((row: UserOverrideRow) => {
-                        if (row.expires_at && new Date(row.expires_at).getTime() < now) return;
-                        uo[row.rule_key] = row.rule_value;
-                    });
-                    setUserOverrides(uo);
-                } catch (err) {
-                    console.warn('[usePermissions] user_permission_overrides unavailable:', err);
-                }
+            try {
+                const { data } = await supabase
+                    .from('user_permission_overrides')
+                    .select('rule_key, rule_value, expires_at')
+                    .eq('user_id', profile.id);
+                if (cancelled) return;
+                const now = Date.now();
+                const uo: SystemRulesMap = {};
+                (data || []).forEach((row: UserOverrideRow) => {
+                    if (row.expires_at && new Date(row.expires_at).getTime() < now) return;
+                    uo[row.rule_key] = row.rule_value;
+                });
+                setUserOverrides(uo);
+            } catch (err) {
+                console.warn('[usePermissions] user_permission_overrides unavailable:', err);
             }
             if (!cancelled) setRulesLoaded(true);
         };
@@ -170,15 +182,17 @@ export function usePermissions() {
             canManageUsers: isSystemAdmin,
             canViewAuditLogs: isPowerAdmin,
             canEditSystemRules: isSystemAdmin,
-            canApproveSchedules: isScheduleAdmin,
-            canEditAnySchedule: isScheduleAdmin,
+            canApproveSchedules: isScheduleAdmin || isPowerAdmin,
+            canEditAnySchedule: isScheduleAdmin || isPowerAdmin,
             canCreateSchedules: hasAny(['admin','power_admin','schedule_manager']),
-            canDirectPublish: isPowerAdmin || isScheduleAdmin
-                || (isScheduleManager && !ruleEnabled('schedule_managers_require_approval', true)),
+            canDirectPublishCreate: isPowerAdmin || isScheduleAdmin
+                || (isScheduleManager && ruleEnabled('schedule_managers_can_create_without_approval', false)),
+            canDirectPublishEdit: isPowerAdmin || isScheduleAdmin
+                || (isScheduleManager && ruleEnabled('schedule_managers_can_edit_without_approval', false)),
             canPostAnnouncements: hasAny(['admin','power_admin','system_admin','schedule_admin']),
             canSeeUserStats: isSystemAdmin,
             canSeeSystemHealth: isSystemAdmin,
-            canSeeApprovalQueue: isScheduleAdmin,
+            canSeeApprovalQueue: isScheduleAdmin || isPowerAdmin,
             canSeeConflicts: isAdminTier,
             canSeeFacultyLoad: isAdminTier || isTeacher,
             canSeeAllSchedules: hasAny(['admin','power_admin','system_admin','schedule_admin']),
@@ -186,6 +200,8 @@ export function usePermissions() {
             canSubmitChangeRequest: isTeacher && ruleEnabled('teachers_can_submit_change_requests', true),
             canMessageAdmins: isAdminTier
                 || (isTeacher && ruleEnabled('teachers_can_message_admins', true)),
+            canAccessAllData: isScheduleAdmin || isPowerAdmin || isSystemAdmin
+                || (isScheduleManager && ruleEnabled('schedule_managers_access_all_data', false)),
 
             // rules engine accessor
             ruleEnabled,

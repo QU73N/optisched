@@ -4,7 +4,7 @@
 
 import { useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { redactPii, redactErrorMessage } from '../utils/pii';
+import { redactPii } from '../utils/pii';
 
 export type ActivityType =
     | 'login'
@@ -12,7 +12,13 @@ export type ActivityType =
     | 'page_view'
     | 'mutation'
     | 'rls_denied'
-    | 'ai_prompt'
+    | 'role_switch'
+    | 'schedule_generation'
+    | 'schedule_edit'
+    | 'schedule_delete'
+    | 'user_create'
+    | 'user_update'
+    | 'user_delete'
     | 'error'
     | 'export'
     | 'admin_action';

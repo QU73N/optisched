@@ -53,17 +53,49 @@ const ScheduleGenerate: React.FC = () => {
     useEffect(() => {
         const load = async () => {
             setDataLoading(true);
-            const [sub, t, r, sec, sch] = await Promise.all([
-                supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id'),
-                supabase.from('teachers').select('id, max_hours, profile:profiles(full_name)'),
-                supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available'),
-                supabase.from('sections').select('id, name, program, year_level, student_count'),
+            const [sub, t, r, sec, sch, prefs] = await Promise.all([
+                supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id, sessions_per_week, weight, priority_note'),
+                supabase.from('teachers').select('id, max_hours, weight, priority_note, profile:profiles(full_name)'),
+                supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available, weight, priority_note'),
+                supabase.from('sections').select('id, name, program, year_level, student_count, weight'),
                 supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at'),
+                supabase.from('teacher_preferences').select('teacher_id, preferred_days, preferred_time_start, preferred_time_end, max_classes_per_day, max_consecutive_classes, availability'),
             ]);
+
+            // Index preferences by teacher_id for quick lookup
+            type PrefRow = {
+                teacher_id: string;
+                preferred_days: string[] | null;
+                preferred_time_start: string | null;
+                preferred_time_end: string | null;
+                max_classes_per_day: number | null;
+                max_consecutive_classes: number | null;
+                availability: Record<string, boolean> | null;
+            };
+            const prefByTeacher = new Map<string, PrefRow>();
+            for (const p of (prefs.data as unknown as PrefRow[]) || []) {
+                prefByTeacher.set(p.teacher_id, p);
+            }
+
             setSubjects((sub.data as unknown as Subject[]) || []);
             setTeachers(
-                ((t.data as unknown as { id: string; max_hours: number | null; profile: { full_name: string } | null }[]) || [])
-                    .map(x => ({ id: x.id, max_hours: x.max_hours, full_name: x.profile?.full_name || 'Unnamed' })),
+                ((t.data as unknown as { id: string; max_hours: number | null; weight: number; priority_note: string | null; profile: { full_name: string } | null }[]) || [])
+                    .map(x => {
+                        const pref = prefByTeacher.get(x.id);
+                        return {
+                            id: x.id,
+                            max_hours: x.max_hours,
+                            full_name: x.profile?.full_name || 'Unnamed',
+                            weight: x.weight ?? 50,
+                            priority_note: x.priority_note,
+                            preferred_days: pref?.preferred_days || undefined,
+                            preferred_time_start: pref?.preferred_time_start || null,
+                            preferred_time_end: pref?.preferred_time_end || null,
+                            max_classes_per_day: pref?.max_classes_per_day ?? null,
+                            max_consecutive_classes: pref?.max_consecutive_classes ?? null,
+                            availability: pref?.availability || undefined,
+                        };
+                    }),
             );
             setRooms((r.data as unknown as Room[]) || []);
             setSections((sec.data as unknown as Section[]) || []);
@@ -675,6 +707,11 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 <SoftSlider label="Balanced teacher load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} />
                 <SoftSlider label="Compact schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} />
                 <SoftSlider label="Minimize room switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} />
+                <SoftSlider label="Teacher preferred time" desc="Honor each teacher's preferred days and time window." value={config.soft.teacherPreferredTime} onChange={v => updateSoft('teacherPreferredTime', v)} />
+                <SoftSlider label="Daily load balance" desc="Even teaching load per teacher per day." value={config.soft.dailyLoadBalance} onChange={v => updateSoft('dailyLoadBalance', v)} />
+                <SoftSlider label="Workload fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} />
+                <SoftSlider label="Subject spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} />
+                <SoftSlider label="Room utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} />
             </div>
 
             <div className="sg-grid-3" style={{ marginTop: 16 }}>

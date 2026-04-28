@@ -55,7 +55,7 @@
 }
 
 [data-theme="light"] .sidebar {
-    background: #ffffff;
+    background: var(--bg-secondary);
     box-shadow: 1px 0 0 var(--border-default);
 }
 
@@ -185,12 +185,12 @@
 }
 
 [data-theme="light"] .sidebar-link-active {
-    background: rgba(37, 99, 235, 0.08);
-    color: #1d4ed8;
+    background: var(--accent-primary-subtle);
+    color: var(--accent-primary);
 }
 
 [data-theme="light"] .sidebar-link-active svg {
-    color: #2563eb;
+    color: var(--accent-primary);
 }
 
 [data-theme="light"] .sidebar-link:hover {
@@ -226,8 +226,8 @@
 }
 
 [data-theme="light"] .sidebar-avatar {
-    background: rgba(37, 99, 235, 0.08);
-    color: #1d4ed8;
+    background: var(--accent-primary-subtle);
+    color: var(--accent-primary);
 }
 
 .sidebar-user-info {
@@ -300,7 +300,7 @@
 }
 
 [data-theme="light"] .topbar {
-    background: #ffffff;
+    background: var(--bg-secondary);
     box-shadow: 0 1px 0 var(--border-default);
 }
 
@@ -334,7 +334,7 @@
 }
 
 [data-theme="light"] .topbar-btn:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: var(--bg-hover);
 }
 
 /* ========== MAIN CONTENT ========== */
@@ -359,7 +359,7 @@
 }
 
 [data-theme="light"] .siderail {
-    background: #ffffff;
+    background: var(--bg-secondary);
 }
 
 .siderail-open {
@@ -422,11 +422,11 @@
 }
 
 [data-theme="light"] .siderail-action {
-    background: rgba(0, 0, 0, 0.03);
+    background: var(--bg-hover);
 }
 
 [data-theme="light"] .siderail-action:hover {
-    background: rgba(37, 99, 235, 0.08);
+    background: var(--accent-primary-subtle);
 }
 
 .siderail-status {
@@ -440,7 +440,7 @@
 }
 
 [data-theme="light"] .siderail-status {
-    background: rgba(0, 0, 0, 0.03);
+    background: var(--bg-hover);
 }
 
 .siderail-status-item {
@@ -494,7 +494,24 @@
 }
 
 [data-theme="light"] .siderail-list a:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: var(--bg-hover);
+}
+
+.siderail-chart {
+    min-height: 120px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    border: 1px solid var(--border-default);
+}
+
+.siderail-chart-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 96px;
+    color: var(--text-muted);
+    font-size: 12px;
 }
 
 /* ========== RESPONSIVE ========== */
@@ -616,9 +633,9 @@
 .sidebar-search-trigger {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     width: 100%;
-    margin: 4px 0 12px;
+    margin: 4px 0 6px;
     padding: 7px 10px;
     background: var(--bg-inset);
     border: 1px solid var(--border-default);
@@ -698,7 +715,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 10px;
+    padding: 7px 10px;
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
     text-decoration: none;
@@ -715,7 +732,7 @@
     display: flex;
     flex-direction: column;
     gap: 1px;
-    margin-top: 8px;
+    margin-top: 6px;
 }
 .sidebar-group-label {
     display: flex;
@@ -740,11 +757,16 @@
 }
 .sidebar-group-toggle:hover { color: var(--text-secondary); }
 .sidebar-group-chevron {
-    transition: transform 180ms var(--ease-out);
+    transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
 }
 .sidebar-group-chevron-collapsed { transform: rotate(-90deg); }
 .sidebar-group-links {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.sidebar-group-links-inner {
     display: flex;
     flex-direction: column;
     gap: 1px;
@@ -756,6 +778,17 @@
     align-items: stretch;
     gap: 2px;
     position: relative;
+    opacity: 1;
+    max-height: 50px;
+    transition: opacity 240ms cubic-bezier(0.4, 0, 0.2, 1), max-height 240ms cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+.sidebar-link-hidden {
+    opacity: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: none;
 }
 .sidebar-link {
     flex: 1;
@@ -797,7 +830,7 @@
 }
 .sidebar-link-badge {
  background: var(--accent-error);
- color: #fff;
+ color: var(--text-on-accent);
  font-size: 10px;
  font-weight: 700;
  padding: 1px 6px;

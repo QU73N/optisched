@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { ADMIN_ROLES } from '../../types/database';
-import { ArrowLeft, GraduationCap, MapPin, Search, Users, Lock, Scissors, Merge, MoreVertical, X } from 'lucide-react';
+import { ArrowLeft, GraduationCap, MapPin, Search, Users, Lock, Scissors, Merge, MoreVertical, X, History } from 'lucide-react';
 import '../admin/Dashboard.css';
+import ScheduleVersionHistory from './ScheduleVersionHistory';
 
 type Category = 'sections' | 'teachers' | 'rooms';
 
@@ -179,10 +180,14 @@ const ScheduleManagement: React.FC = () => {
     }, [visibleSchedules, selected]);
 
     const statusCounts = useMemo(() => {
-        const counts: Record<string, number> = { all: schedules.length };
+        const counts: Record<string, number> = { all: schedules.length, published: 0, approved: 0, submitted: 0, draft: 0 };
         for (const s of schedules) {
-            const k = s.status || 'draft';
-            counts[k] = (counts[k] || 0) + 1;
+            const k = (s.status || 'draft').toLowerCase();
+            if (k in counts) {
+                counts[k]++;
+            } else {
+                counts[k] = (counts[k] || 0) + 1;
+            }
         }
         return counts;
     }, [schedules]);
@@ -329,6 +334,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
     const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
     const [splitModal, setSplitModal] = useState(false);
     const [splitCount, setSplitCount] = useState(2);
+    const [showVersionHistory, setShowVersionHistory] = useState(false);
 
     const events = schedules.map(s => {
         const dayIdx = dayOrder.indexOf(s.day_of_week);
@@ -596,20 +602,34 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                                 <button
                                     className="sm-context-menu-item"
                                     onClick={() => {
-                                        setSplitModal(true);
+                                        setShowVersionHistory(true);
                                         setShowMenu(false);
                                     }}
                                 >
-                                    <Scissors size={14} />
-                                    Split Session
+                                    <History size={14} />
+                                    View History
                                 </button>
-                                <button
-                                    className="sm-context-menu-item"
-                                    onClick={handleCombine}
-                                >
-                                    <Merge size={14} />
-                                    Combine Sessions
-                                </button>
+                                {canEdit && (
+                                    <>
+                                        <button
+                                            className="sm-context-menu-item"
+                                            onClick={() => {
+                                                setSplitModal(true);
+                                                setShowMenu(false);
+                                            }}
+                                        >
+                                            <Scissors size={14} />
+                                            Split Session
+                                        </button>
+                                        <button
+                                            className="sm-context-menu-item"
+                                            onClick={handleCombine}
+                                        >
+                                            <Merge size={14} />
+                                            Combine Sessions
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -654,6 +674,29 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                                             Split
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Version History Modal */}
+                        {showVersionHistory && selectedEvent && (
+                            <div className="modal-overlay" onClick={() => setShowVersionHistory(false)}>
+                                <div className="modal-content" style={{ maxWidth: 900, maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                        <h2 style={{ fontSize: 18, fontWeight: 600 }}>Version History</h2>
+                                        <button
+                                            className="btn btn-ghost"
+                                            style={{ padding: 4 }}
+                                            onClick={() => setShowVersionHistory(false)}
+                                        >
+                                            <X size={18} />
+                                        </button>
+                                    </div>
+                                    <ScheduleVersionHistory 
+                                        scheduleId={selectedEvent.s.id} 
+                                        scheduleName={`${selectedEvent.s.subject?.code || 'Schedule'} - ${selectedEvent.s.day_of_week}`}
+                                        onBack={() => setShowVersionHistory(false)} 
+                                    />
                                 </div>
                             </div>
                         )}

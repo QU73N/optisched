@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Session, User } from '@supabase/supabase-js';
@@ -15,6 +15,7 @@ interface AuthContextType {
     isLoading: boolean;
     signIn: (email: string, password: string) => Promise<{ error: string | null }>;
     signOut: () => Promise<void>;
+    switchRole: (role: UserRole) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,6 +27,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [role, setRole] = useState<UserRole | null>(null);
     const [roles, setRoles] = useState<UserRole[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    const fetchProfile = useCallback(async (userId: string, authUser?: User) => {
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
+            if (error) throw error;
+            setProfile(data as Profile);
+
+            const primaryRole = (data.role as UserRole) || 'student';
+            setRole(primaryRole);
+
+            // Read additional_roles from auth app_metadata (admin-only, not user-writable)
+            const additionalRoles = authUser?.app_metadata?.additional_roles as string[] | undefined;
+            const allRoles = getAllRoles(primaryRole, additionalRoles);
+            setRoles(allRoles);
+        } catch (err) {
+            console.error('Error fetching profile:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session }, error }) => {
@@ -57,33 +82,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
         return () => subscription.unsubscribe();
-    }, []);
+    }, [fetchProfile]);
 
-    const fetchProfile = async (userId: string, authUser?: User) => {
-        try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', userId)
-                .single();
-            if (error) throw error;
-            setProfile(data as Profile);
-
-            const primaryRole = (data.role as UserRole) || 'student';
-            setRole(primaryRole);
-
-            // Read additional_roles from auth app_metadata (admin-only, not user-writable)
-            const additionalRoles = authUser?.app_metadata?.additional_roles as string[] | undefined;
-            const allRoles = getAllRoles(primaryRole, additionalRoles);
-            setRoles(allRoles);
-        } catch (err) {
-            console.error('Error fetching profile:', err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
+    const signIn = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
         const start = performance.now();
         try {
             // Server-enforced login rate limit (Session 2 / C3).
@@ -122,19 +123,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 details: { email },
             });
             return { error: null };
-        } catch (err: any) {
-            return { error: err?.message || 'An error occurred' };
+        } catch (err: unknown) {
+            return { error: (err as Error)?.message || 'An error occurred' };
         }
-    };
+    }, []);
 
-    const signOut = async () => {
+    const signOut = useCallback(async () => {
         await logActivity({ actionType: 'logout', resource: 'auth' });
         await supabase.auth.signOut();
         setProfile(null); setRole(null); setRoles([]);
-    };
+        localStorage.removeItem('optisched-selected-role');
+    }, []);
+
+    const switchRole = useCallback((newRole: UserRole) => {
+        if (!roles.includes(newRole)) {
+            console.warn('Cannot switch to role not in user roles:', newRole);
+            return;
+        }
+        setRole(newRole);
+        localStorage.setItem('optisched-selected-role', newRole);
+        void logActivity({ actionType: 'role_switch', resource: 'auth', details: { from: role, to: newRole } });
+    }, [roles, role]);
+
+    // Restore selected role from localStorage on mount
+    useEffect(() => {
+        if (roles.length > 0) {
+            const savedRole = localStorage.getItem('optisched-selected-role') as UserRole | null;
+            if (savedRole && roles.includes(savedRole)) {
+                setRole(savedRole);
+            }
+        }
+    }, [roles]);
+
+    const value = useMemo<AuthContextType>(
+        () => ({ session, user, profile, role, roles, isLoading, signIn, signOut, switchRole }),
+        [session, user, profile, role, roles, isLoading, signIn, signOut, switchRole],
+    );
 
     return (
-        <AuthContext.Provider value={{ session, user, profile, role, roles, isLoading, signIn, signOut }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );

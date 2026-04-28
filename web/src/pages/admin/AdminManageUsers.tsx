@@ -12,10 +12,22 @@ interface UserProfile {
     full_name: string;
     role: string;
     department: string | null;
+    department_id?: string | null;
     program: string | null;
     year_level: number | null;
     section: string | null;
     avatar_url: string | null;
+}
+
+interface ProfileData {
+    id: string;
+    full_name: string;
+    role: string;
+    email: string;
+    section?: string | null;
+    program?: string | null;
+    year_level?: number | null;
+    department?: string | null;
 }
 
 const EMAIL_DOMAIN = 'meycauayan.sti.edu.ph';
@@ -111,7 +123,7 @@ const AdminManageUsers: React.FC = () => {
             setFormError('Please fill in name and password.');
             return;
         }
-        if (!/^[a-zA-Z\s.\-]+$/.test(newUser.fullName)) {
+        if (!/^[a-zA-Z\s.-]+$/.test(newUser.fullName)) {
             setFormError('Name can only contain letters, spaces, dots, and hyphens.');
             return;
         }
@@ -144,7 +156,7 @@ const AdminManageUsers: React.FC = () => {
 
             if (userId) {
                 await new Promise(r => setTimeout(r, 500));
-                const profileData: any = {
+                const profileData: ProfileData = {
                     id: userId, full_name: newUser.fullName, role: newUser.role, email,
                 };
                 // Add role-specific fields
@@ -165,9 +177,9 @@ const AdminManageUsers: React.FC = () => {
             setShowCreateModal(false);
             setNewUser({ fullName: '', email: '', password: '', role: 'student', studentId: '', section: '', program: '', yearLevel: '', department: '' });
             fetchUsers();
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Create user error:', err);
-            setFormError(err?.message || 'Failed to create account.');
+            setFormError(err instanceof Error ? err.message : 'Failed to create account.');
         } finally {
             setCreating(false);
         }
@@ -197,9 +209,11 @@ const AdminManageUsers: React.FC = () => {
         setEditSaving(true);
         try {
             // NOTE: Email changes and additional_roles require service role - move to Edge Function
-            const updateData: any = {
+            const updateData: ProfileData = {
+                id: editUser.id,
                 full_name: editForm.full_name,
                 role: editForm.role,
+                email: editForm.email,
                 department: editForm.department || null,
                 program: editForm.program || null,
                 year_level: editForm.year_level ? parseInt(editForm.year_level) : null,
@@ -209,8 +223,8 @@ const AdminManageUsers: React.FC = () => {
             if (error) throw error;
             setShowEditModal(false);
             fetchUsers();
-        } catch (err: any) {
-            setEditError(err?.message || 'Failed to update user.');
+        } catch (err: unknown) {
+            setEditError(err instanceof Error ? err.message : 'Failed to update user.');
         } finally {
             setEditSaving(false);
         }
@@ -251,7 +265,7 @@ const AdminManageUsers: React.FC = () => {
     const studentCount = users.filter(u => u.role === 'student').length;
 
     // ── Render role-specific fields ──
-    const renderRoleFields = (role: string, values: any, onChange: (field: string, value: string) => void) => {
+    const renderRoleFields = (role: string, values: Record<string, string>, onChange: (field: string, value: string) => void) => {
         if (STUDENT_ROLES.includes(role)) {
             return (
                 <>
@@ -353,7 +367,7 @@ const AdminManageUsers: React.FC = () => {
                             <tr>
                                 <th>Name</th>
                                 <th>Email</th>
-                                <th>Role</th>
+                                <th style={{ verticalAlign: 'middle', textAlign: 'center' }}>Role</th>
                                 <th>Section / Dept</th>
                                 <th>Program / Year</th>
                                 <th style={{ width: 140 }}>Actions</th>
@@ -364,7 +378,7 @@ const AdminManageUsers: React.FC = () => {
                                 <tr key={user.id}>
                                     <td style={{ fontWeight: 600 }}>{user.full_name || 'Unnamed'}</td>
                                     <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{user.email}</td>
-                                    <td><span className={getBadgeClass(user.role)}>{getRoleLabel(user.role)}</span></td>
+                                    <td style={{ verticalAlign: 'middle', textAlign: 'center' }}><span className={getBadgeClass(user.role)}>{getRoleLabel(user.role)}</span></td>
                                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
                                         {user.section || user.department || '-'}
                                     </td>
@@ -464,7 +478,7 @@ const AdminManageUsers: React.FC = () => {
                         </div>
                         <div className="modal-form">
                             {(() => {
-                                const isPowerUser = POWER_ADMIN_ROLES.includes(editUser.role as any);
+                                const isPowerUser = POWER_ADMIN_ROLES.includes(editUser.role as UserRole);
                                 const isStudentPrimary = editForm.role === 'student';
                                 const isTeacherPrimary = editForm.role === 'teacher';
 

@@ -25,36 +25,39 @@ const TeacherPreferences: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [teacherId, setTeacherId] = useState<string | null>(null);
 
-    const [allSubjects, setAllSubjects] = useState<any[]>([]);
-    const [allRooms, setAllRooms] = useState<any[]>([]);
+    const [allSubjects, setAllSubjects] = useState<{ id: string; name: string }[]>([]);
+    const [allRooms, setAllRooms] = useState<{ id: string; name: string }[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
-            const [subRes, roomRes] = await Promise.all([
-                supabase.from('subjects').select('name'),
-                supabase.from('rooms').select('name')
+            const [subRes, roomRes, teacherRes] = await Promise.all([
+                supabase.from('subjects').select('id, name'),
+                supabase.from('rooms').select('id, name'),
+                supabase.from('teachers').select('id').eq('profile_id', profile?.id || '').single()
             ]);
             if (subRes.data) setAllSubjects(subRes.data);
             if (roomRes.data) setAllRooms(roomRes.data);
+            if (teacherRes.data) setTeacherId(teacherRes.data.id);
         };
         fetchData();
-    }, []);
+    }, [profile]);
 
     // Load existing preferences
     useEffect(() => {
         const fetchPreferences = async () => {
-            if (!profile?.id) return;
+            if (!teacherId) return;
             setLoading(true);
             try {
                 const { data } = await supabase
                     .from('teacher_preferences')
                     .select('*')
-                    .eq('teacher_id', profile.id)
+                    .eq('teacher_id', teacherId)
                     .single();
 
                 if (data) {
-                    setAvailability(data.availability || {});
+                    setAvailability((data.availability as Record<string, boolean>) || {});
                     setPreferredDays(data.preferred_days || []);
                     setPreferredTimeStart(data.preferred_time_start || '8:00');
                     setPreferredTimeEnd(data.preferred_time_end || '17:00');
@@ -64,13 +67,14 @@ const TeacherPreferences: React.FC = () => {
                     setPreferredRooms(data.preferred_rooms || []);
                     setNotes(data.notes || '');
                 }
-            } catch (err) {
+            } catch {
                 // No preferences yet
+                console.log('No preferences found for teacher');
             }
             setLoading(false);
         };
         fetchPreferences();
-    }, [profile]);
+    }, [teacherId]);
 
     const toggleAvailability = (day: string, time: string) => {
         const key = `${day}-${time}`;
@@ -90,11 +94,11 @@ const TeacherPreferences: React.FC = () => {
     };
 
     const handleSave = async () => {
-        if (!profile?.id) return;
+        if (!teacherId) return;
         setSaving(true);
         try {
             await supabase.from('teacher_preferences').upsert({
-                teacher_id: profile.id,
+                teacher_id: teacherId,
                 availability,
                 preferred_days: preferredDays,
                 preferred_time_start: preferredTimeStart,
@@ -108,8 +112,9 @@ const TeacherPreferences: React.FC = () => {
             });
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
-        } catch (err: any) {
-            window.alert('Error saving: ' + err.message);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            window.alert('Error saving: ' + errorMessage);
         } finally { setSaving(false); }
     };
 

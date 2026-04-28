@@ -16,8 +16,8 @@ const isWeb = Platform.OS === 'web';
 const CARD_MAX_W = isWeb ? 420 : width;
 
 // Logo assets
-const logoLight = require('../../assets/logo.png');
-const logoDark = require('../../assets/logo-white.png');
+const logoLight = require('../../../assets/logo.png');
+const logoDark = require('../../../assets/logo-white.png');
 
 // Theme-aware color tokens
 const getLoginColors = (isDark: boolean) => ({

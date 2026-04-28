@@ -8,6 +8,10 @@ const AdminDashboardDispatcher = lazy(() => import('./pages/admin/AdminDashboard
 const AdminManageUsers = lazy(() => import('./pages/admin/AdminManageUsers'));
 const ScheduleManagement = lazy(() => import('./pages/admin/ScheduleManagement'));
 const DataManagement = lazy(() => import('./pages/admin/DataManagement'));
+const PriorityConfiguration = lazy(() => import('./pages/admin/PriorityConfiguration'));
+const SharingManagement = lazy(() => import('./pages/admin/SharingManagement'));
+const BreakTimes = lazy(() => import('./pages/admin/BreakTimes'));
+const ScheduleLocking = lazy(() => import('./pages/admin/ScheduleLocking'));
 const ConflictsAlerts = lazy(() => import('./pages/admin/ConflictsAlerts'));
 const ConstraintSettings = lazy(() => import('./pages/admin/ConstraintSettings'));
 const Analytics = lazy(() => import('./pages/admin/Analytics'));
@@ -126,6 +130,10 @@ function App() {
             <Route path="users" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminManageUsers /></Suspense>} />
             <Route path="schedules" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleManagement /></Suspense>} />
             <Route path="data" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
+            <Route path="priority" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><PriorityConfiguration /></Suspense>} />
+            <Route path="sharing" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><SharingManagement /></Suspense>} />
+            <Route path="break-times" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><BreakTimes /></Suspense>} />
+            <Route path="locking" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleLocking /></Suspense>} />
             <Route path="conflicts" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ConflictsAlerts /></Suspense>} />
             <Route path="constraints" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ConstraintSettings /></Suspense>} />
             <Route path="analytics" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><Analytics /></Suspense>} />

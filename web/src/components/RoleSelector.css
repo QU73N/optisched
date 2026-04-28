@@ -1,0 +1,123 @@
+.role-selector-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg-overlay);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
+.role-selector-modal {
+    background: var(--bg-primary);
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    max-width: 400px;
+    width: 90%;
+    animation: roleSelectorSlideIn 0.2s ease-out;
+}
+
+@keyframes roleSelectorSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.role-selector-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.role-selector-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.role-selector-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    transition: background 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.role-selector-close:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.role-selector-content {
+    padding: 20px;
+}
+
+.role-selector-description {
+    margin: 0 0 16px 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.role-selector-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.role-selector-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    background: var(--bg-primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.role-selector-item:hover {
+    background: var(--bg-secondary);
+    border-color: var(--border-subtle);
+}
+
+.role-selector-item-active {
+    background: var(--accent-primary-subtle);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.role-selector-item-name {
+    flex: 1;
+}
+
+.role-selector-item-check {
+    color: currentColor;
+}
+
+[data-theme="dark"] .role-selector-modal {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .role-selector-item-active {
+    background: var(--accent-primary-subtle);
+}

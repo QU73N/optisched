@@ -90,9 +90,64 @@ const shuffle = <T,>(arr: T[]): T[] => {
 const priorityOf = (map: Record<string, number>, id: string) =>
     typeof map[id] === 'number' ? map[id] : 50;
 
+/** Calculate how many sessions a subject needs based on duration_hours and session length. */
+const sessionsNeeded = (subject: Subject, sessionMinutes: number): number => {
+    // If explicitly set, use that
+    if (subject.sessions_per_week != null && subject.sessions_per_week > 0) {
+        return subject.sessions_per_week;
+    }
+    // Otherwise calculate from duration_hours
+    if (subject.duration_hours != null && subject.duration_hours > 0) {
+        const totalMinutes = subject.duration_hours * 60;
+        return Math.max(1, Math.ceil(totalMinutes / sessionMinutes));
+    }
+    // Default to 1 session
+    return 1;
+};
+
 const isSpecialRoom = (room: Room) => {
     const t = (room.type || '').toLowerCase();
     return t.includes('lab') || t.includes('special') || t.includes('studio');
+};
+
+/** Check if a teacher is available at the given day/time per their preferences. */
+const teacherAvailable = (teacher: Teacher, day: string, startHHMM: string): boolean => {
+    const av = teacher.availability;
+    if (!av || Object.keys(av).length === 0) return true; // default available
+    const key = `${day}-${startHHMM}`;
+    const v = av[key];
+    return v === undefined ? true : !!v;
+};
+
+/** Check if day falls within teacher's preferred_days; empty/missing = all days ok. */
+const dayIsPreferred = (teacher: Teacher, day: string): boolean => {
+    const pd = teacher.preferred_days;
+    if (!pd || pd.length === 0) return true;
+    return pd.includes(day);
+};
+
+/** Check if placing this session would exceed teacher's max_classes_per_day. */
+const wouldExceedMaxClassesPerDay = (
+    teacherId: string,
+    day: string,
+    currentEntries: PlacedEntry[],
+    teacher: Teacher,
+): boolean => {
+    if (!teacher.max_classes_per_day) return false;
+    const dayCount = currentEntries.filter(e => e.teacherId === teacherId && e.day === day).length;
+    return dayCount >= teacher.max_classes_per_day;
+};
+
+/** Check if placing this session would exceed teacher's max_hours (total weekly). */
+const wouldExceedMaxHours = (
+    teacherId: string,
+    currentEntries: PlacedEntry[],
+    teacher: Teacher,
+    sessionMinutes: number,
+): boolean => {
+    if (!teacher.max_hours) return false;
+    const totalHours = (currentEntries.filter(e => e.teacherId === teacherId).length * sessionMinutes) / 60;
+    return totalHours >= teacher.max_hours;
 };
 
 /** Stable sort subjects by combined priority (higher first), with small jitter per attempt. */
@@ -119,10 +174,15 @@ const rankSubjects = (
 };
 
 /** Score the soft constraints for a completed attempt. 0..100 */
-const scoreAttempt = (entries: PlacedEntry[], cfg: GenerationConfig): number => {
+const scoreAttempt = (
+    entries: PlacedEntry[],
+    cfg: GenerationConfig,
+    teachers: Map<string, Teacher>,
+    rooms: Map<string, Room>,
+): number => {
     if (entries.length === 0) return 0;
 
-    // Balanced load: std-dev of sessions per teacher (lower = better)
+    // 1. Balanced load: std-dev of sessions per teacher (lower = better)
     const perTeacher: Record<string, number> = {};
     for (const e of entries) perTeacher[e.teacherId] = (perTeacher[e.teacherId] || 0) + 1;
     const counts = Object.values(perTeacher);
@@ -130,7 +190,7 @@ const scoreAttempt = (entries: PlacedEntry[], cfg: GenerationConfig): number => 
     const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
     const balancedScore = Math.max(0, 100 - variance * 20);
 
-    // Compact: gaps inside each (section, day). Lower gaps = better.
+    // 2. Compact: gaps inside each (section, day). Lower gaps = better.
     const bySec: Record<string, PlacedEntry[]> = {};
     for (const e of entries) {
         const k = `${e.sectionId}|${e.day}`;
@@ -145,7 +205,7 @@ const scoreAttempt = (entries: PlacedEntry[], cfg: GenerationConfig): number => 
     }
     const compactScore = Math.max(0, 100 - gapMin / 10);
 
-    // Room switching: count distinct rooms per teacher (lower = better).
+    // 3. Room switching: count distinct rooms per teacher (lower = better).
     const perTeacherRooms: Record<string, Set<string>> = {};
     for (const e of entries) {
         (perTeacherRooms[e.teacherId] = perTeacherRooms[e.teacherId] || new Set()).add(e.roomId);
@@ -153,12 +213,69 @@ const scoreAttempt = (entries: PlacedEntry[], cfg: GenerationConfig): number => 
     const switches = Object.values(perTeacherRooms).reduce((acc, s) => acc + (s.size - 1), 0);
     const roomScore = Math.max(0, 100 - switches * 5);
 
+    // 4. Teacher preferred time window: percent of placements inside [preferred_time_start, preferred_time_end].
+    let prefHits = 0, prefTotal = 0;
+    for (const e of entries) {
+        const t = teachers.get(e.teacherId);
+        if (!t) continue;
+        const ps = t.preferred_time_start;
+        const pe = t.preferred_time_end;
+        if (!ps || !pe) continue; // no preference => skip
+        prefTotal++;
+        if (toMin(e.start) >= toMin(ps) && toMin(e.end) <= toMin(pe)) prefHits++;
+        // also reward preferred_days adherence
+        if (t.preferred_days && t.preferred_days.length > 0) {
+            prefTotal++;
+            if (t.preferred_days.includes(e.day)) prefHits++;
+        }
+    }
+    const preferredScore = prefTotal === 0 ? 100 : Math.round((prefHits / prefTotal) * 100);
+
+    // 5. Daily load balance: std-dev of sessions per teacher per day (lower = better).
+    const perTeacherDay: Record<string, number> = {};
+    for (const e of entries) perTeacherDay[`${e.teacherId}|${e.day}`] = (perTeacherDay[`${e.teacherId}|${e.day}`] || 0) + 1;
+    const dayCounts = Object.values(perTeacherDay);
+    const dayMean = dayCounts.reduce((a, b) => a + b, 0) / Math.max(1, dayCounts.length);
+    const dayVar = dayCounts.reduce((a, b) => a + (b - dayMean) ** 2, 0) / Math.max(1, dayCounts.length);
+    const dailyBalanceScore = Math.max(0, 100 - dayVar * 25);
+
+    // 6. Workload fairness: now a hard constraint, so no penalty here.
+    // max_classes_per_day and max_hours are enforced during placement.
+    // We keep this score as 100 (perfect) since violations are prevented.
+    const fairnessScore = 100;
+
+    // 7. Subject spacing: penalize same subject placed multiple times on the same day for the same section.
+    const subjectDayMap: Record<string, number> = {};
+    for (const e of entries) {
+        const k = `${e.sectionId}|${e.subjectId}|${e.day}`;
+        subjectDayMap[k] = (subjectDayMap[k] || 0) + 1;
+    }
+    const stackingPenalty = Object.values(subjectDayMap).reduce((acc, n) => acc + Math.max(0, n - 1) * 15, 0);
+    const spacingScore = Math.max(0, 100 - stackingPenalty);
+
+    // 8. Room utilization: reward higher utilization of scarce (special) rooms.
+    const perRoom: Record<string, number> = {};
+    for (const e of entries) perRoom[e.roomId] = (perRoom[e.roomId] || 0) + 1;
+    const specialRoomIds = new Set<string>();
+    for (const r of rooms.values()) if (isSpecialRoom(r)) specialRoomIds.add(r.id);
+    let usedSpecial = 0;
+    for (const id of specialRoomIds) if ((perRoom[id] || 0) > 0) usedSpecial++;
+    const utilizationScore = specialRoomIds.size === 0 ? 100 : Math.round((usedSpecial / specialRoomIds.size) * 100);
+
     const w = cfg.soft;
-    const total = w.balancedLoad + w.compactSchedule + w.minimizeRoomSwitch || 1;
+    const total =
+        w.balancedLoad + w.compactSchedule + w.minimizeRoomSwitch +
+        w.teacherPreferredTime + w.dailyLoadBalance + w.workloadFairness +
+        w.subjectSpacing + w.roomUtilization || 1;
     return Math.round(
         (balancedScore * w.balancedLoad +
             compactScore * w.compactSchedule +
-            roomScore * w.minimizeRoomSwitch) / total,
+            roomScore * w.minimizeRoomSwitch +
+            preferredScore * w.teacherPreferredTime +
+            dailyBalanceScore * w.dailyLoadBalance +
+            fairnessScore * w.workloadFairness +
+            spacingScore * w.subjectSpacing +
+            utilizationScore * w.roomUtilization) / total,
     );
 };
 
@@ -315,6 +432,13 @@ export async function runGenerator(
         // section and room: the section/room picks already narrow the space; keep subject list as is.
     }
 
+    // Expand subjects into placement tasks based on sessions_needed (split sessions).
+    interface PlacementTask {
+        subject: Subject;
+        section: Section;
+        sessionIndex: number; // 0-based index for this subject-section pair
+    }
+
     onProgress({
         subStage: 'ranking',
         attempt: 0,
@@ -359,8 +483,14 @@ export async function runGenerator(
         }).map(s => s.id),
     );
 
+    // Calculate total tasks needed for split sessions
+    let totalTasks = 0;
+    for (const sub of scopedSubjects) {
+        totalTasks += sessionsNeeded(sub, config.sessionMinutes);
+    }
+
     let best: GenerationResult = {
-        total: scopedSubjects.length,
+        total: totalTasks,
         placed: 0,
         entries: [],
         errors: [],
@@ -376,13 +506,32 @@ export async function runGenerator(
         const entries: PlacedEntry[] = [];
         const errors: string[] = [];
 
+        // Track which days have been used for each subject-section pair to spread sessions
+        const usedDaysByTask: Map<string, Set<string>> = new Map();
+
         // Attempt 0 uses pure priority order; later attempts add jitter to explore.
         const jitter = attempt === 0 ? 0 : 8 + attempt * 3;
         const subjectsShuffled = rankSubjects(scopedSubjects, scopedSections, config, jitter);
         const daysShuffled = shuffle(days);
 
-        for (let i = 0; i < subjectsShuffled.length; i++) {
-            const sub = subjectsShuffled[i];
+        // Build tasks in priority order (subjects already ranked)
+        const rankedTasks: PlacementTask[] = [];
+        for (const sub of subjectsShuffled) {
+            const matchSections = scopedSections.filter(
+                s => s.program === sub.program && s.year_level === sub.year_level,
+            );
+            const section = matchSections[0] || scopedSections[0];
+            if (!section) continue;
+
+            const needed = sessionsNeeded(sub, config.sessionMinutes);
+            for (let i = 0; i < needed; i++) {
+                rankedTasks.push({ subject: sub, section, sessionIndex: i });
+            }
+        }
+
+        for (let i = 0; i < rankedTasks.length; i++) {
+            const task = rankedTasks[i];
+            const sub = task.subject;
 
             if (i % 5 === 0) {
                 onProgress({
@@ -390,8 +539,8 @@ export async function runGenerator(
                     attempt: attempt + 1,
                     totalAttempts: config.maxAttempts,
                     placed: entries.length,
-                    total: subjectsShuffled.length,
-                    message: `Placing ${sub.code} (${i + 1}/${subjectsShuffled.length})`,
+                    total: rankedTasks.length,
+                    message: `Placing ${sub.code} session ${task.sessionIndex + 1} (${i + 1}/${rankedTasks.length})`,
                 });
                 await new Promise(r => setTimeout(r, 0));
             }
@@ -401,21 +550,35 @@ export async function runGenerator(
                 : teachers[Math.floor(Math.random() * teachers.length)];
             if (!teacher) { errors.push(`No teacher for "${sub.name}"`); continue; }
 
-            const matchSections = scopedSections.filter(
-                s => s.program === sub.program && s.year_level === sub.year_level,
-            );
-            const section = matchSections[0] || scopedSections[0];
-            if (!section) { errors.push(`No section for "${sub.name}"`); continue; }
+            const section = task.section;
+            const taskKey = `${sub.id}|${section.id}`;
+            const usedDays = usedDaysByTask.get(taskKey) || new Set<string>();
 
             let placed = false;
-            for (const day of daysShuffled) {
+            // Prefer days not yet used for this subject-section pair (spread sessions across days)
+            const availableDays = daysShuffled.slice().sort((a, b) => {
+                const aUsed = usedDays.has(a) ? 1 : 0;
+                const bUsed = usedDays.has(b) ? 1 : 0;
+                return aUsed - bUsed;
+            });
+
+            for (const day of availableDays) {
                 if (placed) break;
+                // Hard: skip days the teacher has explicitly removed from preferred_days.
+                // (Empty preferred_days means "all days OK"; see dayIsPreferred.)
+                if (!dayIsPreferred(teacher, day)) continue;
+                // Hard: check max_classes_per_day constraint
+                if (wouldExceedMaxClassesPerDay(teacher.id, day, entries, teacher)) continue;
                 for (const slot of slots) {
                     if (placed) break;
                     const sMin = toMin(slot.start);
                     const eMin = toMin(slot.end);
+                    // Hard: respect teacher's explicit per-slot availability map.
+                    if (!teacherAvailable(teacher, day, slot.start)) continue;
                     if (!isFree(busy, 'teacher', teacher.id, day, sMin, eMin)) continue;
                     if (!isFree(busy, 'section', section.id, day, sMin, eMin)) continue;
+                    // Hard: check max_hours constraint
+                    if (wouldExceedMaxHours(teacher.id, entries, teacher, config.sessionMinutes)) continue;
 
                     const compat = availableRooms.filter(r => roomCompatible(r, sub, section));
                     if (compat.length === 0) { errors.push(`No compatible room for "${sub.name}"`); break; }
@@ -453,12 +616,14 @@ export async function runGenerator(
                             startMin: sMin,
                             endMin: eMin,
                         });
+                        usedDays.add(day);
+                        usedDaysByTask.set(taskKey, usedDays);
                         placed = true;
                         break;
                     }
                 }
             }
-            if (!placed) errors.push(`Could not place "${sub.name}". No free slot.`);
+            if (!placed) errors.push(`Could not place "${sub.name}" session ${task.sessionIndex + 1}. No free slot.`);
         }
 
         onProgress({
@@ -466,25 +631,25 @@ export async function runGenerator(
             attempt: attempt + 1,
             totalAttempts: config.maxAttempts,
             placed: entries.length,
-            total: subjectsShuffled.length,
+            total: rankedTasks.length,
             message: `Resolving conflicts (attempt ${attempt + 1})`,
         });
         await new Promise(r => setTimeout(r, 60));
 
-        const score = scoreAttempt(entries, config);
+        const score = scoreAttempt(entries, config, teacherMap, roomMap);
         onProgress({
             subStage: 'scoring',
             attempt: attempt + 1,
             totalAttempts: config.maxAttempts,
             placed: entries.length,
-            total: subjectsShuffled.length,
+            total: rankedTasks.length,
             message: `Scoring attempt ${attempt + 1}. ${score} out of 100.`,
         });
         await new Promise(r => setTimeout(r, 60));
 
         const highPlaced = entries.filter(e => highPriorityIds.has(e.subjectId)).length;
         const current: GenerationResult = {
-            total: subjectsShuffled.length,
+            total: rankedTasks.length,
             placed: entries.length,
             entries,
             errors,

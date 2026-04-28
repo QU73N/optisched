@@ -98,6 +98,11 @@ export interface Teacher {
     max_hours: number;
     current_load_percentage: number;
     is_active: boolean;
+    weight: number;
+    priority_note: string | null;
+    owner_id: string | null;
+    is_public: boolean;
+    shared_with: string[];
     created_at: string;
     updated_at: string;
     profile?: Profile;
@@ -112,6 +117,11 @@ export interface Room {
     floor: number;
     equipment: string[];
     is_available: boolean;
+    weight: number;
+    priority_note: string | null;
+    owner_id: string | null;
+    is_public: boolean;
+    shared_with: string[];
     created_at: string;
 }
 
@@ -125,6 +135,11 @@ export interface Subject {
     program: string;
     year_level: number;
     requires_lab: boolean;
+    weight: number;
+    priority_note: string | null;
+    owner_id: string | null;
+    is_public: boolean;
+    shared_with: string[];
     created_at: string;
 }
 
@@ -134,27 +149,164 @@ export interface Section {
     program: string;
     year_level: number;
     student_count: number;
+    parent_id: string | null;
+    weight: number;
+    path: string | null;
+    node_type: 'group' | 'section';
+    is_active: boolean;
+    description: string | null;
+    metadata: Record<string, unknown>;
+    sort_order: number;
+    owner_id: string | null;
+    is_public: boolean;
+    shared_with: string[];
     created_at: string;
 }
 
 export interface Schedule {
     id: string;
     subject_id: string;
-    teacher_id: string;
-    room_id: string;
-    section_id: string;
+    teacher_id: string | null;
+    room_id: string | null;
+    section_id: string | null;
     day_of_week: DayOfWeek;
     start_time: string;
     end_time: string;
     semester: string;
     academic_year: string;
     status: ScheduleStatus;
-    created_at: string;
-    updated_at: string;
-    subject?: Subject;
     teacher?: Teacher;
     room?: Room;
     section?: Section;
+    is_locked?: boolean;
+    locked_by?: string | null;
+    locked_at?: string | null;
+    lock_reason?: string | null;
+}
+
+export interface ScheduleVersion {
+    id: string;
+    schedule_id: string;
+    version_number: number;
+    snapshot: Record<string, unknown>;
+    change_type: 'created' | 'updated' | 'deleted' | 'status_change' | 'checkpoint';
+    change_summary: string | null;
+    change_reason: string | null;
+    changed_by: string;
+    changed_at: string;
+    previous_version_id: string | null;
+}
+
+export interface ScheduleVersionSet {
+    id: string;
+    name: string;
+    description: string | null;
+    academic_year: string;
+    semester: string;
+    is_published: boolean;
+    created_by: string;
+    created_at: string;
+}
+
+export interface ScheduleVersionSetItem {
+    id: string;
+    version_set_id: string;
+    schedule_version_id: string;
+}
+
+export interface VersionComparison {
+    field: string;
+    old_value: string;
+    new_value: string;
+    change_type: 'added' | 'removed' | 'modified';
+}
+
+export interface PriorityConfig {
+    id: string;
+    key: string;
+    value: Record<string, unknown>;
+    description: string | null;
+    category: string;
+    is_active: boolean;
+    updated_by: string | null;
+    updated_at: string;
+    created_at: string;
+}
+
+export interface SharingRequest {
+    id: string;
+    resource_type: 'teacher' | 'room' | 'subject' | 'section';
+    resource_id: string;
+    from_user_id: string;
+    to_user_id: string;
+    status: 'pending' | 'approved' | 'rejected';
+    message: string | null;
+    created_at: string;
+    responded_at: string | null;
+    from_user?: Profile;
+    to_user?: Profile;
+}
+
+export interface InstitutionBreak {
+    id: string;
+    name: string;
+    break_type: 'lunch' | 'recess' | 'assembly' | 'other';
+    day_of_week: DayOfWeek | 'all';
+    start_time: string;
+    end_time: string;
+    is_active: boolean;
+    academic_year: string | null;
+    semester: string | null;
+    description: string | null;
+    created_at: string;
+    updated_at: string;
+    created_by: string | null;
+}
+
+export interface Notification {
+    id: string;
+    user_id: string;
+    type: 'schedule_change' | 'sharing_request' | 'approval' | 'system' | 'reminder';
+    title: string;
+    message: string;
+    data: Record<string, unknown>;
+    is_read: boolean;
+    action_url: string | null;
+    created_at: string;
+    expires_at: string | null;
+}
+
+export interface ApprovalRequest {
+    id: string;
+    request_type: 'schedule_change' | 'new_schedule' | 'delete_schedule' | 'bulk_change';
+    resource_type: 'schedule' | 'section' | 'teacher' | 'room' | 'subject';
+    resource_id: string | null;
+    requested_by: string;
+    status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+    title: string;
+    description: string | null;
+    change_data: Record<string, unknown>;
+    approved_by: string | null;
+    approved_at: string | null;
+    rejection_reason: string | null;
+    academic_year: string | null;
+    semester: string | null;
+    created_at: string;
+    updated_at: string;
+    requested_by_user?: Profile;
+    approved_by_user?: Profile;
+}
+
+export interface ApprovalAuditLog {
+    id: string;
+    approval_request_id: string;
+    action: 'created' | 'approved' | 'rejected' | 'cancelled' | 'commented';
+    performed_by: string | null;
+    notes: string | null;
+    previous_status: string | null;
+    new_status: string | null;
+    created_at: string;
+    performed_by_user?: Profile;
 }
 
 export interface Conflict {

@@ -247,7 +247,9 @@ export const STUDENT_NAV: NavGroup[] = [
 // Resolve which nav config to use given primary role + multi-role array
 export function resolveNav(role: string | null, roles: string[]): NavGroup[] {
     if (!role) return STUDENT_NAV;
-    if (role === 'admin' || role === 'power_admin') return POWER_ADMIN_NAV;
+    // Check for Power Admin in roles array (multi-role support)
+    const hasPowerAdmin = roles.includes('admin') || roles.includes('power_admin');
+    if (role === 'admin' || role === 'power_admin' || hasPowerAdmin) return POWER_ADMIN_NAV;
     if (role === 'system_admin') return SYSTEM_ADMIN_NAV;
     if (role === 'schedule_admin') return SCHEDULE_ADMIN_NAV;
     if (role === 'schedule_manager') return SCHEDULE_MANAGER_NAV;

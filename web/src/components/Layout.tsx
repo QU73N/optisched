@@ -1,5 +1,5 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ADMIN_ROLES, POWER_ADMIN_ROLES, ROLE_DISPLAY_NAMES, hasAnyRole } from '../types/database';
 import Sidebar from './Sidebar';
@@ -7,6 +7,8 @@ import { logActivity } from '../hooks/useActivityLogger';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
 import { usePermissions } from '../hooks/usePermissions';
 import IdleTimeoutModal, { type IdleMode } from './IdleTimeoutModal';
+import RoleSelector from './RoleSelector';
+import SiderailCharts from './SiderailCharts';
 
 import {
     LogOut, Moon, Sun, Bell, HelpCircle, PanelLeft, Settings,
@@ -16,10 +18,12 @@ import FloatingOptiBot from './FloatingOptiBot';
 import './Layout.css';
 
 const Layout: React.FC = () => {
-    const { profile, role, roles, signOut } = useAuth();
+    const { profile, role, roles, signOut, switchRole } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [theme, setTheme] = useState(() => localStorage.getItem('optisched-theme') || 'light');
     const [siderailOpen, setSiderailOpen] = useState(true);
+    const [roleSelectorOpen, setRoleSelectorOpen] = useState(false);
 
     useEffect(() => {
         const handleStorageChange = () => {
@@ -44,14 +48,19 @@ const Layout: React.FC = () => {
 
     // ---------- Idle timeout (Session 2 / C4) ------------------------------
     const perms = usePermissions();
-    const idleMinutes = (() => {
+    const idleMinutes = useMemo(() => {
         const map = perms.getRule('idle_timeout_minutes_by_role') as Record<string, number> | undefined;
         if (map && role && typeof map[role] === 'number') return map[role];
         return perms.ruleNumber('session_timeout_minutes', 60);
-    })();
-    const graceSeconds = perms.ruleNumber('idle_timeout_grace_seconds', 30);
-    const reauthRoles = (perms.getRule('idle_reauth_roles') as string[] | undefined) || ['power_admin', 'admin'];
-    const idleMode: IdleMode = role && reauthRoles.includes(role) ? 'reauth' : 'signout';
+    }, [perms, role]);
+    const graceSeconds = useMemo(
+        () => perms.ruleNumber('idle_timeout_grace_seconds', 30),
+        [perms],
+    );
+    const idleMode: IdleMode = useMemo(() => {
+        const reauthRoles = (perms.getRule('idle_reauth_roles') as string[] | undefined) || ['power_admin', 'admin'];
+        return role && reauthRoles.includes(role) ? 'reauth' : 'signout';
+    }, [perms, role]);
 
     const handleIdleWarn = useCallback(() => {
         // no-op: useIdleTimeout sets state we observe via .warning
@@ -89,9 +98,8 @@ const Layout: React.FC = () => {
 
     // Activity logging: page view on every route change
     useEffect(() => {
-        const path = window.location.pathname;
-        logActivity({ actionType: 'page_view', resource: path });
-    }, [navigate]);
+        logActivity({ actionType: 'page_view', resource: location.pathname });
+    }, [location.pathname]);
 
     // Sidebar navigation is now handled by <Sidebar /> via src/config/sidebar.ts
 
@@ -115,6 +123,19 @@ const Layout: React.FC = () => {
         ? roles.map(r => SHORT_NAMES[ROLE_DISPLAY_NAMES[r]] || ROLE_DISPLAY_NAMES[r] || r).join(' · ').toUpperCase()
         : role ? (ROLE_DISPLAY_NAMES[role] || role).toUpperCase() : 'USER';
 
+    const handleRoleBadgeClick = () => {
+        if (roles.length > 1) {
+            setRoleSelectorOpen(true);
+        }
+    };
+
+    const handleRoleSelect = (selectedRole: typeof role) => {
+        if (selectedRole) {
+            switchRole(selectedRole);
+        }
+        setRoleSelectorOpen(false);
+    };
+
     return (
         <div className={`layout ${siderailOpen ? 'siderail-open-layout' : ''}`}>
             <a href="#main-content" className="skip-link">Skip to content</a>
@@ -130,7 +151,14 @@ const Layout: React.FC = () => {
                         </div>
                         <div className="sidebar-user-info">
                             <span className="sidebar-user-name">{profile?.full_name || 'User'}</span>
-                            <span className={`${getRoleBadgeClass()} badge-sm`} title={displayRole}>{displayRole}</span>
+                            <button
+                                className={`${getRoleBadgeClass()} badge-sm ${roles.length > 1 ? 'badge-clickable' : ''}`}
+                                title={displayRole}
+                                onClick={handleRoleBadgeClick}
+                                aria-label={roles.length > 1 ? 'Switch role' : displayRole}
+                            >
+                                {displayRole}
+                            </button>
                         </div>
                     </div>
                     <button className="sidebar-logout" onClick={handleSignOut} aria-label="Sign Out">
@@ -179,49 +207,43 @@ const Layout: React.FC = () => {
                     <div className="siderail-section">
                         <h4>Quick Actions</h4>
                         <div className="siderail-grid">
-                            <button className="siderail-action" onClick={() => navigate(`/${role}/generate`)}>
-                                <Sparkles size={18} />
-                                <span>Generate</span>
-                            </button>
-                            <button className="siderail-action" onClick={() => navigate(`/${role}/schedules`)}>
+                            {isAnyAdmin && (
+                                <button className="siderail-action" onClick={() => navigate(`/${role}/generate`)} aria-label="Generate Schedule">
+                                    <Sparkles size={18} />
+                                    <span>Generate</span>
+                                </button>
+                            )}
+                            <button className="siderail-action" onClick={() => navigate(`/${role}/schedules`)} aria-label="View Schedules">
                                 <CalendarDays size={18} />
                                 <span>Schedules</span>
                             </button>
-                            <button className="siderail-action" onClick={() => navigate(`/${role}/users`)}>
-                                <Users size={18} />
-                                <span>Users</span>
-                            </button>
-                            <button className="siderail-action" onClick={() => navigate(`/${role}/data`)}>
-                                <Database size={18} />
-                                <span>Data</span>
-                            </button>
+                            {isAnyAdmin && (
+                                <button className="siderail-action" onClick={() => navigate(`/${role}/users`)} aria-label="Manage Users">
+                                    <Users size={18} />
+                                    <span>Users</span>
+                                </button>
+                            )}
+                            {isAnyAdmin && (
+                                <button className="siderail-action" onClick={() => navigate(`/${role}/data`)} aria-label="View Data">
+                                    <Database size={18} />
+                                    <span>Data</span>
+                                </button>
+                            )}
                         </div>
                     </div>
-                    <div className="siderail-section">
-                        <h4>System Status</h4>
-                        <div className="siderail-status">
-                            <div className="siderail-status-item">
-                                <span className="siderail-status-dot siderail-status-dot-active"></span>
-                                <span>System Online</span>
-                            </div>
-                            <div className="siderail-status-item">
-                                <span className="siderail-status-dot siderail-status-dot-success"></span>
-                                <span>Database Connected</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="siderail-section">
-                        <h4>Recent Activity</h4>
-                        <ul className="siderail-list">
-                            <li><a href="#">Schedule generated</a></li>
-                            <li><a href="#">New user added</a></li>
-                            <li><a href="#">Conflict resolved</a></li>
-                        </ul>
-                    </div>
+                    <SiderailCharts />
                 </div>
             </aside>
 
             <FloatingOptiBot />
+
+            <RoleSelector
+                isOpen={roleSelectorOpen}
+                onClose={() => setRoleSelectorOpen(false)}
+                currentRole={role}
+                availableRoles={roles}
+                onRoleSelect={handleRoleSelect}
+            />
 
             <IdleTimeoutModal
                 open={idle.warning}

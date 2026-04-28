@@ -188,28 +188,63 @@ const Sidebar: React.FC<SidebarProps> = ({ badges = {} }) => {
             {/* Groups */}
             {filteredGroups.map(group => {
                 const isCollapsed = collapsed[group.label];
-                const hasActive = group.links.some(l =>
+                const activeLink = group.links.find(l =>
                     l.end ? location.pathname === l.to : location.pathname.startsWith(l.to)
                 );
+                const isGroupCollapsed = isCollapsed;
                 return (
-                    <div key={group.label} className={`sidebar-group ${isCollapsed && !hasActive ? 'sidebar-group-collapsed' : ''}`}>
+                    <div key={group.label} className="sidebar-group">
                         <button
                             type="button"
                             className="sidebar-group-label sidebar-group-toggle"
                             onClick={() => toggleGroup(group.label)}
-                            aria-expanded={!isCollapsed}
+                            aria-expanded={!isGroupCollapsed}
                         >
                             <ChevronDown
                                 size={10}
-                                className={`sidebar-group-chevron ${isCollapsed && !hasActive ? 'sidebar-group-chevron-collapsed' : ''}`}
+                                className={`sidebar-group-chevron ${isGroupCollapsed ? 'sidebar-group-chevron-collapsed' : ''}`}
                             />
                             {group.label}
                         </button>
-                        {(!isCollapsed || hasActive) && (
-                            <div className="sidebar-group-links">
-                                {group.links.map(l => renderLink(l))}
+                        <div className="sidebar-group-links">
+                            <div className="sidebar-group-links-inner">
+                                {group.links.map(l => {
+                                    const isActive = activeLink && l.to === activeLink.to;
+                                    const isVisible = !isCollapsed || isActive;
+                                    return (
+                                        <div 
+                                            key={l.to} 
+                                            className={`sidebar-link-row ${!isVisible ? 'sidebar-link-hidden' : ''}`}
+                                        >
+                                            <NavLink
+                                                to={l.to}
+                                                end={l.end}
+                                                className={({ isActive: linkActive }) =>
+                                                    `sidebar-link ${linkActive ? 'sidebar-link-active' : ''}`
+                                                }
+                                                title={l.label}
+                                            >
+                                                <l.icon size={16} />
+                                                <span className="sidebar-link-label">{l.label}</span>
+                                                {l.badgeKey && badges[l.badgeKey] > 0 && (
+                                                    <span className="sidebar-link-badge">
+                                                        {badges[l.badgeKey] > 99 ? '99+' : badges[l.badgeKey]}
+                                                    </span>
+                                                )}
+                                            </NavLink>
+                                            <button
+                                                className={`sidebar-pin-btn ${pinned.includes(l.to) ? 'sidebar-pin-active' : ''}`}
+                                                onClick={() => togglePin(l.to)}
+                                                aria-label={pinned.includes(l.to) ? `Unpin ${l.label}` : `Pin ${l.label}`}
+                                                title={pinned.includes(l.to) ? 'Unpin' : 'Pin (max 5)'}
+                                            >
+                                                <Star size={12} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        )}
+                        </div>
                     </div>
                 );
             })}

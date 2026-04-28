@@ -29,7 +29,7 @@
 }
 
 [data-theme="light"] .floating-optibot-btn {
-    background: #ffffff;
+    background: var(--bg-secondary);
 }
 
 .floating-optibot-btn img {
@@ -70,7 +70,7 @@
 }
 
 [data-theme="light"] .optibot-panel {
-    background: #ffffff;
+    background: var(--bg-secondary);
 }
 
 @keyframes panelSlideUp {
@@ -160,7 +160,7 @@
 .optibot-msg-user {
     align-self: flex-end;
     background: var(--accent-primary);
-    color: #ffffff;
+    color: var(--text-on-accent);
     border-bottom-right-radius: var(--radius-xs);
 }
 
@@ -204,7 +204,7 @@
 }
 
 [data-theme="light"] .optibot-panel-input input:focus {
-    background: #ffffff;
+    background: var(--bg-secondary);
 }
 
 .optibot-panel-input input::placeholder {
@@ -221,7 +221,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #ffffff;
+    color: var(--text-on-accent);
     transition: background 120ms ease, transform 120ms ease;
     flex-shrink: 0;
 }
@@ -277,7 +277,7 @@
 }
 
 [data-theme="light"] .optibot-welcome-bubble-content {
-    background: #ffffff;
+    background: var(--bg-secondary);
 }
 
 .optibot-welcome-bubble-header {

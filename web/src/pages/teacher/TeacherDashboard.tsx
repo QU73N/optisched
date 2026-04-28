@@ -6,11 +6,8 @@ import { useCustomEvents } from '../../hooks/useCustomEvents';
 import {
     Calendar, Clock, CheckCircle, BookOpen, Users, MessageSquare,
     AlertTriangle, Plus, Send, X, Megaphone, MapPin, ArrowRightLeft, FileText,
-    BarChart3, XCircle
+    XCircle
 } from 'lucide-react';
-import {
-    BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
 import '../admin/Dashboard.css';
 
 const TeacherDashboard: React.FC = () => {
@@ -62,23 +59,6 @@ const TeacherDashboard: React.FC = () => {
         const timer = setInterval(() => setCurrentTime(new Date()), 30000);
         return () => clearInterval(timer);
     }, []);
-
-    // Weekly load. All schedules for this teacher across the week (real data)
-    const [weeklyTeacherSchedules, setWeeklyTeacherSchedules] = useState<any[]>([]);
-    useEffect(() => {
-        if (!profile?.full_name) return;
-        (async () => {
-            const { data } = await supabase
-                .from('schedules')
-                .select('id, day_of_week, start_time, end_time, status, teacher:teachers(profile:profiles(full_name), full_name)')
-                .eq('status', 'published');
-            const mine = (data || []).filter((s: any) => {
-                const t = s.teacher?.profile?.full_name || s.teacher?.full_name || '';
-                return t.toLowerCase() === (profile.full_name || '').toLowerCase();
-            });
-            setWeeklyTeacherSchedules(mine);
-        })();
-    }, [profile?.full_name]);
 
     // Admins for messaging
     const [allAdmins, setAllAdmins] = useState<any[]>([]);
@@ -266,23 +246,6 @@ const TeacherDashboard: React.FC = () => {
     const ongoingClass = todaySchedule.find(s => s.status === 'ongoing');
     const nextClass = todaySchedule.find(s => s.status === 'upcoming');
 
-    // Chart data
-    // T1: Weekly load by day (real)
-    const weeklyLoad = useMemo(() => {
-        const order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const map: Record<string, number> = Object.fromEntries(order.map(d => [d, 0]));
-        weeklyTeacherSchedules.forEach((s: any) => {
-            if (s.day_of_week && s.day_of_week in map) map[s.day_of_week]++;
-        });
-        return order.map(d => ({
-            day: d.slice(0, 3),
-            count: map[d],
-            isToday: d === scheduleDayName,
-        }));
-    }, [weeklyTeacherSchedules, scheduleDayName]);
-    const weeklyTotal = weeklyLoad.reduce((s, d) => s + d.count, 0);
-    const peakDay = weeklyLoad.reduce((m, d) => d.count > m.count ? d : m, { day: '-', count: 0, isToday: false });
-
     // T2: Today's day progress. Minutes finished, ongoing, and upcoming over the day span
     const dayProgress = useMemo(() => {
         if (todaySchedule.length === 0) return { finished: 0, ongoing: 0, upcoming: 0, total: 0 };
@@ -304,18 +267,6 @@ const TeacherDashboard: React.FC = () => {
         return o;
     }, [myRequests]);
     const outcomeTotal = requestOutcome.approved + requestOutcome.rejected + requestOutcome.pending;
-
-    const ChartTooltip = ({ active, payload, label }: any) => {
-        if (!active || !payload?.length) return null;
-        return (
-            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', boxShadow: 'var(--shadow-lg)', fontSize: 12 }}>
-                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{label}</div>
-                {payload.map((p: any, i: number) => (
-                    <div key={i} style={{ color: 'var(--text-secondary)' }}>{p.name}: <strong style={{ color: 'var(--text-primary)' }}>{p.value}</strong></div>
-                ))}
-            </div>
-        );
-    };
 
     return (
         <div className="dashboard fade-in">
@@ -454,33 +405,7 @@ const TeacherDashboard: React.FC = () => {
 
                 {/* Right column. Actions, events, announcements */}
                 <div className="dash-col">
-                    {/* T1: Weekly load (real, by day-of-week) */}
-                    {weeklyTotal > 0 && (
-                        <div>
-                            <div className="dash-section-header">
-                                <h3><BarChart3 size={15} /> Weekly Load</h3>
-                                <span className="dash-section-count" title={`Peak: ${peakDay.day}`}>{weeklyTotal}</span>
-                            </div>
-                            <div className="dash-chart-card" role="img" aria-label={`Weekly schedule load. Peak day: ${peakDay.day} with ${peakDay.count} classes`}>
-                                <ResponsiveContainer width="100%" height={140}>
-                                    <BarChart data={weeklyLoad} margin={{ top: 6, right: 6, left: -24, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-                                        <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
-                                        <Bar dataKey="count" name="Classes" radius={[4, 4, 0, 0]}>
-                                            {weeklyLoad.map((d, i) => (
-                                                <Cell key={i} fill={d.isToday ? '#10b981' : '#60a5fa'} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>
-                                    Peak day: <strong style={{ color: 'var(--text-primary)' }}>{peakDay.day}</strong> ({peakDay.count} classes) · today highlighted in green
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {/* Weekly load moved to siderail */}
 
                     {/* T3: My Request Outcomes (real) */}
                     {outcomeTotal > 0 && (

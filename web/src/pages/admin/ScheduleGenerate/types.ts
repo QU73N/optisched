@@ -20,12 +20,26 @@ export interface Subject {
     program: string | null;
     year_level: number | null;
     teacher_id: string | null;
+    weight: number;
+    priority_note: string | null;
+    // For split sessions: number of sessions per week (calculated from duration_hours / session_minutes if not set)
+    sessions_per_week?: number | null;
 }
 
 export interface Teacher {
     id: string;
     max_hours: number | null;
     full_name: string;
+    weight: number;
+    priority_note: string | null;
+    // Preferences (from teacher_preferences; optional to stay backward-compatible)
+    preferred_days?: string[];
+    preferred_time_start?: string | null; // HH:MM
+    preferred_time_end?: string | null;   // HH:MM
+    max_classes_per_day?: number | null;
+    max_consecutive_classes?: number | null;
+    // Per-slot availability map: { "Monday-08:00": false, ... } — missing keys default to true
+    availability?: Record<string, boolean>;
 }
 
 export interface Room {
@@ -36,6 +50,8 @@ export interface Room {
     building: string | null;
     floor: number | null;
     is_available: boolean | null;
+    weight: number;
+    priority_note: string | null;
 }
 
 export interface Section {
@@ -44,6 +60,14 @@ export interface Section {
     program: string | null;
     year_level: number | null;
     student_count: number | null;
+    parent_id: string | null;
+    weight: number;
+    path: string;
+    node_type: 'group' | 'section';
+    is_active: boolean;
+    description: string | null;
+    metadata: Record<string, unknown>;
+    sort_order: number;
 }
 
 export interface ExistingSchedule {
@@ -84,9 +108,14 @@ export interface BreakWindow {
 }
 
 export interface SoftWeights {
-    balancedLoad: number;      // 0 to 100
-    compactSchedule: number;   // 0 to 100
-    minimizeRoomSwitch: number;// 0 to 100
+    balancedLoad: number;         // 0 to 100 — spread sessions evenly across teachers
+    compactSchedule: number;      // 0 to 100 — reduce idle gaps inside section days
+    minimizeRoomSwitch: number;   // 0 to 100 — keep teachers in fewer rooms
+    teacherPreferredTime: number; // 0 to 100 — honor each teacher's preferred window
+    dailyLoadBalance: number;     // 0 to 100 — even teaching load per teacher per day
+    workloadFairness: number;     // 0 to 100 — (now hard constraint, kept for compatibility)
+    subjectSpacing: number;       // 0 to 100 — avoid stacking the same subject on one day
+    roomUtilization: number;      // 0 to 100 — reward high utilization of scarce rooms
 }
 
 export type PriorityTier = 'high' | 'normal' | 'low';
@@ -208,7 +237,16 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     breaks: [
         { id: 'lunch', label: 'Lunch', start: '12:00', end: '13:00' },
     ],
-    soft: { balancedLoad: 60, compactSchedule: 70, minimizeRoomSwitch: 50 },
+    soft: {
+        balancedLoad: 60,
+        compactSchedule: 70,
+        minimizeRoomSwitch: 50,
+        teacherPreferredTime: 60,
+        dailyLoadBalance: 50,
+        workloadFairness: 60,
+        subjectSpacing: 50,
+        roomUtilization: 40,
+    },
     priorities: { sections: {}, subjects: {}, specialRoomBias: 70 },
     maxAttempts: 5,
 };
@@ -236,6 +274,8 @@ export const HARD_CONSTRAINTS: string[] = [
     'Teacher availability enforcement',
     'Maximum consecutive hours per day',
     'Maximum daily teaching hours',
+    'Maximum classes per day (teacher)',
+    'Maximum total hours per week (teacher)',
     'Break enforcement when enabled',
     'Single teacher per session',
     'Single room per session',

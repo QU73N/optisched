@@ -46,6 +46,22 @@ export function useIdleTimeout(opts: IdleTimeoutOptions): IdleTimeoutHandle {
     const graceTimerRef = useRef<number | null>(null);
     const tickRef = useRef<number | null>(null);
     const lastActivityRef = useRef<number>(0);
+    const warningRef = useRef<boolean>(false);
+    const disabledRef = useRef<boolean>(!!disabled);
+
+    // Latest callback refs so the listener/effect identity stays stable
+    // across re-renders. Without this, parent re-renders (e.g. AuthContext
+    // value changing) would tear down and re-attach 6 document listeners
+    // every render, causing input lag during state-heavy flows like logout.
+    const onWarnRef = useRef(onWarn);
+    const onTimeoutRef = useRef(onTimeout);
+    const idleMinutesRef = useRef(idleMinutes);
+    const graceSecondsRef = useRef(graceSeconds);
+    useEffect(() => { onWarnRef.current = onWarn; }, [onWarn]);
+    useEffect(() => { onTimeoutRef.current = onTimeout; }, [onTimeout]);
+    useEffect(() => { idleMinutesRef.current = idleMinutes; }, [idleMinutes]);
+    useEffect(() => { graceSecondsRef.current = graceSeconds; }, [graceSeconds]);
+    useEffect(() => { disabledRef.current = !!disabled; }, [disabled]);
 
     const clearIdle = () => {
         if (idleTimerRef.current !== null) {
@@ -66,33 +82,47 @@ export function useIdleTimeout(opts: IdleTimeoutOptions): IdleTimeoutHandle {
 
     const armIdle = useCallback(() => {
         clearIdle();
-        if (disabled) return;
+        if (disabledRef.current) return;
         idleTimerRef.current = window.setTimeout(() => {
-            setSecondsLeft(graceSeconds);
+            setSecondsLeft(graceSecondsRef.current);
+            warningRef.current = true;
             setWarning(true);
-            onWarn();
+            onWarnRef.current();
             tickRef.current = window.setInterval(() => {
                 setSecondsLeft(s => Math.max(0, s - 1));
             }, 1000);
             graceTimerRef.current = window.setTimeout(() => {
                 clearGrace();
+                warningRef.current = false;
                 setWarning(false);
-                onTimeout();
-            }, graceSeconds * 1000);
-        }, idleMinutes * 60 * 1000);
-    }, [disabled, idleMinutes, graceSeconds, onWarn, onTimeout]);
+                onTimeoutRef.current();
+            }, graceSecondsRef.current * 1000);
+        }, idleMinutesRef.current * 60 * 1000);
+    }, []);
 
     const reset = useCallback(() => {
         clearGrace();
+        warningRef.current = false;
         setWarning(false);
         lastActivityRef.current = Date.now();
         armIdle();
     }, [armIdle]);
 
+    // Re-arm the idle timer when configuration changes without re-attaching
+    // the activity listeners. The handler reads the latest values from refs.
+    useEffect(() => {
+        if (disabled) return;
+        armIdle();
+    }, [idleMinutes, disabled, armIdle]);
+
     useEffect(() => {
         if (disabled) {
             clearIdle();
             clearGrace();
+            warningRef.current = false;
+            // Note: `warning` state is gated by `!disabled` in the return value,
+            // so no setWarning call is needed here (and would just trigger an
+            // extra render). The modal closes via the gated boolean.
             return;
         }
 
@@ -102,7 +132,7 @@ export function useIdleTimeout(opts: IdleTimeoutOptions): IdleTimeoutHandle {
             lastActivityRef.current = now;
             // If we're already in the warning phase, don't auto-dismiss on
             // mousemove — the user must take an explicit action.
-            if (warning) return;
+            if (warningRef.current) return;
             armIdle();
         };
 
@@ -115,7 +145,7 @@ export function useIdleTimeout(opts: IdleTimeoutOptions): IdleTimeoutHandle {
             clearIdle();
             clearGrace();
         };
-    }, [disabled, armIdle, warning]);
+    }, [disabled, armIdle]);
 
     return { reset, warning: warning && !disabled, secondsLeft };
 }

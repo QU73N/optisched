@@ -19,7 +19,7 @@ const HealthPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    const isPower = profile?.role === 'power_admin' || profile?.role === 'system_admin';
+    const isPower = profile?.role === 'power_admin' || profile?.role === 'system_admin' || profile?.role === 'admin';
 
     const runHealthChecks = useCallback(async () => {
         setRefreshing(true);
@@ -119,7 +119,6 @@ const HealthPage: React.FC = () => {
             const interval = setInterval(runHealthChecks, 30000); // Refresh every 30s
             return () => clearInterval(interval);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isPower, runHealthChecks]);
 
     if (!isPower) {

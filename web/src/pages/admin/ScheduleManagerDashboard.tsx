@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import {
     Sparkles, CalendarDays, AlertTriangle, BookOpen, Users,
-    MapPin, Loader2, Inbox, BarChart3, FileText, Clock
+    MapPin, Loader2, Inbox, FileText, Clock
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -26,7 +26,6 @@ interface DraftRow {
     updated_at: string;
 }
 interface ConflictTypeBucket { type: string; count: number; }
-interface DayLoadBucket { day: string; count: number; }
 
 const ScheduleManagerDashboard: React.FC = () => {
     const { profile } = useAuth();
@@ -39,7 +38,6 @@ const ScheduleManagerDashboard: React.FC = () => {
     const [conflictsInDrafts, setConflictsInDrafts] = useState(0);
     const [counts, setCounts] = useState({ teachers: 0, rooms: 0, sections: 0, subjects: 0 });
     const [conflictsByType, setConflictsByType] = useState<ConflictTypeBucket[]>([]);
-    const [loadByDay, setLoadByDay] = useState<DayLoadBucket[]>([]);
 
     useEffect(() => {
         if (!profile?.id) return;
@@ -109,24 +107,6 @@ const ScheduleManagerDashboard: React.FC = () => {
                     sections: sections.count || 0,
                     subjects: subjects.count || 0,
                 });
-
-                // 6. load by day from MY drafts
-                const { data: scheds } = await supabase
-                    .from('schedules')
-                    .select('day_of_week')
-                    .eq('created_by', profile.id);
-                const dayMap = new Map<string, number>();
-                DASHBOARD_CONFIG.CHART.SCHEDULE_DAYS.forEach(d => dayMap.set(d, 0));
-                (scheds || []).forEach(s => {
-                    if (s.day_of_week) {
-                        dayMap.set(s.day_of_week, (dayMap.get(s.day_of_week) || 0) + 1);
-                    }
-                });
-                setLoadByDay(
-                    Array.from(dayMap.entries()).map(([day, count]) => ({
-                        day: day.slice(0, 3), count
-                    }))
-                );
             } catch (err) {
                 console.error('[ScheduleManagerDashboard] fetch error:', err);
             } finally {
@@ -309,27 +289,7 @@ const ScheduleManagerDashboard: React.FC = () => {
                             </div>
                         )}
                     </div>
-
-                    {/* Load by day */}
-                    <div className="dash-card dash-stagger">
-                        <div className="dash-card-header">
-                            <div className="dash-card-title"><BarChart3 size={16} /> My Load by Day</div>
-                            <span className="dash-card-badge dash-badge-info">
-                                {loadByDay.reduce((s, d) => s + d.count, 0)}
-                            </span>
-                        </div>
-                        <div className="dash-chart-wrap-sm" role="img" aria-label="Schedule count per day of week from my schedules">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={loadByDay} margin={{ top: 6, right: 8, left: -22, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-                                    <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
-                                    <Bar dataKey="count" name="Schedules" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
+                    {/* Load by day moved to siderail */}
                 </div>
             </div>
         </div>
