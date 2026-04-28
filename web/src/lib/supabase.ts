@@ -2,7 +2,6 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_KEY;
-const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: {
@@ -12,17 +11,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     },
     realtime: {
         params: {
-            eventsPerSecond: 10,
+            eventsPerSecond: 50,
         },
     },
 });
-
-export const supabaseAdmin = supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey, {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-            storageKey: 'sb-admin-auth-token',
-        },
-    })
-    : null;

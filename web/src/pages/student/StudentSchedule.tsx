@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { CalendarDays, Clock, MapPin, ChevronLeft, ChevronRight, List, LayoutGrid, Timer, Download } from 'lucide-react';
+import { toCsv, downloadCsv } from '../../utils/csv';
 import '../admin/Dashboard.css';
 
 interface ScheduleItem {
@@ -70,14 +71,19 @@ const StudentSchedule: React.FC = () => {
     };
 
     const exportCSV = () => {
-        const rows = sorted.map(s =>
-            `${s.day_of_week},${s.start_time?.slice(0, 5)},${s.end_time?.slice(0, 5)},"${(s.subject as any)?.code || ''}","${(s.subject as any)?.name || ''}","${(s.room as any)?.name || ''}","${(s.teacher as any)?.profile?.full_name || 'TBA'}"`
-        ).join('\n');
-        const blob = new Blob(['Day,Start,End,Code,Subject,Room,Teacher\n' + rows], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url;
-        a.download = `schedule_${profile?.section || 'student'}.csv`;
-        a.click(); URL.revokeObjectURL(url);
+        const csv = toCsv(
+            ['Day', 'Start', 'End', 'Code', 'Subject', 'Room', 'Teacher'],
+            sorted.map(s => [
+                s.day_of_week,
+                s.start_time?.slice(0, 5),
+                s.end_time?.slice(0, 5),
+                (s.subject as any)?.code || '',
+                (s.subject as any)?.name || '',
+                (s.room as any)?.name || '',
+                (s.teacher as any)?.profile?.full_name || 'TBA',
+            ]),
+        );
+        downloadCsv(`schedule_${profile?.section || 'student'}`, csv);
     };
 
     return (

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Download, Printer, CalendarDays, MapPin, Users, Clock } from 'lucide-react';
+import { toCsv, downloadCsv } from '../../utils/csv';
 import '../admin/Dashboard.css';
 
 type ViewMode = 'room' | 'teacher' | 'section' | 'day';
@@ -34,15 +35,18 @@ const ScheduleViews: React.FC = () => {
     const handlePrint = () => window.print();
 
     const handleExportCSV = () => {
-        const header = 'Day,Time,Subject,Teacher,Room,Section\n';
-        const rows = schedules.map(s =>
-            `${s.day_of_week},${s.start_time?.slice(0, 5)}-${s.end_time?.slice(0, 5)},${s.subject?.code || ''} - ${s.subject?.name || ''},${s.teacher?.profile?.full_name || ''},${s.room?.name || ''},${s.section?.name || ''}`
-        ).join('\n');
-        const blob = new Blob([header + rows], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'schedule_export.csv'; a.click();
-        URL.revokeObjectURL(url);
+        const csv = toCsv(
+            ['Day', 'Time', 'Subject', 'Teacher', 'Room', 'Section'],
+            schedules.map(s => [
+                s.day_of_week,
+                `${s.start_time?.slice(0, 5)}-${s.end_time?.slice(0, 5)}`,
+                `${s.subject?.code || ''} - ${s.subject?.name || ''}`,
+                s.teacher?.profile?.full_name || '',
+                s.room?.name || '',
+                s.section?.name || '',
+            ]),
+        );
+        downloadCsv('schedule_export', csv);
     };
 
     const views: { key: ViewMode; label: string; icon: React.ElementType }[] = [

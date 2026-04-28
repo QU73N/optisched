@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import React, { useCallback, useState, useEffect } from 'react';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ADMIN_ROLES, POWER_ADMIN_ROLES, ROLE_DISPLAY_NAMES, hasAnyRole } from '../types/database';
+import Sidebar from './Sidebar';
+import { logActivity } from '../hooks/useActivityLogger';
+import { useIdleTimeout } from '../hooks/useIdleTimeout';
+import { usePermissions } from '../hooks/usePermissions';
+import IdleTimeoutModal, { type IdleMode } from './IdleTimeoutModal';
 
 import {
-    LayoutDashboard, Users, CalendarDays, AlertTriangle, Settings,
-    MessageSquare, LogOut, Database, ClipboardList,
-    Sparkles, UserCheck
+    LogOut, Moon, Sun, Bell, HelpCircle, PanelLeft, Settings,
+    Sparkles, CalendarDays, Users, Database
 } from 'lucide-react';
 import FloatingOptiBot from './FloatingOptiBot';
 import './Layout.css';
@@ -15,6 +19,7 @@ const Layout: React.FC = () => {
     const { profile, role, roles, signOut } = useAuth();
     const navigate = useNavigate();
     const [theme, setTheme] = useState(() => localStorage.getItem('optisched-theme') || 'light');
+    const [siderailOpen, setSiderailOpen] = useState(true);
 
     useEffect(() => {
         const handleStorageChange = () => {
@@ -32,121 +37,63 @@ const Layout: React.FC = () => {
         };
     }, []);
 
-    const handleSignOut = async () => {
+    const handleSignOut = useCallback(async () => {
         await signOut();
         navigate('/login');
+    }, [signOut, navigate]);
+
+    // ---------- Idle timeout (Session 2 / C4) ------------------------------
+    const perms = usePermissions();
+    const idleMinutes = (() => {
+        const map = perms.getRule('idle_timeout_minutes_by_role') as Record<string, number> | undefined;
+        if (map && role && typeof map[role] === 'number') return map[role];
+        return perms.ruleNumber('session_timeout_minutes', 60);
+    })();
+    const graceSeconds = perms.ruleNumber('idle_timeout_grace_seconds', 30);
+    const reauthRoles = (perms.getRule('idle_reauth_roles') as string[] | undefined) || ['power_admin', 'admin'];
+    const idleMode: IdleMode = role && reauthRoles.includes(role) ? 'reauth' : 'signout';
+
+    const handleIdleWarn = useCallback(() => {
+        // no-op: useIdleTimeout sets state we observe via .warning
+    }, []);
+    const handleIdleTimeout = useCallback(() => {
+        if (idleMode === 'signout') {
+            void logActivity({ actionType: 'logout', resource: 'auth', details: { reason: 'idle_timeout' } });
+            void handleSignOut();
+        }
+        // For 'reauth' mode the modal stays open until the user re-auths or
+        // manually clicks Sign out; no auto sign-out at grace expiry.
+    }, [idleMode, handleSignOut]);
+
+    const idle = useIdleTimeout({
+        idleMinutes,
+        graceSeconds,
+        onWarn: handleIdleWarn,
+        onTimeout: handleIdleTimeout,
+        disabled: !profile,
+    });
+
+    const toggleTheme = () => {
+        const newTheme = theme === 'light' ? 'dark' : 'light';
+        setTheme(newTheme);
+        localStorage.setItem('optisched-theme', newTheme);
+        document.documentElement.setAttribute('data-transitioning-theme', '');
+        document.documentElement.setAttribute('data-theme', newTheme);
+        setTimeout(() => {
+            document.documentElement.removeAttribute('data-transitioning-theme');
+        }, 450);
     };
 
     const isPowerAdmin = hasAnyRole(roles, POWER_ADMIN_ROLES);
     const isAnyAdmin = hasAnyRole(roles, ADMIN_ROLES);
 
-    // Power Admin / legacy admin - full access
-    const powerAdminLinks = [
-        { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
-        { to: '/admin/users', icon: Users, label: 'Users' },
-        { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
-        { to: '/admin/data', icon: Database, label: 'Data' },
-        { to: '/admin/generate', icon: Sparkles, label: 'Generate' },
-        { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts' },
-        { to: '/admin/faculty', icon: UserCheck, label: 'Faculty' },
-        { to: '/admin/tasks', icon: ClipboardList, label: 'Tasks' },
-        { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
+    // Activity logging: page view on every route change
+    useEffect(() => {
+        const path = window.location.pathname;
+        logActivity({ actionType: 'page_view', resource: path });
+    }, [navigate]);
 
-        { to: '/admin/settings', icon: Settings, label: 'Settings' },
-    ];
-
-    // System Admin - user management only, no schedule access
-    const systemAdminLinks = [
-        { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
-        { to: '/admin/users', icon: Users, label: 'Users' },
-        { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
-
-        { to: '/admin/settings', icon: Settings, label: 'Settings' },
-    ];
-
-    // Schedule Admin - approves schedules, views all
-    const scheduleAdminLinks = [
-        { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
-        { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
-        { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts' },
-        { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
-
-        { to: '/admin/settings', icon: Settings, label: 'Settings' },
-    ];
-
-    // Schedule Manager (Program Heads) - creates schedules
-    const scheduleManagerLinks = [
-        { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
-        { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
-        { to: '/admin/data', icon: Database, label: 'Data' },
-        { to: '/admin/generate', icon: Sparkles, label: 'Generate' },
-        { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts' },
-        { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
-
-        { to: '/admin/settings', icon: Settings, label: 'Settings' },
-    ];
-
-    const teacherLinks = [
-        { to: '/teacher', icon: LayoutDashboard, label: 'Dashboard', end: true },
-        { to: '/teacher/schedule', icon: CalendarDays, label: 'My Schedule' },
-        { to: '/teacher/preferences', icon: ClipboardList, label: 'Preferences' },
-        { to: '/teacher/chat', icon: MessageSquare, label: 'Messages' },
-
-        { to: '/teacher/settings', icon: Settings, label: 'Settings' },
-    ];
-
-    const studentLinks = [
-        { to: '/student', icon: LayoutDashboard, label: 'Dashboard', end: true },
-        { to: '/student/schedule', icon: CalendarDays, label: 'My Schedule' },
-
-        { to: '/student/settings', icon: Settings, label: 'Settings' },
-    ];
-
-    // Determine links: teachers with additional roles get teacher base + unique admin features only
-    const getLinks = () => {
-        // Power admin gets everything
-        if (isPowerAdmin) return powerAdminLinks;
-
-        // Pure admin roles (no teacher primary)
-        if (role !== 'teacher' && role !== 'student') {
-            switch (role) {
-                case 'system_admin': return systemAdminLinks;
-                case 'schedule_admin': return scheduleAdminLinks;
-                case 'schedule_manager': return scheduleManagerLinks;
-                default: return studentLinks;
-            }
-        }
-
-        // Student — no multi-role
-        if (role === 'student') return studentLinks;
-
-        // Teacher — base links always shown
-        const finalLinks = [...teacherLinks];
-
-        // If teacher has additional admin roles, add ONLY the unique admin features
-        // (skip Dashboard, Messages, OptiBot, Settings since teacher already has those)
-        const teacherLabelSet = new Set(teacherLinks.map(l => l.label));
-        const additionalRoles = roles.filter(r => r !== 'teacher');
-
-        for (const r of additionalRoles) {
-            let adminLinks: typeof powerAdminLinks = [];
-            switch (r) {
-                case 'schedule_admin': adminLinks = scheduleAdminLinks; break;
-                case 'schedule_manager': adminLinks = scheduleManagerLinks; break;
-                case 'system_admin': adminLinks = systemAdminLinks; break;
-            }
-            for (const link of adminLinks) {
-                // Only add links that don't duplicate teacher sidebar items
-                if (!teacherLabelSet.has(link.label) && !finalLinks.some(l => l.label === link.label)) {
-                    finalLinks.splice(finalLinks.length - 1, 0, link); // Insert before Settings
-                }
-            }
-        }
-
-        return finalLinks;
-    };
-
-    const links = getLinks();
+    // Sidebar navigation is now handled by <Sidebar /> via src/config/sidebar.ts
 
     const getRoleBadgeClass = () => {
         if (isPowerAdmin) return 'badge badge-admin';
@@ -160,7 +107,7 @@ const Layout: React.FC = () => {
         'Schedule Administrator': 'Sched Admin',
         'Schedule Manager': 'Sched Mgr',
         'System Administrator': 'Sys Admin',
-        'Power User': 'Power User',
+        'Power Admin': 'Power Admin',
         'Teacher': 'Teacher',
         'Student': 'Student',
     };
@@ -169,33 +116,10 @@ const Layout: React.FC = () => {
         : role ? (ROLE_DISPLAY_NAMES[role] || role).toUpperCase() : 'USER';
 
     return (
-        <div className="layout">
+        <div className={`layout ${siderailOpen ? 'siderail-open-layout' : ''}`}>
+            <a href="#main-content" className="skip-link">Skip to content</a>
             <aside className="sidebar">
-                <div className="sidebar-header">
-                    <div className="sidebar-logo">
-                        <img src={theme === 'light' ? '/logo.png' : '/logo-white.png'} alt="OptiSched" />
-                    </div>
-                    <div className="sidebar-brand">
-                        <h2>OptiSched</h2>
-                        <span>Scheduling System</span>
-                    </div>
-                </div>
-
-                <nav className="sidebar-nav">
-                    {links.map(link => (
-                        <NavLink
-                            key={link.to}
-                            to={link.to}
-                            end={link.end}
-                            className={({ isActive }) =>
-                                `sidebar-link ${isActive ? 'sidebar-link-active' : ''}`
-                            }
-                        >
-                            <link.icon size={18} />
-                            <span>{link.label}</span>
-                        </NavLink>
-                    ))}
-                </nav>
+                <Sidebar />
 
                 <div className="sidebar-footer">
                     <div className="sidebar-user">
@@ -206,20 +130,106 @@ const Layout: React.FC = () => {
                         </div>
                         <div className="sidebar-user-info">
                             <span className="sidebar-user-name">{profile?.full_name || 'User'}</span>
-                            <span className={getRoleBadgeClass()} style={{ fontSize: 9, padding: '1px 0', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', lineHeight: 1.4 }}>{displayRole}</span>
+                            <span className={`${getRoleBadgeClass()} badge-sm`} title={displayRole}>{displayRole}</span>
                         </div>
                     </div>
-                    <button className="sidebar-logout" onClick={handleSignOut} title="Sign Out">
+                    <button className="sidebar-logout" onClick={handleSignOut} aria-label="Sign Out">
                         <LogOut size={18} />
                     </button>
                 </div>
             </aside>
 
-            <main className="main-content">
-                <Outlet />
-            </main>
+            <header className="topbar">
+                <div className="topbar-left">
+                    <div className="sidebar-logo">
+                        <img src={theme === 'light' ? '/logo.png' : '/logo-white.png'} alt="OptiSched" />
+                    </div>
+                    <div className="sidebar-brand">
+                        <h2>OptiSched</h2>
+                        <span>Scheduling System</span>
+                    </div>
+                </div>
+                <div className="topbar-right">
+                    <button className="topbar-btn" onClick={() => setSiderailOpen(!siderailOpen)} aria-label="Toggle sidebar">
+                        <PanelLeft size={18} />
+                    </button>
+                    <button className="topbar-btn" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
+                        {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+                    </button>
+                    <button className="topbar-btn" aria-label="Notifications">
+                        <Bell size={18} />
+                    </button>
+                    <button className="topbar-btn" onClick={() => window.open('https://github.com/your-repo/optisched/wiki', '_blank')} aria-label="Open help documentation">
+                        <HelpCircle size={18} />
+                    </button>
+                    <button className="topbar-btn" onClick={() => navigate(`/${role}/settings`)} aria-label="Settings">
+                        <Settings size={18} />
+                    </button>
+                </div>
+            </header>
+
+            <div className="main-wrapper">
+                <main id="main-content" className="main-content">
+                    <Outlet />
+                </main>
+            </div>
+
+            <aside className={`siderail ${siderailOpen ? 'siderail-open' : ''}`}>
+                <div className="siderail-content">
+                    <div className="siderail-section">
+                        <h4>Quick Actions</h4>
+                        <div className="siderail-grid">
+                            <button className="siderail-action" onClick={() => navigate(`/${role}/generate`)}>
+                                <Sparkles size={18} />
+                                <span>Generate</span>
+                            </button>
+                            <button className="siderail-action" onClick={() => navigate(`/${role}/schedules`)}>
+                                <CalendarDays size={18} />
+                                <span>Schedules</span>
+                            </button>
+                            <button className="siderail-action" onClick={() => navigate(`/${role}/users`)}>
+                                <Users size={18} />
+                                <span>Users</span>
+                            </button>
+                            <button className="siderail-action" onClick={() => navigate(`/${role}/data`)}>
+                                <Database size={18} />
+                                <span>Data</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div className="siderail-section">
+                        <h4>System Status</h4>
+                        <div className="siderail-status">
+                            <div className="siderail-status-item">
+                                <span className="siderail-status-dot siderail-status-dot-active"></span>
+                                <span>System Online</span>
+                            </div>
+                            <div className="siderail-status-item">
+                                <span className="siderail-status-dot siderail-status-dot-success"></span>
+                                <span>Database Connected</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="siderail-section">
+                        <h4>Recent Activity</h4>
+                        <ul className="siderail-list">
+                            <li><a href="#">Schedule generated</a></li>
+                            <li><a href="#">New user added</a></li>
+                            <li><a href="#">Conflict resolved</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </aside>
 
             <FloatingOptiBot />
+
+            <IdleTimeoutModal
+                open={idle.warning}
+                mode={idleMode}
+                secondsLeft={idle.secondsLeft}
+                onStay={idle.reset}
+                onSignOut={handleSignOut}
+            />
         </div>
     );
 };

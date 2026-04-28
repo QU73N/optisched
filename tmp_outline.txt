@@ -1,0 +1,495 @@
+   1: /* Dashboard — Modern Redesign v4
+   5: /* --- Stagger entrance animation --- */
+   6: @keyframes dashSlideUp {
+  10: @keyframes dashFadeIn {
+  14: @keyframes shimmer {
+  19: .dash-stagger { animation: dashSlideUp 0.45s var(--ease-out) both; }
+  20: .dash-stagger:nth-child(1)  { animation-delay: 0.03s; }
+  21: .dash-stagger:nth-child(2)  { animation-delay: 0.07s; }
+  22: .dash-stagger:nth-child(3)  { animation-delay: 0.11s; }
+  23: .dash-stagger:nth-child(4)  { animation-delay: 0.15s; }
+  24: .dash-stagger:nth-child(5)  { animation-delay: 0.19s; }
+  25: .dash-stagger:nth-child(6)  { animation-delay: 0.23s; }
+  26: .dash-stagger:nth-child(7)  { animation-delay: 0.27s; }
+  27: .dash-stagger:nth-child(8)  { animation-delay: 0.31s; }
+  29: /* ========== LAYOUT ========== */
+  30: .dashboard {
+  35: .dashboard-header {
+  45: .dashboard-title {
+  54: .dashboard-subtitle {
+  61: .dash-header-actions {
+  67: .dash-header-actions .btn {
+  76: .dash-header-actions .btn:hover {
+  81: /* ========== STAT CARDS (KPI Strip) ========== */
+  82: .stats-grid {
+  89: .stat-card {
+ 101: .stat-card::before {
+ 113: .stat-card::after {
+ 124: .stat-card:hover {
+ 130: .stat-card:hover::before { opacity: 0.08; }
+ 131: .stat-card:hover::after { transform: scaleX(1); }
+ 139: /* Conflict emphasis — pulsing border + warning tint */
+ 140: .stat-card.stat-warning {
+ 144: .stat-card.stat-warning::before { opacity: 1; background: #f59e0b; }
+ 145: .stat-card.stat-warning .stat-number { color: #f59e0b; }
+ 153: .stat-card-header {
+ 160: .stat-icon {
+ 176: .stat-card:hover .stat-icon { transform: scale(1.08) rotate(-2deg); }
+ 178: .stat-number {
+ 189: .stat-label {
+ 197: .stat-context {
+ 205: .stat-context svg { opacity: 0.5; }
+ 207: /* ========== MAIN GRID ========== */
+ 208: .dashboard-grid {
+ 214: /* ========== ROW LAYOUTS ========== */
+ 215: .dash-row-2 {
+ 221: .dash-row-2-overview {
+ 227: .dash-col-full { grid-column: 1 / -1; }
+ 229: .dash-row-3 {
+ 236: /* ========== ADMIN DASHBOARD LAYOUT ========== */
+ 237: .admin-dash-main {
+ 244: .admin-dash-left {
+ 250: .admin-dash-right {
+ 258: .admin-dash-row-2 {
+ 264: .admin-dash-row-3 {
+ 270: /* ========== CARD SYSTEM ========== */
+ 271: .dash-card {
+ 281: .dash-card:hover {
+ 290: .dash-card-header {
+ 297: .dash-card-title {
+ 308: .dash-card-title svg { opacity: 0.6; color: var(--accent-primary); }
+ 310: .dash-card-badge {
+ 318: .dash-card-subtitle {
+ 324: /* ========== CHARTS ========== */
+ 325: .dash-chart-wrap {
+ 331: .dash-chart-wrap-sm {
+ 337: .dash-chart-stats {
+ 345: .dash-chart-stat { flex: 1; min-width: 0; }
+ 347: .dash-chart-stat-value {
+ 356: .dash-chart-stat-label {
+ 364: /* ========== LIST ITEMS ========== */
+ 365: .dash-list {
+ 375: .dash-list::-webkit-scrollbar { width: 4px; }
+ 376: .dash-list::-webkit-scrollbar-track { background: transparent; }
+ 377: .dash-list::-webkit-scrollbar-thumb { background: var(--border-subtle); border-r
+ 379: .dash-list-item {
+ 391: .dash-list-item:hover {
+ 397: .dash-list-item-accent {
+ 404: .dash-list-item-icon {
+ 414: .dash-list-item-body { flex: 1; min-width: 0; }
+ 416: .dash-list-item-title {
+ 424: .dash-list-item-meta {
+ 430: .dash-list-item-desc {
+ 437: .dash-list-item-actions {
+ 443: .dash-list-item-actions .btn {
+ 451: .dash-list-item-right {
+ 459: /* ========== BADGES ========== */
+ 460: .dash-status-badge {
+ 470: /* ========== STATUS LIST ========== */
+ 471: .status-list {
+ 477: .status-item {
+ 489: .status-item:hover { background: var(--bg-hover); }
+ 491: .status-dot {
+ 500: .status-online {
+ 505: .status-warning {
+ 510: .status-offline {
+ 519: /* ========== TIME RANGE SELECTOR ========== */
+ 520: .dash-time-selector {
+ 524: .dash-time-select {
+ 538: .dash-time-select:hover {
+ 543: .dash-time-select:focus {
+ 548: /* ========== LIGHT MODE — shared component refinements ========== */
+ 594: /* ========== EMPTY STATE ========== */
+ 595: .dash-empty {
+ 602: .dash-empty svg { margin-bottom: 8px; opacity: 0.3; }
+ 604: /* ========== ICON BUTTONS ========== */
+ 605: .dash-icon-btn {
+ 618: .dash-icon-btn:hover {
+ 623: .dash-icon-btn-danger:hover {
+ 628: /* ========== LOADING SKELETON ========== */
+ 629: .dash-skeleton {
+ 636: /* ========== CARD TITLE (legacy) ========== */
+ 637: .card-title {
+ 646: /* ========== GREETING (Teacher / Student) — HERO ========== */
+ 647: .dash-greeting {
+ 664: .dash-greeting::before {
+ 681: .dash-greeting h2 {
+ 693: .dash-greeting p {
+ 700: .dash-day-badge {
+ 713: /* ========== LIVE DOT (pulsing indicator) ========== */
+ 714: @keyframes livePulse {
+ 719: .dash-live-dot {
+ 731: /* ========== TWO-COLUMN LAYOUT ========== */
+ 732: .dash-two-col {
+ 739: .dash-col {
+ 745: /* ========== SECTION HEADERS ========== */
+ 746: .dash-section-header {
+ 753: .dash-section-header h3 {
+ 766: .dash-section-header h3::before {
+ 778: .dash-section-header h3 svg { opacity: 0.65; color: var(--accent-primary); }
+ 780: .dash-section-count {
+ 790: /* ========== SCHEDULE PANEL ========== */
+ 791: .dash-schedule-panel {
+ 797: .dash-panel-empty {
+ 810: .dash-panel-empty.compact { padding: 20px 12px; }
+ 811: .dash-panel-empty svg { margin-bottom: 8px; opacity: 0.25; }
+ 812: .dash-panel-empty p { font-size: 13px; margin-top: 4px; }
+ 814: /* ========== CLASS CARDS ========== */
+ 815: .dash-class-card {
+ 825: .dash-class-card:hover {
+ 831: .dash-class-card.is-ongoing {
+ 837: .dash-class-stripe {
+ 842: .dash-class-body {
+ 848: .dash-class-top {
+ 856: .dash-class-subject {
+ 869: .dash-class-status {
+ 880: .dash-class-details {
+ 888: .dash-class-details span {
+ 894: .dash-class-details svg { opacity: 0.45; }
+ 896: /* ========== PROGRESS BAR ========== */
+ 897: .dash-progress {
+ 906: .dash-progress-fill {
+ 914: .dash-progress-fill::after {
+ 922: @keyframes progressShine {
+ 927: /* ========== QUICK ACTIONS ========== */
+ 928: .dash-quick-actions {
+ 934: .dash-action-btn {
+ 952: .dash-action-btn::before {
+ 962: .dash-action-btn:hover {
+ 968: .dash-action-btn:hover::before { opacity: 1; }
+ 970: .dash-action-btn:hover .dash-action-icon { transform: scale(1.08); }
+ 972: .dash-action-icon {
+ 984: /* ========== ANNOUNCEMENT ITEMS ========== */
+ 985: .dash-ann-item {
+ 995: .dash-ann-item:hover {
+1001: .dash-ann-dot {
+1009: .dash-ann-body { flex: 1; min-width: 0; }
+1011: .dash-ann-title {
+1019: .dash-ann-text {
+1030: .dash-ann-meta {
+1037: /* ========== EVENT ITEMS ========== */
+1038: .dash-event-item {
+1050: .dash-event-item:hover {
+1056: .dash-event-info { flex: 1; min-width: 0; }
+1058: .dash-event-title {
+1066: .dash-event-meta {
+1073: /* ========== REQUEST ITEMS ========== */
+1074: .dash-req-item {
+1082: .dash-req-item:hover {
+1088: .dash-req-top {
+1095: .dash-req-type {
+1103: .dash-req-badge {
+1111: .dash-req-reason {
+1118: .dash-req-notes {
+1127: /* ========== MODAL SYSTEM (Teacher/Student) ========== */
+1128: .dash-modal-box {
+1139: .dash-modal-header {
+1147: .dash-modal-header h3 {
+1155: .dash-modal-close {
+1168: .dash-modal-close:hover {
+1173: .dash-modal-body {
+1180: .dash-modal-body label {
+1187: .dash-modal-body .input { font-size: 13.5px; }
+1189: .dash-modal-body .btn {
+1195: /* Style bare inputs/textareas/selects inside modals */
+1196: .dash-modal-body input,
+1197: .dash-modal-body textarea,
+1198: .dash-modal-body select {
+1212: .dash-modal-body input:focus,
+1213: .dash-modal-body textarea:focus,
+1214: .dash-modal-body select:focus {
+1219: .dash-modal-body textarea { resize: vertical; }
+1221: /* ========== MODAL BUTTONS ========== */
+1222: .dash-modal-btn {
+1239: .dash-modal-btn:disabled {
+1244: .dash-modal-btn-primary {
+1248: .dash-modal-btn-primary:hover:not(:disabled) {
+1253: .dash-modal-btn-success {
+1257: .dash-modal-btn-success:hover:not(:disabled) {
+1262: .dash-modal-btn-warning {
+1266: .dash-modal-btn-warning:hover:not(:disabled) {
+1271: /* ========== BUTTON GROUP / TABS (modal) ========== */
+1272: .dash-btn-group {
+1280: .dash-btn-tab {
+1294: .dash-btn-tab:last-child { border-right: none; }
+1296: .dash-btn-tab:hover {
+1301: .dash-btn-tab.active {
+1306: /* ========== CHIP SELECTOR (modal) ========== */
+1307: .dash-chip-group {
+1313: .dash-chip {
+1326: .dash-chip:hover {
+1331: .dash-chip.active {
+1337: /* ========== RESPONSIVE ========== */
+1339: /* Ultrawide (>1800px) — 16:9 landscape optimization */
+1340: @media (min-width: 1800px) {
+1349: /* Large desktop (1400–1800px) — standard 16:9 */
+1350: @media (min-width: 1400px) and (max-width: 1799px) {
+1356: /* Standard desktop (1100–1399px) — default layout works */
+1357: @media (min-width: 1100px) and (max-width: 1399px) {
+1363: /* Laptop / small desktop (<1100px) */
+1364: @media (max-width: 1099px) {
+1371: /* Tablet (<900px) — 9:16 portrait optimization */
+1372: @media (max-width: 899px) {
+1388: /* Phone (<600px) — mobile portrait */
+1389: @media (max-width: 599px) {
+1430: /* Tiny phone (<400px) — compact mobile */
+1431: @media (max-width: 399px) {
+1441: /* ============================================================
+1446: .sm-tabs {
+1456: .sm-tab {
+1472: .sm-tab:hover:not(.sm-tab-active) {
+1477: .sm-tab-active {
+1484: .sm-tab-count {
+1497: .sm-tab:not(.sm-tab-active) .sm-tab-count {
+1502: .sm-entity-grid {
+1508: .sm-entity-card {
+1521: .sm-entity-card:hover {
+1532: .sm-entity-title {
+1540: .sm-entity-sub {
+1545: .sm-entity-meta {
+1554: .sm-entity-meta-dot {
+1561: .sm-back {
+1577: .sm-back:hover {
+1583: /* Weekly calendar grid */
+1584: .sm-calendar {
+1597: .sm-cal-grid {
+1607: .sm-cal-cell {
+1618: .sm-cal-head {
+1634: .sm-cal-time {
+1652: .sm-cal-slot {
+1656: .sm-cal-event {
+1676: .sm-cal-event-title {
+1687: .sm-cal-event-sub {
+1697: .sm-cal-event-time {
+1705: .sm-cal-event.c-navy { background: linear-gradient(135deg, #0f2854, #1c4d8d); }
+1706: .sm-cal-event.c-core { background: linear-gradient(135deg, #1c4d8d, #2f67aa); }
+1707: .sm-cal-event.c-bright { background: linear-gradient(135deg, #4988c4, #7fb0db); 
+1708: .sm-cal-event.c-ice { background: linear-gradient(135deg, #3a7cb8, #4988c4); }
+1710: .sm-cal-empty {
+1717: @media (max-width: 720px) {
+1721: /* ============================================================
+1725: .sg-stepper {
+1737: .sg-step { flex: 1 1 0; min-width: 110px; }
+1739: .sg-step-btn {
+1757: .sg-step-btn:disabled { cursor: default; }
+1759: .sg-step-num {
+1773: .sg-step-current .sg-step-btn {
+1779: .sg-step-current .sg-step-num {
+1784: .sg-step-done .sg-step-btn { color: var(--text-primary); }
+1786: .sg-step-done .sg-step-num {
+1791: .sg-step-upcoming .sg-step-btn { opacity: 0.7; }
+1793: .sg-stage-card {
+1805: .sg-stage-head {
+1812: .sg-stage-icon {
+1824: .sg-stage-title {
+1832: .sg-stage-desc {
+1838: .sg-subhead {
+1850: .sg-row {
+1857: .sg-inline-check {
+1866: .sg-chip {
+1882: .sg-chip:hover { border-color: var(--accent-primary); color: var(--text-primary)
+1884: .sg-chip-active {
+1890: .sg-chip-sub { opacity: 0.7; font-weight: 500; }
+1892: .sg-chip-wrap { display: flex; gap: 6px; flex-wrap: wrap; }
+1894: .sg-group-head {
+1903: .sg-scroll {
+1909: .sg-fields { display: flex; flex-direction: column; gap: 18px; }
+1911: .sg-field-label {
+1919: .sg-grid-3 {
+1925: .sg-break-list {
+1931: .sg-break-row {
+1937: .sg-break-row .input { flex: 0 1 auto; }
+1938: .sg-break-row .input[type="time"] { width: 120px; }
+1939: .sg-break-row .input:first-child { flex: 1; }
+1941: .sg-sep { font-size: 12px; color: var(--text-muted); }
+1943: .sg-icon-btn {
+1957: .sg-icon-btn:hover { color: var(--accent-error, #C84B4B); border-color: var(--ac
+1959: .sg-empty {
+1969: .sg-hard-list {
+1978: .sg-hard-list li {
+1986: .sg-hard-list svg { color: var(--accent-success, #2F8F5B); flex-shrink: 0; }
+1988: .sg-sliders { display: flex; flex-direction: column; gap: 14px; }
+1990: .sg-slider {
+1997: .sg-slider-head {
+2005: .sg-slider-label {
+2012: .sg-slider-desc {
+2018: .sg-slider-val {
+2026: .sg-slider input[type="range"] { width: 100%; accent-color: var(--accent-primary
+2028: .sg-review-grid {
+2035: .sg-review-block {
+2042: .sg-review-title {
+2052: .sg-review-block dl { margin: 0; padding: 0; display: flex; flex-direction: colu
+2054: .sg-review-row {
+2061: .sg-review-row dt { color: var(--text-muted); margin: 0; }
+2062: .sg-review-row dd {
+2071: .sg-blockers {
+2079: .sg-blockers-head {
+2089: .sg-blockers ul { margin: 0; padding-left: 22px; }
+2090: .sg-blockers li { font-size: 12.5px; color: var(--text-secondary); padding: 2px 
+2092: .sg-progress-wrap { margin-bottom: 18px; }
+2094: .sg-progress-bar {
+2102: .sg-progress-fill {
+2108: .sg-progress-meta {
+2116: .sg-progress-msg {
+2123: .sg-substages {
+2132: .sg-substage {
+2145: .sg-substage-dot {
+2152: .sg-substage-done .sg-substage-dot { background: var(--accent-success, #2F8F5B);
+2153: .sg-substage-done { color: var(--text-primary); }
+2155: .sg-substage-current {
+2160: .sg-substage-current .sg-substage-dot {
+2166: @keyframes sg-pulse {
+2171: @media (prefers-reduced-motion: reduce) {
+2175: .sg-errors {
+2183: .sg-errors summary {
+2193: .sg-errors ul { margin: 8px 0 0; padding-left: 22px; }
+2194: .sg-errors li { font-size: 12.5px; color: var(--text-secondary); padding: 2px 0;
+2195: .sg-errors-more { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; 
+2197: .sg-banner {
+2208: .sg-banner-success {
+2214: .sg-banner-error {
+2220: .sg-nav {
+2227: @media (max-width: 720px) {
+2235: /* ============================================================
+2239: .sg-highlight {
+2252: .sg-highlight svg { color: var(--accent-primary); }
+2253: .sg-highlight strong {
+2259: .sg-prio-bias {
+2267: .sg-prio-bias input[type="range"] {
+2273: .sg-prio-toolbar {
+2281: .sg-tabs-mini {
+2290: .sg-tab-mini {
+2306: .sg-tab-mini:hover:not(.sg-tab-mini-active) {
+2311: .sg-tab-mini-active {
+2316: .sg-tab-mini-count {
+2329: .sg-tab-mini:not(.sg-tab-mini-active) .sg-tab-mini-count {
+2334: .sg-prio-search {
+2340: .sg-prio-search svg {
+2349: .sg-prio-search .input { padding-left: 34px; }
+2351: .sg-reset-btn {
+2360: .sg-reset-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+2362: .sg-prio-scroll { max-height: 420px; }
+2364: .sg-prio-group {
+2372: .sg-prio-group-head {
+2381: .sg-prio-group-title {
+2389: .sg-prio-group-count {
+2401: .sg-prio-group-actions {
+2408: .sg-prio-group-hint {
+2417: .sg-prio-mini {
+2430: .sg-prio-mini:hover { color: var(--text-primary); }
+2432: .sg-prio-mini.sg-prio-mini-active.sg-prio-high {
+2438: .sg-prio-mini.sg-prio-mini-active.sg-prio-low {
+2444: .sg-prio-mini.sg-prio-mini-active.sg-prio-normal {
+2450: .sg-prio-list {
+2456: .sg-prio-list li { border-top: 1px solid var(--border-default); }
+2457: .sg-prio-list li:first-child { border-top: none; }
+2459: .sg-prio-row {
+2473: .sg-prio-row:hover { background: var(--bg-hover); }
+2475: .sg-prio-row-main {
+2483: .sg-prio-row-label {
+2491: .sg-prio-row-sub {
+2499: .sg-prio-pill {
+2513: .sg-prio-pill-sub {
+2521: .sg-prio-pill.sg-prio-high {
+2527: .sg-prio-pill.sg-prio-low {
+2533: .sg-prio-pill.sg-prio-normal {
+2539: .sg-prio-legend {
+2548: .sg-prio-legend .sg-prio-pill {
+2555: @media (max-width: 720px) {
+2562: /* ============================================================
+2566: .sg-mode-toggle {
+2573: .sg-mode {
+2588: .sg-mode:hover { border-color: var(--accent-primary); color: var(--text-primary)
+2590: .sg-mode svg { color: var(--text-muted); flex-shrink: 0; margin-top: 2px; }
+2592: .sg-mode-label {
+2599: .sg-mode-title {
+2607: .sg-mode-desc {
+2613: .sg-mode-active {
+2619: .sg-mode-active svg { color: var(--accent-primary); }
+2621: .sg-partial {
+2628: .sg-partial .sg-field-label { margin-bottom: 8px; }
+2630: .sg-partial-hint {
+2637: /* Diff view */
+2639: .sg-diff {
+2647: .sg-diff-empty {
+2658: .sg-diff-head {
+2672: .sg-diff-head svg { color: var(--accent-primary); }
+2674: .sg-diff-counts {
+2681: .sg-diff-chip {
+2694: .sg-diff-chip.sg-diff-added,
+2695: .sg-diff-tag.sg-diff-added {
+2701: .sg-diff-chip.sg-diff-removed,
+2702: .sg-diff-tag.sg-diff-removed {
+2708: .sg-diff-chip.sg-diff-changed,
+2709: .sg-diff-tag.sg-diff-changed {
+2715: .sg-diff-chip.sg-diff-unchanged,
+2716: .sg-diff-tag.sg-diff-unchanged {
+2722: .sg-diff-list {
+2730: .sg-diff-row {
+2738: .sg-diff-row:first-child { border-top: none; }
+2740: .sg-diff-row.sg-diff-unchanged { opacity: 0.65; }
+2742: .sg-diff-tag {
+2758: .sg-diff-body {
+2766: .sg-diff-title {
+2773: .sg-diff-title strong {
+2779: .sg-diff-sub {
+2784: .sg-diff-delta {
+2794: .sg-diff-delta svg { color: var(--text-muted); flex-shrink: 0; }
+2796: .sg-diff-before {
+2802: .sg-diff-after { color: var(--text-primary); font-weight: 600; }
+2804: @media (max-width: 720px) {
+2812: /* ============================================================
+2816: .sg-versions {
+2829: .sg-versions-head {
+2841: .sg-versions-head svg { color: var(--accent-primary); }
+2843: .sg-versions-hint {
+2852: .sg-versions-grid {
+2858: .sg-version-card {
+2869: .sg-version-card.sg-version-draft     { border-left-color: rgba(100, 116, 139, 0
+2870: .sg-version-card.sg-version-submitted { border-left-color: rgba(211, 139, 32, 0.
+2871: .sg-version-card.sg-version-approved  { border-left-color: rgba(73, 136, 196, 0.
+2872: .sg-version-card.sg-version-published { border-left-color: rgba(47, 143, 91, 0.8
+2874: .sg-version-label {
+2885: .sg-version-count {
+2895: .sg-version-desc {
+2901: .sg-version-meta {
+2908: .sg-version-action {
+2917: .sg-version-action:disabled {
+2922: .sg-version-locked {
+2934: @media (max-width: 720px) {
+2939: /* ============================================================
+2942: @media (prefers-reduced-motion: reduce) {
+2960: /* ============================================================
+2964: /* Stat card delta indicator (KPI + change) */
+2965: .stat-card { position: relative; }
+2966: .stat-delta {
+2975: .stat-delta svg { flex-shrink: 0; }
+2977: /* Funnel/segmented horizontal bar (admin requests, teacher day-progress, etc.) 
+2978: .dash-funnel-bar {
+2987: .dash-funnel-bar > div {
+2990: .dash-funnel-bar > div:first-child { border-radius: 999px 0 0 999px; }
+2991: .dash-funnel-bar > div:last-child  { border-radius: 0 999px 999px 0; }
+2992: .dash-funnel-bar > div:only-child  { border-radius: 999px; }
+2994: .dash-funnel-legend {
+3002: .dash-funnel-legend > div {
+3007: .dash-funnel-legend strong {
+3011: .dash-funnel-legend span {
+3017: /* Day-progress card (teacher) */
+3018: .dash-day-progress-card {
+3025: .dash-day-progress-header {
+3033: .dash-day-progress-header > span:first-child {
+3039: .dash-day-progress-stats strong {
+3043: .dash-day-progress-stats span {
+3047: /* Generic chart card (teacher/student small charts) */
+3048: .dash-chart-card {
+3054: .dash-chart-card + .dash-chart-card { margin-top: 6px; }
+3056: /* Subject distribution legend (student) */
+3057: .dash-subject-legend {
+3064: .dash-subject-legend > div {
+3072: .dash-subject-dot {
+3078: .dash-subject-name {
+3083: .dash-subject-legend strong {
+3088: /* Reduced motion: disable transitions on chart bars for accessibility */
+3089: @media (prefers-reduced-motion: reduce) {
+3094: /* Responsive: stack charts and shrink legends on narrow screens */
+3095: @media (max-width: 600px) {

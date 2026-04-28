@@ -68,7 +68,7 @@ const CommunicationHub: React.FC = () => {
             .select('id, full_name, avatar_url, role')
             .order('full_name', { ascending: true });
 
-        // If current user is a teacher, only show specific admin positions: admin (power user) and schedule manager
+        // If current user is a teacher, only show specific admin positions: admin (power admin) and schedule manager
         if (!isAdmin) {
             query = query.in('role', ['admin', 'power_admin', 'schedule_manager']);
         } else {

@@ -122,7 +122,7 @@ const LoginPage: React.FC = () => {
                             </div>
 
                             {forgotError && (
-                                <div className="login-error slide-up">
+                                <div className="login-error slide-up" role="alert" aria-live="polite">
                                     <span>{forgotError}</span>
                                 </div>
                             )}
@@ -217,7 +217,7 @@ const LoginPage: React.FC = () => {
                     </div>
 
                     {error && (
-                        <div className="login-error slide-up">
+                        <div className="login-error slide-up" role="alert" aria-live="polite">
                             <span>{error}</span>
                         </div>
                     )}

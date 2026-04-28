@@ -1,12 +1,14 @@
 /* OptiSched Web — Design System v2.0
    Professional academic scheduling platform
    ========================================= */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lexend:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lexend:wght@400;500;600;700;800&family=Atkinson+Hyperlegible:wght@400;700&family=Crimson+Pro:wght@400;500;600;700&display=swap');
 
 /* Tailwind (preflight disabled in tailwind.config.js to protect existing custom CSS) */
+/* stylelint-disable */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* stylelint-enable */
 
 /* ========== DARK MODE (DEFAULT) ========== */
 :root {
@@ -16,24 +18,24 @@
   --brand-bright: #4988C4;
   --brand-ice: #BDE8F5;
 
-  /* Surfaces — deep navy layered system based on brand navy */
-  --bg-primary: #0a1428;
-  --bg-secondary: #0f1a35;
-  --bg-surface: #14203d;
-  --bg-elevated: #1a2a4a;
-  --bg-hover: #1e3055;
-  --bg-inset: #081022;
+  /* Surfaces — deep navy layered system, tuned for clearer hierarchy */
+  --bg-primary: #0b1830;
+  --bg-secondary: #112247;
+  --bg-surface: #162c55;
+  --bg-elevated: #1d3865;
+  --bg-hover: #224378;
+  --bg-inset: #081428;
 
-  /* Borders */
-  --border-default: #1c3055;
-  --border-subtle: #253a60;
-  --border-accent: rgba(73, 136, 196, 0.3);
+  /* Borders — more visible separation between layers */
+  --border-default: #284674;
+  --border-subtle: #355589;
+  --border-accent: rgba(91, 154, 220, 0.4);
 
-  /* Text */
-  --text-primary: #e8ecf5;
-  --text-secondary: #8a9ab8;
-  --text-muted: #5c6c88;
-  --text-inverse: #0a1428;
+  /* Text — WCAG AA on bg-primary */
+  --text-primary: #eef2fb;
+  --text-secondary: #b3c1dc;
+  --text-muted: #8294b8;
+  --text-inverse: #0b1830;
   --text-on-accent: #ffffff;
 
   /* Brand / Accents */
@@ -57,6 +59,20 @@
   --shadow-xl: 0 20px 40px -5px rgba(0, 0, 0, 0.5);
   --shadow-focus: 0 0 0 3px rgba(73, 136, 196, 0.25);
 
+  /* Spacing scale (4 px base grid) — single source of truth */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
   /* Radii — moderate, professional */
   --radius-xs: 4px;
   --radius-sm: 6px;
@@ -69,6 +85,9 @@
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Lexend', var(--font-sans);
+  /* Academic / accessible variants (opt-in via .font-academic / .font-accessible) */
+  --font-academic: 'Crimson Pro', Georgia, 'Times New Roman', serif;
+  --font-accessible: 'Atkinson Hyperlegible', var(--font-sans);
 
   /* Transitions */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -166,6 +185,12 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* Global focus-visible fallback for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 html {
@@ -297,6 +322,110 @@ a:hover {
   }
 }
 
+/* Import print stylesheet */
+@import './styles/print.css';
+
+/* Error Boundary */
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px;
+  background: var(--bg-surface);
+}
+.error-boundary-content {
+  text-align: center;
+  max-width: 480px;
+}
+.error-boundary h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+  color: var(--text-primary);
+}
+.error-boundary p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+.error-details {
+  text-align: left;
+  margin: 16px 0;
+}
+.error-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.error-details pre {
+  background: var(--bg-inset);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  overflow-x: auto;
+  margin-top: 8px;
+}
+.error-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* Shared States */
+.dash-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.dash-loading-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+/* Spin animation for loaders */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Form Field Rhythm (A3) */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+.field-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.field-label.required::after {
+  content: ' *';
+  color: var(--accent-error);
+}
+.field-help {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.field-error {
+  font-size: 12px;
+  color: var(--accent-error);
+  margin-top: 2px;
+}
+
 /* ========== BUTTONS ========== */
 .btn {
   display: inline-flex;
@@ -319,6 +448,7 @@ a:hover {
 
 .btn:focus-visible {
   box-shadow: 0 0 0 3px rgba(73, 136, 196, 0.25);
+  outline: none;
 }
 
 .btn:active:not(:disabled) {
@@ -398,7 +528,7 @@ a:hover {
 /* ========== INPUTS ========== */
 .input {
   width: 100%;
-  padding: 11px 14px;
+  padding: var(--space-3) var(--space-4);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -419,6 +549,7 @@ a:hover {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(73, 136, 196, 0.15);
   background: var(--bg-elevated);
+  outline: none;
 }
 
 .input::placeholder {
@@ -479,7 +610,7 @@ textarea.input {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 24px;
+  padding: var(--space-6);
   transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
@@ -518,13 +649,26 @@ textarea.input {
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-full);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
   line-height: 1.6;
+}
+
+.badge-sm {
+  padding: var(--space-1) var(--space-2);
+  font-size: 9.5px;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  border-radius: var(--radius-full);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
 }
 
 .badge-admin {
@@ -554,10 +698,10 @@ textarea.input {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 20px 22px;
+  padding: var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
   transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
   position: relative;
 }
@@ -608,7 +752,7 @@ table {
 }
 
 th {
-  padding: 14px 16px;
+  padding: var(--space-3) var(--space-4);
   text-align: left;
   font-size: 11px;
   font-weight: 600;
@@ -621,7 +765,7 @@ th {
 }
 
 td {
-  padding: 14px 16px;
+  padding: var(--space-3) var(--space-4);
   font-size: 14px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-default);
@@ -694,7 +838,7 @@ tr:last-child td {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
-  padding: 28px;
+  padding: var(--space-7);
   width: 90%;
   max-width: 480px;
   box-shadow: 0 20px 50px rgba(15, 40, 84, 0.3);
@@ -709,7 +853,7 @@ tr:last-child td {
 .modal-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-4);
 }
 
 .modal-form label {
@@ -722,7 +866,7 @@ tr:last-child td {
 
 /* ========== PAGE STRUCTURE ========== */
 .page-header {
-  margin-bottom: 32px;
+  margin-bottom: var(--space-8);
 }
 
 .page-header h1 {
@@ -734,7 +878,7 @@ tr:last-child td {
   line-height: 1.2;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .page-header h2 {

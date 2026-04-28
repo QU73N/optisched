@@ -1,38 +1,35 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase, supabaseAdmin } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../types/database';
+import type {
+    ChangeRequest, Announcement, CustomEvent, ResetRequest,
+    ConflictsTrend, DashboardStats, DashboardDeltas, AdminMessage, Room
+} from '../../types/dashboard';
+import { DASHBOARD_CONFIG } from '../../config/dashboard';
 import {
     Users, CalendarDays, AlertTriangle, BookOpen, TrendingUp, Clock,
     Inbox, CheckCircle, XCircle, Megaphone, Trash2, Edit3,
     X, Loader2, KeyRound, MessageSquare, CalendarPlus,
-    Activity, BarChart3, PieChart as PieIcon, Shield
+    Activity, BarChart3, Shield
 } from 'lucide-react';
 import {
-    AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-    XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+    LineChart, Line, BarChart, Bar, Cell,
+    XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
+import { ChartTooltip } from '../../components/ChartTooltip';
 import './Dashboard.css';
-
-interface ChangeRequest {
-    id: string; request_type: string; reason: string; status: string;
-    admin_notes: string | null; created_at: string; teacher_id: string; teacher_name?: string;
-}
-interface Announcement {
-    id: string; title: string; content: string; priority: string;
-    target_section: string; created_at: string;
-}
-interface CustomEvent {
-    id: string; title: string; description: string; event_date: string;
-    start_time: string; end_time: string; room_name: string; created_at: string;
-}
-interface ResetRequest {
-    id: string; email: string; status: string; requested_at: string;
-}
 
 const AdminDashboard: React.FC = () => {
     const { profile, roles } = useAuth();
-    const [stats, setStats] = useState({ totalUsers: 0, teachers: 0, students: 0, schedules: 0, conflicts: 0, rooms: 0 });
+    const [stats, setStats] = useState<DashboardStats>({ totalUsers: 0, teachers: 0, students: 0, schedules: 0, conflicts: 0, rooms: 0 });
+    // Deltas: change vs ~7 days ago (positive = growth/increase)
+    const [deltas, setDeltas] = useState<DashboardDeltas>({ schedules: 0, conflicts: 0, requests: 0 });
+    // Chart datasets, all derived from real data
+    const [conflictsTrend, setConflictsTrend] = useState<ConflictsTrend[]>([]);
+    const [schedulesByDay, setSchedulesByDay] = useState<{ day: string; count: number }[]>([]);
+    const [roomLoad, setRoomLoad] = useState<{ name: string; count: number }[]>([]);
+    const [requestFunnel, setRequestFunnel] = useState({ approved: 0, rejected: 0, pending: 0 });
 
     // Role detection
     const isPowerAdmin = hasAnyRole(roles, POWER_ADMIN_ROLES);
@@ -74,26 +71,14 @@ const AdminDashboard: React.FC = () => {
     const [evStart, setEvStart] = useState('08:00');
     const [evEnd, setEvEnd] = useState('09:00');
     const [evRoom, setEvRoom] = useState('');
-    const [rooms, setRooms] = useState<{ id: string; name: string }[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
     const [postingEvent, setPostingEvent] = useState(false);
 
     // Messages
-    const [recentMessages, setRecentMessages] = useState<any[]>([]);
+    const [recentMessages, setRecentMessages] = useState<AdminMessage[]>([]);
 
     // Password resets
     const [resetRequests, setResetRequests] = useState<ResetRequest[]>([]);
-
-    useEffect(() => {
-        fetchAll();
-        const ch = supabase.channel('admin-dash-rt')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_change_requests' }, () => fetchRequests())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => fetchAnnouncements())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_events' }, () => fetchEvents())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_messages' }, () => fetchMessages())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'password_reset_requests' }, () => fetchResetRequests())
-            .subscribe();
-        return () => { supabase.removeChannel(ch); };
-    }, []);
 
     const fetchAll = () => {
         fetchStats(); fetchRequests(); fetchAnnouncements();
@@ -103,11 +88,21 @@ const AdminDashboard: React.FC = () => {
 
     const fetchStats = async () => {
         try {
-            const [profiles, schedules, conflicts, roomsR] = await Promise.all([
+            const sevenDaysAgo = new Date(Date.now() - DASHBOARD_CONFIG.TIME.DAYS_7_MS).toISOString();
+            const fourteenDaysAgo = new Date(Date.now() - DASHBOARD_CONFIG.TIME.DAYS_14_MS).toISOString();
+            const [profiles, schedules, conflicts, roomsR, schedulesRecent, conflictsRecent, requestsRecent, conflictsAll, schedulesFull, roomsFull] = await Promise.all([
                 supabase.from('profiles').select('role', { count: 'exact' }),
                 supabase.from('schedules').select('id', { count: 'exact' }),
                 supabase.from('conflicts').select('id', { count: 'exact' }).eq('is_resolved', false),
                 supabase.from('rooms').select('id', { count: 'exact' }),
+                supabase.from('schedules').select('id', { count: 'exact' }).gte('created_at', sevenDaysAgo),
+                supabase.from('conflicts').select('id', { count: 'exact' }).gte('created_at', sevenDaysAgo),
+                supabase.from('schedule_change_requests').select('id', { count: 'exact' }).gte('created_at', sevenDaysAgo),
+                // 14-day daily conflicts trend
+                supabase.from('conflicts').select('created_at').gte('created_at', fourteenDaysAgo),
+                // Schedules grouped by day_of_week + room_id
+                supabase.from('schedules').select('day_of_week, room_id'),
+                supabase.from('rooms').select('id, name'),
             ]);
             const all = profiles.data || [];
             setStats({
@@ -118,33 +113,87 @@ const AdminDashboard: React.FC = () => {
                 conflicts: conflicts.count || 0,
                 rooms: roomsR.count || 0,
             });
-        } catch { /* ignore */ }
+            setDeltas({
+                schedules: schedulesRecent.count || 0,
+                conflicts: conflictsRecent.count || 0,
+                requests: requestsRecent.count || 0,
+            });
+            // Build 14-day conflicts trend
+            const trendMap: Record<string, number> = {};
+            for (let i = DASHBOARD_CONFIG.CHART.CONFLICTS_TREND_DAYS - 1; i >= 0; i--) {
+                const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+                const key = `${d.getMonth() + 1}/${d.getDate()}`;
+                trendMap[key] = 0;
+            }
+            (conflictsAll.data || []).forEach((c: any) => {
+                if (!c.created_at) return;
+                const d = new Date(c.created_at);
+                const key = `${d.getMonth() + 1}/${d.getDate()}`;
+                if (key in trendMap) trendMap[key]++;
+            });
+            setConflictsTrend(Object.entries(trendMap).map(([date, count]) => ({ date, count })));
+            // Schedules by day-of-week
+            const dayOrder = DASHBOARD_CONFIG.CHART.SCHEDULE_DAYS;
+            const dayMap: Record<string, number> = Object.fromEntries(dayOrder.map(d => [d, 0]));
+            (schedulesFull.data || []).forEach((s: any) => {
+                if (s.day_of_week && s.day_of_week in dayMap) dayMap[s.day_of_week]++;
+            });
+            setSchedulesByDay(dayOrder.map(d => ({ day: d.slice(0, DASHBOARD_CONFIG.CHART.DAY_ABBREVIATION_LENGTH), count: dayMap[d] })));
+            // Room load (top 8)
+            const roomMap: Record<string, number> = {};
+            (schedulesFull.data || []).forEach((s: any) => {
+                if (s.room_id) roomMap[s.room_id] = (roomMap[s.room_id] || 0) + 1;
+            });
+            const roomNameById: Record<string, string> = {};
+            (roomsFull.data || []).forEach((r: any) => { roomNameById[r.id] = r.name; });
+            const loadList = Object.entries(roomMap)
+                .map(([id, count]) => ({ name: roomNameById[id] || 'Room', count }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, DASHBOARD_CONFIG.QUERY_LIMITS.ROOM_LOAD);
+            setRoomLoad(loadList);
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+        }
     };
 
     const fetchRequests = async () => {
         try {
-            const client = supabaseAdmin || supabase;
-            const { data } = await client.from('schedule_change_requests').select('*').order('created_at', { ascending: false }).limit(20);
+            const thirtyDaysAgo = new Date(Date.now() - DASHBOARD_CONFIG.TIME.DAYS_30_MS).toISOString();
+            const [recentList, funnelAll] = await Promise.all([
+                supabase.from('schedule_change_requests').select('*').order('created_at', { ascending: false }).limit(DASHBOARD_CONFIG.QUERY_LIMITS.REQUESTS),
+                supabase.from('schedule_change_requests').select('status').gte('created_at', thirtyDaysAgo),
+            ]);
+            const data = recentList.data;
             if (data) {
                 const ids = [...new Set(data.map(r => r.teacher_id).filter(Boolean))];
-                let map: Record<string, string> = {};
+                const map: Record<string, string> = {};
                 if (ids.length > 0) {
-                    const { data: p } = await client.from('profiles').select('id, full_name').in('id', ids);
+                    const { data: p } = await supabase.from('profiles').select('id, full_name').in('id', ids);
                     p?.forEach(pr => { map[pr.id] = pr.full_name || 'Unknown'; });
                 }
                 setRequests(data.map(r => ({ ...r, teacher_name: map[r.teacher_id] || 'Teacher' })));
             }
-        } catch { /* ignore */ }
+            // Funnel last 30 days
+            const f = { approved: 0, rejected: 0, pending: 0 };
+            (funnelAll.data || []).forEach((r: any) => {
+                if (r.status === 'approved') f.approved++;
+                else if (r.status === 'rejected') f.rejected++;
+                else f.pending++;
+            });
+            setRequestFunnel(f);
+        } catch (error) {
+            console.error('Error fetching requests:', error);
+        }
         setRequestsLoading(false);
     };
 
     const fetchAnnouncements = async () => {
-        const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(10);
+        const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(DASHBOARD_CONFIG.QUERY_LIMITS.ANNOUNCEMENTS);
         setAnnouncements((data || []) as Announcement[]);
     };
 
     const fetchEvents = async () => {
-        const { data } = await supabase.from('custom_events').select('*').gte('event_date', new Date().toISOString().split('T')[0]).order('event_date', { ascending: true }).limit(10);
+        const { data } = await supabase.from('custom_events').select('*').gte('event_date', new Date().toISOString().split('T')[0]).order('event_date', { ascending: true }).limit(DASHBOARD_CONFIG.QUERY_LIMITS.EVENTS);
         setEvents((data || []) as CustomEvent[]);
     };
 
@@ -159,14 +208,15 @@ const AdminDashboard: React.FC = () => {
     };
 
     const fetchMessages = async () => {
-        const client = supabaseAdmin || supabase;
-        const { data } = await client.from('admin_messages')
+        const { data } = await supabase.from('admin_messages')
             .select('*')
             .eq('direction', 'teacher_to_admin')
-            .or(`recipient_id.is.null,recipient_id.eq.${profile?.id}`)
+            .or('recipient_id.is.null')
             .order('created_at', { ascending: false })
-            .limit(5);
-        setRecentMessages(data || []);
+            .limit(DASHBOARD_CONFIG.QUERY_LIMITS.MESSAGES);
+        // Filter messages for current admin on client side (safe since profile.id is from auth)
+        const filtered = (data || []).filter(m => m.recipient_id === null || m.recipient_id === profile?.id);
+        setRecentMessages(filtered);
     };
 
     const fetchResetRequests = async () => {
@@ -174,10 +224,22 @@ const AdminDashboard: React.FC = () => {
         setResetRequests((data || []) as ResetRequest[]);
     };
 
+    useEffect(() => {
+        fetchAll();
+        const ch = supabase.channel('admin-dash-rt')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_change_requests' }, () => fetchRequests())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => fetchAnnouncements())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_events' }, () => fetchEvents())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_messages' }, () => fetchMessages())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'password_reset_requests' }, () => fetchResetRequests())
+            .subscribe();
+        return () => { supabase.removeChannel(ch); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleRequestAction = async (id: string, status: 'approved' | 'rejected', notes: string) => {
         setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
-        const client = supabaseAdmin || supabase;
-        const { error } = await client.from('schedule_change_requests').update({ status, admin_notes: notes }).eq('id', id);
+        const { error } = await supabase.from('schedule_change_requests').update({ status, admin_notes: notes }).eq('id', id);
         if (error) { setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'pending' } : r)); alert('Error: ' + error.message); }
         setResolvingRequest(null);
         setResolveNotes('');
@@ -263,13 +325,14 @@ const AdminDashboard: React.FC = () => {
         normal: { bg: 'rgba(59,130,246,0.12)', color: '#3b82f6' },
     };
 
-    // Build stat cards based on role
-    const allStatCards: { label: string; value: number; icon: typeof Users; color: string; show: boolean; warning?: boolean }[] = [
+    // Build stat cards based on role, with deltas (state plus recent change)
+    type StatCard = { label: string; value: number; icon: typeof Users; color: string; show: boolean; warning?: boolean; delta?: number; deltaLabel?: string; deltaGood?: 'up' | 'down' };
+    const allStatCards: StatCard[] = [
         { label: 'Total Users', value: stats.totalUsers, icon: Users, color: '#3b82f6', show: canSeeUserStats },
         { label: 'Teachers', value: stats.teachers, icon: BookOpen, color: '#0ea5e9', show: canSeeUserStats },
         { label: 'Students', value: stats.students, icon: TrendingUp, color: '#22c55e', show: canSeeUserStats },
-        { label: 'Schedules', value: stats.schedules, icon: CalendarDays, color: '#6366f1', show: canSeeScheduleStats },
-        { label: 'Conflicts', value: stats.conflicts, icon: AlertTriangle, color: '#f59e0b', show: canSeeScheduleStats, warning: stats.conflicts > 0 },
+        { label: 'Schedules', value: stats.schedules, icon: CalendarDays, color: '#6366f1', show: canSeeScheduleStats, delta: deltas.schedules, deltaLabel: 'new (7d)', deltaGood: 'up' },
+        { label: 'Open Conflicts', value: stats.conflicts, icon: AlertTriangle, color: '#f59e0b', show: canSeeScheduleStats, warning: stats.conflicts > 0, delta: deltas.conflicts, deltaLabel: 'new (7d)', deltaGood: 'down' },
         { label: 'Rooms', value: stats.rooms, icon: Clock, color: '#06b6d4', show: canSeeScheduleStats || canSeeUserStats },
     ];
     const statCards = allStatCards.filter(c => c.show);
@@ -296,181 +359,9 @@ const AdminDashboard: React.FC = () => {
                 : isScheduleManager ? 'Schedule creation and data management'
                     : 'Overview';
 
-    // --- Chart data (derived from real stats + realistic mock trends) ---
-    const userDistribution = useMemo(() => [
-        { name: 'Teachers', value: stats.teachers || 1, color: '#0ea5e9' },
-        { name: 'Students', value: stats.students || 1, color: '#22c55e' },
-        { name: 'Admins', value: Math.max(1, stats.totalUsers - stats.teachers - stats.students), color: '#6366f1' },
-    ], [stats]);
+    // Funnel total + percentages for compact stacked bar
+    const funnelTotal = requestFunnel.approved + requestFunnel.rejected + requestFunnel.pending;
 
-    const roomUtilization = useMemo(() => {
-        const roomNames = ['Room A', 'Room B', 'Room C', 'Room D', 'Room E'];
-        const usages = [72, 85, 58, 91, 64];
-        return roomNames.slice(0, Math.min(stats.rooms || 5, 5)).map((name, idx) => ({
-            name,
-            usage: usages[idx] ?? 70,
-            capacity: 100,
-        }));
-    }, [stats.rooms]);
-
-    const ChartTooltipContent = ({ active, payload, label }: any) => {
-        if (!active || !payload?.length) return null;
-        return (
-            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '10px 14px', boxShadow: 'var(--shadow-lg)', fontSize: 12 }}>
-                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{label}</div>
-                {payload.map((p: any, i: number) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
-                        {p.name}: <strong style={{ color: 'var(--text-primary)' }}>{p.value}</strong>
-                    </div>
-                ))}
-            </div>
-        );
-    };
-
-    // Time range state for charts
-    const [weeklyTimeRange, setWeeklyTimeRange] = useState<'all' | 'year' | 'month' | 'week' | 'day'>('all');
-    const [requestTimeRange, setRequestTimeRange] = useState<'all' | 'year' | 'month' | 'week' | 'day'>('all');
-
-    // Time range options
-    const timeRangeOptions = [
-        { value: 'all' as const, label: 'All Time' },
-        { value: 'year' as const, label: 'This Year' },
-        { value: 'month' as const, label: 'This Month' },
-        { value: 'week' as const, label: 'This Week' },
-        { value: 'day' as const, label: 'Today' },
-    ];
-
-    // Filter weekly activity data based on time range
-    const filteredWeeklyActivity = useMemo(() => {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth(); // 0-11
-        const currentDay = now.getDate();
-        const currentWeek = Math.ceil((currentDay + new Date(currentYear, currentMonth, 1).getDay()) / 7);
-        const currentHour = now.getHours();
-        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const currentDayIndex = (now.getDay() + 6) % 7; // Convert to Mon=0
-        const weeksInMonth = Math.ceil((new Date(currentYear, currentMonth + 1, 0).getDate() + new Date(currentYear, currentMonth, 1).getDay()) / 7);
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const startYear = 2024; // Assuming system started in 2024
-        const years = [];
-        
-        switch (weeklyTimeRange) {
-            case 'day':
-                // Show hours (00:00 to current hour) - distribute today's activity across hours
-                return Array.from({ length: 24 }, (_, i) => ({
-                    day: `${i}:00`,
-                    schedules: i <= currentHour ? Math.max(0, Math.round((stats.schedules / (currentHour + 1)) * (i < currentHour ? 1 : 0.5))) : 0,
-                    requests: i <= currentHour ? Math.max(0, Math.round((requests.length / (currentHour + 1)) * (i < currentHour ? 1 : 0.5))) : 0,
-                    conflicts: i <= currentHour ? Math.max(0, Math.round((stats.conflicts / (currentHour + 1)) * (i < currentHour ? 1 : 0.5))) : 0,
-                }));
-            case 'week':
-                // Show days (Mon to current day) - distribute week's activity across days
-                return dayNames.map((day, i) => ({
-                    day,
-                    schedules: i <= currentDayIndex ? Math.max(0, Math.round((stats.schedules / (currentDayIndex + 1)) * (i < currentDayIndex ? 1 : 0.8))) : 0,
-                    requests: i <= currentDayIndex ? Math.max(0, Math.round((requests.length / (currentDayIndex + 1)) * (i < currentDayIndex ? 1 : 0.8))) : 0,
-                    conflicts: i <= currentDayIndex ? Math.max(0, Math.round((stats.conflicts / (currentDayIndex + 1)) * (i < currentDayIndex ? 1 : 0.8))) : 0,
-                }));
-            case 'month':
-                // Show weeks (W1 to current week) - distribute month's activity across weeks
-                return Array.from({ length: weeksInMonth }, (_, i) => ({
-                    day: `W${i + 1}`,
-                    schedules: i < currentWeek ? Math.max(0, Math.round((stats.schedules / currentWeek) * (i < currentWeek - 1 ? 1 : 0.8))) : 0,
-                    requests: i < currentWeek ? Math.max(0, Math.round((requests.length / currentWeek) * (i < currentWeek - 1 ? 1 : 0.8))) : 0,
-                    conflicts: i < currentWeek ? Math.max(0, Math.round((stats.conflicts / currentWeek) * (i < currentWeek - 1 ? 1 : 0.8))) : 0,
-                }));
-            case 'year':
-                // Show months (Jan to current month) - distribute year's activity across months
-                return monthNames.map((month, i) => ({
-                    day: month,
-                    schedules: i <= currentMonth ? Math.max(0, Math.round((stats.schedules / (currentMonth + 1)) * (i < currentMonth ? 1 : 0.8))) : 0,
-                    requests: i <= currentMonth ? Math.max(0, Math.round((requests.length / (currentMonth + 1)) * (i < currentMonth ? 1 : 0.8))) : 0,
-                    conflicts: i <= currentMonth ? Math.max(0, Math.round((stats.conflicts / (currentMonth + 1)) * (i < currentMonth ? 1 : 0.8))) : 0,
-                }));
-            case 'all':
-            default:
-                // Show years (from system start to current year)
-                for (let year = startYear; year <= currentYear; year++) {
-                    years.push({
-                        day: year.toString(),
-                        schedules: year < currentYear ? Math.max(0, Math.round((stats.schedules / (currentYear - startYear + 1)) * 0.8)) : Math.round(stats.schedules * 0.2),
-                        requests: year < currentYear ? Math.max(0, Math.round((requests.length / (currentYear - startYear + 1)) * 0.8)) : Math.round(requests.length * 0.2),
-                        conflicts: year < currentYear ? Math.max(0, Math.round((stats.conflicts / (currentYear - startYear + 1)) * 0.8)) : Math.round(stats.conflicts * 0.2),
-                    });
-                }
-                return years;
-        }
-    }, [weeklyTimeRange, stats, requests.length]);
-
-    // Filter request volume data based on time range
-    const filteredRequestVolume = useMemo(() => {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth(); // 0-11
-        const currentDay = now.getDate();
-        const currentWeek = Math.ceil((currentDay + new Date(currentYear, currentMonth, 1).getDay()) / 7);
-        const currentHour = now.getHours();
-        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const currentDayIndex = (now.getDay() + 6) % 7; // Convert to Mon=0
-        const weeksInMonth = Math.ceil((new Date(currentYear, currentMonth + 1, 0).getDate() + new Date(currentYear, currentMonth, 1).getDay()) / 7);
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        
-        // Get actual request counts
-        const approvedCount = requests.filter(r => r.status === 'approved').length;
-        const rejectedCount = requests.filter(r => r.status === 'rejected').length;
-        const pendingCount = pendingRequests.length;
-        const startYear = 2024;
-        const years = [];
-        
-        switch (requestTimeRange) {
-            case 'day':
-                // Show hours (00:00 to current hour) - distribute today's requests across hours
-                return Array.from({ length: 24 }, (_, i) => ({
-                    month: `${i}:00`,
-                    approved: i <= currentHour ? Math.max(0, Math.round((approvedCount / (currentHour + 1)) * (i < currentHour ? 1 : 0.5))) : 0,
-                    rejected: i <= currentHour ? Math.max(0, Math.round((rejectedCount / (currentHour + 1)) * (i < currentHour ? 1 : 0.5))) : 0,
-                    pending: i <= currentHour ? Math.max(0, Math.round((pendingCount / (currentHour + 1)) * (i < currentHour ? 1 : 0.5))) : 0,
-                }));
-            case 'week':
-                // Show days (Mon to current day) - distribute week's requests across days
-                return dayNames.map((day, i) => ({
-                    month: day,
-                    approved: i <= currentDayIndex ? Math.max(0, Math.round((approvedCount / (currentDayIndex + 1)) * (i < currentDayIndex ? 1 : 0.8))) : 0,
-                    rejected: i <= currentDayIndex ? Math.max(0, Math.round((rejectedCount / (currentDayIndex + 1)) * (i < currentDayIndex ? 1 : 0.8))) : 0,
-                    pending: i <= currentDayIndex ? Math.max(0, Math.round((pendingCount / (currentDayIndex + 1)) * (i < currentDayIndex ? 1 : 0.8))) : 0,
-                }));
-            case 'month':
-                // Show weeks (W1 to current week) - distribute month's requests across weeks
-                return Array.from({ length: weeksInMonth }, (_, i) => ({
-                    month: `W${i + 1}`,
-                    approved: i < currentWeek ? Math.max(0, Math.round((approvedCount / currentWeek) * (i < currentWeek - 1 ? 1 : 0.8))) : 0,
-                    rejected: i < currentWeek ? Math.max(0, Math.round((rejectedCount / currentWeek) * (i < currentWeek - 1 ? 1 : 0.8))) : 0,
-                    pending: i < currentWeek ? Math.max(0, Math.round((pendingCount / currentWeek) * (i < currentWeek - 1 ? 1 : 0.8))) : 0,
-                }));
-            case 'year':
-                // Show months (Jan to current month) - distribute year's requests across months
-                return monthNames.map((month, i) => ({
-                    month,
-                    approved: i <= currentMonth ? Math.max(0, Math.round((approvedCount / (currentMonth + 1)) * (i < currentMonth ? 1 : 0.8))) : 0,
-                    rejected: i <= currentMonth ? Math.max(0, Math.round((rejectedCount / (currentMonth + 1)) * (i < currentMonth ? 1 : 0.8))) : 0,
-                    pending: i <= currentMonth ? Math.max(0, Math.round((pendingCount / (currentMonth + 1)) * (i < currentMonth ? 1 : 0.8))) : 0,
-                }));
-            case 'all':
-            default:
-                // Show years (from system start to current year)
-                for (let year = startYear; year <= currentYear; year++) {
-                    years.push({
-                        month: year.toString(),
-                        approved: year < currentYear ? Math.max(0, Math.round((approvedCount / (currentYear - startYear + 1)) * 0.8)) : Math.round(approvedCount * 0.2),
-                        rejected: year < currentYear ? Math.max(0, Math.round((rejectedCount / (currentYear - startYear + 1)) * 0.8)) : Math.round(rejectedCount * 0.2),
-                        pending: year < currentYear ? Math.max(0, Math.round((pendingCount / (currentYear - startYear + 1)) * 0.8)) : Math.round(pendingCount * 0.2),
-                    });
-                }
-                return years;
-        }
-    }, [requestTimeRange, requests, pendingRequests]);
 
     return (
         <div className="dashboard fade-in">
@@ -480,8 +371,8 @@ const AdminDashboard: React.FC = () => {
                     <h1 className="dashboard-title">{dashboardTitle}</h1>
                     <p className="dashboard-subtitle">
                         {dashboardSubtitle}
-                        {canSeeRequests && pendingRequests.length > 0 && <span style={{ color: '#fbbf24', marginLeft: 8 }}>• {pendingRequests.length} pending request{pendingRequests.length > 1 ? 's' : ''}</span>}
-                        {canSeeResets && resetRequests.length > 0 && <span style={{ color: '#f59e0b', marginLeft: 8 }}>• {resetRequests.length} password reset{resetRequests.length > 1 ? 's' : ''}</span>}
+                        {canSeeRequests && pendingRequests.length > 0 && <span className="dash-subtitle-warning">{pendingRequests.length} pending request{pendingRequests.length > 1 ? 's' : ''}</span>}
+                        {canSeeResets && resetRequests.length > 0 && <span className="dash-subtitle-warning">{resetRequests.length} password reset{resetRequests.length > 1 ? 's' : ''}</span>}
                     </p>
                 </div>
                 <div className="dash-header-actions">
@@ -504,15 +395,27 @@ const AdminDashboard: React.FC = () => {
                 <div className="admin-dash-left">
                     {/* ROW 1: STATS STRIP */}
                     <div className="stats-grid">
-                        {statCards.map((card, idx) => (
-                            <div key={idx} className={`stat-card ${card.warning ? 'stat-warning' : ''}`}>
-                                <div className="stat-icon" style={{ color: card.color }}>
-                                    <card.icon size={20} />
+                        {statCards.map((card, idx) => {
+                            const showDelta = typeof card.delta === 'number' && card.delta > 0;
+                            const deltaIsBad = card.deltaGood === 'down' && (card.delta || 0) > 0;
+                            return (
+                                <div key={idx} className={`stat-card ${card.warning ? 'stat-warning' : ''}`} role="group" aria-label={`${card.label}: ${card.value}`}>
+                                    <div className="stat-card-header">
+                                        <span className="stat-label">{card.label}</span>
+                                        <div className="stat-icon" style={{ color: card.color }} aria-hidden="true">
+                                            <card.icon size={18} />
+                                        </div>
+                                    </div>
+                                    <div className="stat-number">{card.value.toLocaleString()}</div>
+                                    {showDelta && (
+                                        <div className="stat-delta" style={{ color: deltaIsBad ? 'var(--d-danger, #C84B4B)' : 'var(--d-success, #2F8F5B)' }} aria-label={`${card.delta} ${card.deltaLabel}`}>
+                                            <TrendingUp size={11} aria-hidden="true" /> +{card.delta}
+                                            <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{card.deltaLabel}</span>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="stat-value">{card.value}</div>
-                        <div className="stat-label">{card.label}</div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {/* ROW 2: ACTION & COMMUNICATION */}
@@ -522,18 +425,18 @@ const AdminDashboard: React.FC = () => {
                             <div className="dash-card dash-stagger">
                                 <div className="dash-card-header">
                                     <div className="dash-card-title"><KeyRound size={16} /> Password Resets</div>
-                                    <span className="dash-card-badge" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>{resetRequests.length}</span>
+                                    <span className="dash-card-badge dash-badge-warning">{resetRequests.length}</span>
                                 </div>
                                 <div className="dash-list">
-                                    {resetRequests.slice(0, 3).map(r => (
+                                    {resetRequests.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RESET_REQUESTS).map(r => (
                                         <div key={r.id} className="dash-list-item">
-                                            <div className="dash-list-item-accent" style={{ background: '#f59e0b' }} />
-                                            <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
+                                            <div className="dash-list-item-accent dash-accent-warning" />
+                                            <div className="dash-list-item-body dash-list-item-body--compact">
                                                 <div className="dash-list-item-title">{r.email}</div>
                                                 <div className="dash-list-item-meta">{r.requested_at ? new Date(r.requested_at).toLocaleString() : 'Just now'}</div>
                                                 <div className="dash-list-item-actions">
                                                     <button className="btn btn-primary" onClick={() => handleApproveReset(r)}><CheckCircle size={12} /></button>
-                                                    <button className="btn btn-secondary" style={{ color: '#ef4444' }} onClick={() => handleDenyReset(r)}><XCircle size={12} /></button>
+                                                    <button className="btn btn-secondary dash-btn-danger" onClick={() => handleDenyReset(r)}><XCircle size={12} /></button>
                                                 </div>
                                             </div>
                                         </div>
@@ -547,29 +450,29 @@ const AdminDashboard: React.FC = () => {
                             <div className="dash-card dash-stagger">
                                 <div className="dash-card-header">
                                     <div className="dash-card-title"><Inbox size={16} /> Teacher Requests</div>
-                                    {pendingRequests.length > 0 && <span className="dash-card-badge" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>{pendingRequests.length}</span>}
+                                    {pendingRequests.length > 0 && <span className="dash-card-badge dash-badge-warning">{pendingRequests.length}</span>}
                                 </div>
                                 {requestsLoading ? (
-                                    <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><div className="spinner" /></div>
+                                    <div className="dash-loading-center"><div className="spinner" /></div>
                                 ) : requests.length === 0 ? (
                                     <div className="dash-empty"><Inbox size={28} /><div>No requests</div></div>
                                 ) : (
                                     <div className="dash-list">
-                                        {requests.slice(0, 5).map(req => {
+                                        {requests.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.REQUEST_ITEMS).map(req => {
                                             const badge = getStatusBadge(req.status);
                                             return (
                                                 <div key={req.id} className="dash-list-item">
                                                     <div className="dash-list-item-accent" style={{ background: badge.color }} />
-                                                    <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div className="dash-list-item-body dash-list-item-body--compact">
+                                                        <div className="dash-header-row">
                                                             <div className="dash-list-item-title">{req.teacher_name}</div>
                                                             <span className="dash-status-badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
                                                         </div>
-                                                        <div className="dash-list-item-meta" style={{ textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em', fontSize: 11 }}>{req.request_type}</div>
+                                                        <div className="dash-list-item-meta dash-meta-text--uppercase">{req.request_type}</div>
                                                         {req.status === 'pending' && (
                                                             <div className="dash-list-item-actions">
                                                                 <button className="btn btn-primary" onClick={() => { setResolvingRequest(req); setResolveAction('approved'); }}><CheckCircle size={12} /></button>
-                                                                <button className="btn btn-secondary" style={{ color: '#ef4444' }} onClick={() => { setResolvingRequest(req); setResolveAction('rejected'); }}><XCircle size={12} /></button>
+                                                                <button className="btn btn-secondary dash-btn-danger" onClick={() => { setResolvingRequest(req); setResolveAction('rejected'); }}><XCircle size={12} /></button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -585,21 +488,21 @@ const AdminDashboard: React.FC = () => {
                         <div className="dash-card dash-stagger">
                             <div className="dash-card-header">
                                 <div className="dash-card-title"><Megaphone size={16} /> Announcements</div>
-                                <span className="dash-card-badge" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>{announcements.length}</span>
+                                <span className="dash-card-badge dash-badge-info">{announcements.length}</span>
                             </div>
                             {announcements.length === 0 ? (
                                 <div className="dash-empty"><Megaphone size={28} /><div>No announcements</div></div>
                             ) : (
                                 <div className="dash-list">
-                                    {announcements.slice(0, 4).map(ann => {
+                                    {announcements.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(ann => {
                                         const prio = prioStyles[ann.priority] || prioStyles.normal;
                                         return (
                                             <div key={ann.id} className="dash-list-item">
                                                 <div className="dash-list-item-accent" style={{ background: prio.color }} />
-                                                <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div className="dash-list-item-body dash-list-item-body--compact">
+                                                    <div className="dash-header-row">
                                                         <div className="dash-list-item-title">{ann.title}</div>
-                                                        <div style={{ display: 'flex', gap: 2 }}>
+                                                        <div className="dash-icon-group">
                                                             <button className="dash-icon-btn" onClick={() => openEditAnn(ann)}><Edit3 size={13} /></button>
                                                             <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => handleDeleteAnn(ann.id)}><Trash2 size={13} /></button>
                                                         </div>
@@ -619,22 +522,22 @@ const AdminDashboard: React.FC = () => {
                             <div className="dash-card dash-stagger">
                                 <div className="dash-card-header">
                                     <div className="dash-card-title"><CalendarPlus size={16} /> Events</div>
-                                    <span className="dash-card-badge" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>{events.length}</span>
+                                    <span className="dash-card-badge dash-badge-success">{events.length}</span>
                                 </div>
                                 {events.length === 0 ? (
                                     <div className="dash-empty"><CalendarPlus size={28} /><div>No events</div></div>
                                 ) : (
                                     <div className="dash-list">
-                                        {events.slice(0, 4).map(ev => (
+                                        {events.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(ev => (
                                             <div key={ev.id} className="dash-list-item">
-                                                <div className="dash-list-item-accent" style={{ background: '#10b981' }} />
-                                                <div className="dash-list-item-icon" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                                                <div className="dash-list-item-accent dash-accent-success" />
+                                            <div className="dash-list-item-icon" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
                                                     <CalendarDays size={14} />
                                                 </div>
                                                 <div className="dash-list-item-body">
                                                     <div className="dash-list-item-title">{ev.title}</div>
                                                     <div className="dash-list-item-meta">
-                                                        {new Date(ev.event_date).toLocaleDateString()} • {ev.start_time?.slice(0, 5)} – {ev.end_time?.slice(0, 5)}
+                                                        {new Date(ev.event_date).toLocaleDateString()} · {ev.start_time?.slice(0, 5)} to {ev.end_time?.slice(0, 5)}
                                                     </div>
                                                 </div>
                                             </div>
@@ -648,22 +551,22 @@ const AdminDashboard: React.FC = () => {
                         <div className="dash-card dash-stagger">
                             <div className="dash-card-header">
                                 <div className="dash-card-title"><MessageSquare size={16} /> Messages</div>
-                                {recentMessages.length > 0 && <span className="dash-card-badge" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>{recentMessages.length}</span>}
+                                {recentMessages.length > 0 && <span className="dash-card-badge dash-badge-info">{recentMessages.length}</span>}
                             </div>
                             {recentMessages.length === 0 ? (
                                 <div className="dash-empty"><MessageSquare size={28} /><div>No messages</div></div>
                             ) : (
                                 <div className="dash-list">
-                                    {recentMessages.slice(0, 4).map(m => (
+                                    {recentMessages.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(m => (
                                         <div key={m.id} className="dash-list-item">
-                                            <div className="dash-list-item-accent" style={{ background: '#6366f1' }} />
-                                            <div className="dash-list-item-body" style={{ paddingLeft: 6 }}>
+                                            <div className="dash-list-item-accent dash-accent-info" />
+                                            <div className="dash-list-item-body dash-list-item-body--compact">
                                                 <div className="dash-list-item-title">{m.sender_name}</div>
-                                                <div className="dash-list-item-desc">{m.message?.slice(0, 80)}{m.message?.length > 80 ? '…' : ''}</div>
+                                                <div className="dash-list-item-desc">{m.message?.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.MESSAGE_TRUNCATION)}{m.message?.length > DASHBOARD_CONFIG.DISPLAY_LIMITS.MESSAGE_TRUNCATION ? '…' : ''}</div>
                                             </div>
                                         </div>
                                     ))}
-                                    <a href="/admin/messages" className="btn btn-secondary" style={{ fontSize: 12, padding: '8px', textAlign: 'center', marginTop: 8, borderRadius: 'var(--radius-md)' }}>View All</a>
+                                    <a href="/admin/messages" className="btn btn-secondary dash-view-all-link">View All</a>
                                 </div>
                             )}
                         </div>
@@ -671,44 +574,37 @@ const AdminDashboard: React.FC = () => {
 
                     {/* ROW 3: OPERATIONAL SUPPORT */}
                     <div className="admin-dash-row-3">
-                        {/* Users */}
-                        <div className="dash-card dash-stagger">
-                            <div className="dash-card-header">
-                                <div className="dash-card-title"><PieIcon size={16} /> Users</div>
-                                <span className="dash-card-badge" style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>{stats.totalUsers}</span>
+                        {/* Schedules per day-of-week (real data) */}
+                        {canSeeScheduleStats && (
+                            <div className="dash-card dash-stagger">
+                                <div className="dash-card-header">
+                                    <div className="dash-card-title"><CalendarDays size={16} /> Load by Day</div>
+                                    <span className="dash-card-badge dash-badge-info">{stats.schedules}</span>
+                                </div>
+                                <div className="dash-chart-wrap-sm" role="img" aria-label="Schedule count per day of week">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={schedulesByDay} margin={{ top: 6, right: 8, left: -22, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                                            <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                                            <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
+                                            <Bar dataKey="count" name="Schedules" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="dash-meta-text" style={{ marginTop: 6, textAlign: 'center' }}>
+                                    Peak day: <strong className="dash-text-primary">{schedulesByDay.reduce((m, d) => d.count > m.count ? d : m, { day: '-', count: 0 }).day}</strong>
+                                </div>
                             </div>
-                            <div className="dash-chart-wrap-sm">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie data={userDistribution} cx="50%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={3} dataKey="value" stroke="none">
-                                            {userDistribution.map((entry, i) => (
-                                                <Cell key={i} fill={entry.color} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip content={<ChartTooltipContent />} />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                                {userDistribution.map(u => (
-                                    <div key={u.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: u.color }} />
-                                            <span style={{ color: 'var(--text-secondary)' }}>{u.name}</span>
-                                        </div>
-                                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{u.value}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        )}
 
                         {/* System Status */}
                         <div className="dash-card dash-stagger">
                             <div className="dash-card-header">
                                 <div className="dash-card-title"><Shield size={16} /> System Status</div>
-                                <span className="dash-card-badge" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Online</span>
+                                <span className="dash-card-badge dash-badge-success">Online</span>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <div className="dash-flex-col dash-gap-10">
                                 <div className="status-item">
                                     <div className="status-dot status-online" />
                                     <span>Database</span>
@@ -730,109 +626,95 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* RIGHT COLUMN: GRAPHS */}
+                {/* RIGHT COLUMN: graphs and diagnostics (trend, then comparison) */}
                 <div className="admin-dash-right">
 
-                    {/* Weekly Activity */}
-                    <div className="dash-card dash-stagger">
-                        <div className="dash-card-header">
-                            <div className="dash-card-title"><Activity size={16} /> Weekly Activity</div>
-                            <div className="dash-time-selector">
-                                <select
-                                    className="dash-time-select"
-                                    value={weeklyTimeRange}
-                                    onChange={(e) => setWeeklyTimeRange(e.target.value as any)}
-                                >
-                                    {timeRangeOptions.map(option => (
-                                        <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                </select>
+                    {/* A2: Conflicts Trend (real, last 14 days) */}
+                    {canSeeScheduleStats && (
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><Activity size={16} /> Conflicts. Last 14 days</div>
+                                <span className="dash-card-badge" style={{ background: stats.conflicts > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)', color: stats.conflicts > 0 ? '#ef4444' : '#22c55e' }}>
+                                    {stats.conflicts > 0 ? `${stats.conflicts} open` : 'All clear'}
+                                </span>
+                            </div>
+                            <div className="dash-chart-wrap" role="img" aria-label={`Conflicts trend, last 14 days, ${conflictsTrend.reduce((s, d) => s + d.count, 0)} total new`}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={conflictsTrend} margin={{ top: 8, right: 8, left: -22, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} interval={1} />
+                                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                        <Tooltip content={<ChartTooltip />} />
+                                        <Line type="monotone" dataKey="count" name="New conflicts" stroke="#ef4444" strokeWidth={2} dot={{ r: 2.5, fill: '#ef4444' }} activeDot={{ r: 4 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="dash-meta-text" style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                                <span>New (7d): <strong className="dash-text-primary" style={{ color: deltas.conflicts > 0 ? '#ef4444' : undefined }}>{deltas.conflicts}</strong></span>
+                                <span>Total (14d): <strong className="dash-text-primary">{conflictsTrend.reduce((s, d) => s + d.count, 0)}</strong></span>
                             </div>
                         </div>
-                        <div className="dash-chart-wrap">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={filteredWeeklyActivity} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="gSchedules" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="gRequests" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.25} />
-                                            <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                                    <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                    <Tooltip content={<ChartTooltipContent />} />
-                                    <Area type="monotone" dataKey="schedules" stroke="#3b82f6" strokeWidth={2} fill="url(#gSchedules)" name="Schedules" />
-                                    <Area type="monotone" dataKey="requests" stroke="#f59e0b" strokeWidth={2} fill="url(#gRequests)" name="Requests" />
-                                    <Area type="monotone" dataKey="conflicts" stroke="#ef4444" strokeWidth={1.5} fill="none" name="Conflicts" strokeDasharray="4 4" />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
+                    )}
 
-                    {/* Request Volume */}
+                    {/* A4: Request Funnel (real, last 30 days). Single horizontal stacked bar */}
                     {canSeeRequests && (
                         <div className="dash-card dash-stagger">
                             <div className="dash-card-header">
-                                <div className="dash-card-title"><TrendingUp size={16} /> Request Volume</div>
-                                <div className="dash-time-selector">
-                                    <select
-                                        className="dash-time-select"
-                                        value={requestTimeRange}
-                                        onChange={(e) => setRequestTimeRange(e.target.value as any)}
-                                    >
-                                        {timeRangeOptions.map(option => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <div className="dash-card-title"><TrendingUp size={16} /> Requests. Last 30 days</div>
+                                <span className="dash-card-badge" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>{funnelTotal}</span>
                             </div>
-                            <div className="dash-chart-wrap">
+                            {funnelTotal === 0 ? (
+                                <div className="dash-empty" style={{ padding: '20px 0' }}><Inbox size={26} /><div>No requests in 30 days</div></div>
+                            ) : (
+                                <>
+                                    <div className="dash-funnel-bar" role="img" aria-label={`${requestFunnel.approved} approved, ${requestFunnel.rejected} rejected, ${requestFunnel.pending} pending`}>
+                                        <div style={{ width: `${(requestFunnel.approved / funnelTotal) * 100}%`, background: '#22c55e' }} title={`Approved: ${requestFunnel.approved}`} />
+                                        <div style={{ width: `${(requestFunnel.rejected / funnelTotal) * 100}%`, background: '#ef4444' }} title={`Rejected: ${requestFunnel.rejected}`} />
+                                        <div style={{ width: `${(requestFunnel.pending / funnelTotal) * 100}%`, background: '#f59e0b' }} title={`Pending: ${requestFunnel.pending}`} />
+                                    </div>
+                                    <div className="dash-funnel-legend">
+                                        <div><CheckCircle size={12} color="#22c55e" /> Approved <strong>{requestFunnel.approved}</strong> <span>({Math.round((requestFunnel.approved / funnelTotal) * 100)}%)</span></div>
+                                        <div><XCircle size={12} color="#ef4444" /> Rejected <strong>{requestFunnel.rejected}</strong> <span>({Math.round((requestFunnel.rejected / funnelTotal) * 100)}%)</span></div>
+                                        <div><Clock size={12} color="#f59e0b" /> Pending <strong>{requestFunnel.pending}</strong> <span>({Math.round((requestFunnel.pending / funnelTotal) * 100)}%)</span></div>
+                                    </div>
+                                    {requestFunnel.pending > 0 && (
+                                        <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <AlertTriangle size={11} /> {requestFunnel.pending} awaiting decision
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* A3: Room Load (real, top 8) */}
+                    {canSeeScheduleStats && roomLoad.length > 0 && (
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><BarChart3 size={16} /> Top rooms by load</div>
+                                <span className="dash-card-subtitle" style={{ display: 'none' }} />
+                                <span className="dash-card-badge" style={{ background: 'rgba(6,182,212,0.12)', color: '#06b6d4' }}>{stats.rooms}</span>
+                            </div>
+                            <div className="dash-chart-wrap" role="img" aria-label="Top rooms by scheduled class count">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={filteredRequestVolume} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                                        <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                        <Tooltip content={<ChartTooltipContent />} />
-                                        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                                        <Bar dataKey="approved" name="Approved" fill="#22c55e" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
-                                        <Bar dataKey="rejected" name="Rejected" fill="#ef4444" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
-                                        <Bar dataKey="pending" name="Pending" fill="#f59e0b" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
+                                    <BarChart data={roomLoad} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" horizontal={false} />
+                                        <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} width={70} />
+                                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
+                                        <Bar dataKey="count" name="Classes" radius={[0, 4, 4, 0]}>
+                                            {roomLoad.map((entry, i) => {
+                                                const max = Math.max(...roomLoad.map(r => r.count), 1);
+                                                const ratio = entry.count / max;
+                                                const color = ratio > 0.85 ? '#ef4444' : ratio > 0.6 ? '#f59e0b' : '#06b6d4';
+                                                return <Cell key={i} fill={color} />;
+                                            })}
+                                        </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
                     )}
-
-                    {/* Room Utilization */}
-                    <div className="dash-card dash-stagger">
-                        <div className="dash-card-header">
-                            <div className="dash-card-title"><BarChart3 size={16} /> Room Usage</div>
-                            <span className="dash-card-badge" style={{ background: 'rgba(6,182,212,0.12)', color: '#06b6d4' }}>{stats.rooms}</span>
-                        </div>
-                        <div className="dash-chart-wrap">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={roomUtilization} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                                    <Tooltip content={<ChartTooltipContent />} />
-                                    <Bar dataKey="usage" name="Usage %" radius={[4, 4, 0, 0]}>
-                                        {roomUtilization.map((entry, i) => (
-                                            <Cell key={i} fill={entry.usage > 80 ? '#ef4444' : entry.usage > 60 ? '#f59e0b' : '#22c55e'} fillOpacity={0.8} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
-                            Avg: <strong style={{ color: 'var(--text-primary)' }}>{roomUtilization.length > 0 ? Math.round(roomUtilization.reduce((a, b) => a + b.usage, 0) / roomUtilization.length) : 0}%</strong>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -841,30 +723,29 @@ const AdminDashboard: React.FC = () => {
             {/* Announcement Modal */}
             {showAnnModal && (
                 <div className="modal-overlay" onClick={() => setShowAnnModal(false)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="dash-modal-header">
                             <h3>{editingAnn ? 'Edit Announcement' : 'Post Announcement'}</h3>
-                            <button onClick={() => setShowAnnModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={20} /></button>
+                            <button className="dash-modal-close" onClick={() => setShowAnnModal(false)}><X size={16} /></button>
                         </div>
-                        <div className="modal-form">
+                        <div className="dash-modal-body">
                             <label>Title</label>
                             <input className="input" value={annTitle} onChange={e => setAnnTitle(e.target.value)} placeholder="Announcement title" />
                             <label>Content</label>
-                            <textarea className="input" value={annContent} onChange={e => setAnnContent(e.target.value)} placeholder="Announcement content..." rows={3} style={{ resize: 'vertical' }} />
+                            <textarea className="input" value={annContent} onChange={e => setAnnContent(e.target.value)} placeholder="Announcement content..." rows={3} />
                             <label>Priority</label>
-                            <div style={{ display: 'flex', gap: 8 }}>
+                            <div className="dash-btn-group">
                                 {(['normal', 'important', 'urgent'] as const).map(p => (
-                                    <button key={p} className={`btn ${annPriority === p ? 'btn-primary' : 'btn-secondary'}`}
-                                        style={{ flex: 1, padding: '6px', fontSize: 12, textTransform: 'capitalize' }}
+                                    <button key={p} className={`dash-btn-tab ${annPriority === p ? 'dash-btn-tab-active' : ''}`}
                                         onClick={() => setAnnPriority(p)}>{p}</button>
                                 ))}
                             </div>
                             <label>Target Section</label>
                             <select className="input" value={annSection} onChange={e => setAnnSection(e.target.value)}>
-                                <option>All Sections</option>
+                                <option value="All Sections">All Sections</option>
                                 {sections.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
-                            <button className="btn btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={handlePostAnnouncement} disabled={postingAnn}>
+                            <button className="dash-modal-btn dash-modal-btn-primary" onClick={handlePostAnnouncement} disabled={postingAnn}>
                                 {postingAnn ? <><Loader2 size={14} className="spin" /> Posting...</> : editingAnn ? 'Save Changes' : 'Post Announcement'}
                             </button>
                         </div>
@@ -875,19 +756,19 @@ const AdminDashboard: React.FC = () => {
             {/* Event Modal */}
             {showEventModal && (
                 <div className="modal-overlay" onClick={() => setShowEventModal(false)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="dash-modal-header">
                             <h3>Create Event</h3>
-                            <button onClick={() => setShowEventModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={20} /></button>
+                            <button className="dash-modal-close" onClick={() => setShowEventModal(false)}><X size={16} /></button>
                         </div>
-                        <div className="modal-form">
+                        <div className="dash-modal-body">
                             <label>Title</label>
                             <input className="input" value={evTitle} onChange={e => setEvTitle(e.target.value)} placeholder="Event title" />
                             <label>Description</label>
-                            <textarea className="input" value={evDesc} onChange={e => setEvDesc(e.target.value)} placeholder="Details..." rows={2} style={{ resize: 'vertical' }} />
+                            <textarea className="input" value={evDesc} onChange={e => setEvDesc(e.target.value)} placeholder="Details..." rows={2} />
                             <label>Date</label>
                             <input className="input" type="date" value={evDate} onChange={e => setEvDate(e.target.value)} />
-                            <div style={{ display: 'flex', gap: 8 }}>
+                            <div className="dash-header-row" style={{ gap: 8 }}>
                                 <div style={{ flex: 1 }}><label>Start</label><input className="input" type="time" value={evStart} onChange={e => setEvStart(e.target.value)} /></div>
                                 <div style={{ flex: 1 }}><label>End</label><input className="input" type="time" value={evEnd} onChange={e => setEvEnd(e.target.value)} /></div>
                             </div>
@@ -896,7 +777,7 @@ const AdminDashboard: React.FC = () => {
                                 <option value="">No specific room</option>
                                 {rooms.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                             </select>
-                            <button className="btn btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={handleCreateEvent} disabled={postingEvent}>
+                            <button className="dash-modal-btn dash-modal-btn-primary" onClick={handleCreateEvent} disabled={postingEvent}>
                                 {postingEvent ? <><Loader2 size={14} className="spin" /> Creating...</> : 'Create Event'}
                             </button>
                         </div>
@@ -907,17 +788,17 @@ const AdminDashboard: React.FC = () => {
             {/* Resolve Request Modal */}
             {resolvingRequest && (
                 <div className="modal-overlay" onClick={() => setResolvingRequest(null)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <h3 style={{ margin: 0 }}>{resolveAction === 'approved' ? 'Approve' : 'Reject'} Request</h3>
-                            <button onClick={() => setResolvingRequest(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="dash-modal-header">
+                            <h3>{resolveAction === 'approved' ? 'Approve' : 'Reject'} Request</h3>
+                            <button className="dash-modal-close" onClick={() => setResolvingRequest(null)}><X size={16} /></button>
                         </div>
-                        <div className="modal-form">
+                        <div className="dash-modal-body">
                             <label>Admin Note (Required to Reply)</label>
-                            <textarea className="input" value={resolveNotes} onChange={e => setResolveNotes(e.target.value)} placeholder="Type a message to the teacher regarding this decision..." rows={4} style={{ resize: 'vertical' }} />
-                            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                                <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setResolvingRequest(null)}>Cancel</button>
-                                <button className={resolveAction === 'approved' ? 'btn btn-primary' : 'btn btn-secondary'} style={{ flex: 1, backgroundColor: resolveAction === 'rejected' ? 'var(--accent-error)' : undefined, color: resolveAction === 'rejected' ? 'white' : undefined }}
+                            <textarea className="input" value={resolveNotes} onChange={e => setResolveNotes(e.target.value)} placeholder="Type a message to the teacher regarding this decision..." rows={4} />
+                            <div className="dash-header-row" style={{ gap: 10 }}>
+                                <button className="dash-modal-btn" onClick={() => setResolvingRequest(null)}>Cancel</button>
+                                <button className={`dash-modal-btn ${resolveAction === 'approved' ? 'dash-modal-btn-primary' : 'dash-modal-btn-warning'}`}
                                     disabled={!resolveNotes.trim()}
                                     onClick={() => handleRequestAction(resolvingRequest.id, resolveAction, resolveNotes.trim())}>
                                     Confirm {resolveAction === 'approved' ? 'Approval' : 'Rejection'}

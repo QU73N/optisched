@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import type { Session, User } from '@supabase/supabase-js';
 import type { Profile, UserRole } from '../types/database';
 import { getAllRoles } from '../types/database';
+import { logActivity } from '../hooks/useActivityLogger';
 
 interface AuthContextType {
     session: Session | null;
@@ -71,8 +72,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const primaryRole = (data.role as UserRole) || 'student';
             setRole(primaryRole);
 
-            // Read additional_roles from auth user_metadata
-            const additionalRoles = authUser?.user_metadata?.additional_roles as string[] | undefined;
+            // Read additional_roles from auth app_metadata (admin-only, not user-writable)
+            const additionalRoles = authUser?.app_metadata?.additional_roles as string[] | undefined;
             const allRoles = getAllRoles(primaryRole, additionalRoles);
             setRoles(allRoles);
         } catch (err) {
@@ -83,9 +84,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
+        const start = performance.now();
         try {
+            // Server-enforced login rate limit (Session 2 / C3).
+            // 5 attempts per 5 minutes per email, regardless of UI.
+            try {
+                const { data: rl } = await supabase.rpc('rate_limit_login', { p_email: email });
+                const result = rl as { allowed?: boolean; retry_after_seconds?: number } | null;
+                if (result && result.allowed === false) {
+                    const wait = result.retry_after_seconds ?? 60;
+                    return { error: `Too many login attempts. Try again in ${wait}s.` };
+                }
+            } catch {
+                // Rate-limit RPC unavailable (e.g. fresh DB without create_rate_limits.sql);
+                // fail-open so login still works during rollout.
+            }
+
             const { error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) return { error: error.message };
+            const ms = Math.round(performance.now() - start);
+            if (error) {
+                // Best-effort: log failure (will be a no-op pre-auth, but handles MFA edge cases)
+                await logActivity({
+                    actionType: 'login',
+                    resource: 'auth',
+                    success: false,
+                    error: error.message,
+                    durationMs: ms,
+                    details: { email },
+                });
+                return { error: error.message };
+            }
+            await logActivity({
+                actionType: 'login',
+                resource: 'auth',
+                success: true,
+                durationMs: ms,
+                details: { email },
+            });
             return { error: null };
         } catch (err: any) {
             return { error: err?.message || 'An error occurred' };
@@ -93,6 +128,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const signOut = async () => {
+        await logActivity({ actionType: 'logout', resource: 'auth' });
         await supabase.auth.signOut();
         setProfile(null); setRole(null); setRoles([]);
     };

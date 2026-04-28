@@ -5,8 +5,12 @@ import { useSchedules, useAnnouncements, useScheduleChangeRequests, useSections 
 import { useCustomEvents } from '../../hooks/useCustomEvents';
 import {
     Calendar, Clock, CheckCircle, BookOpen, Users, MessageSquare,
-    AlertTriangle, Plus, Send, X, Megaphone, MapPin, ArrowRightLeft, FileText
+    AlertTriangle, Plus, Send, X, Megaphone, MapPin, ArrowRightLeft, FileText,
+    BarChart3, XCircle
 } from 'lucide-react';
+import {
+    BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
 import '../admin/Dashboard.css';
 
 const TeacherDashboard: React.FC = () => {
@@ -58,6 +62,23 @@ const TeacherDashboard: React.FC = () => {
         const timer = setInterval(() => setCurrentTime(new Date()), 30000);
         return () => clearInterval(timer);
     }, []);
+
+    // Weekly load. All schedules for this teacher across the week (real data)
+    const [weeklyTeacherSchedules, setWeeklyTeacherSchedules] = useState<any[]>([]);
+    useEffect(() => {
+        if (!profile?.full_name) return;
+        (async () => {
+            const { data } = await supabase
+                .from('schedules')
+                .select('id, day_of_week, start_time, end_time, status, teacher:teachers(profile:profiles(full_name), full_name)')
+                .eq('status', 'published');
+            const mine = (data || []).filter((s: any) => {
+                const t = s.teacher?.profile?.full_name || s.teacher?.full_name || '';
+                return t.toLowerCase() === (profile.full_name || '').toLowerCase();
+            });
+            setWeeklyTeacherSchedules(mine);
+        })();
+    }, [profile?.full_name]);
 
     // Admins for messaging
     const [allAdmins, setAllAdmins] = useState<any[]>([]);
@@ -245,13 +266,64 @@ const TeacherDashboard: React.FC = () => {
     const ongoingClass = todaySchedule.find(s => s.status === 'ongoing');
     const nextClass = todaySchedule.find(s => s.status === 'upcoming');
 
+    // Chart data
+    // T1: Weekly load by day (real)
+    const weeklyLoad = useMemo(() => {
+        const order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const map: Record<string, number> = Object.fromEntries(order.map(d => [d, 0]));
+        weeklyTeacherSchedules.forEach((s: any) => {
+            if (s.day_of_week && s.day_of_week in map) map[s.day_of_week]++;
+        });
+        return order.map(d => ({
+            day: d.slice(0, 3),
+            count: map[d],
+            isToday: d === scheduleDayName,
+        }));
+    }, [weeklyTeacherSchedules, scheduleDayName]);
+    const weeklyTotal = weeklyLoad.reduce((s, d) => s + d.count, 0);
+    const peakDay = weeklyLoad.reduce((m, d) => d.count > m.count ? d : m, { day: '-', count: 0, isToday: false });
+
+    // T2: Today's day progress. Minutes finished, ongoing, and upcoming over the day span
+    const dayProgress = useMemo(() => {
+        if (todaySchedule.length === 0) return { finished: 0, ongoing: 0, upcoming: 0, total: 0 };
+        // Count by status, weighted by duration would be more accurate; here we use counts as a proxy
+        const finished = todaySchedule.filter(s => s.status === 'finished').length;
+        const ongoing = todaySchedule.filter(s => s.status === 'ongoing').length;
+        const upcoming = todaySchedule.filter(s => s.status === 'upcoming').length;
+        return { finished, ongoing, upcoming, total: finished + ongoing + upcoming };
+    }, [todaySchedule]);
+
+    // T3: Request outcome counts (already-fetched myRequests)
+    const requestOutcome = useMemo(() => {
+        const o = { approved: 0, rejected: 0, pending: 0 };
+        myRequests.forEach((r: any) => {
+            if (r.status === 'approved') o.approved++;
+            else if (r.status === 'rejected') o.rejected++;
+            else o.pending++;
+        });
+        return o;
+    }, [myRequests]);
+    const outcomeTotal = requestOutcome.approved + requestOutcome.rejected + requestOutcome.pending;
+
+    const ChartTooltip = ({ active, payload, label }: any) => {
+        if (!active || !payload?.length) return null;
+        return (
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', boxShadow: 'var(--shadow-lg)', fontSize: 12 }}>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{label}</div>
+                {payload.map((p: any, i: number) => (
+                    <div key={i} style={{ color: 'var(--text-secondary)' }}>{p.name}: <strong style={{ color: 'var(--text-primary)' }}>{p.value}</strong></div>
+                ))}
+            </div>
+        );
+    };
+
     return (
         <div className="dashboard fade-in">
             {/* Greeting */}
             <div className="dash-greeting">
                 <div>
                     <h2>{ongoingClass ? <><span className="dash-live-dot" />Teaching Now</> : `Welcome back, ${profile?.full_name?.split(',')[0] || profile?.full_name?.split(' ')[0] || 'Teacher'}`}</h2>
-                    <p>{ongoingClass ? `${ongoingClass.subject} — ${ongoingClass.section} in ${ongoingClass.room}` : nextClass ? `Next: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}` : isOffDay ? 'Enjoy your day off' : 'No more classes today'}</p>
+                    <p>{ongoingClass ? `${ongoingClass.subject} · ${ongoingClass.section} in ${ongoingClass.room}` : nextClass ? `Next: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}` : isOffDay ? 'Enjoy your day off' : 'No more classes today'}</p>
                 </div>
                 <span className="dash-day-badge">{isOffDay ? 'Tomorrow: Monday' : scheduleDayName}</span>
             </div>
@@ -288,9 +360,31 @@ const TeacherDashboard: React.FC = () => {
                 </div>
             </div>
 
+            {/* T2: Today's day progress \u2014 segmented horizontal bar (decision velocity: where am I in the day) */}
+            {!isOffDay && dayProgress.total > 0 && (
+                <div className="dash-day-progress-card" role="group" aria-label={`Today: ${dayProgress.finished} finished, ${dayProgress.ongoing} ongoing, ${dayProgress.upcoming} upcoming`}>
+                    <div className="dash-day-progress-header">
+                        <span><Clock size={13} /> Today's progress</span>
+                        <span className="dash-day-progress-stats">
+                            <strong>{dayProgress.finished}</strong>/<span>{dayProgress.total}</span> done
+                        </span>
+                    </div>
+                    <div className="dash-funnel-bar" style={{ height: 10 }}>
+                        <div style={{ width: `${(dayProgress.finished / dayProgress.total) * 100}%`, background: '#94a3b8' }} title={`Finished: ${dayProgress.finished}`} />
+                        <div style={{ width: `${(dayProgress.ongoing / dayProgress.total) * 100}%`, background: '#10b981' }} title={`Ongoing: ${dayProgress.ongoing}`} />
+                        <div style={{ width: `${(dayProgress.upcoming / dayProgress.total) * 100}%`, background: '#3b82f6' }} title={`Upcoming: ${dayProgress.upcoming}`} />
+                    </div>
+                    <div className="dash-funnel-legend" style={{ marginTop: 6 }}>
+                        <div><CheckCircle size={11} color="#94a3b8" /> Finished <strong>{dayProgress.finished}</strong></div>
+                        <div><span className="dash-live-dot" style={{ background: '#10b981' }} /> Ongoing <strong>{dayProgress.ongoing}</strong></div>
+                        <div><Clock size={11} color="#3b82f6" /> Upcoming <strong>{dayProgress.upcoming}</strong></div>
+                    </div>
+                </div>
+            )}
+
             {/* Main two-column layout */}
             <div className="dash-two-col">
-                {/* Left — Today's Schedule */}
+                {/* Left column. Today's schedule */}
                 <div className="dash-col">
                     <div>
                         <div className="dash-section-header">
@@ -358,8 +452,58 @@ const TeacherDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Right — Actions, Events, Announcements */}
+                {/* Right column. Actions, events, announcements */}
                 <div className="dash-col">
+                    {/* T1: Weekly load (real, by day-of-week) */}
+                    {weeklyTotal > 0 && (
+                        <div>
+                            <div className="dash-section-header">
+                                <h3><BarChart3 size={15} /> Weekly Load</h3>
+                                <span className="dash-section-count" title={`Peak: ${peakDay.day}`}>{weeklyTotal}</span>
+                            </div>
+                            <div className="dash-chart-card" role="img" aria-label={`Weekly schedule load. Peak day: ${peakDay.day} with ${peakDay.count} classes`}>
+                                <ResponsiveContainer width="100%" height={140}>
+                                    <BarChart data={weeklyLoad} margin={{ top: 6, right: 6, left: -24, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                                        <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
+                                        <Bar dataKey="count" name="Classes" radius={[4, 4, 0, 0]}>
+                                            {weeklyLoad.map((d, i) => (
+                                                <Cell key={i} fill={d.isToday ? '#10b981' : '#60a5fa'} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>
+                                    Peak day: <strong style={{ color: 'var(--text-primary)' }}>{peakDay.day}</strong> ({peakDay.count} classes) · today highlighted in green
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* T3: My Request Outcomes (real) */}
+                    {outcomeTotal > 0 && (
+                        <div>
+                            <div className="dash-section-header">
+                                <h3><FileText size={15} /> Request Outcomes</h3>
+                                <span className="dash-section-count">{outcomeTotal}</span>
+                            </div>
+                            <div className="dash-chart-card">
+                                <div className="dash-funnel-bar" role="img" aria-label={`${requestOutcome.approved} approved, ${requestOutcome.rejected} rejected, ${requestOutcome.pending} pending`}>
+                                    <div style={{ width: `${(requestOutcome.approved / outcomeTotal) * 100}%`, background: '#22c55e' }} title={`Approved: ${requestOutcome.approved}`} />
+                                    <div style={{ width: `${(requestOutcome.rejected / outcomeTotal) * 100}%`, background: '#ef4444' }} title={`Rejected: ${requestOutcome.rejected}`} />
+                                    <div style={{ width: `${(requestOutcome.pending / outcomeTotal) * 100}%`, background: '#f59e0b' }} title={`Pending: ${requestOutcome.pending}`} />
+                                </div>
+                                <div className="dash-funnel-legend">
+                                    <div><CheckCircle size={11} color="#22c55e" /> Approved <strong>{requestOutcome.approved}</strong></div>
+                                    <div><XCircle size={11} color="#ef4444" /> Rejected <strong>{requestOutcome.rejected}</strong></div>
+                                    <div><Clock size={11} color="#f59e0b" /> Pending <strong>{requestOutcome.pending}</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Quick Actions */}
                     <div>
                         <div className="dash-section-header"><h3>Quick Actions</h3></div>

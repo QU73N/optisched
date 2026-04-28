@@ -1,7 +1,7 @@
 // OptiBot AI Service (Web) - Mirror of mobile optibotService.ts
 // Multi-provider AI with Gemini, Groq, and OpenRouter + full database context + action execution
 
-import { supabase, supabaseAdmin } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 // === API Keys (read from .env — never commit keys to source) ===
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
@@ -114,7 +114,7 @@ export interface GeminiMessage {
 
 // Fetch relevant context from Supabase for the AI
 async function getScheduleContext(): Promise<string> {
-    const db = supabaseAdmin || supabase;
+    const db = supabase;
     try {
         const [schedulesRes, teachersRes, roomsRes, conflictsRes, eventsRes, usersRes, subjectsRes, sectionsRes, announcementsRes] = await Promise.all([
             db.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile:profiles(full_name)), room:rooms(name, capacity), section:sections(name)').eq('status', 'published').limit(50),
@@ -392,7 +392,7 @@ async function processAIActions(response: string, userRole?: string): Promise<st
 }
 
 async function executeAction(action: string, params: Record<string, any>): Promise<{ success: boolean; message: string }> {
-    const dbClient = supabaseAdmin || supabase;
+    const dbClient = supabase;
     try {
         switch (action) {
             case 'create_user': {
@@ -412,18 +412,21 @@ async function executeAction(action: string, params: Record<string, any>): Promi
                     assignedPassword = randomPassword(8);
                 }
 
-                const adminClient = supabaseAdmin || supabase;
-                const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-                    email, password: assignedPassword, email_confirm: true,
+                // NOTE: auth.admin.createUser requires service role - move to Edge Function
+                // Using client-side signUp for now (requires RLS policies)
+                const { data: authData, error: authError } = await supabase.auth.signUp({
+                    email, password: assignedPassword,
+                    options: { data: { role, full_name } },
                 });
                 if (authError) return { success: false, message: `Could not create auth account: ${authError.message}` };
+                if (!authData.user) return { success: false, message: 'Auth user creation failed.' };
 
                 const profileData: any = { id: authData.user.id, email, full_name, role };
                 if (section) profileData.section = section;
                 if (program) profileData.program = program;
                 if (year_level) profileData.year_level = typeof year_level === 'string' ? parseInt(year_level) : year_level;
 
-                const { error: profileError } = await adminClient.from('profiles').upsert(profileData);
+                const { error: profileError } = await dbClient.from('profiles').upsert(profileData);
                 if (profileError) return { success: false, message: `Auth created but profile failed: ${profileError.message}` };
 
                 return { success: true, message: `User created! Name: ${full_name}, Email: ${email}, Password: ${assignedPassword}` };
@@ -457,10 +460,9 @@ async function executeAction(action: string, params: Record<string, any>): Promi
                 const { data: found } = await dbClient.from('profiles').select('id').eq('email', user_email).single();
                 if (!found) return { success: false, message: `No user found with email "${user_email}".` };
                 await dbClient.from('profiles').delete().eq('id', found.id);
-                if (supabaseAdmin) {
-                    try { await supabaseAdmin.auth.admin.deleteUser(found.id); } catch { }
-                }
-                return { success: true, message: `User "${user_email}" deleted.` };
+                // NOTE: auth.admin.deleteUser requires service role - move to Edge Function
+                // For now, only delete profile (auth user remains orphaned)
+                return { success: true, message: `User "${user_email}" deleted (profile only).` };
             }
 
             case 'create_schedule': {
@@ -600,16 +602,9 @@ async function executeAction(action: string, params: Record<string, any>): Promi
                     if (!updates.email.includes('@') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updates.email)) {
                         return { success: false, message: `Invalid email format: "${updates.email}". Email must contain "@" (e.g. user@domain.com).` };
                     }
-                    const adminClient = supabaseAdmin || supabase;
-                    try {
-                        const { error: authError } = await adminClient.auth.admin.updateUserById(found.id, {
-                            email: updates.email,
-                            email_confirm: true,
-                        });
-                        if (authError) return { success: false, message: `Failed to update auth email: ${authError.message}` };
-                    } catch (e: any) {
-                        return { success: false, message: `Auth email update failed: ${e.message}` };
-                    }
+                    // NOTE: auth.admin.updateUserById requires service role - move to Edge Function
+                    // Email changes require service role, skip for now
+                    return { success: false, message: 'Email changes require server-side implementation (Edge Function).' };
                 }
 
                 const { error } = await dbClient.from('profiles').update(updates).eq('id', found.id);

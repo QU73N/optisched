@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import {
     Lock, Mail, Eye, EyeOff, Loader2, ArrowLeft, ArrowRight,
     Shield, Users, Zap, GitBranch, Bell, MessageSquare,
-    Sparkles, Layers, X, Sun, Moon,
+    Sparkles, Layers, X, Sun, Moon, Pause,
     BookOpen, Gauge, TrendingUp, AlertCircle,
     FileCheck, ShieldCheck, UserCog, Send, Smartphone,
     Clock, Scale, KeyRound, Workflow, Check,
@@ -16,14 +17,16 @@ import './LandingPage.css';
 /* ============================================================
    useReveal — IntersectionObserver scroll reveal
    ============================================================ */
-const useReveal = () => {
+const useReveal = (animationsEnabled: boolean) => {
     useEffect(() => {
         const selector = '.reveal, .reveal-stage, .reveal-left, .reveal-right';
         const els = document.querySelectorAll<HTMLElement>(selector);
-        if (!('IntersectionObserver' in window) || els.length === 0) {
+
+        if (!animationsEnabled || !('IntersectionObserver' in window) || els.length === 0) {
             els.forEach(el => el.classList.add('in-view'));
             return;
         }
+
         const io = new IntersectionObserver(
             (entries) => {
                 entries.forEach((e) => {
@@ -37,7 +40,7 @@ const useReveal = () => {
         );
         els.forEach((el) => io.observe(el));
         return () => io.disconnect();
-    }, []);
+    }, [animationsEnabled]);
 };
 
 /* ============================================================
@@ -62,6 +65,29 @@ const useTheme = () => {
     }, []);
 
     return { theme, toggle };
+};
+
+/* ============================================================
+   Animations toggle (for low-end devices)
+   ============================================================ */
+const useAnimations = () => {
+    const [animationsEnabled, setAnimationsEnabled] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return true;
+        const stored = localStorage.getItem('optisched-animations');
+        return stored === null ? true : stored === 'true';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('optisched-animations', String(animationsEnabled));
+        // Set a data attribute on body for CSS-based animation control
+        document.body.setAttribute('data-animations', animationsEnabled ? 'on' : 'off');
+    }, [animationsEnabled]);
+
+    const toggle = useCallback(() => {
+        setAnimationsEnabled((prev) => !prev);
+    }, []);
+
+    return { animationsEnabled, toggle };
 };
 
 /* ============================================================
@@ -91,6 +117,7 @@ interface LoginModalProps {
 
 const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, theme }) => {
     const { signIn } = useAuth();
+    const modalRef = useRef<HTMLDivElement>(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -102,6 +129,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, theme }) => {
     const [forgotLoading, setForgotLoading] = useState(false);
     const [forgotSent, setForgotSent] = useState(false);
     const [forgotError, setForgotError] = useState<string | null>(null);
+
+    // Focus trap for accessibility
+    useFocusTrap(open, modalRef);
 
     // ESC to close + scroll lock
     useEffect(() => {
@@ -161,7 +191,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, theme }) => {
 
     return (
         <div className="lp-modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="lp-modal" role="dialog" aria-modal="true" aria-labelledby="lp-modal-title">
+            <div ref={modalRef} className="lp-modal" role="dialog" aria-modal="true" aria-labelledby="lp-modal-title">
                 <button className="lp-modal-close" onClick={onClose} aria-label="Close login">
                     <X size={18} />
                 </button>
@@ -217,7 +247,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, theme }) => {
                             </div>
 
                             {forgotError && (
-                                <div className="lp-form-error">
+                                <div className="lp-form-error" role="alert" aria-live="polite">
                                     <AlertCircle size={15} />
                                     <span>{forgotError}</span>
                                 </div>
@@ -292,7 +322,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, theme }) => {
                         </div>
 
                         {error && (
-                            <div className="lp-form-error">
+                            <div className="lp-form-error" role="alert" aria-live="polite">
                                 <AlertCircle size={15} />
                                 <span>{error}</span>
                             </div>
@@ -307,7 +337,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, theme }) => {
                         </button>
 
                         <p className="lp-form-foot">
-                            New to OptiSched? Contact your institution administrator for access.
+                            New to OptiSched?<br />
+                            Contact your institution's administrator for access.
                         </p>
                     </form>
                 )}
@@ -324,9 +355,11 @@ interface NavProps {
     onScrollTo: (id: string) => void;
     theme: string;
     onToggleTheme: () => void;
+    animationsEnabled: boolean;
+    onToggleAnimations: () => void;
 }
 
-const Navigation: React.FC<NavProps> = ({ onLogin, onScrollTo, theme, onToggleTheme }) => {
+const Navigation: React.FC<NavProps> = ({ onLogin, onScrollTo, theme, onToggleTheme, animationsEnabled, onToggleAnimations }) => {
     const [scrolled, setScrolled] = useState(false);
 
     useEffect(() => {
@@ -359,6 +392,14 @@ const Navigation: React.FC<NavProps> = ({ onLogin, onScrollTo, theme, onToggleTh
                         aria-label="Toggle theme"
                     >
                         {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                    </button>
+                    <button
+                        className="lp-theme-btn"
+                        onClick={onToggleAnimations}
+                        title={animationsEnabled ? 'Disable animations (for low-end devices)' : 'Enable animations'}
+                        aria-label="Toggle animations"
+                    >
+                        {animationsEnabled ? <Sparkles size={16} /> : <Pause size={16} />}
                     </button>
                     <button className="lp-btn lp-btn-primary lp-btn-sm" onClick={onLogin}>
                         Sign in <ArrowRight size={14} />
@@ -1344,9 +1385,10 @@ const ScrollToTop: React.FC = () => {
    ============================================================ */
 const LandingPage: React.FC = () => {
     const { theme, toggle } = useTheme();
+    const { animationsEnabled, toggle: toggleAnimations } = useAnimations();
     const [loginOpen, setLoginOpen] = useState(false);
 
-    useReveal();
+    useReveal(animationsEnabled);
 
     const scrollTo = useCallback((id: string) => {
         const el = document.getElementById(id);
@@ -1359,12 +1401,12 @@ const LandingPage: React.FC = () => {
     const closeLogin = useCallback(() => setLoginOpen(false), []);
 
     return (
-        <AuroraBackground className="landing">
+        <AuroraBackground className="landing" disabled={!animationsEnabled}>
             <div className="lp-grid-bg" aria-hidden="true" />
             <div className="lp-ambient" aria-hidden="true" />
 
             <div className="lp-page-content">
-                <Navigation onLogin={openLogin} onScrollTo={scrollTo} theme={theme} onToggleTheme={toggle} />
+                <Navigation onLogin={openLogin} onScrollTo={scrollTo} theme={theme} onToggleTheme={toggle} animationsEnabled={animationsEnabled} onToggleAnimations={toggleAnimations} />
 
                 <main>
                     <HeroSection onLogin={openLogin} onScrollTo={scrollTo} />

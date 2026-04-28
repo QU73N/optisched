@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, supabaseAdmin } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { CheckCircle, ArrowRight, ArrowLeft, Users, BookOpen, MapPin, Layers, Zap } from 'lucide-react';
 import '../admin/Dashboard.css';
 
@@ -105,20 +105,9 @@ const SetupWizard: React.FC = () => {
         if (tEmail.trim().length < 5 || !tEmail.includes('@')) { setMsg('Enter a valid email'); return; }
         setSaving(true); setMsg('');
         try {
-            if (!supabaseAdmin) { setMsg('Error: Service key not configured. Add teachers via User Management instead.'); setSaving(false); return; }
-            const password = 'Teacher' + Math.floor(1000 + Math.random() * 9000);
-            const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-                email: tEmail.trim(), password, email_confirm: true,
-                user_metadata: { full_name: tName.trim(), role: 'teacher' },
-            });
-            if (authErr) throw authErr;
-            if (authData.user) {
-                await supabase.from('profiles').upsert({ id: authData.user.id, email: tEmail.trim(), full_name: tName.trim(), role: 'teacher' });
-                await supabase.from('teachers').insert({ id: authData.user.id, max_hours: 40 });
-            }
-            setMsg(`Added teacher "${tName.trim()}" (pw: ${password})`);
-            setTName(''); setTEmail('');
-            fetchCounts();
+            // NOTE: Teacher creation requires service role - move to Edge Function
+            // For now, disable teacher creation in SetupWizard
+            setMsg('Teacher creation requires server-side implementation (Edge Function). Please use User Management instead.');
         } catch (e: any) { setMsg('Error: ' + e.message); }
         finally { setSaving(false); }
     };

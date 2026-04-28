@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { CalendarDays, Clock, MapPin, Download, Printer, ChevronLeft, ChevronRight, List, LayoutGrid, Timer } from 'lucide-react';
+import { toCsv, downloadCsv } from '../../utils/csv';
 import '../admin/Dashboard.css';
 
 interface ScheduleItem {
@@ -70,15 +71,19 @@ const TeacherSchedule: React.FC = () => {
     };
 
     const exportCSV = () => {
-        const header = 'Day,Start Time,End Time,Subject Code,Subject Name,Room,Section\n';
-        const rows = sorted.map(s =>
-            `${s.day_of_week},${s.start_time?.slice(0, 5)},${s.end_time?.slice(0, 5)},"${(s.subject as any)?.code || ''}","${(s.subject as any)?.name || ''}","${(s.room as any)?.name || ''}","${(s.section as any)?.name || ''}"`
-        ).join('\n');
-        const blob = new Blob([header + rows], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url;
-        a.download = `schedule_${profile?.full_name?.replace(/\s+/g, '_') || 'teacher'}.csv`;
-        a.click(); URL.revokeObjectURL(url);
+        const csv = toCsv(
+            ['Day', 'Start Time', 'End Time', 'Subject Code', 'Subject Name', 'Room', 'Section'],
+            sorted.map(s => [
+                s.day_of_week,
+                s.start_time?.slice(0, 5),
+                s.end_time?.slice(0, 5),
+                (s.subject as any)?.code || '',
+                (s.subject as any)?.name || '',
+                (s.room as any)?.name || '',
+                (s.section as any)?.name || '',
+            ]),
+        );
+        downloadCsv(`schedule_${profile?.full_name?.replace(/\s+/g, '_') || 'teacher'}`, csv);
     };
 
     return (

@@ -22,7 +22,7 @@ const ThemeToggle: React.FC = () => {
     return (
         <button
             onClick={toggleTheme}
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             style={{
                 background: 'none',
                 border: 'none',

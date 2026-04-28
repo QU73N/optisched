@@ -7,8 +7,8 @@ export const ADMIN_ROLES: UserRole[] = ['admin', 'power_admin', 'system_admin', 
 export const POWER_ADMIN_ROLES: UserRole[] = ['admin', 'power_admin'];
 
 export const ROLE_DISPLAY_NAMES: Record<UserRole, string> = {
-    admin: 'Power User',
-    power_admin: 'Power User',
+    admin: 'Power Admin',
+    power_admin: 'Power Admin',
     system_admin: 'System Administrator',
     schedule_admin: 'Schedule Administrator',
     schedule_manager: 'Schedule Manager',
@@ -18,7 +18,7 @@ export const ROLE_DISPLAY_NAMES: Record<UserRole, string> = {
 
 // Roles visible in role selectors (deduplicated: admin treated as power_admin)
 export const SELECTABLE_ROLE_DISPLAY: { value: UserRole; label: string }[] = [
-    { value: 'power_admin', label: 'Power User' },
+    { value: 'power_admin', label: 'Power Admin' },
     { value: 'system_admin', label: 'System Administrator' },
     { value: 'schedule_admin', label: 'Schedule Administrator' },
     { value: 'schedule_manager', label: 'Schedule Manager' },

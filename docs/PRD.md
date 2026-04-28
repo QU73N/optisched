@@ -3,9 +3,13 @@
 ## Document Information
 
 - **Product Name:** OptiSched
-- **Document Version:** 1.0
-- **Last Updated:** April 17, 2026
-- **Status:** Draft
+- **Document Version:** 1.2
+- **Last Updated:** April 28, 2026
+- **Status:** Draft (Board Review Ready)
+
+### Changelog
+- **1.2 (2026-04-28):** Finalized comprehensive tab structure per role with grouped sidebar sections. Added role-rank hierarchy enforcement, user activity logging, three-tier permission overrides (global → role → per-user), lockout-proof Power Admin design, and board-defensible rationale for each governance decision.
+- **1.1 (2026-04-28):** Expanded roles from 5 to 6 (split "Administrator" into System Admin and Schedule Admin). Added Permission Rules Engine concept. Added tab matrix and per-role dashboard content specifications. Added role-data-access table.
 
 ---
 
@@ -33,13 +37,31 @@ The product should feel like a serious institutional tool, not a toy. It should 
 
 ## 3. Target Users
 
-| Role | Description |
-|------|-------------|
-| **Power Admin** | Emergency-only system authorities. Reserved for security incidents, recovery, or critical overrides. |
-| **Administrator** | Approval authorities. They review schedule manager output, edit schedules when necessary, and approve schedules before they are sent to users. |
-| **Schedule Manager** | Build schedules. They input teachers, subjects, rooms, sections, and teacher roles. They generate schedules, edit them manually, manage sharing, and submit schedules for approval. |
-| **Teacher** | Users who only receive approved schedules and can only view their own data. |
-| **Student** | Users who only receive approved schedules and can only view their own data. |
+OptiSched supports **6 distinct roles**. Roles are hierarchical in trust level but not all roles share the same domain of authority.
+
+| # | Role | Domain | Description |
+|---|------|--------|-------------|
+| 1 | **Power Admin** | Security & recovery | Emergency-only system authority. Full override, audit log access, can impersonate. Inherits every System Admin power. |
+| 2 | **System Admin** | Access governance & system health | Creates accounts, monitors system, configures the **Permission Rules Engine** that shapes what every other role can see or do. Does not approve or edit schedules. |
+| 3 | **Schedule Admin** | Approval & review | Reviews Schedule Manager output, approves or rejects schedules, can edit any schedule, can lock versions. Cannot manage users or system rules. |
+| 4 | **Schedule Manager** | Schedule construction | Builds and manages teachers, rooms, subjects, sections, teacher roles. Generates schedules, edits manually, submits for approval (or publishes directly if Rules Engine allows). |
+| 5 | **Teacher** | Personal operations | Views own approved schedule, workload stats, submits schedule change requests, messages admins. Can optionally hold additional roles (Schedule Manager or Schedule Admin). |
+| 6 | **Student** | View-only | Views own and section-level approved schedules, upcoming classes, breaks, announcements. No multi-role. |
+
+### 3.1 Multi-Role Support
+- A **Teacher** may additionally hold `schedule_manager` or `schedule_admin` role. When this happens, the sidebar exposes the extra tabs, but their primary dashboard remains the Teacher dashboard unless they navigate explicitly.
+- **Students** cannot have additional roles.
+- **Admin-tier roles** (Power Admin, System Admin, Schedule Admin, Schedule Manager) cannot be added on top of each other; each is a single primary role.
+
+### 3.2 Permission Rules Engine
+System Admins configure runtime permission rules stored in a `system_rules` table. Example rules:
+- `teachers_can_see_student_schedules` : boolean
+- `schedule_managers_require_approval` : boolean (if `false`, managers may publish directly)
+- `students_can_see_teacher_names` : boolean
+- `teachers_can_message_admins` : boolean
+- `per_user_overrides` : JSONB keyed by user ID for granular overrides
+
+All dashboards and data queries must consult the Rules Engine before rendering or fetching sensitive cross-role data. Rules Engine changes are audit-logged.
 
 ---
 
@@ -93,38 +115,80 @@ Blue academic family with colors like:
 ## 6. Roles and Permissions
 
 ### 6.1 Power Admin
-- Access to everything
-- Can override schedules
-- Can edit any data
-- Can inspect logs
-- Can recover systems
-- Can handle emergencies
+- Full access to everything System Admin can do, plus:
+- Can override or unlock any schedule regardless of approval state
+- Can inspect full audit logs
+- Can impersonate (with logging) for debugging
+- Can recover locked systems, reset credentials in emergencies
+- Intended for security incidents only — not routine use
 
-### 6.2 Administrator
-- Can approve schedules
-- Can manually edit schedules
-- Can lock and unlock schedule versions
-- Can review schedule manager work
+### 6.2 System Admin
+- Can create, edit, deactivate user accounts
+- Configures the Permission Rules Engine (§3.2)
+- Monitors system health (uptime, DB health, active sessions)
+- Posts broadcast announcements
+- Cannot approve or edit schedules
+- Cannot access Power Admin audit overrides
 
-### 6.3 Schedule Manager
-- Can create and manage teachers, rooms, subjects, sections, teacher roles, and schedules
-- Can generate schedules
-- Can manually edit schedules
-- Can share elements
-- Can mark elements public or private
+### 6.3 Schedule Admin
+- Reviews schedules submitted by Schedule Managers
+- Approves, rejects, or edits schedules before publication
+- Locks/unlocks schedule versions
+- Cannot manage users or Rules Engine
+- Receives Teacher schedule change requests and resolves them
 
-### 6.4 Teachers
-- Can view only their own schedules
-- Can receive notifications
-- Cannot create schedules
+### 6.4 Schedule Manager
+- Creates and manages teachers, rooms, subjects, sections, teacher roles
+- Generates schedules (full or partial regeneration)
+- Manually edits draft schedules
+- Submits for approval (or publishes directly if Rules Engine allows)
+- Shares elements; marks public/private
+- Cannot approve own output unless Rules Engine grants direct-publish
 
-### 6.5 Students
-- Can view only their own schedules
-- Can view their assigned section schedules
-- Cannot edit schedules
+### 6.5 Teachers
+- Views only their own approved schedules
+- Views personal workload stats (weekly hours, utilization vs max)
+- Submits schedule change requests to Schedule Admin
+- Messages admins (if Rules Engine allows)
+- Updates teaching preferences
+- May hold additional `schedule_manager` or `schedule_admin` role
 
-### 6.6 Approval Authority
-- Only Administrators and Power Admins can finalize or override schedules
+### 6.6 Students
+- Views own and assigned-section approved schedules
+- Views upcoming classes, breaks, announcements
+- Cannot edit anything
+- Cannot hold additional roles
+
+### 6.7 Approval Authority
+- Only Schedule Admin and Power Admin can finalize schedules
+- System Admin has no approval power (separation of concerns)
+
+### 6.8 Tab Access Matrix
+
+Legend: ● = full access · ◐ = view-only · — = no access
+
+| Tab / Feature          | Power Admin | System Admin | Schedule Admin | Schedule Manager | Teacher | Student |
+|------------------------|:---:|:---:|:---:|:---:|:---:|:---:|
+| Dashboard              | ● | ● | ● | ● | ● | ● |
+| Audit Logs             | ● | — | — | — | — | — |
+| System Rules (Engine)  | ● | ● | — | — | — | — |
+| Users (CRUD)           | ● | ● | — | — | — | — |
+| System Health          | ● | ● | — | — | — | — |
+| Approvals              | ● | — | ● | — | — | — |
+| Schedules (edit)       | ● | ◐ | ● | ● own drafts | own | section+own |
+| Data (teachers/rooms/subjects/sections) | ● | ◐ | ◐ | ● | — | — |
+| Generate               | ● | — | — | ● | — | — |
+| Conflicts              | ● | ◐ | ● | ● | — | — |
+| Faculty Load           | ● | ◐ | ◐ | ● | own | — |
+| Change Requests (inbox)| ● | — | ● | — | — | — |
+| My Requests            | — | — | — | — | ● | — |
+| Preferences            | — | — | — | — | ● | — |
+| Announcements (post)   | ● | ● | ● | — | — | — |
+| Announcements (view)   | ● | ● | ● | ● | ● | ● |
+| Messages               | ● | ● | ● | ● | ● | — |
+| Tasks                  | ● | ● | — | — | — | — |
+| OptiBot (AI)           | ● | ● | ● | ● | ● | ● |
+| Settings               | ● | ● | ● | ● | ● | ● |
 
 ---
 
@@ -407,30 +471,52 @@ Blue academic family with colors like:
 
 ## 18. Dashboard Experience
 
+There are **6 dedicated dashboards**, one per role. Each dashboard only queries and renders data its role is allowed to see. Every stat and graph must be **accurate** (reflect real DB state) and **professionally presented** (consistent typography hierarchy, calm color palette, clear empty states, accessible labels).
+
 ### 18.1 Power Admin Dashboard
-- Expose emergency and system-wide controls
+- **Stats:** Total users (all roles), active sessions, DB health indicator, unresolved critical conflicts, pending approvals across system, failed logins (24h), audit events (24h)
+- **Graphs:** System activity trend (7d), user role distribution (donut), audit event volume trend (14d)
+- **Lists:** Recent audit log entries, active incidents, recent Power Admin actions, impersonation history
+- **Actions:** Emergency override panel, unlock schedule, impersonate user, force password reset
 
-### 18.2 Administrator Dashboard
-- Focus on approval, editing, version control, and review
+### 18.2 System Admin Dashboard
+- **Stats:** Total users by role, new signups (7d), pending password reset requests, unread messages, rules engine changes (7d)
+- **Graphs:** User role distribution (donut), signup trend (30d), system uptime/activity (7d)
+- **Lists:** Recent user registrations, pending password resets, unread system messages, recent rules engine changes
+- **Actions:** Create user, edit system rules, broadcast announcement, resolve password reset
 
-### 18.3 Schedule Manager Dashboard
-- Focus on data creation, schedule generation, conflict review, optimization, and submission
+### 18.3 Schedule Admin Dashboard
+- **Stats:** Pending approvals, published schedules this term, open conflicts in submitted schedules, teacher change requests pending
+- **Graphs:** Approval funnel last 30 days (submitted/approved/rejected), conflicts trend (14d) filtered to submitted+published only, room load (top 8)
+- **Lists:** Schedules awaiting approval (sorted by submission date), teacher schedule change requests, recent approval decisions
+- **Actions:** Approve, reject, edit, post announcement, resolve change request
 
-### 18.4 Teacher Dashboard
-- Show personal schedule
-- Show room info
-- Show workload
-- Show notifications
+### 18.4 Schedule Manager Dashboard
+- **Stats:** My drafts, my submitted (awaiting approval), my approved (last 7d), conflicts in my drafts, teachers/rooms/sections/subjects totals
+- **Graphs:** My draft conflicts by type, teacher load balance (from my drafts), load by day (from my drafts)
+- **Lists:** My draft schedules, my recent submissions + feedback from Schedule Admin, conflicts in my drafts
+- **Actions:** New schedule/generate, new subject/teacher/room/section, submit for approval
 
-### 18.5 Student Dashboard
-- Show personal schedule
-- Show section schedule
-- Show room info
-- Show notifications
+### 18.5 Teacher Dashboard
+- **Stats:** Classes today, weekly hours, max hours (from teacher record), utilization percentage, pending change requests, unread admin messages
+- **Graphs:** Weekly load hours by day, subject distribution (from published schedules)
+- **Lists:** Today's classes (with live "now" indicator), next class, upcoming events, announcements, recent admin messages
+- **Actions:** Submit schedule change request, message admin, update preferences
 
-### 18.6 Dashboard Principles
-- Each dashboard should be role-based
-- Should not expose functions outside the role
+### 18.6 Student Dashboard
+- **Stats:** Classes today, next class countdown, next break, weekly class count
+- **Graphs:** Weekly schedule load (hours by day)
+- **Lists:** Today's classes, upcoming events, announcements (for section + global)
+- **Actions:** Open OptiBot, view full schedule
+
+### 18.7 Dashboard Principles
+- Each dashboard is role-based; never expose widgets for functions outside the role
+- All schedule-related stats filter by `status='published'` unless the role is the creator of drafts
+- All counts use role-filtered queries (e.g., "Teachers" stat uses `profiles WHERE role='teacher'`)
+- Conflict counts filter by `is_resolved=false`
+- Charts must render with defined min-height to prevent Recharts collapse in narrow grid cells
+- Consult Permission Rules Engine for cross-role visibility before querying
+- Frontend role gating is cosmetic only; backend RLS is the source of truth
 
 ---
 
@@ -563,11 +649,287 @@ The product is acceptable when:
 - Light Blue: `#4988C4`
 - Pale Blue: `#BDE8F5`
 
-### 26.2 Key Terms
+### 26.2 Known Schema Debt (to reconcile)
+- `profiles.role` CHECK currently `'admin'|'teacher'|'student'` in `database_schema.sql`. Live DB must allow `power_admin`, `system_admin`, `schedule_admin`, `schedule_manager`. A new migration SQL file should extend the CHECK (per rule, existing SQL is not edited; new file will be created).
+- `custom_events.creator_role` CHECK only allows `'admin'|'teacher'`. Should be extended to include all admin sub-roles + schedule_manager.
+- `schedules.status` CHECK currently `'draft'|'published'|'archived'`. Approval workflow (§15) needs an additional `'submitted'` state to distinguish "awaiting approval" from "draft".
+
+### 26.3 Required New Tables (for this revision)
+- `system_rules` — Permission Rules Engine storage
+- `audit_logs` — Power Admin audit trail
+- `schedule_versions` — versioning (already implied but not defined in current schema)
+
+### 26.4 Key Terms
 - **Hard Constraint:** A rule that must never be violated
-- **Soft Constraint:** An optimization goal that the scheduler tries to satisfy as much as possible
-- **Split Session:** A subject that is divided into multiple time blocks within a week
-- **Section Hierarchy:** A folder-style grouping of sections with weights for scheduling priority
-- **Teacher Role:** Defines max hours per day/week and load rules for a teacher
-- **Special Room:** A room with specific requirements, prioritized for special subjects
-- **Special Subject:** A subject that requires special room accommodations
+- **Soft Constraint:** An optimization goal
+- **Role Rank:** Numeric tier (1–6) used for hierarchical authorization
+- **Rules Engine:** Runtime configurable permission system (global/role/per-user)
+- **Activity Log:** Per-user action trail for troubleshooting and security
+- **Audit Log:** System-wide privileged-action trail (Power Admin only)
+
+---
+
+## 27. Governance Model (Board Reference)
+
+This section formalizes every authority decision so each can be defended in board review. Every choice has a stated **purpose**, **risk it mitigates**, and **fallback**.
+
+### 27.1 Role Rank Hierarchy
+
+| Rank | Role | Headcount | Purpose |
+|:---:|------|-----------|---------|
+| 6 | Power Admin | 1 (system developer) | Last-resort recovery, vendor support, emergency override |
+| 5 | System Admin | 1–3 institutional IT/Registrar | Account governance, system rules, troubleshooting |
+| 4 | Schedule Admin | 1–4 academic deans/heads | Approval authority for schedules |
+| 3 | Schedule Manager | 3–10 program coordinators | Schedule construction |
+| 2 | Teacher | 30+ | Personal operations |
+| 1 | Student | 500+ | View-only |
+
+**Authority rule:** A user can only modify another user whose rank is *strictly lower*. Equal-rank users cannot edit each other. No user can edit themselves administratively (only personal Settings). This is enforced in **both** RLS and UI.
+
+**Why this matters for the board:** It makes privilege escalation provably impossible at the database level. A Schedule Admin cannot promote themselves to Power Admin even if they discover a UI bug, because Postgres rejects the row update.
+
+### 27.2 Power Admin Design — Lockout-Proof
+
+The Power Admin is a single user (the system developer/vendor), not an institutional staff member. Design choices:
+
+- **Cannot be deactivated through the UI.** Hard-coded RLS policy prevents any role from updating `profiles` rows where target rank ≥ 6.
+- **Cannot be demoted.** Same RLS principle — `profiles_role_check` policy rejects role downgrades on Power Admin rows.
+- **Cannot be deleted.** A `BEFORE DELETE` trigger raises an exception when target is Power Admin.
+- **Recovery path exists.** If the Power Admin loses MFA, a service-account credential (kept by vendor in cold storage) can restore access via direct DB. This is documented and audit-logged.
+- **Power Admin actions are still logged.** Even though Power Admin can override anything, every override is recorded in `audit_logs` with full context.
+
+**Board defense:** "What if the Power Admin is compromised?" — Answer: All Power Admin actions are logged in append-only `audit_logs`, retention 730+ days, readable by Power Admin only. Compromise is detectable post-hoc; before that, MFA + IP allowlist + session timeouts mitigate it. The institution can rotate to a new Power Admin in cooperation with the vendor (manual DB key rotation).
+
+### 27.3 Three-Tier Permission Overrides
+
+Lookup precedence (most-specific wins):
+1. **Per-user override** (`user_permission_overrides` table)
+2. **Role override** (`system_rules.role_overrides` JSONB)
+3. **Global rule** (`system_rules.rule_value`)
+4. **Hardcoded default** (in `usePermissions` fallback)
+
+**Why three tiers:** Institutions need both blanket policy ("teachers can message admins") and exception handling ("…except this teacher under investigation"). Two tiers force ugly workarounds; four tiers add no clarity.
+
+**Who can edit what:**
+- **Power Admin:** Edits any rule at any tier for any user except themselves.
+- **System Admin:** Edits global, role, and per-user overrides — but cannot edit a Power Admin's per-user overrides, cannot edit themselves, cannot edit any same-rank System Admin.
+- **Other roles:** Read-only access to global rules (so the UI can self-gate); cannot edit anything.
+
+### 27.4 Activity Logging — Board-Defensible Privacy
+
+Two log streams, deliberately separated:
+
+**`user_activity_logs`** — granular per-user trail for troubleshooting:
+- Login attempts (success + failure with reason)
+- Page navigation
+- Database mutations (insert/update/delete)
+- RLS denials (security signal)
+- AI prompts (OptiBot interactions)
+- Failed validations (UI errors)
+
+**Visibility:** Power Admin and System Admin only. Schedule Admin / Schedule Manager / Teacher / Student cannot view any activity logs (theirs or others'). A user may export their *own* activity log for personal review (GDPR-style data portability).
+
+**`audit_logs`** — system-wide privileged-action trail:
+- Role changes
+- Rule edits
+- Schedule approvals/rejections
+- Manual overrides (Power Admin)
+- Account creation/deletion
+- Permission override grants
+
+**Visibility:** Power Admin only.
+
+**Why two streams:** Activity logs are high-volume operational data needed for support. Audit logs are low-volume integrity-of-record data needed for compliance. Mixing them makes both worse — operational queries swamp the audit table, and audit retention costs balloon. Separating them lets us tune retention and access independently.
+
+**Retention defaults:**
+- Activity logs: 90 days (configurable via `activity_log_retention_days` rule)
+- Audit logs: 730 days (configurable via `audit_log_retention_days` rule)
+
+**Board defense:** "Doesn't this surveil teachers?" — Answer: Activity logs are operational data for troubleshooting, not performance evaluation. Logs are technical (page views, DB queries) — not content (chat messages already require RLS). Access is restricted to two roles with documented duty. Teachers can export their own logs to verify what is collected. Logs auto-purge after 90 days. This is industry-standard for any SaaS handling academic records (FERPA-aligned).
+
+### 27.5 Comprehensive Tab Map (Final)
+
+Sidebar uses **grouped sections** with collapsible headers. Each role sees only the groups and tabs relevant to it. Badge counts (pending approvals, unread messages, conflicts) appear inline.
+
+#### Power Admin (full control, all groups)
+
+**Overview**
+- Dashboard
+- Live Activity Feed (real-time stream of system actions)
+
+**Operations**
+- Schedules · Approvals · Generate · Conflicts · Faculty Load · Data
+
+**Governance**
+- Users (CRUD all roles except self)
+- System Rules (global + role + per-user overrides)
+- Audit Log (privileged actions, all users)
+- User Activity (per-user troubleshooting trail)
+- Sessions (active sessions, force-logout)
+- System Health (DB, RLS state, API latency)
+- Backup & Recovery (snapshots, point-in-time restore)
+- Emergency Override (force-publish, force-archive, unlock)
+- Feature Flags (beta features)
+
+**Communication**
+- Announcements · Messages · Broadcasts · OptiBot
+
+**Personal**
+- Tasks · My Settings
+
+#### System Admin
+
+**Overview**
+- Dashboard
+
+**Governance**
+- Users (CRUD ranks 1–4; view-only for Power Admin)
+- System Rules (edit global + role + per-user overrides for ranks 1–4)
+- User Activity (per-user troubleshooting trail for ranks 1–4)
+- Sessions (force-logout for ranks 1–4)
+- System Health
+- Account Lifecycle (bulk import/export, deactivation)
+- Department & Program Setup (institutional structure)
+- Theme & Branding (logo, colors, terminology)
+
+**Communication**
+- Announcements · Messages · Broadcasts · OptiBot
+
+**Personal**
+- Tasks · My Settings
+
+> Hidden from System Admin: Audit Log (Power-only), Backup & Recovery, Emergency Override, Feature Flags. Rationale: these tools mutate or expose data at a level only the system vendor should reach. Limiting them prevents an institutional admin from accidentally destroying records.
+
+#### Schedule Admin
+
+**Overview**
+- Dashboard
+
+**Operations**
+- Approvals (queue with inline approve/reject)
+- Schedules (view all, edit any)
+- Schedule History (versions, diff, rollback)
+- Conflicts
+- Change Requests (from teachers)
+- Faculty Load (read-only)
+
+**Communication**
+- Announcements (post + read) · Messages · OptiBot
+
+**Personal**
+- My Settings
+
+> Schedule Admin cannot view activity logs or manage users — this preserves separation of concerns. Their authority is over schedules; account governance lives with System Admin.
+
+#### Schedule Manager
+
+**Overview**
+- Dashboard
+
+**Operations**
+- My Schedules (drafts, submitted, approved)
+- Generate
+- Data (Teachers, Rooms, Subjects, Sections, Teacher Roles)
+- Conflicts (in own drafts)
+- Faculty Load
+- Sharing (public/private elements)
+- Templates (save/reuse)
+
+**Communication**
+- Messages · OptiBot
+
+**Personal**
+- My Settings
+
+#### Teacher
+
+**Overview**
+- Dashboard
+
+**Personal**
+- My Schedule
+- My Workload (hours, utilization, projection)
+- My Preferences (availability)
+- My Requests (change request history)
+- My Sections (students/sections I teach)
+
+**Communication**
+- Messages (with admins, with peers if rule allows)
+- Announcements (read)
+- OptiBot
+
+**Personal Settings**
+- My Settings (theme, password, notifications, export my activity log)
+
+> Teachers with multi-role pick up the relevant admin tabs automatically.
+
+#### Student
+
+**Overview**
+- Dashboard
+
+**Personal**
+- My Schedule
+- Section Schedule (if rule allows)
+- Upcoming (next class, next break, events)
+
+**Communication**
+- Announcements (read)
+- OptiBot
+- Help / Contact (guided form, creates a tagged message)
+
+**Personal Settings**
+- My Settings (theme, password, notifications)
+
+### 27.6 Tab-Naming Principles
+
+Every tab name was chosen by these rules — board can verify clarity:
+
+1. **Verb or noun, never both.** "Generate" not "Generate Schedule" (action implied).
+2. **Personal prefix "My"** for own data. Reduces confusion (My Schedule vs Schedules).
+3. **Plural nouns** for collections (Users, Schedules, Conflicts).
+4. **Singular nouns** for single workspaces (Dashboard, Generate, Audit Log).
+5. **No acronyms** in sidebar. "OptiBot" is a product name, allowed.
+6. **6–14 characters** target length so the sidebar stays narrow.
+
+### 27.7 Sidebar UX Improvements
+
+1. **Grouped sections** with a small group label (e.g., "Operations") and 4–8 items beneath.
+2. **Collapsible groups** — chevron toggles; state persisted per user in `localStorage`.
+3. **Search** at top of sidebar (⌘K opens it). Fuzzy-finds tabs and pages.
+4. **Pinned tabs** — user can star up to 5 tabs that stick to top above groups.
+5. **Recent** auto-list shows last 3 visited (between Pinned and Groups).
+6. **Badge counts** — Approvals (3), Messages (12), Conflicts (1) shown inline.
+7. **Compact (icon-only) mode** for narrow viewports; hover reveals labels.
+8. **Active route highlight** with left accent bar (4px), not full-row tint.
+9. **Keyboard nav:** ⌘1–⌘9 jumps to first 9 tabs; arrow keys navigate within group.
+
+### 27.8 Design System Tokens (v1.2)
+
+Selected via `ui-ux-pro-max` skill (academic dashboard, professional, secure):
+
+- **Pattern:** Data-Dense Dashboard
+- **Heading font:** Crimson Pro (academic, scholarly serif)
+- **Body font:** Atkinson Hyperlegible (highly readable, accessible)
+- **Primary:** `#0F2854` (existing OptiSched dark blue)
+- **Secondary:** `#1C4D8D` (existing medium blue)
+- **Accent CTA:** `#22C55E` (success green for primary actions)
+- **Negative:** `#EF4444` (error red for conflicts)
+- **Warning:** `#F59E0B` (amber for pending state)
+- **Effects:** Hover tooltips, smooth row highlighting, 150–250ms transitions
+- **Avoid:** ornate decorations, excessive shadows, no-filter tables, layout-shifting hover scales
+
+### 27.9 Security Posture (Board Summary)
+
+| Risk | Mitigation | Residual |
+|------|-----------|----------|
+| Privilege escalation | RLS rank checks on `profiles` updates | Low — DB-enforced |
+| Compromised admin account | Activity logs + audit logs + session timeout (60min default) + MFA option | Low — detectable + recoverable |
+| Data leakage to wrong role | RLS policies on every sensitive table; rules engine adds per-rule gating | Low — defense in depth |
+| Lockout (lost admin) | Power Admin cannot be locked out by RLS design; vendor recovery path | Very low |
+| SQL injection | All queries via Supabase client (parameterized); no raw string concatenation | Very low |
+| XSS | React auto-escapes output; sanitize Markdown rendering | Low |
+| Insider threat (malicious admin) | All privileged actions logged; rank prevents same-tier override | Medium — depends on log review cadence |
+| Schedule data tampering | Versioning + audit_logs + RLS edit gate | Low |
+
+**Recommendation for board:** quarterly review of `audit_logs` by an independent stakeholder (not the System Admin) to catch insider threat patterns. This requires no engineering change; it's a process control.

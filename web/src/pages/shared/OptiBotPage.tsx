@@ -102,7 +102,7 @@ const OptiBotPage: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    <button className="reset-btn" onClick={resetChat} title="Reset conversation">
+                    <button className="reset-btn" onClick={resetChat} aria-label="Reset conversation">
                         <RotateCcw size={16} />
                     </button>
                 </div>

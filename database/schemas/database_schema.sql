@@ -38,6 +38,36 @@ CREATE TABLE public.announcements (
   CONSTRAINT announcements_pkey PRIMARY KEY (id),
   CONSTRAINT announcements_author_id_fkey FOREIGN KEY (author_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.audit_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  actor_id uuid,
+  actor_role text,
+  action text NOT NULL,
+  target_table text,
+  target_id uuid,
+  details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ip_address inet,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  prev_hash text,
+  row_hash text,
+  CONSTRAINT audit_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT audit_logs_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.backup_jobs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  kind text NOT NULL CHECK (kind = ANY (ARRAY['full'::text, 'schema'::text, 'data'::text, 'manual'::text])),
+  status text NOT NULL DEFAULT 'queued'::text CHECK (status = ANY (ARRAY['queued'::text, 'running'::text, 'succeeded'::text, 'failed'::text, 'cancelled'::text])),
+  note text,
+  file_path text,
+  size_bytes bigint,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  started_at timestamp with time zone,
+  finished_at timestamp with time zone,
+  error_message text,
+  CONSTRAINT backup_jobs_pkey PRIMARY KEY (id),
+  CONSTRAINT backup_jobs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.chat_messages (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   user_id uuid NOT NULL,
@@ -47,6 +77,19 @@ CREATE TABLE public.chat_messages (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT chat_messages_pkey PRIMARY KEY (id),
   CONSTRAINT chat_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.client_error_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  url text NOT NULL,
+  message text NOT NULL,
+  stack text,
+  user_agent text,
+  component_stack text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  metadata jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT client_error_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT client_error_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.conflicts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -74,11 +117,39 @@ CREATE TABLE public.custom_events (
   end_time time without time zone,
   created_by uuid,
   creator_name text,
-  creator_role text CHECK (creator_role = ANY (ARRAY['admin'::text, 'teacher'::text])),
+  creator_role text CHECK (creator_role = ANY (ARRAY['admin'::text, 'power_admin'::text, 'system_admin'::text, 'schedule_admin'::text, 'schedule_manager'::text, 'teacher'::text])),
   created_at timestamp with time zone DEFAULT now(),
   room text,
   CONSTRAINT custom_events_pkey PRIMARY KEY (id),
   CONSTRAINT custom_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.emergency_overrides (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  kind text NOT NULL CHECK (kind = ANY (ARRAY['disable_rate_limit'::text, 'disable_idle_timeout'::text, 'bypass_approval'::text, 'maintenance_mode'::text, 'custom'::text])),
+  reason text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active boolean NOT NULL DEFAULT true,
+  activated_by uuid,
+  activated_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone,
+  deactivated_by uuid,
+  deactivated_at timestamp with time zone,
+  CONSTRAINT emergency_overrides_pkey PRIMARY KEY (id),
+  CONSTRAINT emergency_overrides_activated_by_fkey FOREIGN KEY (activated_by) REFERENCES public.profiles(id),
+  CONSTRAINT emergency_overrides_deactivated_by_fkey FOREIGN KEY (deactivated_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.feature_flags (
+  key text NOT NULL,
+  label text NOT NULL,
+  description text,
+  enabled boolean NOT NULL DEFAULT false,
+  rollout_pct integer NOT NULL DEFAULT 0 CHECK (rollout_pct >= 0 AND rollout_pct <= 100),
+  audience text NOT NULL DEFAULT 'all'::text CHECK (audience = ANY (ARRAY['all'::text, 'admin'::text, 'teacher'::text, 'student'::text, 'beta'::text])),
+  updated_by uuid,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT feature_flags_pkey PRIMARY KEY (key),
+  CONSTRAINT feature_flags_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.password_reset_requests (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -93,7 +164,7 @@ CREATE TABLE public.password_reset_requests (
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
   email text NOT NULL,
-  role text NOT NULL CHECK (role = ANY (ARRAY['admin'::text, 'teacher'::text, 'student'::text])),
+  role text NOT NULL CHECK (role = ANY (ARRAY['admin'::text, 'power_admin'::text, 'system_admin'::text, 'schedule_admin'::text, 'schedule_manager'::text, 'teacher'::text, 'student'::text])),
   full_name text NOT NULL,
   avatar_url text,
   department text,
@@ -104,6 +175,14 @@ CREATE TABLE public.profiles (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.rate_limit_buckets (
+  action text NOT NULL,
+  subject text NOT NULL,
+  window_start timestamp with time zone NOT NULL DEFAULT now(),
+  count integer NOT NULL DEFAULT 0,
+  last_hit timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT rate_limit_buckets_pkey PRIMARY KEY (action, subject)
 );
 CREATE TABLE public.room_issues (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -156,14 +235,21 @@ CREATE TABLE public.schedules (
   end_time time without time zone NOT NULL,
   semester text NOT NULL DEFAULT '1st Semester'::text,
   academic_year text NOT NULL DEFAULT '2025-2026'::text,
-  status text NOT NULL DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'published'::text, 'archived'::text])),
+  status text NOT NULL DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'submitted'::text, 'published'::text, 'archived'::text, 'rejected'::text])),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  created_by uuid,
+  submitted_at timestamp with time zone,
+  approved_by uuid,
+  approved_at timestamp with time zone,
+  rejection_reason text,
   CONSTRAINT schedules_pkey PRIMARY KEY (id),
   CONSTRAINT schedules_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
   CONSTRAINT schedules_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
   CONSTRAINT schedules_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id),
-  CONSTRAINT schedules_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id)
+  CONSTRAINT schedules_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id),
+  CONSTRAINT schedules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.sections (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -188,6 +274,19 @@ CREATE TABLE public.subjects (
   teacher_id uuid,
   CONSTRAINT subjects_pkey PRIMARY KEY (id),
   CONSTRAINT subjects_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id)
+);
+CREATE TABLE public.system_rules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  rule_key text NOT NULL UNIQUE,
+  rule_value jsonb NOT NULL DEFAULT 'true'::jsonb,
+  description text,
+  category text NOT NULL DEFAULT 'general'::text,
+  updated_by uuid,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  role_overrides jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT system_rules_pkey PRIMARY KEY (id),
+  CONSTRAINT system_rules_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.teacher_messages (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -227,4 +326,52 @@ CREATE TABLE public.teachers (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT teachers_pkey PRIMARY KEY (id),
   CONSTRAINT teachers_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.user_activity_logs (
+  id bigint NOT NULL DEFAULT nextval('user_activity_logs_id_seq'::regclass),
+  user_id uuid,
+  action_type text NOT NULL,
+  resource text,
+  resource_id uuid,
+  details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  session_id text,
+  ip_address inet,
+  user_agent text,
+  success boolean NOT NULL DEFAULT true,
+  error_message text,
+  duration_ms integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT user_activity_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT user_activity_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.user_activity_logs_archive (
+  id bigint NOT NULL DEFAULT nextval('user_activity_logs_id_seq'::regclass),
+  user_id uuid,
+  action_type text NOT NULL,
+  resource text,
+  resource_id uuid,
+  details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  session_id text,
+  ip_address inet,
+  user_agent text,
+  success boolean NOT NULL DEFAULT true,
+  error_message text,
+  duration_ms integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  archived_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT user_activity_logs_archive_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.user_permission_overrides (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  rule_key text NOT NULL,
+  rule_value jsonb NOT NULL,
+  reason text,
+  set_by uuid,
+  expires_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT user_permission_overrides_pkey PRIMARY KEY (id),
+  CONSTRAINT user_permission_overrides_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT user_permission_overrides_set_by_fkey FOREIGN KEY (set_by) REFERENCES public.profiles(id)
 );

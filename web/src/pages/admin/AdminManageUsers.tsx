@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { supabase, supabaseAdmin } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { CREATABLE_ROLES, ROLE_DISPLAY_NAMES, POWER_ADMIN_ROLES, SELECTABLE_ROLE_DISPLAY, TEACHER_ADDABLE_ROLES } from '../../types/database';
 import type { UserRole } from '../../types/database';
-import { UserPlus, Trash2, Search, X, Loader2, Edit3, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, Trash2, Search, X, Loader2, Edit3 } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 interface UserProfile {
@@ -50,15 +50,6 @@ const AdminManageUsers: React.FC = () => {
     const [editSaving, setEditSaving] = useState(false);
     const [editError, setEditError] = useState<string | null>(null);
     const [editAdditionalRoles, setEditAdditionalRoles] = useState<string[]>([]);
-
-    // Reset password
-    const [showResetModal, setShowResetModal] = useState(false);
-    const [resetUser, setResetUser] = useState<UserProfile | null>(null);
-    const [newPassword, setNewPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [resetting, setResetting] = useState(false);
-    const [resetError, setResetError] = useState<string | null>(null);
-    const [resetSuccess, setResetSuccess] = useState(false);
 
     const isSuperUser = POWER_ADMIN_ROLES.includes(currentRole as UserRole);
     const creatableRoles = currentRole ? (CREATABLE_ROLES[currentRole] || []) : [];
@@ -142,34 +133,17 @@ const AdminManageUsers: React.FC = () => {
         try {
             let userId: string | null = null;
 
-            if (supabaseAdmin) {
-                const { data, error } = await supabaseAdmin.auth.admin.createUser({
-                    email, password: newUser.password, email_confirm: true,
-                    user_metadata: { role: newUser.role, full_name: newUser.fullName },
-                });
-                if (error) {
-                    console.warn('Admin createUser failed, trying signUp fallback:', error.message);
-                    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                        email, password: newUser.password,
-                        options: { data: { role: newUser.role, full_name: newUser.fullName } },
-                    });
-                    if (signUpError) { setFormError(signUpError.message); setCreating(false); return; }
-                    userId = signUpData.user?.id || null;
-                } else {
-                    userId = data.user?.id || null;
-                }
-            } else {
-                const { data, error } = await supabase.auth.signUp({
-                    email, password: newUser.password,
-                    options: { data: { role: newUser.role, full_name: newUser.fullName } },
-                });
-                if (error) { setFormError(error.message); setCreating(false); return; }
-                userId = data.user?.id || null;
-            }
+            // NOTE: Service role operations moved to Edge Functions for security
+            // Using client-side signUp with user_metadata (requires RLS policies)
+            const { data, error } = await supabase.auth.signUp({
+                email, password: newUser.password,
+                options: { data: { role: newUser.role, full_name: newUser.fullName } },
+            });
+            if (error) { setFormError(error.message); setCreating(false); return; }
+            userId = data.user?.id || null;
 
             if (userId) {
                 await new Promise(r => setTimeout(r, 500));
-                const client = supabaseAdmin || supabase;
                 const profileData: any = {
                     id: userId, full_name: newUser.fullName, role: newUser.role, email,
                 };
@@ -185,7 +159,7 @@ const AdminManageUsers: React.FC = () => {
                 if (ADMIN_VARIANT_ROLES.includes(newUser.role)) {
                     if (newUser.department) profileData.department = newUser.department;
                 }
-                await client.from('profiles').upsert(profileData, { onConflict: 'id' });
+                await supabase.from('profiles').upsert(profileData, { onConflict: 'id' });
             }
 
             setShowCreateModal(false);
@@ -213,14 +187,8 @@ const AdminManageUsers: React.FC = () => {
         });
         setEditError(null);
         setShowEditModal(true);
-        // Load additional roles from auth user_metadata
-        if (supabaseAdmin) {
-            supabaseAdmin.auth.admin.getUserById(user.id).then(({ data }) => {
-                setEditAdditionalRoles((data?.user?.user_metadata?.additional_roles as string[]) || []);
-            }).catch(() => setEditAdditionalRoles([]));
-        } else {
-            setEditAdditionalRoles([]);
-        }
+        // NOTE: Loading additional_roles requires service role - move to Edge Function
+        setEditAdditionalRoles([]);
     };
 
     const handleEditSave = async () => {
@@ -228,30 +196,16 @@ const AdminManageUsers: React.FC = () => {
         setEditError(null);
         setEditSaving(true);
         try {
-            const client = supabaseAdmin || supabase;
+            // NOTE: Email changes and additional_roles require service role - move to Edge Function
             const updateData: any = {
                 full_name: editForm.full_name,
-                role: editForm.role, // Single valid enum value
+                role: editForm.role,
                 department: editForm.department || null,
                 program: editForm.program || null,
                 year_level: editForm.year_level ? parseInt(editForm.year_level) : null,
                 section: editForm.section || null,
             };
-            // Update email if changed
-            if (editForm.email !== editUser.email) {
-                updateData.email = editForm.email;
-                if (supabaseAdmin) {
-                    await supabaseAdmin.auth.admin.updateUserById(editUser.id, { email: editForm.email });
-                }
-            }
-            // Save additional roles in user_metadata
-            if (supabaseAdmin) {
-                const additionalToSave = editForm.role === 'teacher' ? editAdditionalRoles : [];
-                await supabaseAdmin.auth.admin.updateUserById(editUser.id, {
-                    user_metadata: { additional_roles: additionalToSave },
-                });
-            }
-            const { error } = await client.from('profiles').update(updateData).eq('id', editUser.id);
+            const { error } = await supabase.from('profiles').update(updateData).eq('id', editUser.id);
             if (error) throw error;
             setShowEditModal(false);
             fetchUsers();
@@ -262,46 +216,18 @@ const AdminManageUsers: React.FC = () => {
         }
     };
 
-    // ── RESET PASSWORD ──
-    const openResetModal = (user: UserProfile) => {
-        setResetUser(user);
-        setNewPassword('');
-        setResetError(null);
-        setResetSuccess(false);
-        setShowPassword(false);
-        setShowResetModal(true);
-    };
-
-    const handleResetPassword = async () => {
-        if (!resetUser || !newPassword) return;
-        if (newPassword.length < 8) { setResetError('Password must be at least 8 characters.'); return; }
-        setResetting(true);
-        setResetError(null);
-        try {
-            if (!supabaseAdmin) throw new Error('Service role key not configured. Cannot reset passwords.');
-            const { error } = await supabaseAdmin.auth.admin.updateUserById(resetUser.id, { password: newPassword });
-            if (error) throw error;
-            setResetSuccess(true);
-            setTimeout(() => { setShowResetModal(false); }, 1500);
-        } catch (err: any) {
-            setResetError(err?.message || 'Failed to reset password.');
-        } finally {
-            setResetting(false);
-        }
-    };
-
     // ── DELETE ──
     const handleDelete = async (user: UserProfile) => {
         if (['admin', 'power_admin'].includes(user.role)) {
-            alert('Cannot delete the Power User account.');
+            alert('Cannot delete the Power Admin account.');
             return;
         }
         if (!confirm(`Delete ${user.full_name || user.email}? This cannot be undone.`)) return;
         try {
-            if (supabaseAdmin) await supabaseAdmin.auth.admin.deleteUser(user.id);
-            const client = supabaseAdmin || supabase;
-            await client.from('teachers').delete().eq('profile_id', user.id);
-            await client.from('profiles').delete().eq('id', user.id);
+            // NOTE: Deleting auth user requires service role - move to Edge Function
+            // For now, only delete profile (auth user remains orphaned)
+            await supabase.from('teachers').delete().eq('profile_id', user.id);
+            await supabase.from('profiles').delete().eq('id', user.id);
             fetchUsers();
         } catch {
             alert('Failed to delete user.');
@@ -449,18 +375,13 @@ const AdminManageUsers: React.FC = () => {
                                         <div style={{ display: 'flex', gap: 4 }}>
                                             {isSuperUser && (
                                                 <>
-                                                    <button className="btn btn-ghost" style={{ padding: 6 }} title="Edit User" onClick={() => openEditModal(user)}>
+                                                    <button className="btn btn-ghost" style={{ padding: 6 }} aria-label={`Edit user ${user.full_name || user.email}`} onClick={() => openEditModal(user)}>
                                                         <Edit3 size={15} style={{ color: 'var(--accent-primary)' }} />
                                                     </button>
-                                                    {supabaseAdmin && (
-                                                        <button className="btn btn-ghost" style={{ padding: 6 }} title="Reset Password" onClick={() => openResetModal(user)}>
-                                                            <KeyRound size={15} style={{ color: '#f59e0b' }} />
-                                                        </button>
-                                                    )}
                                                 </>
                                             )}
                                             {!['admin', 'power_admin'].includes(user.role) && (
-                                                <button className="btn btn-ghost" style={{ padding: 6 }} title="Delete" onClick={() => handleDelete(user)}>
+                                                <button className="btn btn-ghost" style={{ padding: 6 }} aria-label={`Delete user ${user.full_name || user.email}`} onClick={() => handleDelete(user)}>
                                                     <Trash2 size={15} style={{ color: 'var(--accent-error)' }} />
                                                 </button>
                                             )}
@@ -482,7 +403,7 @@ const AdminManageUsers: React.FC = () => {
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Create New Account</h2>
-                            <button className="btn btn-ghost" onClick={() => setShowCreateModal(false)}><X size={20} /></button>
+                            <button className="btn btn-ghost" onClick={() => setShowCreateModal(false)} aria-label="Close modal"><X size={20} /></button>
                         </div>
                         <form onSubmit={handleCreate} className="modal-form">
                             {/* Role */}
@@ -522,7 +443,7 @@ const AdminManageUsers: React.FC = () => {
                             </div>
 
                             {formError && (
-                                <div className="login-error">{formError}</div>
+                                <div className="login-error" role="alert" aria-live="polite">{formError}</div>
                             )}
 
                             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={creating}>
@@ -539,7 +460,7 @@ const AdminManageUsers: React.FC = () => {
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Edit User</h2>
-                            <button className="btn btn-ghost" onClick={() => setShowEditModal(false)}><X size={20} /></button>
+                            <button className="btn btn-ghost" onClick={() => setShowEditModal(false)} aria-label="Close modal"><X size={20} /></button>
                         </div>
                         <div className="modal-form">
                             {(() => {
@@ -578,7 +499,7 @@ const AdminManageUsers: React.FC = () => {
                                                     <option key={r.value} value={r.value}>{r.label}</option>
                                                 ))}
                                             </select>
-                                            {isPowerUser && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>Power User role cannot be changed</span>}
+                                            {isPowerUser && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>Power Admin role cannot be changed</span>}
                                         </div>
 
                                         {isTeacherPrimary && (
@@ -651,51 +572,10 @@ const AdminManageUsers: React.FC = () => {
                                 </div>
                             )}
 
-                            {editError && <div className="login-error">{editError}</div>}
+                            {editError && <div className="login-error" role="alert" aria-live="polite">{editError}</div>}
 
                             <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={editSaving} onClick={handleEditSave}>
                                 {editSaving ? <><Loader2 size={16} className="spin" /> Saving...</> : 'Save Changes'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ── Reset Password Modal ── */}
-            {showResetModal && resetUser && (
-                <div className="modal-overlay" onClick={() => setShowResetModal(false)}>
-                    <div className="modal-content slide-up" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
-                        <div className="modal-header">
-                            <h2>Reset Password</h2>
-                            <button className="btn btn-ghost" onClick={() => setShowResetModal(false)}><X size={20} /></button>
-                        </div>
-                        <div className="modal-form">
-                            <div style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', marginBottom: 8 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{resetUser.full_name}</div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{resetUser.email}</div>
-                            </div>
-
-                            <div className="field">
-                                <label className="field-label">NEW PASSWORD</label>
-                                <div style={{ position: 'relative' }}>
-                                    <input className="input" type={showPassword ? 'text' : 'password'} placeholder="Min 8 characters"
-                                        value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                                        style={{ paddingRight: 40 }}
-                                    />
-                                    <button type="button" className="btn btn-ghost"
-                                        style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', padding: 6 }}
-                                        onClick={() => setShowPassword(!showPassword)}
-                                    >
-                                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {resetError && <div className="login-error">{resetError}</div>}
-                            {resetSuccess && <div style={{ padding: '10px 14px', background: 'rgba(16,185,129,0.1)', color: '#10b981', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>Password reset successfully!</div>}
-
-                            <button className="btn btn-primary" style={{ width: '100%', marginTop: 8, background: '#f59e0b' }} disabled={resetting || resetSuccess || !newPassword} onClick={handleResetPassword}>
-                                {resetting ? <><Loader2 size={16} className="spin" /> Resetting...</> : 'Reset Password'}
                             </button>
                         </div>
                     </div>

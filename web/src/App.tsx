@@ -1,32 +1,52 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import LandingPage from './pages/LandingPage';
 import PricingPage from './pages/PricingPage';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminManageUsers from './pages/admin/AdminManageUsers';
-import ScheduleManagement from './pages/admin/ScheduleManagement';
-import DataManagement from './pages/admin/DataManagement';
-import ConflictsAlerts from './pages/admin/ConflictsAlerts';
-import ConstraintSettings from './pages/admin/ConstraintSettings';
-import Analytics from './pages/admin/Analytics';
-import ScheduleViews from './pages/admin/ScheduleViews';
-import CommunicationHub from './pages/shared/CommunicationHub';
-import AuditLog from './pages/admin/AuditLog';
-import ScheduleGenerate from './pages/admin/ScheduleGenerate';
-import FacultyHub from './pages/admin/FacultyHub';
-import AIScheduleChat from './pages/admin/AIScheduleChat';
-import AdminScheduleTasks from './pages/admin/AdminScheduleTasks';
-import AppSettings from './pages/shared/AppSettings';
-import OptiBotPage from './pages/shared/OptiBotPage';
-import TeacherToTeacherChat from './pages/teacher/TeacherToTeacherChat';
-import TeacherChatHub from './pages/teacher/TeacherChatHub';
+const AdminDashboardDispatcher = lazy(() => import('./pages/admin/AdminDashboardDispatcher'));
+const AdminManageUsers = lazy(() => import('./pages/admin/AdminManageUsers'));
+const ScheduleManagement = lazy(() => import('./pages/admin/ScheduleManagement'));
+const DataManagement = lazy(() => import('./pages/admin/DataManagement'));
+const ConflictsAlerts = lazy(() => import('./pages/admin/ConflictsAlerts'));
+const ConstraintSettings = lazy(() => import('./pages/admin/ConstraintSettings'));
+const Analytics = lazy(() => import('./pages/admin/Analytics'));
+const ScheduleViews = lazy(() => import('./pages/admin/ScheduleViews'));
+const CommunicationHub = lazy(() => import('./pages/shared/CommunicationHub'));
+const AuditLogLegacy = lazy(() => import('./pages/admin/AuditLog'));
+const ScheduleGenerate = lazy(() => import('./pages/admin/ScheduleGenerate'));
+const FacultyHub = lazy(() => import('./pages/admin/FacultyHub'));
+const AIScheduleChat = lazy(() => import('./pages/admin/AIScheduleChat'));
+const AdminScheduleTasks = lazy(() => import('./pages/admin/AdminScheduleTasks'));
+const AppSettings = lazy(() => import('./pages/shared/AppSettings'));
+const OptiBotPage = lazy(() => import('./pages/shared/OptiBotPage'));
+const TeacherToTeacherChat = lazy(() => import('./pages/teacher/TeacherToTeacherChat'));
+const TeacherChatHub = lazy(() => import('./pages/teacher/TeacherChatHub'));
 
-import TeacherDashboard from './pages/teacher/TeacherDashboard';
-import TeacherSchedule from './pages/teacher/TeacherSchedule';
-import TeacherPreferences from './pages/teacher/TeacherPreferences';
-import StudentDashboard from './pages/student/StudentDashboard';
-import StudentSchedule from './pages/student/StudentSchedule';
+// New v1.2 governance & per-role pages (lazy-loaded for code splitting)
+const SystemRules = lazy(() => import('./pages/admin/SystemRules'));
+const AuditLogPage = lazy(() => import('./pages/admin/AuditLogPage'));
+const UserActivityPage = lazy(() => import('./pages/admin/UserActivityPage'));
+const SessionsPage = lazy(() => import('./pages/admin/SessionsPage'));
+const ApprovalsPage = lazy(() => import('./pages/admin/ApprovalsPage'));
+const AnnouncementsPage = lazy(() => import('./pages/shared/AnnouncementsPage'));
+const AdminBackup = lazy(() => import('./pages/admin/AdminBackup'));
+const AdminOverride = lazy(() => import('./pages/admin/AdminOverride'));
+const AdminFeatureFlags = lazy(() => import('./pages/admin/AdminFeatureFlags'));
+const HealthPage = lazy(() => import('./pages/admin/HealthPage'));
+
+const TeacherDashboard = lazy(() => import('./pages/teacher/TeacherDashboard'));
+const TeacherSchedule = lazy(() => import('./pages/teacher/TeacherSchedule'));
+const TeacherPreferences = lazy(() => import('./pages/teacher/TeacherPreferences'));
+const TeacherWorkload = lazy(() => import('./pages/teacher/TeacherWorkload'));
+const TeacherRequests = lazy(() => import('./pages/teacher/TeacherRequests'));
+const TeacherSections = lazy(() => import('./pages/teacher/TeacherSections'));
+
+const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
+const StudentSchedule = lazy(() => import('./pages/student/StudentSchedule'));
+const StudentUpcoming = lazy(() => import('./pages/student/StudentUpcoming'));
+const StudentSection = lazy(() => import('./pages/student/StudentSection'));
+const StudentHelp = lazy(() => import('./pages/student/StudentHelp'));
 import './index.css';
 
 // Protected route wrapper
@@ -102,42 +122,76 @@ function App() {
 
           {/* Admin routes - accessible by all admin sub-roles */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={adminRoles}><Layout /></ProtectedRoute>}>
-            <Route index element={<AdminDashboard />} />
-            <Route path="users" element={<AdminManageUsers />} />
-            <Route path="schedules" element={<ScheduleManagement />} />
-            <Route path="data" element={<DataManagement />} />
-            <Route path="conflicts" element={<ConflictsAlerts />} />
-            <Route path="constraints" element={<ConstraintSettings />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="views" element={<ScheduleViews />} />
-            <Route path="messages" element={<CommunicationHub />} />
-            <Route path="audit" element={<AuditLog />} />
-            <Route path="generate" element={<ScheduleGenerate />} />
-            <Route path="faculty" element={<FacultyHub />} />
-            <Route path="ai-chat" element={<AIScheduleChat />} />
-            <Route path="tasks" element={<AdminScheduleTasks />} />
-            <Route path="optibot" element={<OptiBotPage />} />
-            <Route path="settings" element={<AppSettings />} />
+            <Route index element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminDashboardDispatcher /></Suspense>} />
+            <Route path="users" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminManageUsers /></Suspense>} />
+            <Route path="schedules" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleManagement /></Suspense>} />
+            <Route path="data" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
+            <Route path="conflicts" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ConflictsAlerts /></Suspense>} />
+            <Route path="constraints" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ConstraintSettings /></Suspense>} />
+            <Route path="analytics" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><Analytics /></Suspense>} />
+            <Route path="views" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleViews /></Suspense>} />
+            <Route path="messages" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><CommunicationHub /></Suspense>} />
+            <Route path="audit" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AuditLogPage /></Suspense>} />
+            <Route path="audit-legacy" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AuditLogLegacy /></Suspense>} />
+            <Route path="generate" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleGenerate /></Suspense>} />
+            <Route path="faculty" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><FacultyHub /></Suspense>} />
+            <Route path="ai-chat" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AIScheduleChat /></Suspense>} />
+            <Route path="tasks" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminScheduleTasks /></Suspense>} />
+            <Route path="optibot" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><OptiBotPage /></Suspense>} />
+            <Route path="settings" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AppSettings /></Suspense>} />
 
+            {/* v1.2 governance + approval pages */}
+            <Route path="rules" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><SystemRules /></Suspense>} />
+            <Route path="activity" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><UserActivityPage /></Suspense>} />
+            <Route path="sessions" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><SessionsPage /></Suspense>} />
+            <Route path="approvals" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ApprovalsPage /></Suspense>} />
+            <Route path="announcements" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AnnouncementsPage /></Suspense>} />
+
+            {/* Schedule Admin extras */}
+            <Route path="history" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleManagement /></Suspense>} />
+            <Route path="requests" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ApprovalsPage /></Suspense>} />
+
+            {/* Schedule Manager extras */}
+            <Route path="sharing" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
+            <Route path="templates" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
+
+            {/* System Admin extras (placeholders — reuse existing surfaces for now) */}
+            <Route path="health" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><HealthPage /></Suspense>} />
+            <Route path="lifecycle" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminManageUsers /></Suspense>} />
+            <Route path="structure" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
+            <Route path="branding" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AppSettings /></Suspense>} />
+
+            {/* Power Admin extras */}
+            <Route path="backup" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminBackup /></Suspense>} />
+            <Route path="override" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminOverride /></Suspense>} />
+            <Route path="flags" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminFeatureFlags /></Suspense>} />
           </Route>
 
           {/* Teacher routes - also accessible by multi-role users with teacher role */}
           <Route path="/teacher" element={<ProtectedRoute allowedRoles={['teacher']}><Layout /></ProtectedRoute>}>
-            <Route index element={<TeacherDashboard />} />
-            <Route path="schedule" element={<TeacherSchedule />} />
-            <Route path="preferences" element={<TeacherPreferences />} />
-            <Route path="chat" element={<TeacherChatHub />} />
-            <Route path="peer-chat" element={<TeacherToTeacherChat />} />
-            <Route path="optibot" element={<OptiBotPage />} />
-            <Route path="settings" element={<AppSettings />} />
+            <Route index element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherDashboard /></Suspense>} />
+            <Route path="schedule" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherSchedule /></Suspense>} />
+            <Route path="workload" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherWorkload /></Suspense>} />
+            <Route path="preferences" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherPreferences /></Suspense>} />
+            <Route path="requests" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherRequests /></Suspense>} />
+            <Route path="sections" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherSections /></Suspense>} />
+            <Route path="announcements" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AnnouncementsPage /></Suspense>} />
+            <Route path="chat" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherChatHub /></Suspense>} />
+            <Route path="peer-chat" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherToTeacherChat /></Suspense>} />
+            <Route path="optibot" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><OptiBotPage /></Suspense>} />
+            <Route path="settings" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AppSettings /></Suspense>} />
           </Route>
 
           {/* Student routes */}
           <Route path="/student" element={<ProtectedRoute allowedRoles={['student']}><Layout /></ProtectedRoute>}>
-            <Route index element={<StudentDashboard />} />
-            <Route path="schedule" element={<StudentSchedule />} />
-            <Route path="optibot" element={<OptiBotPage />} />
-            <Route path="settings" element={<AppSettings />} />
+            <Route index element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentDashboard /></Suspense>} />
+            <Route path="schedule" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentSchedule /></Suspense>} />
+            <Route path="upcoming" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentUpcoming /></Suspense>} />
+            <Route path="section" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentSection /></Suspense>} />
+            <Route path="announcements" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AnnouncementsPage /></Suspense>} />
+            <Route path="help" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentHelp /></Suspense>} />
+            <Route path="optibot" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><OptiBotPage /></Suspense>} />
+            <Route path="settings" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AppSettings /></Suspense>} />
           </Route>
 
           {/* Fallback */}
