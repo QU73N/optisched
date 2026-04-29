@@ -55,10 +55,10 @@ const ConflictsAlerts: React.FC = () => {
             .select(`
                 id, teacher_id, room_id, section_id, subject_id,
                 day_of_week, start_time, end_time, status,
-                teachers:teacher_id(full_name),
-                rooms:room_id(name),
-                sections:section_id(name),
-                subjects:subject_id(name)
+                teachers(id, profile:profiles(full_name)),
+                rooms(id, name, building),
+                sections(id, name, program),
+                subjects(id, name, code)
             `)
             .in('status', ['published', 'draft']);
 
@@ -102,7 +102,7 @@ const ConflictsAlerts: React.FC = () => {
                     const key = `teacher_${a.teacher_id}_${a.day_of_week}_${[a.id, b.id].sort().join('_')}`;
                     if (!seen.has(key)) {
                         seen.add(key);
-                        const teacherName = a.teachers?.full_name || 'Teacher';
+                        const teacherName = a.teachers?.profile?.full_name || 'Teacher';
                         conflicts.push({
                             id: key,
                             type: 'teacher_overlap',

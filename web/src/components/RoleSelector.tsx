@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, Check } from 'lucide-react';
 import { ROLE_DISPLAY_NAMES, type UserRole } from '../types/database';
 import './RoleSelector.css';
@@ -18,6 +18,16 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
     availableRoles,
     onRoleSelect,
 }) => {
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEscape);
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     return (

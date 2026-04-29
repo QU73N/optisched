@@ -16,6 +16,8 @@ interface AuthContextType {
     signIn: (email: string, password: string) => Promise<{ error: string | null }>;
     signOut: () => Promise<void>;
     switchRole: (role: UserRole) => void;
+    refreshSession: () => Promise<void>;
+    getRule: (ruleKey: string) => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -145,6 +147,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         void logActivity({ actionType: 'role_switch', resource: 'auth', details: { from: role, to: newRole } });
     }, [roles, role]);
 
+    const refreshSession = useCallback(async () => {
+        const { error } = await supabase.auth.refreshSession();
+        if (error) {
+            console.error('Session refresh failed:', error);
+            throw error;
+        }
+        // Session will be updated via onAuthStateChange listener
+    }, []);
+
+    const getRule = useCallback((ruleKey: string): string | null => {
+        // Fetch system rule from database
+        // This would typically be cached and updated periodically
+        // For now, return null as a placeholder
+        console.warn('getRule() not yet implemented - returning null for:', ruleKey);
+        return null;
+    }, []);
+
     // Restore selected role from localStorage on mount
     useEffect(() => {
         if (roles.length > 0) {
@@ -156,8 +175,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [roles]);
 
     const value = useMemo<AuthContextType>(
-        () => ({ session, user, profile, role, roles, isLoading, signIn, signOut, switchRole }),
-        [session, user, profile, role, roles, isLoading, signIn, signOut, switchRole],
+        () => ({ session, user, profile, role, roles, isLoading, signIn, signOut, switchRole, refreshSession, getRule }),
+        [session, user, profile, role, roles, isLoading, signIn, signOut, switchRole, refreshSession, getRule],
     );
 
     return (

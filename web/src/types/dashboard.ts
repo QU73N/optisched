@@ -1,7 +1,7 @@
 // Dashboard-specific TypeScript interfaces
 
 // Dashboard-specific Schedule interface (simplified for dashboard use)
-export interface Schedule {
+export interface DashboardSchedule {
     id: string;
     day_of_week: string;
     start_time: string;
@@ -17,25 +17,25 @@ export interface Schedule {
 }
 
 // Dashboard-specific Room interface (simplified for dashboard use)
-export interface Room {
+export interface DashboardRoom {
     id: string;
     name: string;
 }
 
 // Dashboard-specific Section interface (simplified for dashboard use)
-export interface Section {
+export interface DashboardSection {
     name: string;
 }
 
 // Dashboard-specific Conflict interface (simplified for dashboard use)
-export interface Conflict {
+export interface DashboardConflict {
     id: string;
     created_at: string;
     is_resolved: boolean;
 }
 
 // Dashboard-specific Profile interface (simplified for dashboard use)
-export interface Profile {
+export interface DashboardProfile {
     id: string;
     full_name: string;
     role: string;

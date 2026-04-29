@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { ADMIN_ROLES } from '../../types/database';
+import type { DayOfWeek, ScheduleStatus } from '../../types/database';
 import { ArrowLeft, GraduationCap, MapPin, Search, Users, Lock, Scissors, Merge, MoreVertical, X, History } from 'lucide-react';
 import '../admin/Dashboard.css';
 import ScheduleVersionHistory from './ScheduleVersionHistory';
@@ -74,10 +75,9 @@ const CATEGORY_META: { key: Category; label: string; icon: React.ComponentType<{
     { key: 'rooms', label: 'Rooms', icon: MapPin, empty: 'No rooms found.' },
 ];
 
-type StatusFilter = 'published' | 'all' | 'draft' | 'submitted' | 'approved';
+type StatusFilter = 'published' | 'all' | 'draft' | 'submitted';
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
     { key: 'published', label: 'Published' },
-    { key: 'approved',  label: 'Approved' },
     { key: 'submitted', label: 'Submitted' },
     { key: 'draft',     label: 'Drafts' },
     { key: 'all',       label: 'All' },
@@ -99,19 +99,56 @@ const ScheduleManagement: React.FC = () => {
 
     const fetchData = useCallback(async () => {
         setLoading(true);
+        
+        // Use RPC functions to bypass RLS join issues
         const [schedRes, secRes, tchRes, roomRes] = await Promise.all([
-            supabase.from('schedules')
-                .select('id, day_of_week, start_time, end_time, status, semester, academic_year, subject:subjects(name, code), teacher:teachers(id, profile:profiles(full_name)), room:rooms(id, name, building), section:sections(id, name, program)')
-                .order('start_time'),
+            supabase.rpc('get_schedules_with_details'),
             supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
-            supabase.from('teachers').select('id, profile:profiles(full_name)').order('id'),
+            supabase.rpc('get_teachers_with_profiles'),
             supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
         ]);
-        setSchedules((schedRes.data as unknown as ScheduleRow[]) || []);
+        
+        if (schedRes.error) console.error('Schedules error:', schedRes.error);
+        if (tchRes.error) console.error('Teachers error:', tchRes.error);
+        if (secRes.error) console.error('Sections error:', secRes.error);
+        if (roomRes.error) console.error('Rooms error:', roomRes.error);
+        
+        // Map RPC response to ScheduleRow format
+        const schedulesData = (schedRes.data as unknown as Array<{
+            id: string;
+            day_of_week: string;
+            start_time: string;
+            end_time: string;
+            status: string;
+            semester: string;
+            academic_year: string;
+            subject_name: string;
+            subject_code: string;
+            teacher_name: string;
+            room_name: string;
+            room_building: string;
+            section_name: string;
+            section_program: string;
+        }>) || [];
+        
+        setSchedules(schedulesData.map(s => ({
+            id: s.id,
+            day_of_week: s.day_of_week as DayOfWeek,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            status: s.status as ScheduleStatus,
+            semester: s.semester,
+            academic_year: s.academic_year,
+            subject: { name: s.subject_name, code: s.subject_code },
+            teacher: { id: '', profile: { full_name: s.teacher_name } },
+            room: { id: '', name: s.room_name, building: s.room_building },
+            section: { id: '', name: s.section_name, program: s.section_program },
+        })));
+        
         setSections((secRes.data as unknown as typeof sections) || []);
         setTeachers(
-            ((tchRes.data as unknown as { id: string; profile: { full_name: string } | null }[]) || [])
-                .map(t => ({ id: t.id, full_name: t.profile?.full_name || 'Unnamed' }))
+            ((tchRes.data as unknown as { id: string; full_name: string }[]) || [])
+                .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed' }))
         );
         setRooms((roomRes.data as unknown as typeof rooms) || []);
         setLoading(false);
@@ -180,7 +217,7 @@ const ScheduleManagement: React.FC = () => {
     }, [visibleSchedules, selected]);
 
     const statusCounts = useMemo(() => {
-        const counts: Record<string, number> = { all: schedules.length, published: 0, approved: 0, submitted: 0, draft: 0 };
+        const counts: Record<string, number> = { all: schedules.length, published: 0, submitted: 0, draft: 0 };
         for (const s of schedules) {
             const k = (s.status || 'draft').toLowerCase();
             if (k in counts) {

@@ -38,6 +38,7 @@ const AdminBackup = lazy(() => import('./pages/admin/AdminBackup'));
 const AdminOverride = lazy(() => import('./pages/admin/AdminOverride'));
 const AdminFeatureFlags = lazy(() => import('./pages/admin/AdminFeatureFlags'));
 const HealthPage = lazy(() => import('./pages/admin/HealthPage'));
+const VersionManager = lazy(() => import('./pages/admin/VersionManager'));
 
 const TeacherDashboard = lazy(() => import('./pages/teacher/TeacherDashboard'));
 const TeacherSchedule = lazy(() => import('./pages/teacher/TeacherSchedule'));
@@ -160,7 +161,6 @@ function App() {
             <Route path="requests" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ApprovalsPage /></Suspense>} />
 
             {/* Schedule Manager extras */}
-            <Route path="sharing" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
             <Route path="templates" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
 
             {/* System Admin extras (placeholders — reuse existing surfaces for now) */}
@@ -173,10 +173,11 @@ function App() {
             <Route path="backup" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminBackup /></Suspense>} />
             <Route path="override" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminOverride /></Suspense>} />
             <Route path="flags" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminFeatureFlags /></Suspense>} />
+            <Route path="versions" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><VersionManager /></Suspense>} />
           </Route>
 
           {/* Teacher routes - also accessible by multi-role users with teacher role */}
-          <Route path="/teacher" element={<ProtectedRoute allowedRoles={['teacher']}><Layout /></ProtectedRoute>}>
+          <Route path="/teacher" element={<ProtectedRoute allowedRoles={['teacher', 'schedule_admin', 'schedule_manager']}><Layout /></ProtectedRoute>}>
             <Route index element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherDashboard /></Suspense>} />
             <Route path="schedule" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherSchedule /></Suspense>} />
             <Route path="workload" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherWorkload /></Suspense>} />

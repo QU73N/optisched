@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../types/database';
 import type {
     ChangeRequest, Announcement, CustomEvent, ResetRequest,
-    ConflictsTrend, DashboardStats, DashboardDeltas, AdminMessage, Room
+    ConflictsTrend, DashboardStats, DashboardDeltas, AdminMessage, DashboardRoom
 } from '../../types/dashboard';
 import { DASHBOARD_CONFIG } from '../../config/dashboard';
 import {
@@ -70,7 +70,7 @@ const AdminDashboard: React.FC = () => {
     const [evStart, setEvStart] = useState('08:00');
     const [evEnd, setEvEnd] = useState('09:00');
     const [evRoom, setEvRoom] = useState('');
-    const [rooms, setRooms] = useState<Room[]>([]);
+    const [rooms, setRooms] = useState<DashboardRoom[]>([]);
     const [postingEvent, setPostingEvent] = useState(false);
 
     // Messages
@@ -577,7 +577,7 @@ const AdminDashboard: React.FC = () => {
                     {canSeeScheduleStats && (
                         <div className="dash-card dash-stagger">
                             <div className="dash-card-header">
-                                <div className="dash-card-title"><Activity size={16} /> Conflicts. Last 14 days</div>
+                                <div className="dash-card-title"><Activity size={16} /> Conflicts Last 14 Days</div>
                                 <span className="dash-card-badge" style={{ background: stats.conflicts > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)', color: stats.conflicts > 0 ? '#ef4444' : '#22c55e' }}>
                                     {stats.conflicts > 0 ? `${stats.conflicts} open` : 'All clear'}
                                 </span>
@@ -604,7 +604,7 @@ const AdminDashboard: React.FC = () => {
                     {canSeeRequests && (
                         <div className="dash-card dash-stagger">
                             <div className="dash-card-header">
-                                <div className="dash-card-title"><TrendingUp size={16} /> Requests. Last 30 days</div>
+                                <div className="dash-card-title"><TrendingUp size={16} /> Requests Last 30 Days</div>
                                 <span className="dash-card-badge" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>{funnelTotal}</span>
                             </div>
                             {funnelTotal === 0 ? (
@@ -635,7 +635,7 @@ const AdminDashboard: React.FC = () => {
                     {canSeeScheduleStats && roomLoad.length > 0 && (
                         <div className="dash-card dash-stagger">
                             <div className="dash-card-header">
-                                <div className="dash-card-title"><BarChart3 size={16} /> Top rooms by load</div>
+                                <div className="dash-card-title"><BarChart3 size={16} /> Top Rooms by Load</div>
                                 <span className="dash-card-subtitle" style={{ display: 'none' }} />
                                 <span className="dash-card-badge" style={{ background: 'rgba(6,182,212,0.12)', color: '#06b6d4' }}>{stats.rooms}</span>
                             </div>

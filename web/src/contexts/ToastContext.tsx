@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { X, CheckCircle, AlertTriangle, AlertCircle, Info } from 'lucide-react';
 
 interface ToastOptions {
+    id?: string;
     title: string;
     message?: string;
     type?: 'info' | 'success' | 'warning' | 'error';
@@ -14,9 +15,14 @@ interface ToastOptions {
     }[];
 }
 
+interface ToastItem extends ToastOptions {
+    id: string;
+    isVisible: boolean;
+}
+
 interface ToastContextType {
     showToast: (options: ToastOptions) => void;
-    hideToast: () => void;
+    hideToast: (id: string) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -30,29 +36,50 @@ export const useToast = () => {
 };
 
 export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [toast, setToast] = useState<ToastOptions | null>(null);
-    const [isVisible, setIsVisible] = useState(false);
+    const [toasts, setToasts] = useState<ToastItem[]>([]);
 
     const showToast = useCallback((options: ToastOptions) => {
-        setToast(options);
-        setIsVisible(true);
+        const id = options.id || `toast-${Date.now()}-${Math.random()}`;
+        const newToast: ToastItem = { ...options, id, isVisible: true };
 
+        setToasts(prev => {
+            // Remove existing toast with same id if exists
+            const filtered = prev.filter(t => t.id !== id);
+            // Add new toast at the beginning (top of stack)
+            return [newToast, ...filtered].slice(0, 5); // Max 5 toasts
+        });
+
+        // Auto-hide if no actions
         if (!options.actions || options.actions.length === 0) {
             const duration = options.duration || 4000;
             setTimeout(() => {
-                setIsVisible(false);
-                setTimeout(() => setToast(null), 300);
+                setToasts(prev => {
+                    const toast = prev.find(t => t.id === id);
+                    if (!toast) return prev;
+                    return prev.map(t => t.id === id ? { ...t, isVisible: false } : t);
+                });
+                // Remove from DOM after animation
+                setTimeout(() => {
+                    setToasts(prev => prev.filter(t => t.id !== id));
+                }, 300);
             }, duration);
         }
     }, []);
 
-    const hideToast = useCallback(() => {
-        setIsVisible(false);
-        setTimeout(() => setToast(null), 300);
+    const hideToast = useCallback((id: string) => {
+        setToasts(prev => {
+            const toast = prev.find(t => t.id === id);
+            if (!toast) return prev;
+            return prev.map(t => t.id === id ? { ...t, isVisible: false } : t);
+        });
+        // Remove from DOM after animation
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 300);
     }, []);
 
-    const handleAction = (onPress?: () => void) => {
-        hideToast();
+    const handleAction = (id: string, onPress?: () => void) => {
+        hideToast(id);
         if (onPress) setTimeout(onPress, 200);
     };
 
@@ -77,40 +104,50 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return (
         <ToastContext.Provider value={{ showToast, hideToast }}>
             {children}
-            {toast && (
-                <div className={`toast-overlay ${isVisible ? 'toast-visible' : 'toast-hidden'}`}>
-                    <div className="toast-box" style={{ borderLeftColor: getAccentColor(toast.type) }}>
-                        <div className="toast-header">
-                            <div className="toast-icon">{getIcon(toast.type)}</div>
-                            <div className="toast-content">
-                                <h4 className="toast-title">{toast.title}</h4>
-                                {toast.message && <p className="toast-message">{toast.message}</p>}
+            <div className="toast-container">
+                {toasts.map(toast => (
+                    <div
+                        key={toast.id}
+                        className={`toast-overlay ${toast.isVisible ? 'toast-visible' : 'toast-hidden'}`}
+                        style={{ top: `${24 + toasts.indexOf(toast) * 80}px` }}
+                    >
+                        <div className="toast-box" style={{ borderLeftColor: getAccentColor(toast.type) }}>
+                            <div className="toast-header">
+                                <div className="toast-icon">{getIcon(toast.type)}</div>
+                                <div className="toast-content">
+                                    <h4 className="toast-title">{toast.title}</h4>
+                                    {toast.message && <p className="toast-message">{toast.message}</p>}
+                                </div>
+                                <button className="toast-close" onClick={() => hideToast(toast.id)}><X size={16} /></button>
                             </div>
-                            <button className="toast-close" onClick={hideToast}><X size={16} /></button>
+                            {toast.actions && toast.actions.length > 0 && (
+                                <div className="toast-actions">
+                                    {toast.actions.map((action, idx) => (
+                                        <button
+                                            key={idx}
+                                            className={`toast-action-btn ${action.style === 'destructive' ? 'destructive' : action.style === 'cancel' ? 'cancel' : 'primary'}`}
+                                            onClick={() => handleAction(toast.id, action.onPress)}
+                                        >
+                                            {action.text}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                        {toast.actions && toast.actions.length > 0 && (
-                            <div className="toast-actions">
-                                {toast.actions.map((action, idx) => (
-                                    <button
-                                        key={idx}
-                                        className={`toast-action-btn ${action.style === 'destructive' ? 'destructive' : action.style === 'cancel' ? 'cancel' : 'primary'}`}
-                                        onClick={() => handleAction(action.onPress)}
-                                    >
-                                        {action.text}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
                     </div>
-                </div>
-            )}
+                ))}
+            </div>
 
             <style>{`
-                .toast-overlay {
+                .toast-container {
                     position: fixed;
-                    top: 24px;
+                    top: 0;
                     right: 24px;
                     z-index: 10000;
+                }
+                .toast-overlay {
+                    position: absolute;
+                    right: 0;
                     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 }
                 .toast-visible { opacity: 1; transform: translateX(0); }

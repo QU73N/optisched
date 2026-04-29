@@ -366,6 +366,10 @@ CREATE TABLE public.schedules (
   rejection_reason text,
   deleted_at timestamp with time zone,
   deleted_by uuid REFERENCES public.profiles(id),
+  is_locked boolean DEFAULT false,
+  locked_by uuid REFERENCES public.profiles(id),
+  locked_at timestamp with time zone,
+  lock_reason text,
   CONSTRAINT schedules_pkey PRIMARY KEY (id),
   CONSTRAINT schedules_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
   CONSTRAINT schedules_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
@@ -373,7 +377,8 @@ CREATE TABLE public.schedules (
   CONSTRAINT schedules_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id),
   CONSTRAINT schedules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
   CONSTRAINT schedules_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.profiles(id),
-  CONSTRAINT schedules_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id)
+  CONSTRAINT schedules_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.sections (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -428,6 +433,7 @@ CREATE TABLE public.subjects (
   owner_id uuid,
   is_public boolean DEFAULT false,
   shared_with ARRAY DEFAULT '{}'::uuid[],
+  sessions_per_week integer,
   CONSTRAINT subjects_pkey PRIMARY KEY (id),
   CONSTRAINT subjects_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
   CONSTRAINT subjects_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)

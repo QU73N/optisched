@@ -23,6 +23,7 @@ const SiderailCharts: React.FC = () => {
     const [loadData, setLoadData] = useState<LoadDataPoint[]>([]);
     const [systemData, setSystemData] = useState<SystemDataPoint[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const isPowerAdmin = roles.includes('power_admin') || roles.includes('admin');
     const isSystemAdmin = roles.includes('system_admin');
@@ -67,6 +68,7 @@ const SiderailCharts: React.FC = () => {
                     }
                 } catch (err) {
                     console.error('Error fetching load data:', err);
+                    setError('Failed to load chart data');
                 }
             }
 
@@ -108,6 +110,29 @@ const SiderailCharts: React.FC = () => {
                         <h4>System Status</h4>
                         <div className="siderail-chart">
                             <div className="siderail-chart-placeholder">Loading...</div>
+                        </div>
+                    </div>
+                )}
+            </>
+        );
+    }
+
+    if (error) {
+        return (
+            <>
+                {shouldShowLoadChart && (
+                    <div className="siderail-section">
+                        <h4>Load by Day</h4>
+                        <div className="siderail-chart">
+                            <div className="siderail-chart-placeholder" style={{color: 'var(--accent-error)'}}>{error}</div>
+                        </div>
+                    </div>
+                )}
+                {shouldShowSystemChart && (
+                    <div className="siderail-section">
+                        <h4>System Status</h4>
+                        <div className="siderail-chart">
+                            <div className="siderail-chart-placeholder" style={{color: 'var(--accent-error)'}}>{error}</div>
                         </div>
                     </div>
                 )}

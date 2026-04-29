@@ -74,7 +74,7 @@ export type ConflictType = 'room_conflict' | 'teacher_overlap' | 'capacity_excee
 export type ConflictSeverity = 'high' | 'medium' | 'low';
 export type TaskPriority = 'high' | 'medium' | 'low';
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
-export type ScheduleStatus = 'draft' | 'published' | 'archived';
+export type ScheduleStatus = 'draft' | 'submitted' | 'approved' | 'published' | 'archived' | 'rejected';
 
 export interface Profile {
     id: string;
@@ -135,6 +135,7 @@ export interface Subject {
     program: string;
     year_level: number;
     requires_lab: boolean;
+    teacher_id: string | null;
     weight: number;
     priority_note: string | null;
     owner_id: string | null;
@@ -165,7 +166,7 @@ export interface Section {
 
 export interface Schedule {
     id: string;
-    subject_id: string;
+    subject_id: string | null;
     teacher_id: string | null;
     room_id: string | null;
     section_id: string | null;
@@ -175,13 +176,25 @@ export interface Schedule {
     semester: string;
     academic_year: string;
     status: ScheduleStatus;
+    created_at: string;
+    updated_at: string;
+    created_by: string | null;
+    submitted_at: string | null;
+    approved_by: string | null;
+    approved_at: string | null;
+    rejected_by: string | null;
+    rejected_at: string | null;
+    rejection_reason: string | null;
+    deleted_at: string | null;
+    deleted_by: string | null;
+    is_locked: boolean;
+    locked_by: string | null;
+    locked_at: string | null;
+    lock_reason: string | null;
+    subject?: Subject;
     teacher?: Teacher;
     room?: Room;
     section?: Section;
-    is_locked?: boolean;
-    locked_by?: string | null;
-    locked_at?: string | null;
-    lock_reason?: string | null;
 }
 
 export interface ScheduleVersion {

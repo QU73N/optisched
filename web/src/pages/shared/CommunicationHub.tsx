@@ -137,7 +137,12 @@ const CommunicationHub: React.FC = () => {
 
         // Fetch avatars & resolve names
         const threadsList = Array.from(threadMap.values());
-        const senderIds = threadsList.map(t => t.senderId).filter(id => id !== 'admin');
+        const senderIds = threadsList.map(t => t.senderId).filter(id => 
+            id !== 'admin' && 
+            id !== 'system_admin_placeholder' &&
+            id !== null &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        );
         if (senderIds.length > 0) {
             const { data: profiles } = await supabase
                 .from('profiles')
