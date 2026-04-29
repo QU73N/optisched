@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, RotateCcw, Layers, Clock, CheckCircle, Trash2, Plus, Eye } from 'lucide-react';
+import { Save, RotateCcw, Layers, Clock, CheckCircle, Trash2, Eye } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 interface VersionSnapshot {
