@@ -1,0 +1,1412 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { supabase } from '../../../lib/supabase';
+import { useAuth } from '../../../contexts/AuthContext';
+import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
+import {
+    ArrowLeft, ArrowRight, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
+    Flag, GitBranch, Inbox, Layers, Lightbulb, ListChecks, Lock, MapPin, Play, Plus,
+    RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, Sliders, Sparkles, Upload,
+    Users, X, XCircle,
+} from 'lucide-react';
+import '../Dashboard.css';
+import {
+    ALL_DAYS, DEFAULT_CONFIG, HARD_CONSTRAINTS, PARTIAL_KIND_LABELS, PRIORITY_TIERS,
+    PRIORITY_VALUES, STAGES, WORKFLOW_META, tierFromValue,
+    type BreakWindow, type DiffEntry, type ExistingSchedule, type GenerationConfig,
+    type GenerationProgress, type GenerationResult, type PartialKind, type PartialTarget,
+    type PlacedEntry, type PriorityTier, type Room, type Section, type StageKey,
+    type Subject, type Teacher, type VersionSummary, type WorkflowState,
+} from './types';
+import { runGenerator } from './generator';
+
+// ---------------------------------------------------------------------------
+// Root component
+// ---------------------------------------------------------------------------
+
+const ScheduleGenerate: React.FC = () => {
+    const { roles } = useAuth();
+    const canApprove = hasAnyRole(roles, [...POWER_ADMIN_ROLES, 'schedule_admin']);
+    const [stage, setStage] = useState<StageKey>('scope');
+    const [config, setConfig] = useState<GenerationConfig>(DEFAULT_CONFIG);
+
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [teachers, setTeachers] = useState<Teacher[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [sections, setSections] = useState<Section[]>([]);
+    const [existing, setExisting] = useState<ExistingSchedule[]>([]);
+    const [dataLoading, setDataLoading] = useState(true);
+
+    const [progress, setProgress] = useState<GenerationProgress>({
+        subStage: 'idle', attempt: 0, totalAttempts: 0, placed: 0, total: 0, message: 'Ready',
+    });
+    const [result, setResult] = useState<GenerationResult | null>(null);
+    const [generating, setGenerating] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [savedId, setSavedId] = useState<string | null>(null);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [versionsOpen, setVersionsOpen] = useState(false);
+    const [workflowBusy, setWorkflowBusy] = useState<WorkflowState | null>(null);
+    const [workflowNote, setWorkflowNote] = useState<string | null>(null);
+    const [workflowError, setWorkflowError] = useState<string | null>(null);
+    const cancelRef = useRef(false);
+
+    useEffect(() => {
+        const load = async () => {
+            setDataLoading(true);
+            const [sub, t, r, sec, sch] = await Promise.all([
+                supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id'),
+                supabase.from('teachers').select('id, max_hours, profile:profiles(full_name)'),
+                supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available'),
+                supabase.from('sections').select('id, name, program, year_level, student_count'),
+                supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at'),
+            ]);
+            setSubjects((sub.data as unknown as Subject[]) || []);
+            setTeachers(
+                ((t.data as unknown as { id: string; max_hours: number | null; profile: { full_name: string } | null }[]) || [])
+                    .map(x => ({ id: x.id, max_hours: x.max_hours, full_name: x.profile?.full_name || 'Unnamed' })),
+            );
+            setRooms((r.data as unknown as Room[]) || []);
+            setSections((sec.data as unknown as Section[]) || []);
+            setExisting((sch.data as unknown as ExistingSchedule[]) || []);
+            setDataLoading(false);
+        };
+        load();
+    }, []);
+
+    const blockers = useMemo(() => {
+        const issues: string[] = [];
+        if (subjects.length === 0) issues.push('No subjects found. Add subjects in Data.');
+        if (teachers.length === 0) issues.push('No teachers found. Add teachers in Data.');
+        if (rooms.length === 0) issues.push('No rooms found. Add rooms in Data.');
+        if (sections.length === 0) issues.push('No sections found. Add sections in Data.');
+        if (config.days.length === 0) issues.push('Select at least one working day.');
+        if (toMinutes(config.dayEnd) <= toMinutes(config.dayStart)) issues.push('Day end must be after day start.');
+        if (config.sessionMinutes <= 0) issues.push('Session length must be positive.');
+        if (config.mode === 'partial' && !config.partialTarget?.id) issues.push('Pick a partial regeneration target.');
+        return issues;
+    }, [subjects, teachers, rooms, sections, config]);
+
+    const stageIndex = STAGES.findIndex(s => s.key === stage);
+
+    const versionSummary: VersionSummary[] = useMemo(() => {
+        const states: WorkflowState[] = ['draft', 'submitted', 'approved', 'published'];
+        return states.map(state => {
+            const rows = existing.filter(e => ((e.status as WorkflowState) || 'draft') === state);
+            const latest = rows.reduce<string | null>((acc, r) => {
+                if (!r.created_at) return acc;
+                return !acc || r.created_at > acc ? r.created_at : acc;
+            }, null);
+            return { state, count: rows.length, latest, label: WORKFLOW_META[state].label, desc: WORKFLOW_META[state].desc };
+        });
+    }, [existing]);
+
+    const refreshExisting = async () => {
+        const { data } = await supabase
+            .from('schedules')
+            .select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at');
+        setExisting((data as unknown as ExistingSchedule[]) || []);
+    };
+
+    const transitionAll = async (from: WorkflowState, to: WorkflowState) => {
+        // Collect the row ids in this status so the update never reaches unrelated
+        // schedules that land in the table between the read and the write.
+        const ids = existing.filter(e => ((e.status as WorkflowState) || 'draft') === from).map(e => e.id);
+        if (ids.length === 0) return;
+        setWorkflowBusy(from);
+        setWorkflowNote(null);
+        setWorkflowError(null);
+        try {
+            const { error } = await supabase.from('schedules').update({ status: to }).in('id', ids);
+            if (error) throw error;
+            await refreshExisting();
+            setWorkflowNote(`${ids.length} ${WORKFLOW_META[from].label.toLowerCase()} ${ids.length === 1 ? 'entry' : 'entries'} moved to ${WORKFLOW_META[to].label}.`);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            setWorkflowError(`Could not update: ${msg}`);
+        } finally {
+            setWorkflowBusy(null);
+        }
+    };
+
+    const canAdvance = (from: StageKey): boolean => {
+        if (from === 'review') return blockers.length === 0;
+        if (from === 'generate') return !!result && !generating;
+        if (from === 'results') return !!result && result.entries.length > 0;
+        return true;
+    };
+
+    const goNext = () => {
+        const next = STAGES[stageIndex + 1];
+        if (next && canAdvance(stage)) setStage(next.key);
+    };
+    const goBack = () => {
+        const prev = STAGES[stageIndex - 1];
+        if (prev && !generating) setStage(prev.key);
+    };
+    const jumpTo = (key: StageKey) => {
+        if (generating) return;
+        const targetIdx = STAGES.findIndex(s => s.key === key);
+        if (targetIdx <= stageIndex) setStage(key);
+    };
+
+    const startGeneration = async () => {
+        setGenerating(true);
+        setResult(null);
+        setSavedId(null);
+        setSaveError(null);
+        cancelRef.current = false;
+        try {
+            const res = await runGenerator(
+                { subjects, teachers, rooms, sections, existing, config },
+                p => setProgress(p),
+            );
+            if (cancelRef.current) return;
+            setResult(res);
+            setStage('results');
+        } finally {
+            setGenerating(false);
+        }
+    };
+
+    const cancelGeneration = () => {
+        cancelRef.current = true;
+        setGenerating(false);
+        setProgress(p => ({ ...p, subStage: 'idle', message: 'Cancelled' }));
+    };
+
+    const saveAs = async (initialState: 'draft' | 'submitted') => {
+        if (!result) return;
+        setSaving(true); setSaveError(null);
+        try {
+            if (config.mode === 'partial') {
+                const t = config.partialTarget;
+                if (!t?.id) throw new Error('No partial regeneration target selected.');
+                const column =
+                    t.kind === 'section' ? 'section_id' :
+                    t.kind === 'teacher' ? 'teacher_id' :
+                    t.kind === 'room'    ? 'room_id' : 'subject_id';
+                // Only replace unpublished rows in the slice so live schedules survive.
+                const { error: delErr } = await supabase
+                    .from('schedules')
+                    .delete()
+                    .eq(column, t.id)
+                    .in('status', ['draft', 'submitted', 'approved']);
+                if (delErr) throw delErr;
+            } else if (config.clearExisting) {
+                const scope = config.sectionIds;
+                const q = supabase.from('schedules').delete();
+                const { error: delErr } = scope.length
+                    ? await q.in('section_id', scope)
+                    : await q.neq('id', '00000000-0000-0000-0000-000000000000');
+                if (delErr) throw delErr;
+            }
+            const inserts = result.entries.map(e => ({
+                subject_id: e.subjectId, teacher_id: e.teacherId, room_id: e.roomId,
+                section_id: e.sectionId, day_of_week: e.day, start_time: e.start, end_time: e.end,
+                status: initialState,
+            }));
+            const { error, data } = await supabase.from('schedules').insert(inserts).select('id');
+            if (error) throw error;
+            setSavedId(data && data[0] ? data[0].id : 'ok');
+            await refreshExisting();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            setSaveError(msg);
+        } finally {
+            setSaving(false);
+        }
+    };
+    const saveDraft = () => saveAs('draft');
+    const saveAndSubmit = () => saveAs('submitted');
+
+    const resetAll = () => {
+        setResult(null);
+        setSavedId(null);
+        setSaveError(null);
+        setStage('scope');
+    };
+
+    return (
+        <div className="dashboard fade-in">
+            <div className="dashboard-header">
+                <div>
+                    <h1 className="dashboard-title">Generate</h1>
+                    <p className="dashboard-subtitle">
+                        Build a conflict-free weekly schedule. {STAGES[stageIndex].hint}.
+                    </p>
+                </div>
+                <div className="dash-header-actions">
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => setVersionsOpen(v => !v)}
+                        aria-expanded={versionsOpen}
+                    >
+                        <FileClock size={14} /> Versions
+                        {versionsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                </div>
+            </div>
+
+            {versionsOpen && (
+                <VersionsPanel
+                    summary={versionSummary}
+                    busy={workflowBusy}
+                    note={workflowNote}
+                    error={workflowError}
+                    canApprove={canApprove}
+                    onSubmitDrafts={() => transitionAll('draft', 'submitted')}
+                    onApproveSubmitted={() => transitionAll('submitted', 'approved')}
+                    onPublishApproved={() => transitionAll('approved', 'published')}
+                    onDismissNote={() => { setWorkflowNote(null); setWorkflowError(null); }}
+                />
+            )}
+
+            <Stepper stage={stage} onJump={jumpTo} canJump={!generating} />
+
+            {dataLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
+            ) : (
+                <div className="sg-stage-card">
+                    {stage === 'scope' && (
+                        <ScopeStage
+                            config={config}
+                            setConfig={setConfig}
+                            sections={sections}
+                            teachers={teachers}
+                            rooms={rooms}
+                            subjects={subjects}
+                        />
+                    )}
+                    {stage === 'structure' && (
+                        <StructureStage config={config} setConfig={setConfig} />
+                    )}
+                    {stage === 'constraints' && (
+                        <ConstraintsStage config={config} setConfig={setConfig} />
+                    )}
+                    {stage === 'priorities' && (
+                        <PrioritiesStage config={config} setConfig={setConfig} sections={sections} subjects={subjects} />
+                    )}
+                    {stage === 'review' && (
+                        <ReviewStage
+                            config={config}
+                            blockers={blockers}
+                            counts={{ subjects: subjects.length, teachers: teachers.length, rooms: rooms.length, sections: sections.length, existing: existing.length }}
+                            targetLabel={resolveTargetLabel(config.partialTarget, { sections, teachers, rooms, subjects })}
+                            onStart={() => { setStage('generate'); setTimeout(startGeneration, 50); }}
+                        />
+                    )}
+                    {stage === 'generate' && (
+                        <GenerateStage
+                            progress={progress}
+                            generating={generating}
+                            onCancel={cancelGeneration}
+                            onRun={startGeneration}
+                        />
+                    )}
+                    {stage === 'results' && result && (
+                        <ResultsStage result={result} />
+                    )}
+                    {stage === 'save' && result && (
+                        <SaveStage
+                            result={result}
+                            saving={saving}
+                            savedId={savedId}
+                            saveError={saveError}
+                            onSave={saveDraft}
+                            onSaveAndSubmit={saveAndSubmit}
+                            onRegenerate={() => { setStage('generate'); setTimeout(startGeneration, 50); }}
+                            onReset={resetAll}
+                        />
+                    )}
+                </div>
+            )}
+
+            {!dataLoading && stage !== 'generate' && (
+                <div className="sg-nav">
+                    <button className="btn btn-secondary" onClick={goBack} disabled={stageIndex === 0 || generating}>
+                        <ArrowLeft size={14} /> Back
+                    </button>
+                    {stage === 'review' ? (
+                        <button className="btn btn-primary" onClick={() => { setStage('generate'); setTimeout(startGeneration, 50); }} disabled={blockers.length > 0}>
+                            <Sparkles size={14} /> Start generation
+                        </button>
+                    ) : stage === 'results' ? (
+                        <button className="btn btn-primary" onClick={() => setStage('save')} disabled={!result || result.entries.length === 0}>
+                            Continue to save <ArrowRight size={14} />
+                        </button>
+                    ) : stage === 'save' ? null : (
+                        <button className="btn btn-primary" onClick={goNext} disabled={!canAdvance(stage)}>
+                            Next <ArrowRight size={14} />
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+};
+
+// ---------------------------------------------------------------------------
+// Stepper
+// ---------------------------------------------------------------------------
+
+const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJump: boolean }> = ({ stage, onJump, canJump }) => {
+    const idx = STAGES.findIndex(s => s.key === stage);
+    const onKey = (e: React.KeyboardEvent, i: number) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+        e.preventDefault();
+        let next = i;
+        if (e.key === 'ArrowLeft')  next = Math.max(0, i - 1);
+        if (e.key === 'ArrowRight') next = Math.min(idx, i + 1);
+        if (e.key === 'Home')       next = 0;
+        if (e.key === 'End')        next = idx;
+        const el = document.querySelector<HTMLButtonElement>(`[data-sg-step="${STAGES[next].key}"]`);
+        el?.focus();
+    };
+    return (
+        <ol className="sg-stepper" role="tablist" aria-label="Generation stages">
+            {STAGES.map((s, i) => {
+                const state = i < idx ? 'done' : i === idx ? 'current' : 'upcoming';
+                return (
+                    <li key={s.key} className={`sg-step sg-step-${state}`}>
+                        <button
+                            type="button"
+                            role="tab"
+                            data-sg-step={s.key}
+                            className="sg-step-btn"
+                            onClick={() => onJump(s.key)}
+                            onKeyDown={e => onKey(e, i)}
+                            disabled={!canJump || i > idx}
+                            aria-current={i === idx ? 'step' : undefined}
+                            aria-selected={i === idx}
+                            aria-label={`${i + 1} of ${STAGES.length}: ${s.label}. ${s.hint}.`}
+                            tabIndex={i === idx ? 0 : -1}
+                        >
+                            <span className="sg-step-num" aria-hidden="true">{i < idx ? <CheckCircle size={14} /> : i + 1}</span>
+                            <span className="sg-step-label">{s.label}</span>
+                        </button>
+                    </li>
+                );
+            })}
+        </ol>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Stage 1 — Scope
+// ---------------------------------------------------------------------------
+
+const ScopeStage: React.FC<{
+    config: GenerationConfig;
+    setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>>;
+    sections: Section[];
+    teachers: Teacher[];
+    rooms: Room[];
+    subjects: Subject[];
+}> = ({ config, setConfig, sections, teachers, rooms, subjects }) => {
+    const allSelected = config.sectionIds.length === 0;
+    const toggle = (id: string) => {
+        setConfig(c => {
+            const set = new Set(c.sectionIds);
+            if (set.has(id)) set.delete(id); else set.add(id);
+            return { ...c, sectionIds: Array.from(set) };
+        });
+    };
+    const grouped = useMemo(() => {
+        const m = new Map<string, Section[]>();
+        for (const s of sections) {
+            const k = `${s.program || 'Unassigned'} · Year ${s.year_level ?? '?'}`;
+            const arr = m.get(k) || [];
+            arr.push(s);
+            m.set(k, arr);
+        }
+        return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
+    }, [sections]);
+
+    const setMode = (mode: GenerationConfig['mode']) =>
+        setConfig(c => ({ ...c, mode, partialTarget: mode === 'full' ? null : c.partialTarget }));
+
+    const setPartialKind = (kind: PartialKind) =>
+        setConfig(c => ({ ...c, partialTarget: { kind, id: '' } }));
+
+    const setPartialId = (id: string) =>
+        setConfig(c => ({ ...c, partialTarget: c.partialTarget ? { ...c.partialTarget, id } : { kind: 'section', id } }));
+
+    const targetOptions: { id: string; label: string; sub?: string }[] = useMemo(() => {
+        const kind = config.partialTarget?.kind ?? 'section';
+        if (kind === 'section') return sections.map(s => ({
+            id: s.id, label: s.name,
+            sub: [s.program, s.year_level ? `Year ${s.year_level}` : null].filter(Boolean).join(' · '),
+        }));
+        if (kind === 'teacher') return teachers.map(t => ({ id: t.id, label: t.full_name }));
+        if (kind === 'room')    return rooms.map(r => ({
+            id: r.id, label: r.name,
+            sub: [r.building, r.type, r.capacity ? `${r.capacity} seats` : null].filter(Boolean).join(' · '),
+        }));
+        return subjects.map(s => ({ id: s.id, label: s.code, sub: s.name }));
+    }, [config.partialTarget?.kind, sections, teachers, rooms, subjects]);
+
+    return (
+        <div>
+            <StageHeader icon={<Users size={16} />} title="Scope" desc="Pick a generation mode, then choose what to generate." />
+
+            <div className="sg-mode-toggle" role="radiogroup" aria-label="Generation mode">
+                <button
+                    type="button"
+                    role="radio"
+                    aria-checked={config.mode === 'full'}
+                    className={`sg-mode ${config.mode === 'full' ? 'sg-mode-active' : ''}`}
+                    onClick={() => setMode('full')}
+                >
+                    <Sparkles size={14} />
+                    <span className="sg-mode-label">
+                        <span className="sg-mode-title">Full generation</span>
+                        <span className="sg-mode-desc">Solve the whole week for every picked section.</span>
+                    </span>
+                </button>
+                <button
+                    type="button"
+                    role="radio"
+                    aria-checked={config.mode === 'partial'}
+                    className={`sg-mode ${config.mode === 'partial' ? 'sg-mode-active' : ''}`}
+                    onClick={() => setMode('partial')}
+                >
+                    <GitBranch size={14} />
+                    <span className="sg-mode-label">
+                        <span className="sg-mode-title">Partial regeneration</span>
+                        <span className="sg-mode-desc">Re-solve one slice. Everything else stays locked.</span>
+                    </span>
+                </button>
+            </div>
+
+            {config.mode === 'full' ? (
+                <>
+                    <div className="sg-row">
+                        <button className={`sg-chip ${allSelected ? 'sg-chip-active' : ''}`} onClick={() => setConfig(c => ({ ...c, sectionIds: [] }))}>All sections</button>
+                        <button className={`sg-chip ${!allSelected ? 'sg-chip-active' : ''}`} onClick={() => { if (allSelected && sections[0]) setConfig(c => ({ ...c, sectionIds: [sections[0].id] })); }}>Custom selection</button>
+                        <label className="sg-inline-check" style={{ marginLeft: 'auto' }}>
+                            <input type="checkbox" checked={config.clearExisting} onChange={e => setConfig(c => ({ ...c, clearExisting: e.target.checked }))} />
+                            Clear existing schedules in scope before saving
+                        </label>
+                    </div>
+
+                    {!allSelected && (
+                        <div className="sg-scroll" style={{ marginTop: 12 }}>
+                            {grouped.map(([group, list]) => (
+                                <div key={group} style={{ marginBottom: 14 }}>
+                                    <div className="sg-group-head">{group}</div>
+                                    <div className="sg-chip-wrap">
+                                        {list.map(s => (
+                                            <button
+                                                key={s.id}
+                                                className={`sg-chip ${config.sectionIds.includes(s.id) ? 'sg-chip-active' : ''}`}
+                                                onClick={() => toggle(s.id)}
+                                            >
+                                                {s.name}
+                                                {s.student_count != null && <span className="sg-chip-sub">· {s.student_count}</span>}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </>
+            ) : (
+                <PartialTargetPicker
+                    target={config.partialTarget}
+                    options={targetOptions}
+                    onKindChange={setPartialKind}
+                    onIdChange={setPartialId}
+                />
+            )}
+        </div>
+    );
+};
+
+const PartialTargetPicker: React.FC<{
+    target: PartialTarget | null;
+    options: { id: string; label: string; sub?: string }[];
+    onKindChange: (kind: PartialKind) => void;
+    onIdChange: (id: string) => void;
+}> = ({ target, options, onKindChange, onIdChange }) => {
+    const kind = target?.kind ?? 'section';
+    return (
+        <div className="sg-partial">
+            <div className="sg-field-label">Target</div>
+            <div className="sg-tabs-mini" style={{ marginBottom: 12 }}>
+                {(Object.keys(PARTIAL_KIND_LABELS) as PartialKind[]).map(k => (
+                    <button
+                        key={k}
+                        className={`sg-tab-mini ${kind === k ? 'sg-tab-mini-active' : ''}`}
+                        onClick={() => onKindChange(k)}
+                    >
+                        {PARTIAL_KIND_LABELS[k]}
+                    </button>
+                ))}
+            </div>
+            <select
+                className="input"
+                value={target?.id || ''}
+                onChange={e => onIdChange(e.target.value)}
+                style={{ maxWidth: 420 }}
+            >
+                <option value="">Pick a {PARTIAL_KIND_LABELS[kind].toLowerCase()}</option>
+                {options.map(o => (
+                    <option key={o.id} value={o.id}>
+                        {o.label}{o.sub ? ` (${o.sub})` : ''}
+                    </option>
+                ))}
+            </select>
+            <div className="sg-partial-hint">
+                Existing sessions outside this {PARTIAL_KIND_LABELS[kind].toLowerCase()} become locked constraints. Matching sessions get re-solved.
+            </div>
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Stage 2 — Structure
+// ---------------------------------------------------------------------------
+
+const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>> }> = ({ config, setConfig }) => {
+    const toggleDay = (d: string) => setConfig(c => ({
+        ...c,
+        days: c.days.includes(d) ? c.days.filter(x => x !== d) : [...c.days, d],
+    }));
+    const addBreak = () => setConfig(c => ({
+        ...c,
+        breaks: [...c.breaks, { id: `brk-${Date.now()}`, label: 'Break', start: '10:00', end: '10:15' }],
+    }));
+    const updateBreak = (id: string, patch: Partial<BreakWindow>) => setConfig(c => ({
+        ...c,
+        breaks: c.breaks.map(b => b.id === id ? { ...b, ...patch } : b),
+    }));
+    const removeBreak = (id: string) => setConfig(c => ({ ...c, breaks: c.breaks.filter(b => b.id !== id) }));
+
+    return (
+        <div>
+            <StageHeader icon={<Clock size={16} />} title="Structure" desc="Define the working week, session length, and any shared breaks." />
+
+            <div className="sg-fields">
+                <div>
+                    <div className="sg-field-label">Working days</div>
+                    <div className="sg-chip-wrap">
+                        {ALL_DAYS.map(d => (
+                            <button
+                                key={d}
+                                className={`sg-chip ${config.days.includes(d) ? 'sg-chip-active' : ''}`}
+                                onClick={() => toggleDay(d)}
+                            >{d.slice(0, 3)}</button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="sg-grid-3">
+                    <div>
+                        <div className="sg-field-label">Day starts</div>
+                        <input type="time" className="input" value={config.dayStart} onChange={e => setConfig(c => ({ ...c, dayStart: e.target.value }))} />
+                    </div>
+                    <div>
+                        <div className="sg-field-label">Day ends</div>
+                        <input type="time" className="input" value={config.dayEnd} onChange={e => setConfig(c => ({ ...c, dayEnd: e.target.value }))} />
+                    </div>
+                    <div>
+                        <div className="sg-field-label">Session length</div>
+                        <select className="input" value={config.sessionMinutes} onChange={e => setConfig(c => ({ ...c, sessionMinutes: Number(e.target.value) }))}>
+                            <option value={60}>60 minutes</option>
+                            <option value={90}>90 minutes</option>
+                            <option value={120}>120 minutes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <div className="sg-field-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>Breaks</span>
+                        <button className="btn btn-secondary" onClick={addBreak} style={{ padding: '4px 10px', fontSize: 12 }}>+ Add break</button>
+                    </div>
+                    {config.breaks.length === 0 ? (
+                        <div className="sg-empty">No breaks. Sessions pack the entire day.</div>
+                    ) : (
+                        <div className="sg-break-list">
+                            {config.breaks.map(b => (
+                                <div key={b.id} className="sg-break-row">
+                                    <input className="input" value={b.label} onChange={e => updateBreak(b.id, { label: e.target.value })} placeholder="Label" />
+                                    <input type="time" className="input" value={b.start} onChange={e => updateBreak(b.id, { start: e.target.value })} />
+                                    <span className="sg-sep">to</span>
+                                    <input type="time" className="input" value={b.end} onChange={e => updateBreak(b.id, { end: e.target.value })} />
+                                    <button className="sg-icon-btn" onClick={() => removeBreak(b.id)} aria-label="Remove break"><X size={14} /></button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Stage 3 — Constraints
+// ---------------------------------------------------------------------------
+
+const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>> }> = ({ config, setConfig }) => {
+    const updateSoft = (key: keyof GenerationConfig['soft'], val: number) =>
+        setConfig(c => ({ ...c, soft: { ...c.soft, [key]: val } }));
+
+    return (
+        <div>
+            <StageHeader icon={<Sliders size={16} />} title="Constraints" desc="Hard rules are always enforced. Tune soft weights to guide optimization." />
+
+            <div className="sg-subhead"><Lock size={12} /> Hard constraints. Always on.</div>
+            <ul className="sg-hard-list">
+                {HARD_CONSTRAINTS.map(h => (
+                    <li key={h}><CheckCircle size={12} /> {h}</li>
+                ))}
+            </ul>
+
+            <div className="sg-subhead" style={{ marginTop: 20 }}><Sliders size={12} /> Soft optimization weights</div>
+            <div className="sg-sliders">
+                <SoftSlider label="Balanced teacher load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} />
+                <SoftSlider label="Compact schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} />
+                <SoftSlider label="Minimize room switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} />
+            </div>
+
+            <div className="sg-grid-3" style={{ marginTop: 16 }}>
+                <div>
+                    <div className="sg-field-label">Attempts</div>
+                    <select className="input" value={config.maxAttempts} onChange={e => setConfig(c => ({ ...c, maxAttempts: Number(e.target.value) }))}>
+                        {[1, 3, 5, 10].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const SoftSlider: React.FC<{ label: string; desc: string; value: number; onChange: (v: number) => void }> = ({ label, desc, value, onChange }) => (
+    <div className="sg-slider">
+        <div className="sg-slider-head">
+            <div>
+                <div className="sg-slider-label">{label}</div>
+                <div className="sg-slider-desc">{desc}</div>
+            </div>
+            <div className="sg-slider-val">{value}</div>
+        </div>
+        <input type="range" min={0} max={100} step={5} value={value} onChange={e => onChange(Number(e.target.value))} />
+    </div>
+);
+
+// ---------------------------------------------------------------------------
+// Stage 4 — Review
+// ---------------------------------------------------------------------------
+
+const ReviewStage: React.FC<{
+    config: GenerationConfig;
+    blockers: string[];
+    counts: { subjects: number; teachers: number; rooms: number; sections: number; existing: number };
+    targetLabel: string;
+    onStart: () => void;
+}> = ({ config, blockers, counts, targetLabel, onStart }) => {
+    const ready = blockers.length === 0;
+    return (
+        <div>
+            <StageHeader icon={<ListChecks size={16} />} title="Review inputs" desc="Quick summary before running the engine." />
+
+            <div className="stats-grid" style={{ marginBottom: 16 }}>
+                <Stat label="Subjects" value={counts.subjects} />
+                <Stat label="Teachers" value={counts.teachers} />
+                <Stat label="Rooms" value={counts.rooms} />
+                <Stat label="Sections" value={counts.sections} />
+            </div>
+
+            <div className="sg-review-grid">
+                <ReviewBlock title="Scope"
+                    items={config.mode === 'partial'
+                        ? [
+                            ['Mode', 'Partial regeneration'],
+                            ['Target type', config.partialTarget ? PARTIAL_KIND_LABELS[config.partialTarget.kind] : 'Not set'],
+                            ['Target', targetLabel || 'Not set'],
+                            ['Existing entries', String(counts.existing)],
+                        ]
+                        : [
+                            ['Mode', 'Full generation'],
+                            ['Sections', config.sectionIds.length ? `${config.sectionIds.length} selected` : `All (${counts.sections})`],
+                            ['Clear existing', config.clearExisting ? 'Yes' : 'No'],
+                            ['Existing entries', String(counts.existing)],
+                        ]
+                    }
+                />
+                <ReviewBlock title="Structure"
+                    items={[
+                        ['Days', config.days.map(d => d.slice(0, 3)).join(', ') || 'None'],
+                        ['Hours', `${config.dayStart} to ${config.dayEnd}`],
+                        ['Session', `${config.sessionMinutes} min`],
+                        ['Breaks', config.breaks.map(b => `${b.label} ${b.start} to ${b.end}`).join(', ') || 'None'],
+                    ]}
+                />
+                <ReviewBlock title="Soft weights"
+                    items={[
+                        ['Balanced load', `${config.soft.balancedLoad}`],
+                        ['Compact', `${config.soft.compactSchedule}`],
+                        ['Minimize room switch', `${config.soft.minimizeRoomSwitch}`],
+                        ['Attempts', String(config.maxAttempts)],
+                    ]}
+                />
+                <ReviewBlock title="Priorities"
+                    items={[
+                        ['High priority sections', String(Object.values(config.priorities.sections).filter(v => v >= 70).length)],
+                        ['High priority subjects', String(Object.values(config.priorities.subjects).filter(v => v >= 70).length)],
+                        ['Low priority items', String([...Object.values(config.priorities.sections), ...Object.values(config.priorities.subjects)].filter(v => v <= 30).length)],
+                        ['Special room bias', `${config.priorities.specialRoomBias}`],
+                    ]}
+                />
+            </div>
+
+            {blockers.length > 0 && (
+                <div className="sg-blockers">
+                    <div className="sg-blockers-head"><XCircle size={14} /> Fix these before generating</div>
+                    <ul>{blockers.map((b, i) => <li key={i}>{b}</li>)}</ul>
+                </div>
+            )}
+
+            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-primary" onClick={onStart} disabled={!ready}>
+                    <Sparkles size={14} /> Start generation
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const ReviewBlock: React.FC<{ title: string; items: [string, string][] }> = ({ title, items }) => (
+    <div className="sg-review-block">
+        <div className="sg-review-title">{title}</div>
+        <dl>
+            {items.map(([k, v]) => (
+                <div key={k} className="sg-review-row">
+                    <dt>{k}</dt>
+                    <dd>{v}</dd>
+                </div>
+            ))}
+        </dl>
+    </div>
+);
+
+const resolveTargetLabel = (
+    target: PartialTarget | null,
+    lookups: { sections: Section[]; teachers: Teacher[]; rooms: Room[]; subjects: Subject[] },
+): string => {
+    if (!target?.id) return '';
+    if (target.kind === 'section') return lookups.sections.find(s => s.id === target.id)?.name || '';
+    if (target.kind === 'teacher') return lookups.teachers.find(t => t.id === target.id)?.full_name || '';
+    if (target.kind === 'room')    return lookups.rooms.find(r => r.id === target.id)?.name || '';
+    const sub = lookups.subjects.find(s => s.id === target.id);
+    return sub ? `${sub.code} ${sub.name}` : '';
+};
+
+const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => (
+    <div className="stat-card">
+        <div className="stat-number">{value}</div>
+        <div className="stat-label">{label}</div>
+    </div>
+);
+
+// ---------------------------------------------------------------------------
+// Stage 5 — Generate (progress)
+// ---------------------------------------------------------------------------
+
+const SUBSTAGES: { key: GenerationProgress['subStage']; label: string }[] = [
+    { key: 'loading', label: 'Loading data' },
+    { key: 'ranking', label: 'Ranking subjects' },
+    { key: 'placing', label: 'Placing sessions' },
+    { key: 'resolving', label: 'Resolving conflicts' },
+    { key: 'scoring', label: 'Scoring' },
+];
+
+const GenerateStage: React.FC<{
+    progress: GenerationProgress;
+    generating: boolean;
+    onCancel: () => void;
+    onRun: () => void;
+}> = ({ progress, generating, onCancel, onRun }) => {
+    const pct = progress.total > 0 ? Math.round((progress.placed / progress.total) * 100) : 0;
+    const currentIdx = SUBSTAGES.findIndex(s => s.key === progress.subStage);
+    return (
+        <div>
+            <StageHeader icon={<Sparkles size={16} />} title="Generate" desc="The engine is running. You can cancel and adjust inputs at any time." />
+            <div className="sg-progress-wrap">
+                <div className="sg-progress-bar"><div className="sg-progress-fill" style={{ width: `${pct}%` }} /></div>
+                <div className="sg-progress-meta">
+                    <span>Attempt {progress.attempt} of {progress.totalAttempts || '?'}</span>
+                    <span>{progress.placed} of {progress.total || '?'} placed</span>
+                </div>
+                <div className="sg-progress-msg">{progress.message}</div>
+            </div>
+
+            <ol className="sg-substages">
+                {SUBSTAGES.map((s, i) => {
+                    const state = currentIdx < 0 ? 'upcoming' : i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'upcoming';
+                    return (
+                        <li key={s.key} className={`sg-substage sg-substage-${state}`}>
+                            <span className="sg-substage-dot" />
+                            {s.label}
+                        </li>
+                    );
+                })}
+            </ol>
+
+            <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                {generating ? (
+                    <button className="btn btn-secondary" onClick={onCancel}><X size={14} /> Cancel</button>
+                ) : (
+                    <button className="btn btn-primary" onClick={onRun}><RefreshCw size={14} /> Run again</button>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Stage 6 — Results
+// ---------------------------------------------------------------------------
+
+const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
+    const perfect = result.placed === result.total && result.errors.length === 0;
+    return (
+        <div>
+            <StageHeader
+                icon={perfect ? <CheckCircle size={16} /> : <Layers size={16} />}
+                title={perfect ? 'Schedule ready' : 'Partial schedule'}
+                desc={`${result.placed} of ${result.total} sessions placed. Soft score ${result.score} out of 100.`}
+            />
+
+            {result.highPriorityTotal > 0 && (
+                <div className="sg-highlight">
+                    <Flag size={13} />
+                    <span>High priority placed</span>
+                    <strong>{result.highPriorityPlaced} of {result.highPriorityTotal}</strong>
+                </div>
+            )}
+
+            {result.mode === 'partial' && <DiffView diff={result.diff} />}
+
+            <div className="sg-progress-bar" style={{ marginBottom: 16 }}>
+                <div className="sg-progress-fill" style={{ width: `${(result.placed / Math.max(result.total, 1)) * 100}%`, background: perfect ? 'var(--accent-success, #2F8F5B)' : 'var(--accent-warning, #D38B20)' }} />
+            </div>
+
+            {result.errors.length > 0 && (
+                <details className="sg-errors" open>
+                    <summary><XCircle size={13} /> {result.errors.length} unresolved issue{result.errors.length === 1 ? '' : 's'}</summary>
+                    <ul>{result.errors.slice(0, 20).map((e, i) => <li key={i}>{e}</li>)}</ul>
+                    {result.errors.length > 20 && <div className="sg-errors-more">+ {result.errors.length - 20} more</div>}
+                </details>
+            )}
+
+            {result.entries.length > 0 && (
+                <div className="table-container" style={{ maxHeight: 360, overflow: 'auto', marginTop: 12 }}>
+                    <table>
+                        <thead><tr><th>Day</th><th>Time</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Section</th></tr></thead>
+                        <tbody>
+                            {result.entries.slice().sort((a, b) => {
+                                const d = ALL_DAYS.indexOf(a.day) - ALL_DAYS.indexOf(b.day);
+                                return d !== 0 ? d : a.start.localeCompare(b.start);
+                            }).map(e => (
+                                <tr key={`${e.subjectId}-${e.day}-${e.start}`}>
+                                    <td style={{ fontWeight: 600 }}>{e.day}</td>
+                                    <td><Clock size={12} style={{ verticalAlign: 'middle', color: 'var(--text-muted)', marginRight: 4 }} />{e.start} to {e.end}</td>
+                                    <td><strong>{e.subjectCode}</strong><br /><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.subjectName}</span></td>
+                                    <td>{e.teacherName}</td>
+                                    <td><MapPin size={12} style={{ verticalAlign: 'middle', color: 'var(--text-muted)', marginRight: 4 }} />{e.roomName}</td>
+                                    <td>{e.sectionName}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Stage 7 — Save
+// ---------------------------------------------------------------------------
+
+const SaveStage: React.FC<{
+    result: GenerationResult;
+    saving: boolean;
+    savedId: string | null;
+    saveError: string | null;
+    onSave: () => void;
+    onSaveAndSubmit: () => void;
+    onRegenerate: () => void;
+    onReset: () => void;
+}> = ({ result, saving, savedId, saveError, onSave, onSaveAndSubmit, onRegenerate, onReset }) => (
+    <div>
+        <StageHeader icon={<Save size={16} />} title="Save" desc="Persist this run as a draft, or send it for approval right away." />
+
+        <div className="sg-review-grid">
+            <ReviewBlock title="Summary" items={[
+                ['Placed', `${result.placed}/${result.total}`],
+                ['Unresolved', String(result.errors.length)],
+                ['Soft score', `${result.score}/100`],
+            ]} />
+        </div>
+
+        {savedId && (
+            <div className="sg-banner sg-banner-success">
+                <CheckCircle size={14} /> Saved. Open the Versions panel or Schedule Management to keep moving it through the workflow.
+            </div>
+        )}
+        {saveError && (
+            <div className="sg-banner sg-banner-error">
+                <XCircle size={14} /> {saveError}
+            </div>
+        )}
+
+        <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={onSave} disabled={saving || !!savedId}>
+                <Play size={14} /> {saving ? 'Saving…' : savedId ? 'Saved' : 'Save as draft'}
+            </button>
+            <button className="btn btn-primary" onClick={onSaveAndSubmit} disabled={saving || !!savedId}>
+                <Send size={14} /> Save and submit for approval
+            </button>
+            <button className="btn btn-secondary" onClick={onRegenerate} disabled={saving}>
+                <RefreshCw size={14} /> Regenerate
+            </button>
+            <button className="btn btn-secondary" onClick={onReset} disabled={saving}>
+                <ArrowLeft size={14} /> Start over
+            </button>
+        </div>
+    </div>
+);
+
+// ---------------------------------------------------------------------------
+// Versions panel (Phase 4)
+// ---------------------------------------------------------------------------
+
+const STATE_ACTION: Record<WorkflowState, { nextLabel: string; icon: React.ReactNode } | null> = {
+    draft:     { nextLabel: 'Submit for approval', icon: <Send size={13} /> },
+    submitted: { nextLabel: 'Approve',              icon: <CheckCircle size={13} /> },
+    approved:  { nextLabel: 'Publish',              icon: <Upload size={13} /> },
+    published: null,
+};
+
+const formatRelativeTime = (iso: string | null): string => {
+    if (!iso) return 'No entries yet';
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) return iso;
+    const diff = Date.now() - then;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} d ago`;
+    return new Date(iso).toLocaleDateString();
+};
+
+const VersionsPanel: React.FC<{
+    summary: VersionSummary[];
+    busy: WorkflowState | null;
+    note: string | null;
+    error: string | null;
+    canApprove: boolean;
+    onSubmitDrafts: () => void;
+    onApproveSubmitted: () => void;
+    onPublishApproved: () => void;
+    onDismissNote: () => void;
+}> = ({ summary, busy, note, error, canApprove, onSubmitDrafts, onApproveSubmitted, onPublishApproved, onDismissNote }) => {
+    const actionFor = (state: WorkflowState) => {
+        if (state === 'draft')     return onSubmitDrafts;
+        if (state === 'submitted') return canApprove ? onApproveSubmitted : undefined;
+        if (state === 'approved')  return canApprove ? onPublishApproved  : undefined;
+        return undefined;
+    };
+    const lockedReason = (state: WorkflowState) =>
+        (state === 'submitted' || state === 'approved') && !canApprove
+            ? 'Only a Schedule Administrator can move this forward.'
+            : null;
+    return (
+        <div className="sg-versions">
+            <div className="sg-versions-head">
+                <FileClock size={14} />
+                <span>Workflow versions</span>
+                <span className="sg-versions-hint">Move a group forward when it is ready.</span>
+            </div>
+            <div className="sg-versions-grid">
+                {summary.map(v => {
+                    const action = STATE_ACTION[v.state];
+                    const onClick = actionFor(v.state);
+                    return (
+                        <div key={v.state} className={`sg-version-card sg-version-${v.state}`}>
+                            <div className="sg-version-label">
+                                {v.state === 'published' ? <Upload size={13} /> :
+                                 v.state === 'approved'  ? <CheckCircle size={13} /> :
+                                 v.state === 'submitted' ? <Inbox size={13} /> : <Save size={13} />}
+                                {v.label}
+                            </div>
+                            <div className="sg-version-count">{v.count}</div>
+                            <div className="sg-version-desc">{v.desc}</div>
+                            <div className="sg-version-meta">{formatRelativeTime(v.latest)}</div>
+                            {action && onClick ? (
+                                <button
+                                    className="btn btn-secondary sg-version-action"
+                                    onClick={onClick}
+                                    disabled={v.count === 0 || busy === v.state}
+                                >
+                                    {action.icon} {busy === v.state ? 'Working…' : action.nextLabel}
+                                </button>
+                            ) : lockedReason(v.state) && v.count > 0 ? (
+                                <div className="sg-version-locked">{lockedReason(v.state)}</div>
+                            ) : null}
+                        </div>
+                    );
+                })}
+            </div>
+            {note && (
+                <div className="sg-banner sg-banner-success" style={{ marginTop: 12, justifyContent: 'space-between' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <CheckCircle size={14} /> {note}
+                    </span>
+                    <button className="sg-icon-btn" onClick={onDismissNote} aria-label="Dismiss"><X size={12} /></button>
+                </div>
+            )}
+            {error && (
+                <div className="sg-banner sg-banner-error" style={{ marginTop: 12, justifyContent: 'space-between' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <XCircle size={14} /> {error}
+                    </span>
+                    <button className="sg-icon-btn" onClick={onDismissNote} aria-label="Dismiss"><X size={12} /></button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Shared bits
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Diff view (partial mode only)
+// ---------------------------------------------------------------------------
+
+const STATUS_META: Record<DiffEntry['status'], { label: string; icon: React.ReactNode }> = {
+    changed:   { label: 'Moved',     icon: <RefreshCw size={12} /> },
+    added:     { label: 'Added',     icon: <Plus size={12} /> },
+    removed:   { label: 'Removed',   icon: <X size={12} /> },
+    unchanged: { label: 'Unchanged', icon: <CheckCircle size={12} /> },
+};
+
+const DiffView: React.FC<{ diff: DiffEntry[] }> = ({ diff }) => {
+    const counts = diff.reduce((acc, d) => { acc[d.status] = (acc[d.status] || 0) + 1; return acc; }, {} as Record<string, number>);
+    if (diff.length === 0) {
+        return <div className="sg-diff-empty">No prior sessions to compare. Everything in this slice is new.</div>;
+    }
+    return (
+        <div className="sg-diff">
+            <div className="sg-diff-head">
+                <GitBranch size={13} />
+                <span>Changes vs current schedule</span>
+                <div className="sg-diff-counts">
+                    {(['changed', 'added', 'removed', 'unchanged'] as const).map(s => counts[s] ? (
+                        <span key={s} className={`sg-diff-chip sg-diff-${s}`}>
+                            {STATUS_META[s].icon} {STATUS_META[s].label} {counts[s]}
+                        </span>
+                    ) : null)}
+                </div>
+            </div>
+            <ul className="sg-diff-list">
+                {diff.map(d => <DiffRow key={d.key} entry={d} />)}
+            </ul>
+        </div>
+    );
+};
+
+const placementLine = (p: PlacedEntry) =>
+    `${p.day.slice(0, 3)} ${p.start} to ${p.end} · ${p.roomName} · ${p.teacherName}`;
+
+const DiffRow: React.FC<{ entry: DiffEntry }> = ({ entry }) => {
+    const meta = STATUS_META[entry.status];
+    const label = entry.after || entry.before;
+    return (
+        <li className={`sg-diff-row sg-diff-${entry.status}`}>
+            <span className={`sg-diff-tag sg-diff-${entry.status}`}>{meta.icon} {meta.label}</span>
+            <div className="sg-diff-body">
+                <div className="sg-diff-title">
+                    <strong>{label?.subjectCode || 'Session'}</strong>
+                    <span className="sg-diff-sub">{label?.sectionName}</span>
+                </div>
+                {entry.status === 'changed' && entry.before && entry.after ? (
+                    <div className="sg-diff-delta">
+                        <span className="sg-diff-before">{placementLine(entry.before)}</span>
+                        <ArrowRight size={11} />
+                        <span className="sg-diff-after">{placementLine(entry.after)}</span>
+                    </div>
+                ) : (
+                    <div className="sg-diff-delta">
+                        <span>{placementLine(label!)}</span>
+                    </div>
+                )}
+            </div>
+        </li>
+    );
+};
+
+const StageHeader: React.FC<{ icon: React.ReactNode; title: string; desc: string }> = ({ icon, title, desc }) => (
+    <div className="sg-stage-head">
+        <div className="sg-stage-icon">{icon}</div>
+        <div>
+            <div className="sg-stage-title">{title}</div>
+            <div className="sg-stage-desc">{desc}</div>
+        </div>
+    </div>
+);
+
+// ---------------------------------------------------------------------------
+// Stage 4 - Priorities
+// ---------------------------------------------------------------------------
+
+type PriorityKind = 'sections' | 'subjects';
+
+interface PriorityItem {
+    id: string;
+    label: string;
+    sub: string;
+    groupKey: string;
+}
+
+const PrioritiesStage: React.FC<{
+    config: GenerationConfig;
+    setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>>;
+    sections: Section[];
+    subjects: Subject[];
+}> = ({ config, setConfig, sections, subjects }) => {
+    const [kind, setKind] = useState<PriorityKind>('sections');
+    const [search, setSearch] = useState('');
+
+    const items: PriorityItem[] = useMemo(() => {
+        if (kind === 'sections') {
+            return sections.map(s => ({
+                id: s.id,
+                label: s.name,
+                sub: [s.program, s.year_level ? `Year ${s.year_level}` : null].filter(Boolean).join(' · ') || 'Section',
+                groupKey: `${s.program || 'Unassigned'} · Year ${s.year_level ?? '?'}`,
+            }));
+        }
+        return subjects.map(s => ({
+            id: s.id,
+            label: s.code,
+            sub: s.name,
+            groupKey: `${s.program || 'Unassigned'} · Year ${s.year_level ?? '?'}`,
+        }));
+    }, [kind, sections, subjects]);
+
+    const grouped = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        const filtered = q
+            ? items.filter(it => it.label.toLowerCase().includes(q) || it.sub.toLowerCase().includes(q))
+            : items;
+        const m = new Map<string, PriorityItem[]>();
+        for (const it of filtered) {
+            const arr = m.get(it.groupKey) || [];
+            arr.push(it);
+            m.set(it.groupKey, arr);
+        }
+        return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
+    }, [items, search]);
+
+    const map = kind === 'sections' ? config.priorities.sections : config.priorities.subjects;
+    const setMap = (next: Record<string, number>) => setConfig(c => ({
+        ...c,
+        priorities: { ...c.priorities, [kind]: next },
+    }));
+
+    const setOne = (id: string, tier: PriorityTier) => {
+        const next = { ...map, [id]: PRIORITY_VALUES[tier] };
+        setMap(next);
+    };
+    const setMany = (ids: string[], tier: PriorityTier) => {
+        const next = { ...map };
+        for (const id of ids) next[id] = PRIORITY_VALUES[tier];
+        setMap(next);
+    };
+    const resetAll = () => setMap({});
+
+    // Smart suggest uses deterministic heuristics so it works without a cloud AI call.
+    // Sections: top quartile by student count lands on High, bottom quartile on Low.
+    // Subjects: lab subjects land on High (special-room pressure), electives (no program) on Low.
+    const smartSuggest = () => {
+        if (kind === 'sections') {
+            const sized = sections.filter(s => s.student_count != null) as { id: string; student_count: number | null }[];
+            if (sized.length === 0) return;
+            const counts = sized.map(s => s.student_count || 0).sort((a, b) => a - b);
+            const qHigh = counts[Math.floor(counts.length * 0.75)] ?? counts[counts.length - 1];
+            const qLow  = counts[Math.floor(counts.length * 0.25)] ?? counts[0];
+            const next: Record<string, number> = {};
+            for (const s of sections) {
+                const n = s.student_count ?? -1;
+                if (n >= qHigh && n > 0) next[s.id] = PRIORITY_VALUES.high;
+                else if (n > 0 && n <= qLow) next[s.id] = PRIORITY_VALUES.low;
+            }
+            setMap(next);
+        } else {
+            const next: Record<string, number> = {};
+            for (const s of subjects) {
+                if (s.requires_lab) next[s.id] = PRIORITY_VALUES.high;
+                else if (!s.program)  next[s.id] = PRIORITY_VALUES.low;
+            }
+            setMap(next);
+        }
+    };
+
+    const cycleTier = (id: string) => {
+        const current = tierFromValue(map[id] ?? 50);
+        const order: PriorityTier[] = ['normal', 'high', 'low'];
+        const idx = order.indexOf(current);
+        setOne(id, order[(idx + 1) % order.length]);
+    };
+
+    const touched = Object.keys(map).length;
+
+    return (
+        <div>
+            <StageHeader
+                icon={<Flag size={16} />}
+                title="Priorities"
+                desc="Flag what matters most. The engine places high priority items first and protects their slots."
+            />
+
+            <div className="sg-prio-bias">
+                <div className="sg-slider-head">
+                    <div>
+                        <div className="sg-slider-label">Special room bias</div>
+                        <div className="sg-slider-desc">How strongly to reserve labs and studios for subjects that need them. Lab subjects always get labs.</div>
+                    </div>
+                    <div className="sg-slider-val">{config.priorities.specialRoomBias}</div>
+                </div>
+                <input
+                    type="range" min={0} max={100} step={5}
+                    value={config.priorities.specialRoomBias}
+                    onChange={e => setConfig(c => ({ ...c, priorities: { ...c.priorities, specialRoomBias: Number(e.target.value) } }))}
+                />
+            </div>
+
+            <div className="sg-prio-toolbar">
+                <div className="sg-tabs-mini">
+                    <button className={`sg-tab-mini ${kind === 'sections' ? 'sg-tab-mini-active' : ''}`} onClick={() => setKind('sections')}>
+                        Sections <span className="sg-tab-mini-count">{sections.length}</span>
+                    </button>
+                    <button className={`sg-tab-mini ${kind === 'subjects' ? 'sg-tab-mini-active' : ''}`} onClick={() => setKind('subjects')}>
+                        Subjects <span className="sg-tab-mini-count">{subjects.length}</span>
+                    </button>
+                </div>
+                <div className="sg-prio-search">
+                    <SearchIcon size={14} />
+                    <input
+                        className="input"
+                        placeholder={`Search ${kind}`}
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                </div>
+                <button
+                    className="sg-icon-btn sg-reset-btn"
+                    onClick={smartSuggest}
+                    title={kind === 'sections'
+                        ? 'Flag larger sections as high, smaller as low'
+                        : 'Flag lab subjects as high, electives as low'}
+                >
+                    <Lightbulb size={13} /> Smart suggest
+                </button>
+                <button className="sg-icon-btn sg-reset-btn" onClick={resetAll} disabled={touched === 0} title="Reset to normal">
+                    <RotateCcw size={13} /> Reset
+                </button>
+            </div>
+
+            {grouped.length === 0 ? (
+                <div className="sg-empty">Nothing matches your search.</div>
+            ) : (
+                <div className="sg-scroll sg-prio-scroll">
+                    {grouped.map(([groupKey, list]) => (
+                        <PriorityGroup
+                            key={groupKey}
+                            title={groupKey}
+                            items={list}
+                            map={map}
+                            onCycle={cycleTier}
+                            onSetAll={tier => setMany(list.map(i => i.id), tier)}
+                        />
+                    ))}
+                </div>
+            )}
+
+            <div className="sg-prio-legend">
+                {PRIORITY_TIERS.map(t => (
+                    <span key={t.key} className={`sg-prio-pill sg-prio-${t.key}`}>
+                        {t.label}
+                        <span className="sg-prio-pill-sub">{t.desc}</span>
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const PriorityGroup: React.FC<{
+    title: string;
+    items: PriorityItem[];
+    map: Record<string, number>;
+    onCycle: (id: string) => void;
+    onSetAll: (tier: PriorityTier) => void;
+}> = ({ title, items, map, onCycle, onSetAll }) => {
+    const tiers = items.map(i => tierFromValue(map[i.id] ?? 50));
+    const allSame = tiers.every(t => t === tiers[0]) ? tiers[0] : null;
+    return (
+        <div className="sg-prio-group">
+            <div className="sg-prio-group-head">
+                <span className="sg-prio-group-title">{title}</span>
+                <span className="sg-prio-group-count">{items.length}</span>
+                <div className="sg-prio-group-actions">
+                    <span className="sg-prio-group-hint">Set all</span>
+                    {PRIORITY_TIERS.map(t => (
+                        <button
+                            key={t.key}
+                            className={`sg-prio-mini sg-prio-${t.key} ${allSame === t.key ? 'sg-prio-mini-active' : ''}`}
+                            onClick={() => onSetAll(t.key)}
+                            title={t.desc}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <ul className="sg-prio-list">
+                {items.map(it => {
+                    const tier = tierFromValue(map[it.id] ?? 50);
+                    return (
+                        <li key={it.id}>
+                            <button className="sg-prio-row" onClick={() => onCycle(it.id)} title="Click to cycle priority">
+                                <span className="sg-prio-row-main">
+                                    <span className="sg-prio-row-label">{it.label}</span>
+                                    <span className="sg-prio-row-sub">{it.sub}</span>
+                                </span>
+                                <span className={`sg-prio-pill sg-prio-${tier}`}>{tier}</span>
+                            </button>
+                        </li>
+                    );
+                })}
+            </ul>
+        </div>
+    );
+};
+
+export default ScheduleGenerate;

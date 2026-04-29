@@ -1,0 +1,14 @@
+{
+  "name": "optisched",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "env": {
+    "VITE_SUPABASE_URL": {
+      "description": "Supabase Project URL"
+    },
+    "VITE_SUPABASE_ANON_KEY": {
+      "description": "Supabase Anon Public Key"
+    }
+  }
+}

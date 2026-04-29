@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About — OptiSched</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.7;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: fadeDown 0.6s ease-out;
+        }
+
+        @keyframes fadeDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .logo h1 {
+            font-size: 42px;
+            background: linear-gradient(135deg, #818cf8, #c084fc, #818cf8);
+            background-size: 200% auto;
+            animation: shimmer 3s linear infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 4px;
+            letter-spacing: -0.5px;
+        }
+
+        .logo .tagline {
+            font-size: 16px;
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        .logo .badge {
+            display: inline-block;
+            margin-top: 12px;
+            background: rgba(129, 140, 248, 0.12);
+            color: #a5b4fc;
+            font-size: 12px;
+            padding: 6px 18px;
+            border-radius: 99px;
+            font-weight: 500;
+            border: 1px solid rgba(129, 140, 248, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .logo .badge:hover {
+            background: rgba(129, 140, 248, 0.25);
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(129, 140, 248, 0.2);
+        }
+
+        h2 {
+            font-size: 22px;
+            color: #f1f5f9;
+            margin-top: 40px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+            animation: fadeUp 0.5s ease-out;
+        }
+
+        p, li {
+            color: #94a3b8;
+            margin-bottom: 12px;
+        }
+
+        ul { padding-left: 24px; }
+        li { margin-bottom: 6px; }
+
+        .highlight {
+            background: linear-gradient(135deg, rgba(129, 140, 248, 0.08), rgba(192, 132, 252, 0.08));
+            border-left: 3px solid #818cf8;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            transition: all 0.3s ease;
+        }
+
+        .highlight:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 20px rgba(129, 140, 248, 0.15);
+        }
+
+        .highlight p {
+            color: #c7d2fe;
+            margin-bottom: 0;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .feature {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: scaleIn 0.5s ease-out;
+            cursor: default;
+        }
+
+        .feature:hover {
+            transform: translateY(-6px);
+            border-color: #818cf8;
+            box-shadow: 0 12px 40px rgba(129, 140, 248, 0.15);
+            background: linear-gradient(145deg, #1e293b, #253347);
+        }
+
+        .feature .icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+            transition: transform 0.3s ease;
+        }
+
+        .feature:hover .icon {
+            transform: scale(1.2) rotate(5deg);
+        }
+
+        .feature h4 {
+            font-size: 15px;
+            color: #f1f5f9;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .feature p {
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 0;
+        }
+
+
+
+        ol {
+            padding-left: 24px;
+            counter-reset: step-counter;
+        }
+
+        ol li {
+            position: relative;
+            padding-left: 8px;
+            transition: all 0.2s ease;
+        }
+
+        ol li:hover {
+            color: #c7d2fe;
+            transform: translateX(4px);
+        }
+
+        .effective {
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+            margin-top: 48px;
+            border-top: 1px solid #1e293b;
+            padding-top: 20px;
+        }
+
+        a {
+            color: #818cf8;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        a:hover {
+            color: #a5b4fc;
+            text-decoration: underline;
+        }
+
+        .nav {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 32px;
+            animation: fadeDown 0.6s ease-out 0.2s both;
+        }
+
+        .nav a {
+            color: #94a3b8;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav a:hover,
+        .nav a.active {
+            color: #818cf8;
+            border-color: #818cf8;
+            text-decoration: none;
+            background: rgba(129, 140, 248, 0.08);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(129, 140, 248, 0.1);
+        }
+
+        @media (max-width: 600px) {
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="logo">
+        <h1>OptiSched</h1>
+        <p class="tagline">Smart Scheduling, Simple Solutions</p>
+        <span class="badge">STI College Meycauayan • Branch ID: 401903</span>
+    </div>
+
+    <nav class="nav">
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Service</a>
+        <a class="active" href="about.html">About</a>
+    </nav>
+
+    <h2>About OptiSched</h2>
+    <p>OptiSched is an automated academic scheduling platform developed specifically for STI College Meycauayan. It
+        leverages modern technology and artificial intelligence to eliminate the tedious manual process of creating
+        conflict-free timetables for students, faculty, and institutional resources.</p>
+
+    <div class="highlight">
+        <p><strong>Mission:</strong> To streamline academic scheduling through intelligent automation, ensuring
+            zero-conflict timetables while optimizing room utilization, faculty load balancing, and student experience
+            at STI College Meycauayan.</p>
+    </div>
+
+    <h2>Key Features</h2>
+    <div class="features">
+        <div class="feature">
+            <div class="icon">🧠</div>
+            <h4>AI-Powered Scheduling</h4>
+            <p>OptiBot, powered by advanced AI, resolves conflicts and optimizes schedules in real time.</p>
+        </div>
+        <div class="feature">
+            <div class="icon">🛡️</div>
+            <h4>Constraint-Aware Engine</h4>
+            <p>Respects hard constraints (no overlaps, room capacity) and soft preferences (teacher availability).</p>
+        </div>
+        <div class="feature">
+            <div class="icon">📱</div>
+            <h4>Mobile-First Design</h4>
+            <p>Built for a seamless experience on Android and iOS devices.</p>
+        </div>
+        <div class="feature">
+            <div class="icon">🔄</div>
+            <h4>Real-Time Sync</h4>
+            <p>Schedule changes propagate instantly across all users via real-time subscriptions.</p>
+        </div>
+        <div class="feature">
+            <div class="icon">👥</div>
+            <h4>Role-Based Access</h4>
+            <p>Dedicated dashboards for Administrators, Faculty, and Students with appropriate permissions.</p>
+        </div>
+        <div class="feature">
+            <div class="icon">📊</div>
+            <h4>Visual Schedule Editor</h4>
+            <p>Interactive weekly calendar view with drag-and-drop support and conflict highlighting.</p>
+        </div>
+    </div>
+
+
+
+    <h2>How It Works</h2>
+    <ol>
+        <li><strong>Data Input:</strong> Administrators input subjects, teachers, rooms, sections, and scheduling
+            constraints into the system.</li>
+        <li><strong>AI Optimization:</strong> The constraint-aware engine generates optimal timetables, automatically
+            avoiding overlaps and respecting room capacities.</li>
+        <li><strong>Review &amp; Publish:</strong> Administrators review the generated schedule, make manual adjustments if
+            needed, and publish it.</li>
+        <li><strong>Real-Time Access:</strong> Students and faculty instantly see their personalized schedules in the
+            mobile app.</li>
+        <li><strong>Ongoing Support:</strong> OptiBot provides 24/7 scheduling assistance, conflict detection, and
+            data-driven insights.</li>
+    </ol>
+
+    <h2>For STI College Meycauayan</h2>
+    <p>OptiSched was designed as a capstone research project to address the specific scheduling challenges faced by STI
+        College Meycauayan. The system is tailored to handle the institution's programs, sections, room configurations,
+        and faculty structures.</p>
+
+    <h2>Contact</h2>
+    <p>For support, feature requests, or inquiries:</p>
+    <p><strong>STI College Meycauayan — Office of the Registrar</strong><br>
+        Email: registrar@meycauayan.sti.edu.ph</p>
+
+    <p class="effective">OptiSched v1.0 &middot; © 2026 STI College Meycauayan. All rights reserved.</p>
+</body>
+
+</html>
