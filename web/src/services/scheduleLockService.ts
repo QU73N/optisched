@@ -81,7 +81,7 @@ export async function getLockedSchedules(academicYear?: string, semester?: strin
         .from('schedules')
         .select(`
             *,
-            teacher:teachers(id, profile:profiles(full_name, email)),
+            teacher:teachers(id, profile_id:profiles(full_name, email)),
             room:rooms(name, building, capacity),
             section:sections(name, program, year_level),
             locked_by_user:profiles(full_name, email)

@@ -31,7 +31,7 @@ const Analytics: React.FC = () => {
         setLoading(true);
         const [schedRes, teacherRes, roomRes, conflictRes] = await Promise.all([
             supabase.from('schedules').select('id, teacher_id, room_id, day_of_week, start_time, end_time'),
-            supabase.from('teachers').select('id, max_hours, profile:profiles(full_name)'),
+            supabase.from('teachers').select('id, max_hours, profile_id:profiles(full_name)'),
             supabase.from('rooms').select('id, name, building, capacity'),
             supabase.from('conflicts').select('id').eq('is_resolved', false),
         ]);
@@ -48,7 +48,7 @@ const Analytics: React.FC = () => {
             const classes = schedules.filter(s => s.teacher_id === t.id).length;
             const maxHours = t.max_hours || 40;
             return {
-                name: t.profile?.full_name || 'Unknown',
+                name: t.profile_id?.full_name || 'Unknown',
                 classes,
                 maxHours,
                 load: Math.round((classes / (maxHours / 3)) * 100), // rough estimate

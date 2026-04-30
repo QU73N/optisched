@@ -116,6 +116,10 @@ const ScheduleManagement: React.FC = () => {
         // Map RPC response to ScheduleRow format
         const schedulesData = (schedRes.data as unknown as Array<{
             id: string;
+            teacher_id: string;
+            subject_id: string;
+            room_id: string;
+            section_id: string;
             day_of_week: string;
             start_time: string;
             end_time: string;
@@ -140,9 +144,9 @@ const ScheduleManagement: React.FC = () => {
             semester: s.semester,
             academic_year: s.academic_year,
             subject: { name: s.subject_name, code: s.subject_code },
-            teacher: { id: '', profile: { full_name: s.teacher_name } },
-            room: { id: '', name: s.room_name, building: s.room_building },
-            section: { id: '', name: s.section_name, program: s.section_program },
+            teacher: { id: s.teacher_id, profile: { full_name: s.teacher_name } },
+            room: { id: s.room_id, name: s.room_name, building: s.room_building },
+            section: { id: s.section_id, name: s.section_name, program: s.section_program },
         })));
         
         setSections((secRes.data as unknown as typeof sections) || []);
@@ -208,26 +212,104 @@ const ScheduleManagement: React.FC = () => {
 
     const visibleSchedules = useMemo(() => {
         if (statusFilter === 'all') return schedules;
-        return schedules.filter(s => (s.status || 'draft') === statusFilter);
+        return schedules.filter(s => {
+            const status = (s.status || 'draft').toLowerCase();
+            const normalizedStatus = status === 'approved' ? 'published' : status;
+            return normalizedStatus === statusFilter;
+        });
     }, [schedules, statusFilter]);
+
+    // Count visible schedules (unique entity + semester + academic_year)
+    const visibleScheduleCount = useMemo(() => {
+        const scheduleMap = new Map<string, boolean>();
+        visibleSchedules.forEach(s => {
+            let entityId = '';
+            if (category === 'sections') entityId = s.section?.id || '';
+            else if (category === 'teachers') entityId = s.teacher?.id || '';
+            else if (category === 'rooms') entityId = s.room?.id || '';
+            
+            if (!entityId) return;
+            
+            const key = `${entityId}|${s.semester}|${s.academic_year}`;
+            scheduleMap.set(key, true);
+        });
+        return scheduleMap.size;
+    }, [visibleSchedules, category]);
+
+    // Count total schedules (unique entity + semester + academic_year)
+    const totalScheduleCount = useMemo(() => {
+        const scheduleMap = new Map<string, boolean>();
+        schedules.forEach(s => {
+            let entityId = '';
+            if (category === 'sections') entityId = s.section?.id || '';
+            else if (category === 'teachers') entityId = s.teacher?.id || '';
+            else if (category === 'rooms') entityId = s.room?.id || '';
+            
+            if (!entityId) return;
+            
+            const key = `${entityId}|${s.semester}|${s.academic_year}`;
+            scheduleMap.set(key, true);
+        });
+        return scheduleMap.size;
+    }, [schedules, category]);
+
+    // Count unique schedules (entity + semester + academic_year) per entity
+    const getScheduleCount = (entityId: string, entityType: Category) => {
+        const entitySchedules = schedules.filter(s => {
+            if (entityType === 'sections') return s.section?.id === entityId;
+            if (entityType === 'teachers') return s.teacher?.id === entityId;
+            if (entityType === 'rooms') return s.room?.id === entityId;
+            return false;
+        });
+        
+        // Count unique (semester, academic_year) combinations
+        const uniqueSchedules = new Set(
+            entitySchedules.map(s => `${s.semester}|${s.academic_year}`)
+        );
+        return uniqueSchedules.size;
+    };
 
     const selectedSchedules = useMemo(() => {
         if (!selected) return [] as ScheduleRow[];
-        return visibleSchedules.filter(selected.match);
-    }, [visibleSchedules, selected]);
+        // When an entity is selected, show all sessions for that entity (ignore status filter)
+        return schedules.filter(selected.match);
+    }, [schedules, selected]);
 
+    // Count unique schedules (entity + semester + academic_year) by status
     const statusCounts = useMemo(() => {
-        const counts: Record<string, number> = { all: schedules.length, published: 0, submitted: 0, draft: 0 };
-        for (const s of schedules) {
-            const k = (s.status || 'draft').toLowerCase();
-            if (k in counts) {
-                counts[k]++;
-            } else {
-                counts[k] = (counts[k] || 0) + 1;
+        // Group sessions by (entity_id, semester, academic_year) and track their status
+        const scheduleMap = new Map<string, string>();
+        
+        schedules.forEach(s => {
+            // Determine the entity ID based on current category
+            let entityId = '';
+            if (category === 'sections') entityId = s.section?.id || '';
+            else if (category === 'teachers') entityId = s.teacher?.id || '';
+            else if (category === 'rooms') entityId = s.room?.id || '';
+            
+            if (!entityId) return;
+            
+            const key = `${entityId}|${s.semester}|${s.academic_year}`;
+            // Normalize 'approved' to 'published'
+            let status = (s.status || 'draft').toLowerCase();
+            if (status === 'approved') status = 'published';
+            
+            // If this schedule already has a status, keep the most significant one
+            // published > submitted > draft
+            const existing = scheduleMap.get(key);
+            if (!existing || (status === 'published' && existing !== 'published') ||
+                (status === 'submitted' && existing === 'draft')) {
+                scheduleMap.set(key, status);
             }
-        }
+        });
+        
+        const counts: Record<string, number> = { all: scheduleMap.size, published: 0, submitted: 0, draft: 0 };
+        scheduleMap.forEach(status => {
+            if (status in counts) counts[status]++;
+        });
+        
         return counts;
-    }, [schedules]);
+    }, [schedules, category]);
 
     if (!isAdmin) {
         return (
@@ -247,7 +329,7 @@ const ScheduleManagement: React.FC = () => {
                     <p className="dashboard-subtitle">
                         {selected
                             ? `Weekly schedule for ${selected.label}`
-                            : `Browse by category · ${visibleSchedules.length} of ${schedules.length} entries`}
+                            : `Browse by category · ${visibleScheduleCount} of ${totalScheduleCount} schedules`}
                     </p>
                 </div>
             </div>
@@ -320,7 +402,7 @@ const ScheduleManagement: React.FC = () => {
                     ) : (
                         <div className="sm-entity-grid">
                             {filteredEntities.map(e => {
-                                const count = schedules.filter(e.match).length;
+                                const count = getScheduleCount(e.id, category);
                                 return (
                                     <button
                                         key={e.id}
@@ -340,7 +422,7 @@ const ScheduleManagement: React.FC = () => {
                                         )}
                                         <div className="sm-entity-meta">
                                             <span className="sm-entity-meta-dot" />
-                                            {count} {count === 1 ? 'session' : 'sessions'}
+                                            {count} {count === 1 ? 'schedule' : 'schedules'}
                                         </div>
                                     </button>
                                 );
@@ -425,8 +507,8 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
             }).eq('id', event.s.id);
             onUpdate?.();
         } catch (err) {
-            console.error('Error moving schedule:', err);
-            alert('Failed to move schedule');
+            console.error('Error moving session:', err);
+            alert('Failed to move session');
         }
 
         setDraggedEvent(null);
@@ -474,8 +556,8 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
             setSplitModal(false);
             setShowMenu(false);
         } catch (err) {
-            console.error('Error splitting schedule:', err);
-            alert('Failed to split schedule');
+            console.error('Error splitting session:', err);
+            alert('Failed to split session');
         }
     };
 

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useUserPreferences } from '../../contexts/UserPreferencesContext';
 import { supabase } from '../../lib/supabase';
 import {
     Settings, User, Shield, Moon, Sun, Bell, LogOut,
@@ -8,6 +9,7 @@ import {
 
 const AppSettings: React.FC = () => {
     const { profile, session } = useAuth();
+    const { preferences, updatePreferences } = useUserPreferences();
     const [activeTab, setActiveTab] = useState('account');
 
     // Account
@@ -15,45 +17,11 @@ const AppSettings: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
 
-    // Theme — read from document
-    const [theme, setTheme] = useState(() => {
-        return document.documentElement.getAttribute('data-theme') || localStorage.getItem('optisched-theme') || 'light';
-    });
-
-    // Time format
-    const [timeFormat, setTimeFormat] = useState<'12h' | '24h'>(() => {
-        return (localStorage.getItem('optisched-time-format') as '12h' | '24h') || '24h';
-    });
-
-    // Notifications
-    const [emailNotifs, setEmailNotifs] = useState(true);
-    const [scheduleNotifs, setScheduleNotifs] = useState(true);
-    const [announcementNotifs, setAnnouncementNotifs] = useState(true);
-
     // Security
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [changingPassword, setChangingPassword] = useState(false);
-
-    const applyTheme = (newTheme: string) => {
-        document.documentElement.setAttribute('data-transitioning-theme', '');
-        setTheme(newTheme);
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('optisched-theme', newTheme);
-        setTimeout(() => {
-            document.documentElement.removeAttribute('data-transitioning-theme');
-        }, 450);
-    };
-
-    // Sync on mount
-    useEffect(() => {
-        const stored = localStorage.getItem('optisched-theme');
-        if (stored) {
-            document.documentElement.setAttribute('data-theme', stored);
-            setTheme(stored);
-        }
-    }, []);
 
     const handleSaveProfile = async () => {
         if (!profile?.id) return;
@@ -154,7 +122,7 @@ const AppSettings: React.FC = () => {
                                         <Mail size={20} color="#60a5fa" />
                                         <div><strong>Email Notifications</strong><p>Receive updates via email</p></div>
                                     </div>
-                                    <button className={`toggle-switch ${emailNotifs ? 'on' : ''}`} onClick={() => setEmailNotifs(!emailNotifs)}>
+                                    <button className={`toggle-switch ${preferences.email_notifications ? 'on' : ''}`} onClick={() => updatePreferences({ email_notifications: !preferences.email_notifications })}>
                                         <div className="toggle-thumb" />
                                     </button>
                                 </div>
@@ -163,7 +131,7 @@ const AppSettings: React.FC = () => {
                                         <Bell size={20} color="#10b981" />
                                         <div><strong>Schedule Changes</strong><p>Get notified when schedules update</p></div>
                                     </div>
-                                    <button className={`toggle-switch ${scheduleNotifs ? 'on' : ''}`} onClick={() => setScheduleNotifs(!scheduleNotifs)}>
+                                    <button className={`toggle-switch ${preferences.schedule_notifications ? 'on' : ''}`} onClick={() => updatePreferences({ schedule_notifications: !preferences.schedule_notifications })}>
                                         <div className="toggle-thumb" />
                                     </button>
                                 </div>
@@ -172,7 +140,7 @@ const AppSettings: React.FC = () => {
                                         <Bell size={20} color="#f59e0b" />
                                         <div><strong>Announcements</strong><p>Stay updated with new announcements</p></div>
                                     </div>
-                                    <button className={`toggle-switch ${announcementNotifs ? 'on' : ''}`} onClick={() => setAnnouncementNotifs(!announcementNotifs)}>
+                                    <button className={`toggle-switch ${preferences.announcement_notifications ? 'on' : ''}`} onClick={() => updatePreferences({ announcement_notifications: !preferences.announcement_notifications })}>
                                         <div className="toggle-thumb" />
                                     </button>
                                 </div>
@@ -205,36 +173,59 @@ const AppSettings: React.FC = () => {
                             <h2>Appearance</h2>
                             <p className="section-desc">Choose your preferred visual theme and time format.</p>
                             <div className="theme-cards">
-                                <button className={`theme-card ${theme === 'dark' ? 'active' : ''}`} onClick={() => applyTheme('dark')}>
+                                <button className={`theme-card ${preferences.theme === 'dark' ? 'active' : ''}`} onClick={() => updatePreferences({ theme: 'dark' })}>
                                     <div className="theme-preview dark-preview">
                                         <div className="tp-sidebar" /><div className="tp-content"><div className="tp-block" /><div className="tp-block sm" /></div>
                                     </div>
                                     <Moon size={18} />
                                     <span>Dark Mode</span>
-                                    {theme === 'dark' && <span className="theme-active-badge">Active</span>}
+                                    {preferences.theme === 'dark' && <span className="theme-active-badge">Active</span>}
                                 </button>
-                                <button className={`theme-card ${theme === 'light' ? 'active' : ''}`} onClick={() => applyTheme('light')}>
+                                <button className={`theme-card ${preferences.theme === 'light' ? 'active' : ''}`} onClick={() => updatePreferences({ theme: 'light' })}>
                                     <div className="theme-preview light-preview">
                                         <div className="tp-sidebar" /><div className="tp-content"><div className="tp-block" /><div className="tp-block sm" /></div>
                                     </div>
                                     <Sun size={18} />
                                     <span>Light Mode</span>
-                                    {theme === 'light' && <span className="theme-active-badge">Active</span>}
+                                    {preferences.theme === 'light' && <span className="theme-active-badge">Active</span>}
                                 </button>
                             </div>
                             <div style={{ marginTop: 24 }}>
                                 <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Time Format</h3>
                                 <div className="theme-cards">
-                                    <button className={`theme-card ${timeFormat === '24h' ? 'active' : ''}`} onClick={() => { setTimeFormat('24h'); localStorage.setItem('optisched-time-format', '24h'); }}>
+                                    <button className={`theme-card ${preferences.time_format === '24h' ? 'active' : ''}`} onClick={() => updatePreferences({ time_format: '24h' })}>
                                         <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)' }}>24h</span>
                                         <span>24-Hour Format</span>
-                                        {timeFormat === '24h' && <span className="theme-active-badge">Active</span>}
+                                        {preferences.time_format === '24h' && <span className="theme-active-badge">Active</span>}
                                     </button>
-                                    <button className={`theme-card ${timeFormat === '12h' ? 'active' : ''}`} onClick={() => { setTimeFormat('12h'); localStorage.setItem('optisched-time-format', '12h'); }}>
+                                    <button className={`theme-card ${preferences.time_format === '12h' ? 'active' : ''}`} onClick={() => updatePreferences({ time_format: '12h' })}>
                                         <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)' }}>12h</span>
                                         <span>12-Hour Format</span>
-                                        {timeFormat === '12h' && <span className="theme-active-badge">Active</span>}
+                                        {preferences.time_format === '12h' && <span className="theme-active-badge">Active</span>}
                                     </button>
+                                </div>
+                            </div>
+                            <div style={{ marginTop: 24 }}>
+                                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Animations</h3>
+                                <div className="toggle-list">
+                                    <div className="toggle-item">
+                                        <div className="toggle-info">
+                                            <strong>Landing Page Animations</strong>
+                                            <p>Show animations on the landing page</p>
+                                        </div>
+                                        <button className={`toggle-switch ${preferences.landing_animations ? 'on' : ''}`} onClick={() => updatePreferences({ landing_animations: !preferences.landing_animations })}>
+                                            <div className="toggle-thumb" />
+                                        </button>
+                                    </div>
+                                    <div className="toggle-item">
+                                        <div className="toggle-info">
+                                            <strong>Dashboard Animations</strong>
+                                            <p>Show animations in the dashboard</p>
+                                        </div>
+                                        <button className={`toggle-switch ${preferences.dashboard_animations ? 'on' : ''}`} onClick={() => updatePreferences({ dashboard_animations: !preferences.dashboard_animations })}>
+                                            <div className="toggle-thumb" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

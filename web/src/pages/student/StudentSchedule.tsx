@@ -38,7 +38,7 @@ const StudentSchedule: React.FC = () => {
             const { data: sec } = await supabase.from('sections').select('id').eq('name', profile!.section!).single();
             if (sec) {
                 const { data } = await supabase.from('schedules')
-                    .select('id, day_of_week, start_time, end_time, subject:subjects(name, code), room:rooms(name, building), teacher:teachers(profile:profiles(full_name))')
+                    .select('id, day_of_week, start_time, end_time, subject:subjects(name, code), room:rooms(name, building), teacher:teachers(profile_id:profiles(full_name))')
                     .eq('section_id', sec.id).eq('status', 'published');
                 setSchedules((data as any[]) || []);
             }

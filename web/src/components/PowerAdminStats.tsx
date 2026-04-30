@@ -60,31 +60,37 @@ const PowerAdminStats: React.FC = () => {
         );
     }
 
-    const stats = [
-        { label: 'Active Sessions', value: activeSessions, icon: Activity, color: '#8b5cf6' },
-        { label: 'Failed Logins (24h)', value: failedLogins24h, icon: XCircle, color: '#ef4444', warning: failedLogins24h > 0 },
-        { label: 'Audit Events (24h)', value: auditEvents24h, icon: FileSearch, color: '#f97316' },
-        { label: 'Pending Approvals', value: pendingApprovalsSystem, icon: Inbox, color: '#f59e0b', warning: pendingApprovalsSystem > 0 },
-        { label: 'Critical Conflicts', value: criticalConflicts, icon: AlertTriangle, color: '#ef4444', warning: criticalConflicts > 0 },
-    ];
-
     return (
         <div className="siderail-section">
             <h4>Power Admin Stats</h4>
-            <div className="siderail-stats-grid">
-                {stats.map((stat, index) => (
-                    <div
-                        key={index}
-                        className={`siderail-stat ${stat.warning ? 'siderail-stat-warning' : ''}`}
-                        style={{ borderColor: stat.warning ? stat.color : 'var(--border-default)' }}
-                    >
-                        <div className="siderail-stat-icon" style={{ color: stat.color }}>
-                            <stat.icon size={16} />
-                        </div>
-                        <div className="siderail-stat-value">{stat.value}</div>
-                        <div className="siderail-stat-label">{stat.label}</div>
+            <div className="siderail-card">
+                <div className="siderail-info-list">
+                    <div className="siderail-info-item">
+                        <Activity size={14} />
+                        <span className="siderail-info-label">Active Sessions</span>
+                        <span className="siderail-info-value">{activeSessions}</span>
                     </div>
-                ))}
+                    <div className="siderail-info-item">
+                        <XCircle size={14} />
+                        <span className="siderail-info-label">Failed Logins (24h)</span>
+                        <span className={`siderail-info-value ${failedLogins24h > 0 ? 'siderail-info-warning' : ''}`}>{failedLogins24h}</span>
+                    </div>
+                    <div className="siderail-info-item">
+                        <FileSearch size={14} />
+                        <span className="siderail-info-label">Audit Events (24h)</span>
+                        <span className="siderail-info-value">{auditEvents24h}</span>
+                    </div>
+                    <div className="siderail-info-item">
+                        <Inbox size={14} />
+                        <span className="siderail-info-label">Pending Approvals</span>
+                        <span className={`siderail-info-value ${pendingApprovalsSystem > 0 ? 'siderail-info-warning' : ''}`}>{pendingApprovalsSystem}</span>
+                    </div>
+                    <div className="siderail-info-item">
+                        <AlertTriangle size={14} />
+                        <span className="siderail-info-label">Critical Conflicts</span>
+                        <span className={`siderail-info-value ${criticalConflicts > 0 ? 'siderail-info-warning' : ''}`}>{criticalConflicts}</span>
+                    </div>
+                </div>
             </div>
         </div>
     );

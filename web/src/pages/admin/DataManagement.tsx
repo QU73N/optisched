@@ -81,11 +81,11 @@ const DataManagement: React.FC = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
 
     // Form state
-    const [newRoom, setNewRoom] = useState({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [newSubject, setNewSubject] = useState({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [newRoom, setNewRoom] = useState({ name: '', capacity: 40, type: 'common', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [newSubject, setNewSubject] = useState({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
     const [newSection, setNewSection] = useState({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null as string | null, weight: 50, node_type: 'section' as 'group' | 'section', description: '', sort_order: 0, owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [editRoom, setEditRoom] = useState({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [editSubject, setEditSubject] = useState({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [editRoom, setEditRoom] = useState({ name: '', capacity: 40, type: 'common', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [editSubject, setEditSubject] = useState({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
     const [editSection, setEditSection] = useState({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null as string | null, weight: 50, node_type: 'section' as 'group' | 'section', description: '', sort_order: 0, owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
 
     const fetchAll = async () => {
@@ -108,7 +108,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('rooms').insert({ ...newRoom, is_available: true, equipment: [] });
         setShowAddRoom(false);
-        setNewRoom({ name: '', capacity: 40, type: 'lecture', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
+        setNewRoom({ name: '', capacity: 40, type: 'common', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
         setSaving(false);
         fetchAll();
     };
@@ -118,7 +118,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('subjects').insert(newSubject);
         setShowAddSubject(false);
-        setNewSubject({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
+        setNewSubject({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, requires_lab: false, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
         setSaving(false);
         fetchAll();
     };
@@ -262,7 +262,7 @@ const DataManagement: React.FC = () => {
                                             <td style={{ fontWeight: 600 }}>{r.name}</td>
                                             <td>{r.building}</td>
                                             <td>{r.floor}</td>
-                                            <td><span className="badge" style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>{r.type?.toUpperCase()}</span></td>
+                                            <td><span className="badge" style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>{r.type?.charAt(0).toUpperCase() + r.type?.slice(1).toLowerCase()}</span></td>
                                             <td>{r.capacity}</td>
                                             <td><span className="badge" style={{ background: r.is_available ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: r.is_available ? '#34d399' : '#ef4444' }}>{r.is_available ? 'AVAILABLE' : 'UNAVAILABLE'}</span></td>
                                             <td>
@@ -294,7 +294,7 @@ const DataManagement: React.FC = () => {
                                             <td style={{ fontWeight: 600 }}>{s.code}</td>
                                             <td>{s.name}</td>
                                             <td>{s.units}</td>
-                                            <td><span className="badge" style={{ background: s.type === 'laboratory' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)', color: s.type === 'laboratory' ? '#fbbf24' : '#60a5fa' }}>{s.type?.toUpperCase()}</span></td>
+                                            <td><span className="badge" style={{ background: s.type === 'special' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)', color: s.type === 'special' ? '#fbbf24' : '#60a5fa' }}>{s.type?.charAt(0).toUpperCase() + s.type?.slice(1).toLowerCase()}</span></td>
                                             <td>{s.program}</td>
                                             <td>{s.year_level}</td>
                                             <td>{s.duration_hours}h</td>
@@ -371,7 +371,7 @@ const DataManagement: React.FC = () => {
                             </div>
                             <div className="field"><label className="field-label">TYPE</label>
                                 <select className="input" value={newRoom.type} onChange={e => setNewRoom(p => ({ ...p, type: e.target.value }))}>
-                                    <option value="lecture">Lecture</option><option value="laboratory">Laboratory</option><option value="computer_lab">Computer Lab</option><option value="gymnasium">Gymnasium</option>
+                                    <option value="common">Common</option><option value="special">Special</option>
                                 </select>
                             </div>
                             <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={newRoom.weight} onChange={e => setNewRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
@@ -395,7 +395,7 @@ const DataManagement: React.FC = () => {
                             <div style={{ display: 'flex', gap: 12 }}>
                                 <div className="field" style={{ flex: 1 }}><label className="field-label">UNITS</label><input className="input" type="number" min={1} max={6} value={newSubject.units} onChange={e => setNewSubject(p => ({ ...p, units: parseInt(e.target.value) }))} /></div>
                                 <div className="field" style={{ flex: 1 }}><label className="field-label">HOURS</label><input className="input" type="number" min={1} max={6} value={newSubject.duration_hours} onChange={e => setNewSubject(p => ({ ...p, duration_hours: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">TYPE</label><select className="input" value={newSubject.type} onChange={e => setNewSubject(p => ({ ...p, type: e.target.value }))}><option value="lecture">Lecture</option><option value="laboratory">Laboratory</option></select></div>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">TYPE</label><select className="input" value={newSubject.type} onChange={e => setNewSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common</option><option value="special">Special</option></select></div>
                             </div>
                             <div style={{ display: 'flex', gap: 12 }}>
                                 <div className="field" style={{ flex: 2 }}><label className="field-label">PROGRAM</label><input className="input" required placeholder="e.g. BSIT" value={newSubject.program} onChange={e => setNewSubject(p => ({ ...p, program: e.target.value }))} /></div>
@@ -462,7 +462,7 @@ const DataManagement: React.FC = () => {
                             </div>
                             <div className="field"><label className="field-label">TYPE</label>
                                 <select className="input" value={editRoom.type} onChange={e => setEditRoom(p => ({ ...p, type: e.target.value }))}>
-                                    <option value="lecture">Lecture</option><option value="laboratory">Laboratory</option><option value="computer_lab">Computer Lab</option><option value="gymnasium">Gymnasium</option>
+                                    <option value="common">Common</option><option value="special">Special</option>
                                 </select>
                             </div>
                             <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={editRoom.weight} onChange={e => setEditRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
@@ -486,7 +486,7 @@ const DataManagement: React.FC = () => {
                             <div style={{ display: 'flex', gap: 12 }}>
                                 <div className="field" style={{ flex: 1 }}><label className="field-label">UNITS</label><input className="input" type="number" min={1} max={6} value={editSubject.units} onChange={e => setEditSubject(p => ({ ...p, units: parseInt(e.target.value) }))} /></div>
                                 <div className="field" style={{ flex: 1 }}><label className="field-label">HOURS</label><input className="input" type="number" min={1} max={6} value={editSubject.duration_hours} onChange={e => setEditSubject(p => ({ ...p, duration_hours: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">TYPE</label><select className="input" value={editSubject.type} onChange={e => setEditSubject(p => ({ ...p, type: e.target.value }))}><option value="lecture">Lecture</option><option value="laboratory">Laboratory</option></select></div>
+                                <div className="field" style={{ flex: 1 }}><label className="field-label">TYPE</label><select className="input" value={editSubject.type} onChange={e => setEditSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common</option><option value="special">Special</option></select></div>
                             </div>
                             <div style={{ display: 'flex', gap: 12 }}>
                                 <div className="field" style={{ flex: 2 }}><label className="field-label">PROGRAM</label><input className="input" required placeholder="e.g. BSIT" value={editSubject.program} onChange={e => setEditSubject(p => ({ ...p, program: e.target.value }))} /></div>

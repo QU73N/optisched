@@ -70,7 +70,7 @@ const isFree = (
 const roomCompatible = (room: Room, subject: Subject, section: Section): boolean => {
     if (subject.requires_lab) {
         const t = (room.type || '').toLowerCase();
-        if (!t.includes('lab')) return false;
+        if (!t.includes('special')) return false;
     }
     if (section.student_count != null && room.capacity != null && section.student_count > room.capacity) {
         return false;
@@ -107,7 +107,7 @@ const sessionsNeeded = (subject: Subject, sessionMinutes: number): number => {
 
 const isSpecialRoom = (room: Room) => {
     const t = (room.type || '').toLowerCase();
-    return t.includes('lab') || t.includes('special') || t.includes('studio');
+    return t === 'special';
 };
 
 /** Check if a teacher is available at the given day/time per their preferences. */
@@ -161,13 +161,14 @@ const rankSubjects = (
     const subjectP = config.priorities.subjects;
     const scored = subjects.map(sub => {
         const matchSec = sections.find(
-            s => s.program === sub.program && s.year_level === sub.year_level,
+            s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
         );
         const secScore = matchSec ? priorityOf(sectionP, matchSec.id) : 50;
         const subScore = priorityOf(subjectP, sub.id);
         const base = subScore * 0.6 + secScore * 0.4;
         const noise = (Math.random() - 0.5) * jitter;
-        return { sub, score: base + noise };
+        const final = Math.max(0, Math.min(100, Math.round(base + noise)));
+        return { sub, score: final };
     });
     scored.sort((a, b) => b.score - a.score);
     return scored.map(s => s.sub);
@@ -384,7 +385,7 @@ export async function runGenerator(
             scopedSections = s ? [s] : [];
         } else if (target.kind === 'subject') {
             const sub = subjectMap.get(target.id);
-            scopedSections = sub ? sections.filter(s => s.program === sub.program && s.year_level === sub.year_level) : [];
+            scopedSections = sub ? sections.filter(s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level) : [];
         } else {
             // teacher or room: keep all sections in play; subjects will be filtered later.
             scopedSections = sections;
@@ -417,7 +418,7 @@ export async function runGenerator(
     // We replicate the old behavior (one placement per subject matched to first section).
     let scopedSubjects = subjects.filter(sub => {
         const hasSection = scopedSections.some(
-            s => s.program === sub.program && s.year_level === sub.year_level,
+            s => (sub.program === 'ALL' || s.program === sub.program) && sub.year_level === s.year_level,
         );
         return hasSection;
     });
@@ -476,7 +477,7 @@ export async function runGenerator(
     const sectionP = config.priorities.sections;
     const highPriorityIds = new Set(
         scopedSubjects.filter(s => {
-            const sec = scopedSections.find(x => x.program === s.program && x.year_level === s.year_level);
+            const sec = scopedSections.find(x => (s.program === 'ALL' || x.program === s.program) && x.year_level === s.year_level);
             const subScore = priorityOf(subjectP, s.id);
             const secScore = sec ? priorityOf(sectionP, sec.id) : 50;
             return subScore >= 70 || secScore >= 70;
@@ -518,7 +519,7 @@ export async function runGenerator(
         const rankedTasks: PlacementTask[] = [];
         for (const sub of subjectsShuffled) {
             const matchSections = scopedSections.filter(
-                s => s.program === sub.program && s.year_level === sub.year_level,
+                s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
             );
             const section = matchSections[0] || scopedSections[0];
             if (!section) continue;

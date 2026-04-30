@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import {
     XAxis, YAxis, CartesianGrid,
-    Tooltip, ResponsiveContainer, LineChart, Line
+    Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell
 } from 'recharts';
 import ChartTooltip from '../../components/ChartTooltip';
 import { DASHBOARD_CONFIG } from '../../config/dashboard';
@@ -32,6 +32,7 @@ interface ChangeRequestRow {
     status: string;
 }
 interface ConflictBucket { date: string; count: number; }
+interface RoomLoad { name: string; count: number; }
 
 const ScheduleAdminDashboard: React.FC = () => {
     const { profile } = useAuth();
@@ -43,6 +44,7 @@ const ScheduleAdminDashboard: React.FC = () => {
     const [pendingChangeRequests, setPendingChangeRequests] = useState<ChangeRequestRow[]>([]);
     const [funnel, setFunnel] = useState({ submitted: 0, approved: 0, rejected: 0 });
     const [conflictsTrend, setConflictsTrend] = useState<ConflictBucket[]>([]);
+    const [roomLoad, setRoomLoad] = useState<RoomLoad[]>([]);
 
     useEffect(() => {
         const run = async () => {
@@ -99,7 +101,7 @@ const ScheduleAdminDashboard: React.FC = () => {
                 const f = { submitted: 0, approved: 0, rejected: 0 };
                 (recent || []).forEach(s => {
                     if (s.status === 'submitted') f.submitted++;
-                    else if (s.status === 'published') f.approved++;
+                    else if (s.status === 'approved') f.approved++;
                     else if (s.status === 'rejected') f.rejected++;
                 });
                 setFunnel(f);
@@ -119,6 +121,23 @@ const ScheduleAdminDashboard: React.FC = () => {
                     });
                 }
                 setConflictsTrend(buckets);
+
+                // 7. room load (top 8)
+                const [schedulesFull, roomsFull] = await Promise.all([
+                    supabase.from('schedules').select('room_id').eq('status', 'published'),
+                    supabase.from('rooms').select('id, name'),
+                ]);
+                const roomMap: Record<string, number> = {};
+                (schedulesFull.data || []).forEach((s: { room_id: string }) => {
+                    if (s.room_id) roomMap[s.room_id] = (roomMap[s.room_id] || 0) + 1;
+                });
+                const roomNameById: Record<string, string> = {};
+                (roomsFull.data || []).forEach((r: { id: string; name: string }) => { roomNameById[r.id] = r.name; });
+                const loadList = Object.entries(roomMap)
+                    .map(([id, count]) => ({ name: roomNameById[id] || 'Room', count }))
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 8);
+                setRoomLoad(loadList);
             } catch (err) {
                 console.error('[ScheduleAdminDashboard] fetch error:', err);
             } finally {
@@ -307,6 +326,34 @@ const ScheduleAdminDashboard: React.FC = () => {
                             </ResponsiveContainer>
                         </div>
                     </div>
+
+                    {/* Room load (top 8) */}
+                    {roomLoad.length > 0 && (
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><BarChart3 size={16} /> Top Rooms by Load</div>
+                                <span className="dash-card-badge dash-badge-info">{roomLoad.length}</span>
+                            </div>
+                            <div className="dash-chart-wrap" role="img" aria-label="Top rooms by published schedule count">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={roomLoad} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" horizontal={false} />
+                                        <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} width={70} />
+                                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
+                                        <Bar dataKey="count" name="Classes" radius={[0, 4, 4, 0]}>
+                                            {roomLoad.map((entry, i) => {
+                                                const max = Math.max(...roomLoad.map(r => r.count), 1);
+                                                const ratio = entry.count / max;
+                                                const color = ratio > 0.85 ? '#ef4444' : ratio > 0.6 ? '#f59e0b' : '#06b6d4';
+                                                return <Cell key={i} fill={color} />;
+                                            })}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -248,7 +248,7 @@ export const DEFAULT_CONFIG: GenerationConfig = {
         roomUtilization: 40,
     },
     priorities: { sections: {}, subjects: {}, specialRoomBias: 70 },
-    maxAttempts: 5,
+    maxAttempts: 100,
 };
 
 export const STAGES: { key: StageKey; label: string; hint: string }[] = [

@@ -117,8 +117,8 @@ async function getScheduleContext(): Promise<string> {
     const db = supabase;
     try {
         const [schedulesRes, teachersRes, roomsRes, conflictsRes, eventsRes, usersRes, subjectsRes, sectionsRes, announcementsRes] = await Promise.all([
-            db.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile:profiles(full_name)), room:rooms(name, capacity), section:sections(name)').eq('status', 'published').limit(50),
-            db.from('teachers').select('*, profile:profiles(full_name)').eq('is_active', true),
+            db.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile_id:profiles(full_name)), room:rooms(name, capacity), section:sections(name)').eq('status', 'published').limit(50),
+            db.from('teachers').select('*, profile_id:profiles(full_name)').eq('is_active', true),
             db.from('rooms').select('*'),
             db.from('conflicts').select('*').eq('is_resolved', false),
             db.from('custom_events').select('*').gte('event_date', new Date().toISOString().split('T')[0]).order('event_date', { ascending: true }).limit(20),

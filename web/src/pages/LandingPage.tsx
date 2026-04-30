@@ -500,7 +500,6 @@ const HeroVisual: React.FC = () => {
                         <div className="lp-hero-main-title">Grade 12, STEM A</div>
                         <div className="lp-hero-main-sub">Week of Oct 14 · 34 sessions</div>
                     </div>
-                    <span className="lp-hero-main-dot">Live</span>
                 </div>
 
                 <div className="lp-hero-grid">

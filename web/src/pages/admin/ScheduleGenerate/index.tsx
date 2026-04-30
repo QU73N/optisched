@@ -28,6 +28,7 @@ const ScheduleGenerate: React.FC = () => {
     const canApprove = hasAnyRole(roles, [...POWER_ADMIN_ROLES, 'schedule_admin']);
     const [stage, setStage] = useState<StageKey>('scope');
     const [config, setConfig] = useState<GenerationConfig>(DEFAULT_CONFIG);
+    const [compactMode, setCompactMode] = useState(false);
 
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -53,14 +54,38 @@ const ScheduleGenerate: React.FC = () => {
     useEffect(() => {
         const load = async () => {
             setDataLoading(true);
-            const [sub, t, r, sec, sch, prefs] = await Promise.all([
-                supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id, sessions_per_week, weight, priority_note'),
-                supabase.from('teachers').select('id, max_hours, weight, priority_note, profile:profiles(full_name)'),
-                supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available, weight, priority_note'),
-                supabase.from('sections').select('id, name, program, year_level, student_count, weight'),
-                supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at'),
-                supabase.from('teacher_preferences').select('teacher_id, preferred_days, preferred_time_start, preferred_time_end, max_classes_per_day, max_consecutive_classes, availability'),
-            ]);
+            try {
+                const [sub, t, r, sec, sch, prefs, prof] = await Promise.all([
+                    supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id, sessions_per_week, weight, priority_note'),
+                    supabase.from('teachers').select('id, max_hours, weight, priority_note, profile_id'),
+                    supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available, weight, priority_note'),
+                    supabase.from('sections').select('id, name, program, year_level, student_count, weight'),
+                    supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at'),
+                    supabase.from('teacher_preferences').select('teacher_id, preferred_days, preferred_time_start, preferred_time_end, max_classes_per_day, max_consecutive_classes, availability'),
+                    supabase.from('profiles').select('id, full_name'),
+                ]);
+
+                if (t.error) {
+                    console.error('Teachers query error:', t.error);
+                }
+                if (sub.error) {
+                    console.error('Subjects query error:', sub.error);
+                }
+                if (r.error) {
+                    console.error('Rooms query error:', r.error);
+                }
+                if (sec.error) {
+                    console.error('Sections query error:', sec.error);
+                }
+                if (sch.error) {
+                    console.error('Schedules query error:', sch.error);
+                }
+                if (prefs.error) {
+                    console.error('Preferences query error:', prefs.error);
+                }
+                if (prof.error) {
+                    console.error('Profiles query error:', prof.error);
+                }
 
             // Index preferences by teacher_id for quick lookup
             type PrefRow = {
@@ -77,15 +102,26 @@ const ScheduleGenerate: React.FC = () => {
                 prefByTeacher.set(p.teacher_id, p);
             }
 
+            // Index profiles by id for quick lookup
+            type ProfileRow = {
+                id: string;
+                full_name: string;
+            };
+            const profileById = new Map<string, ProfileRow>();
+            for (const p of (prof.data as unknown as ProfileRow[]) || []) {
+                profileById.set(p.id, p);
+            }
+
             setSubjects((sub.data as unknown as Subject[]) || []);
             setTeachers(
-                ((t.data as unknown as { id: string; max_hours: number | null; weight: number; priority_note: string | null; profile: { full_name: string } | null }[]) || [])
+                ((t.data as unknown as { id: string; max_hours: number | null; weight: number; priority_note: string | null; profile_id: string | null }[]) || [])
                     .map(x => {
                         const pref = prefByTeacher.get(x.id);
+                        const profile = x.profile_id ? profileById.get(x.profile_id) : null;
                         return {
                             id: x.id,
                             max_hours: x.max_hours,
-                            full_name: x.profile?.full_name || 'Unnamed',
+                            full_name: profile?.full_name || 'Unnamed',
                             weight: x.weight ?? 50,
                             priority_note: x.priority_note,
                             preferred_days: pref?.preferred_days || undefined,
@@ -101,6 +137,10 @@ const ScheduleGenerate: React.FC = () => {
             setSections((sec.data as unknown as Section[]) || []);
             setExisting((sch.data as unknown as ExistingSchedule[]) || []);
             setDataLoading(false);
+            } catch (err) {
+                console.error('Data load error:', err);
+                setDataLoading(false);
+            }
         };
         load();
     }, []);
@@ -270,6 +310,13 @@ const ScheduleGenerate: React.FC = () => {
                 <div className="dash-header-actions">
                     <button
                         className="btn btn-secondary"
+                        onClick={() => setCompactMode(!compactMode)}
+                        title={compactMode ? 'Show detailed view' : 'Show compact view'}
+                    >
+                        <Layers size={14} /> {compactMode ? 'Detailed' : 'Compact'}
+                    </button>
+                    <button
+                        className="btn btn-secondary"
                         onClick={() => setVersionsOpen(v => !v)}
                         aria-expanded={versionsOpen}
                     >
@@ -298,7 +345,7 @@ const ScheduleGenerate: React.FC = () => {
             {dataLoading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
             ) : (
-                <div className="sg-stage-card">
+                <div className={`sg-stage-card ${compactMode ? 'sg-compact' : ''}`}>
                     {stage === 'scope' && (
                         <ScopeStage
                             config={config}
@@ -307,16 +354,17 @@ const ScheduleGenerate: React.FC = () => {
                             teachers={teachers}
                             rooms={rooms}
                             subjects={subjects}
+                            compact={compactMode}
                         />
                     )}
                     {stage === 'structure' && (
-                        <StructureStage config={config} setConfig={setConfig} />
+                        <StructureStage config={config} setConfig={setConfig} compact={compactMode} />
                     )}
                     {stage === 'constraints' && (
-                        <ConstraintsStage config={config} setConfig={setConfig} />
+                        <ConstraintsStage config={config} setConfig={setConfig} compact={compactMode} />
                     )}
                     {stage === 'priorities' && (
-                        <PrioritiesStage config={config} setConfig={setConfig} sections={sections} subjects={subjects} />
+                        <PrioritiesStage config={config} setConfig={setConfig} sections={sections} subjects={subjects} compact={compactMode} />
                     )}
                     {stage === 'review' && (
                         <ReviewStage
@@ -439,8 +487,11 @@ const ScopeStage: React.FC<{
     teachers: Teacher[];
     rooms: Room[];
     subjects: Subject[];
-}> = ({ config, setConfig, sections, teachers, rooms, subjects }) => {
+    compact?: boolean;
+}> = ({ config, setConfig, sections, teachers, rooms, subjects, compact = false }) => {
     const allSelected = config.sectionIds.length === 0;
+    const [studentFilter, setStudentFilter] = useState<'all' | 'large' | 'small'>('all');
+    
     const toggle = (id: string) => {
         setConfig(c => {
             const set = new Set(c.sectionIds);
@@ -448,6 +499,24 @@ const ScopeStage: React.FC<{
             return { ...c, sectionIds: Array.from(set) };
         });
     };
+    
+    const toggleGroup = (groupSections: Section[]) => {
+        const allSelected = groupSections.every(s => config.sectionIds.includes(s.id));
+        if (allSelected) {
+            // Deselect all in group
+            setConfig(c => ({
+                ...c,
+                sectionIds: c.sectionIds.filter(id => !groupSections.some(s => s.id === id)),
+            }));
+        } else {
+            // Select all in group
+            setConfig(c => ({
+                ...c,
+                sectionIds: [...new Set([...c.sectionIds, ...groupSections.map(s => s.id)])],
+            }));
+        }
+    };
+    
     const grouped = useMemo(() => {
         const m = new Map<string, Section[]>();
         for (const s of sections) {
@@ -458,6 +527,18 @@ const ScopeStage: React.FC<{
         }
         return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
     }, [sections]);
+
+    const filteredGrouped = useMemo(() => {
+        if (studentFilter === 'all') return grouped;
+        return grouped.map(([group, list]) => {
+            const filtered = list.filter(s => {
+                if (studentFilter === 'large') return (s.student_count || 0) >= 30;
+                if (studentFilter === 'small') return (s.student_count || 0) > 0 && (s.student_count || 0) < 30;
+                return true;
+            });
+            return [group, filtered] as [string, Section[]];
+        }).filter(([, list]) => list.length > 0);
+    }, [grouped, studentFilter]);
 
     const setMode = (mode: GenerationConfig['mode']) =>
         setConfig(c => ({ ...c, mode, partialTarget: mode === 'full' ? null : c.partialTarget }));
@@ -484,7 +565,7 @@ const ScopeStage: React.FC<{
 
     return (
         <div>
-            <StageHeader icon={<Users size={16} />} title="Scope" desc="Pick a generation mode, then choose what to generate." />
+            <StageHeader icon={<Users size={16} />} title="Scope" desc="Pick a generation mode, then choose what to generate." compact={compact} />
 
             <div className="sg-mode-toggle" role="radiogroup" aria-label="Generation mode">
                 <button
@@ -497,7 +578,7 @@ const ScopeStage: React.FC<{
                     <Sparkles size={14} />
                     <span className="sg-mode-label">
                         <span className="sg-mode-title">Full generation</span>
-                        <span className="sg-mode-desc">Solve the whole week for every picked section.</span>
+                        {!compact && <span className="sg-mode-desc">Solve the whole week for every picked section.</span>}
                     </span>
                 </button>
                 <button
@@ -510,7 +591,7 @@ const ScopeStage: React.FC<{
                     <GitBranch size={14} />
                     <span className="sg-mode-label">
                         <span className="sg-mode-title">Partial regeneration</span>
-                        <span className="sg-mode-desc">Re-solve one slice. Everything else stays locked.</span>
+                        {!compact && <span className="sg-mode-desc">Re-solve one slice. Everything else stays locked.</span>}
                     </span>
                 </button>
             </div>
@@ -527,25 +608,40 @@ const ScopeStage: React.FC<{
                     </div>
 
                     {!allSelected && (
-                        <div className="sg-scroll" style={{ marginTop: 12 }}>
-                            {grouped.map(([group, list]) => (
-                                <div key={group} style={{ marginBottom: 14 }}>
-                                    <div className="sg-group-head">{group}</div>
-                                    <div className="sg-chip-wrap">
-                                        {list.map(s => (
-                                            <button
-                                                key={s.id}
-                                                className={`sg-chip ${config.sectionIds.includes(s.id) ? 'sg-chip-active' : ''}`}
-                                                onClick={() => toggle(s.id)}
-                                            >
-                                                {s.name}
-                                                {s.student_count != null && <span className="sg-chip-sub">· {s.student_count}</span>}
-                                            </button>
-                                        ))}
-                                    </div>
+                        <>
+                            <div className="sg-row" style={{ marginBottom: 12 }}>
+                                <span className="sg-field-label">Filter by size</span>
+                                <div className="sg-chip-wrap">
+                                    <button className={`sg-chip ${studentFilter === 'all' ? 'sg-chip-active' : ''}`} onClick={() => setStudentFilter('all')}>All</button>
+                                    <button className={`sg-chip ${studentFilter === 'large' ? 'sg-chip-active' : ''}`} onClick={() => setStudentFilter('large')}>30+ students</button>
+                                    <button className={`sg-chip ${studentFilter === 'small' ? 'sg-chip-active' : ''}`} onClick={() => setStudentFilter('small')}>Under 30</button>
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                            <div className="sg-scroll">
+                                {filteredGrouped.map(([group, list]) => (
+                                    <div key={group} style={{ marginBottom: 14 }}>
+                                        <div className="sg-group-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>{group}</span>
+                                            <button className="sg-prio-mini" onClick={() => toggleGroup(list)} title="Select/deselect all in group">
+                                                {list.every(s => config.sectionIds.includes(s.id)) ? 'Deselect all' : 'Select all'}
+                                            </button>
+                                        </div>
+                                        <div className="sg-chip-wrap">
+                                            {list.map(s => (
+                                                <button
+                                                    key={s.id}
+                                                    className={`sg-chip ${config.sectionIds.includes(s.id) ? 'sg-chip-active' : ''}`}
+                                                    onClick={() => toggle(s.id)}
+                                                >
+                                                    {s.name}
+                                                    {s.student_count != null && <span className="sg-chip-sub">· {s.student_count}</span>}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </>
             ) : (
@@ -605,7 +701,7 @@ const PartialTargetPicker: React.FC<{
 // Stage 2 — Structure
 // ---------------------------------------------------------------------------
 
-const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>> }> = ({ config, setConfig }) => {
+const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>>; compact?: boolean }> = ({ config, setConfig, compact = false }) => {
     const toggleDay = (d: string) => setConfig(c => ({
         ...c,
         days: c.days.includes(d) ? c.days.filter(x => x !== d) : [...c.days, d],
@@ -620,9 +716,20 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
     }));
     const removeBreak = (id: string) => setConfig(c => ({ ...c, breaks: c.breaks.filter(b => b.id !== id) }));
 
+    const formatDuration = (start: string, end: string) => {
+        const startMins = toMinutes(start);
+        const endMins = toMinutes(end);
+        const diff = endMins - startMins;
+        if (diff <= 0) return '';
+        const hours = Math.floor(diff / 60);
+        const mins = diff % 60;
+        if (hours > 0) return `${hours}h ${mins}m`;
+        return `${mins}m`;
+    };
+
     return (
         <div>
-            <StageHeader icon={<Clock size={16} />} title="Structure" desc="Define the working week, session length, and any shared breaks." />
+            <StageHeader icon={<Clock size={16} />} title="Structure" desc="Define the working week, session length, and any shared breaks." compact={compact} />
 
             <div className="sg-fields">
                 <div>
@@ -672,6 +779,7 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                                     <input type="time" className="input" value={b.start} onChange={e => updateBreak(b.id, { start: e.target.value })} />
                                     <span className="sg-sep">to</span>
                                     <input type="time" className="input" value={b.end} onChange={e => updateBreak(b.id, { end: e.target.value })} />
+                                    <span className="sg-break-duration">{formatDuration(b.start, b.end)}</span>
                                     <button className="sg-icon-btn" onClick={() => removeBreak(b.id)} aria-label="Remove break"><X size={14} /></button>
                                 </div>
                             ))}
@@ -687,38 +795,50 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
 // Stage 3 — Constraints
 // ---------------------------------------------------------------------------
 
-const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>> }> = ({ config, setConfig }) => {
+const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>>; compact?: boolean }> = ({ config, setConfig, compact = false }) => {
+    const [hardConstraintsOpen, setHardConstraintsOpen] = useState(false);
     const updateSoft = (key: keyof GenerationConfig['soft'], val: number) =>
         setConfig(c => ({ ...c, soft: { ...c.soft, [key]: val } }));
 
     return (
         <div>
-            <StageHeader icon={<Sliders size={16} />} title="Constraints" desc="Hard rules are always enforced. Tune soft weights to guide optimization." />
+            <StageHeader icon={<Sliders size={16} />} title="Constraints" desc="Hard rules are always enforced. Tune soft weights to guide optimization." compact={compact} />
 
             <div className="sg-subhead"><Lock size={12} /> Hard constraints. Always on.</div>
-            <ul className="sg-hard-list">
-                {HARD_CONSTRAINTS.map(h => (
-                    <li key={h}><CheckCircle size={12} /> {h}</li>
-                ))}
-            </ul>
+            <button
+                type="button"
+                className="sg-hard-constraints-btn"
+                onClick={() => setHardConstraintsOpen(!hardConstraintsOpen)}
+                aria-expanded={hardConstraintsOpen}
+            >
+                <span>View {HARD_CONSTRAINTS.length} hard constraints</span>
+                {hardConstraintsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {hardConstraintsOpen && (
+                <ul className="sg-hard-list sg-hard-list-expanded">
+                    {HARD_CONSTRAINTS.map(h => (
+                        <li key={h}><CheckCircle size={12} /> {h}</li>
+                    ))}
+                </ul>
+            )}
 
-            <div className="sg-subhead" style={{ marginTop: 20 }}><Sliders size={12} /> Soft optimization weights</div>
+            <div className="sg-subhead" style={{ marginTop: hardConstraintsOpen ? 20 : 0 }}><Sliders size={12} /> Soft optimization weights</div>
             <div className="sg-sliders">
-                <SoftSlider label="Balanced teacher load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} />
-                <SoftSlider label="Compact schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} />
-                <SoftSlider label="Minimize room switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} />
-                <SoftSlider label="Teacher preferred time" desc="Honor each teacher's preferred days and time window." value={config.soft.teacherPreferredTime} onChange={v => updateSoft('teacherPreferredTime', v)} />
-                <SoftSlider label="Daily load balance" desc="Even teaching load per teacher per day." value={config.soft.dailyLoadBalance} onChange={v => updateSoft('dailyLoadBalance', v)} />
-                <SoftSlider label="Workload fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} />
-                <SoftSlider label="Subject spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} />
-                <SoftSlider label="Room utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} />
+                <SoftSlider label="Balanced teacher load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} compact={compact} />
+                <SoftSlider label="Compact schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} compact={compact} />
+                <SoftSlider label="Minimize room switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} compact={compact} />
+                <SoftSlider label="Teacher preferred time" desc="Honor each teacher's preferred days and time window." value={config.soft.teacherPreferredTime} onChange={v => updateSoft('teacherPreferredTime', v)} compact={compact} />
+                <SoftSlider label="Daily load balance" desc="Even teaching load per teacher per day." value={config.soft.dailyLoadBalance} onChange={v => updateSoft('dailyLoadBalance', v)} compact={compact} />
+                <SoftSlider label="Workload fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} compact={compact} />
+                <SoftSlider label="Subject spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} compact={compact} />
+                <SoftSlider label="Room utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} />
             </div>
 
             <div className="sg-grid-3" style={{ marginTop: 16 }}>
                 <div>
                     <div className="sg-field-label">Attempts</div>
                     <select className="input" value={config.maxAttempts} onChange={e => setConfig(c => ({ ...c, maxAttempts: Number(e.target.value) }))}>
-                        {[1, 3, 5, 10].map(n => <option key={n} value={n}>{n}</option>)}
+                        {[10, 25, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                 </div>
             </div>
@@ -726,12 +846,12 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
     );
 };
 
-const SoftSlider: React.FC<{ label: string; desc: string; value: number; onChange: (v: number) => void }> = ({ label, desc, value, onChange }) => (
+const SoftSlider: React.FC<{ label: string; desc: string; value: number; onChange: (v: number) => void; compact?: boolean }> = ({ label, desc, value, onChange, compact = false }) => (
     <div className="sg-slider">
         <div className="sg-slider-head">
             <div>
                 <div className="sg-slider-label">{label}</div>
-                <div className="sg-slider-desc">{desc}</div>
+                {!compact && <div className="sg-slider-desc">{desc}</div>}
             </div>
             <div className="sg-slider-val">{value}</div>
         </div>
@@ -1198,12 +1318,12 @@ const DiffRow: React.FC<{ entry: DiffEntry }> = ({ entry }) => {
     );
 };
 
-const StageHeader: React.FC<{ icon: React.ReactNode; title: string; desc: string }> = ({ icon, title, desc }) => (
+const StageHeader: React.FC<{ icon: React.ReactNode; title: string; desc: string; compact?: boolean }> = ({ icon, title, desc, compact = false }) => (
     <div className="sg-stage-head">
         <div className="sg-stage-icon">{icon}</div>
         <div>
             <div className="sg-stage-title">{title}</div>
-            <div className="sg-stage-desc">{desc}</div>
+            {!compact && <div className="sg-stage-desc">{desc}</div>}
         </div>
     </div>
 );
@@ -1226,7 +1346,8 @@ const PrioritiesStage: React.FC<{
     setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>>;
     sections: Section[];
     subjects: Subject[];
-}> = ({ config, setConfig, sections, subjects }) => {
+    compact?: boolean;
+}> = ({ config, setConfig, sections, subjects, compact = false }) => {
     const [kind, setKind] = useState<PriorityKind>('sections');
     const [search, setSearch] = useState('');
 
@@ -1278,7 +1399,6 @@ const PrioritiesStage: React.FC<{
     };
     const resetAll = () => setMap({});
 
-    // Smart suggest uses deterministic heuristics so it works without a cloud AI call.
     // Sections: top quartile by student count lands on High, bottom quartile on Low.
     // Subjects: lab subjects land on High (special-room pressure), electives (no program) on Low.
     const smartSuggest = () => {
@@ -1320,13 +1440,14 @@ const PrioritiesStage: React.FC<{
                 icon={<Flag size={16} />}
                 title="Priorities"
                 desc="Flag what matters most. The engine places high priority items first and protects their slots."
+                compact={compact}
             />
 
             <div className="sg-prio-bias">
                 <div className="sg-slider-head">
                     <div>
                         <div className="sg-slider-label">Special room bias</div>
-                        <div className="sg-slider-desc">How strongly to reserve labs and studios for subjects that need them. Lab subjects always get labs.</div>
+                        {!compact && <div className="sg-slider-desc">How strongly to reserve labs and studios for subjects that need them. Lab subjects always get labs.</div>}
                     </div>
                     <div className="sg-slider-val">{config.priorities.specialRoomBias}</div>
                 </div>
@@ -1407,8 +1528,21 @@ const PriorityGroup: React.FC<{
 }> = ({ title, items, map, onCycle, onSetAll }) => {
     const tiers = items.map(i => tierFromValue(map[i.id] ?? 50));
     const allSame = tiers.every(t => t === tiers[0]) ? tiers[0] : null;
+    
+    // Calculate distribution for border color
+    const highCount = tiers.filter(t => t === 'high').length;
+    const normalCount = tiers.filter(t => t === 'normal').length;
+    const lowCount = tiers.filter(t => t === 'low').length;
+    
+    let borderClass = '';
+    if (allSame === 'high') borderClass = 'sg-prio-group-high';
+    else if (allSame === 'low') borderClass = 'sg-prio-group-low';
+    else if (allSame === 'normal') borderClass = 'sg-prio-group-normal';
+    else if (highCount > normalCount && highCount > lowCount) borderClass = 'sg-prio-group-mixed-high';
+    else if (lowCount > normalCount && lowCount > highCount) borderClass = 'sg-prio-group-mixed-low';
+    
     return (
-        <div className="sg-prio-group">
+        <div className={`sg-prio-group ${borderClass}`}>
             <div className="sg-prio-group-head">
                 <span className="sg-prio-group-title">{title}</span>
                 <span className="sg-prio-group-count">{items.length}</span>

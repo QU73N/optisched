@@ -20,9 +20,9 @@ const ScheduleViews: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         const [s, r, t, sec] = await Promise.all([
-            supabase.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile:profiles(full_name)), room:rooms(name, building), section:sections(name, program)'),
+            supabase.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile_id:profiles(full_name)), room:rooms(name, building), section:sections(name, program)'),
             supabase.from('rooms').select('id, name, building').order('name'),
-            supabase.from('teachers').select('id, profile:profiles(full_name)'),
+            supabase.from('teachers').select('id, profile_id:profiles(full_name)'),
             supabase.from('sections').select('id, name, program').order('name'),
         ]);
         setSchedules((s.data as any[]) || []);

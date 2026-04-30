@@ -55,7 +55,7 @@ const ConflictsAlerts: React.FC = () => {
             .select(`
                 id, teacher_id, room_id, section_id, subject_id,
                 day_of_week, start_time, end_time, status,
-                teachers(id, profile:profiles(full_name)),
+                teachers(id, profile_id:profiles(full_name)),
                 rooms(id, name, building),
                 sections(id, name, program),
                 subjects(id, name, code)

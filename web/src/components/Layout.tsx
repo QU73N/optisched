@@ -8,7 +8,9 @@ import { useIdleTimeout } from '../hooks/useIdleTimeout';
 import { usePermissions } from '../hooks/usePermissions';
 import IdleTimeoutModal, { type IdleMode } from './IdleTimeoutModal';
 import RoleSelector from './RoleSelector';
-import SiderailCharts from './SiderailCharts';
+import SystemStats from './SystemStats';
+import PowerAdminStats from './PowerAdminStats';
+import LoadByDay from './LoadByDay';
 
 import {
     LogOut, Moon, Sun, Bell, HelpCircle, PanelLeft, Settings,
@@ -231,7 +233,9 @@ const Layout: React.FC = () => {
                             )}
                         </div>
                     </div>
-                    <SiderailCharts />
+                    <SystemStats />
+                    <PowerAdminStats />
+                    <LoadByDay />
                 </div>
             </aside>
 

@@ -279,7 +279,7 @@ CREATE TABLE public.rooms (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   name text NOT NULL UNIQUE,
   capacity integer NOT NULL DEFAULT 40,
-  type text NOT NULL CHECK (type = ANY (ARRAY['lecture'::text, 'laboratory'::text, 'gymnasium'::text, 'computer_lab'::text])),
+  type text NOT NULL CHECK (type = ANY (ARRAY['common'::text, 'special'::text])),
   building text NOT NULL DEFAULT 'Main'::text,
   floor integer NOT NULL DEFAULT 1,
   equipment ARRAY DEFAULT '{}'::text[],
@@ -361,15 +361,15 @@ CREATE TABLE public.schedules (
   submitted_at timestamp with time zone,
   approved_by uuid,
   approved_at timestamp with time zone,
-  rejected_by uuid,
-  rejected_at timestamp with time zone,
   rejection_reason text,
-  deleted_at timestamp with time zone,
-  deleted_by uuid REFERENCES public.profiles(id),
   is_locked boolean DEFAULT false,
-  locked_by uuid REFERENCES public.profiles(id),
+  locked_by uuid,
   locked_at timestamp with time zone,
   lock_reason text,
+  rejected_by uuid,
+  rejected_at timestamp with time zone,
+  deleted_at timestamp with time zone,
+  deleted_by uuid,
   CONSTRAINT schedules_pkey PRIMARY KEY (id),
   CONSTRAINT schedules_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
   CONSTRAINT schedules_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
@@ -377,8 +377,9 @@ CREATE TABLE public.schedules (
   CONSTRAINT schedules_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id),
   CONSTRAINT schedules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
   CONSTRAINT schedules_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.profiles(id),
-  CONSTRAINT schedules_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id),
-  CONSTRAINT schedules_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES public.profiles(id)
+  CONSTRAINT schedules_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.sections (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -416,12 +417,24 @@ CREATE TABLE public.sharing_requests (
   CONSTRAINT sharing_requests_from_user_id_fkey FOREIGN KEY (from_user_id) REFERENCES public.profiles(id),
   CONSTRAINT sharing_requests_to_user_id_fkey FOREIGN KEY (to_user_id) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.students (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  profile_id uuid NOT NULL,
+  section_id uuid NOT NULL,
+  student_number text,
+  enrollment_date timestamp with time zone DEFAULT now(),
+  is_active boolean DEFAULT true,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT students_pkey PRIMARY KEY (id),
+  CONSTRAINT students_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
+  CONSTRAINT students_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id)
+);
 CREATE TABLE public.subjects (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   code text NOT NULL UNIQUE,
   name text NOT NULL,
   units integer NOT NULL DEFAULT 3,
-  type text NOT NULL CHECK (type = ANY (ARRAY['lecture'::text, 'laboratory'::text])),
+  type text NOT NULL CHECK (type = ANY (ARRAY['common'::text, 'special'::text])),
   duration_hours numeric NOT NULL DEFAULT 1.5,
   program text NOT NULL,
   year_level integer NOT NULL DEFAULT 1,

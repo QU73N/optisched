@@ -6,7 +6,7 @@ import { Users, BookOpen, Clock, Search, BarChart3, Calendar, ChevronRight, Brie
 const FacultyHub: React.FC = () => {
     useAuth();
     const { teachers, loading: loadingTeachers } = useTeachers();
-    const { schedules } = useSchedules({ status: 'published' });
+    const { schedules } = useSchedules({}); // Fetch all schedules, not just published
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedTeacher, setSelectedTeacher] = useState<string | null>(null);
 
@@ -19,8 +19,12 @@ const FacultyHub: React.FC = () => {
             const w = map.get(tid)!;
             w.classes++;
             if (s.day_of_week) w.days.add(s.day_of_week);
-            if (s.subject?.name) w.subjects.add(s.subject.name);
-            if (s.section?.name) w.sections.add(s.section.name);
+            // Handle both nested object structure (subject.name) and flat structure (subject_name)
+            const subjectName = s.subject?.name || s.subject_name;
+            if (subjectName) w.subjects.add(subjectName);
+            // Handle both nested object structure (section.name) and flat structure (section_name)
+            const sectionName = s.section?.name || s.section_name;
+            if (sectionName) w.sections.add(sectionName);
             if (s.start_time && s.end_time) {
                 const [sh, sm] = s.start_time.split(':').map(Number);
                 const [eh, em] = s.end_time.split(':').map(Number);

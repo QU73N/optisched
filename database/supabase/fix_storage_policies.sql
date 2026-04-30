@@ -1,0 +1,32 @@
+-- STORAGE POLICIES MUST BE CONFIGURED IN SUPABASE DASHBOARD
+-- This script is for documentation only - storage policies are managed via Supabase Dashboard
+
+-- Manual steps to fix storage bucket policies:
+-- 1. Go to Supabase Dashboard → Storage → avatars bucket
+-- 2. Click "Policies" tab
+-- 3. Drop the "Public access to avatars" policy if it exists
+-- 4. Create new policies:
+--
+-- Policy: "Avatar files are publicly readable"
+-- - FOR SELECT
+-- - TO: anon, authenticated
+-- - USING: bucket_id = 'avatars'
+--
+-- Policy: "Users can upload avatars"
+-- - FOR INSERT
+-- - TO: authenticated
+-- - WITH CHECK: bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+--
+-- Policy: "Users can update own avatars"
+-- - FOR UPDATE
+-- - TO: authenticated
+-- - USING: bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+-- - WITH CHECK: bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+--
+-- Policy: "Admins can delete avatars"
+-- - FOR DELETE
+-- - TO: authenticated
+-- - USING: bucket_id = 'avatars' AND (SELECT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('power_admin', 'super_admin', 'admin')))
+
+-- Note: Storage policies cannot be managed via SQL in Supabase
+-- They must be configured through the Dashboard or Storage API

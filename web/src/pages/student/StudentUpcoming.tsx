@@ -36,7 +36,7 @@ const StudentUpcoming: React.FC = () => {
             try {
                 const { data } = await supabase
                     .from('schedules')
-                    .select('id, day_of_week, start_time, end_time, subject:subjects(name, code), room:rooms(name), teacher:teachers(profile:profiles(full_name)), section:sections(name)')
+                    .select('id, day_of_week, start_time, end_time, subject:subjects(name, code), room:rooms(name), teacher:teachers(profile_id:profiles(full_name)), section:sections(name)')
                     .eq('status', 'published');
                 const list = ((data || []) as unknown as Array<ScheduleRow & { section?: { name: string } | { name: string }[] | null }>).filter(s => {
                     const sec = Array.isArray(s.section) ? s.section[0] : s.section;

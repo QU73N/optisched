@@ -28,7 +28,7 @@ const AuditLog: React.FC = () => {
 
         // Build audit entries from schedule changes and other tracked actions
         const [schedRes, userRes] = await Promise.all([
-            supabase.from('schedules').select('id, created_at, updated_at, day_of_week, start_time, end_time, subject:subjects(name, code), teacher:teachers(profile:profiles(full_name)), room:rooms(name), section:sections(name)').order('updated_at', { ascending: false }).limit(100),
+            supabase.from('schedules').select('id, created_at, updated_at, day_of_week, start_time, end_time, subject:subjects(name, code), teacher_id:teachers(profile_id:profiles(full_name)), room:rooms(name), section:sections(name)').order('updated_at', { ascending: false }).limit(100),
             supabase.from('profiles').select('id, full_name, role, created_at').order('created_at', { ascending: false }).limit(50),
         ]);
 
@@ -41,8 +41,8 @@ const AuditLog: React.FC = () => {
                 action: s.created_at === s.updated_at ? 'Created' : 'Updated',
                 entity_type: 'schedule',
                 entity_name: `${s.subject?.code || ''} - ${s.subject?.name || 'Schedule'} (${s.day_of_week})`,
-                performed_by: s.teacher?.profile?.full_name || 'System',
-                details: `${s.day_of_week} ${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)} | Room: ${s.room?.name || 'TBA'} | Section: ${s.section?.name || '-'} | Teacher: ${s.teacher?.profile?.full_name || 'TBA'}`,
+                performed_by: s.teacher_id?.profile_id?.full_name || 'System',
+                details: `${s.day_of_week} ${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)} | Room: ${s.room?.name || 'TBA'} | Section: ${s.section?.name || '-'} | Teacher: ${s.teacher_id?.profile_id?.full_name || 'TBA'}`,
                 created_at: s.updated_at || s.created_at,
             });
         });

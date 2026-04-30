@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
-    Tooltip, ResponsiveContainer, Cell
+    Tooltip, ResponsiveContainer, Cell, LineChart, Line
 } from 'recharts';
 import ChartTooltip from '../../components/ChartTooltip';
 import { DASHBOARD_CONFIG } from '../../config/dashboard';
@@ -26,6 +26,8 @@ interface DraftRow {
     updated_at: string;
 }
 interface ConflictTypeBucket { type: string; count: number; }
+interface ConflictTrend { date: string; count: number; }
+interface RoomLoad { name: string; count: number; }
 
 const ScheduleManagerDashboard: React.FC = () => {
     const { profile } = useAuth();
@@ -36,8 +38,11 @@ const ScheduleManagerDashboard: React.FC = () => {
     const [mySubmitted, setMySubmitted] = useState<DraftRow[]>([]);
     const [myApproved7d, setMyApproved7d] = useState(0);
     const [conflictsInDrafts, setConflictsInDrafts] = useState(0);
+    const [conflictsInSubmitted, setConflictsInSubmitted] = useState(0);
     const [counts, setCounts] = useState({ teachers: 0, rooms: 0, sections: 0, subjects: 0 });
     const [conflictsByType, setConflictsByType] = useState<ConflictTypeBucket[]>([]);
+    const [conflictsTrend, setConflictsTrend] = useState<ConflictTrend[]>([]);
+    const [roomLoad, setRoomLoad] = useState<RoomLoad[]>([]);
 
     useEffect(() => {
         if (!profile?.id) return;
@@ -107,6 +112,56 @@ const ScheduleManagerDashboard: React.FC = () => {
                     sections: sections.count || 0,
                     subjects: subjects.count || 0,
                 });
+
+                // 6. conflicts in my submitted schedules
+                const submittedIds = (submitted || []).map(s => s.id);
+                if (submittedIds.length > 0) {
+                    const { data: submittedConfs } = await supabase
+                        .from('conflicts')
+                        .select('id')
+                        .eq('is_resolved', false)
+                        .in('schedule_a_id', submittedIds);
+                    setConflictsInSubmitted((submittedConfs || []).length);
+                } else {
+                    setConflictsInSubmitted(0);
+                }
+
+                // 7. conflicts trend (14d)
+                const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+                const { data: allConflicts } = await supabase
+                    .from('conflicts')
+                    .select('created_at')
+                    .gte('created_at', fourteenDaysAgo);
+                const trendMap: Record<string, number> = {};
+                for (let i = 13; i >= 0; i--) {
+                    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+                    const key = `${d.getMonth() + 1}/${d.getDate()}`;
+                    trendMap[key] = 0;
+                }
+                (allConflicts || []).forEach((c: { created_at: string }) => {
+                    if (!c.created_at) return;
+                    const d = new Date(c.created_at);
+                    const key = `${d.getMonth() + 1}/${d.getDate()}`;
+                    if (key in trendMap) trendMap[key]++;
+                });
+                setConflictsTrend(Object.entries(trendMap).map(([date, count]) => ({ date, count })));
+
+                // 8. room load (top 8)
+                const [schedulesFull, roomsFull] = await Promise.all([
+                    supabase.from('schedules').select('room_id').eq('status', 'published'),
+                    supabase.from('rooms').select('id, name'),
+                ]);
+                const roomMap: Record<string, number> = {};
+                (schedulesFull.data || []).forEach((s: { room_id: string }) => {
+                    if (s.room_id) roomMap[s.room_id] = (roomMap[s.room_id] || 0) + 1;
+                });
+                const roomNameById: Record<string, string> = {};
+                (roomsFull.data || []).forEach((r: { id: string; name: string }) => { roomNameById[r.id] = r.name; });
+                const loadList = Object.entries(roomMap)
+                    .map(([id, count]) => ({ name: roomNameById[id] || 'Room', count }))
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 8);
+                setRoomLoad(loadList);
             } catch (err) {
                 console.error('[ScheduleManagerDashboard] fetch error:', err);
             } finally {
@@ -155,6 +210,11 @@ const ScheduleManagerDashboard: React.FC = () => {
                     <div className="stat-icon"><AlertTriangle size={20} /></div>
                     <div className="stat-number">{conflictsInDrafts}</div>
                     <div className="stat-label">Conflicts in Drafts</div>
+                </div>
+                <div className={`stat-card ${conflictsInSubmitted > 0 ? 'stat-warning' : ''}`}>
+                    <div className="stat-icon"><AlertTriangle size={20} /></div>
+                    <div className="stat-number">{conflictsInSubmitted}</div>
+                    <div className="stat-label">Conflicts in Submitted</div>
                 </div>
                 <div className="stat-card">
                     <div className="stat-icon"><CalendarDays size={20} /></div>
@@ -251,7 +311,7 @@ const ScheduleManagerDashboard: React.FC = () => {
                             </a>
                             <a className="btn btn-secondary" href="/admin/data">Manage Data</a>
                             <a className="btn btn-secondary" href="/admin/conflicts">View Conflicts</a>
-                            {!perms.canDirectPublish && (
+                            {!perms.canDirectPublishEdit && (
                                 <p className="dash-meta-text" style={{ marginTop: 4 }}>
                                     Schedules require Schedule Admin approval before publication.
                                 </p>
@@ -289,6 +349,58 @@ const ScheduleManagerDashboard: React.FC = () => {
                             </div>
                         )}
                     </div>
+
+                    {/* Conflicts trend (14d) */}
+                    {conflictsTrend.length > 0 && (
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><AlertTriangle size={16} /> Conflicts (14d)</div>
+                                <span className="dash-card-badge dash-badge-info">
+                                    {conflictsTrend.reduce((s, d) => s + d.count, 0)}
+                                </span>
+                            </div>
+                            <div className="dash-chart-wrap-sm" role="img" aria-label="Conflicts created per day, last 14 days">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={conflictsTrend} margin={{ top: 8, right: 8, left: -22, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} interval={1} />
+                                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                        <Tooltip content={<ChartTooltip />} />
+                                        <Line type="monotone" dataKey="count" name="Conflicts" stroke="#ef4444" strokeWidth={2} dot={{ r: 2.5, fill: '#ef4444' }} activeDot={{ r: 4 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Room load (top 8) */}
+                    {roomLoad.length > 0 && (
+                        <div className="dash-card dash-stagger">
+                            <div className="dash-card-header">
+                                <div className="dash-card-title"><MapPin size={16} /> Top Rooms by Load</div>
+                                <span className="dash-card-badge dash-badge-info">{roomLoad.length}</span>
+                            </div>
+                            <div className="dash-chart-wrap-sm" role="img" aria-label="Top rooms by published schedule count">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={roomLoad} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" horizontal={false} />
+                                        <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} width={70} />
+                                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
+                                        <Bar dataKey="count" name="Classes" radius={[0, 4, 4, 0]}>
+                                            {roomLoad.map((entry, i) => {
+                                                const max = Math.max(...roomLoad.map(r => r.count), 1);
+                                                const ratio = entry.count / max;
+                                                const color = ratio > 0.85 ? '#ef4444' : ratio > 0.6 ? '#f59e0b' : '#06b6d4';
+                                                return <Cell key={i} fill={color} />;
+                                            })}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Load by day moved to siderail */}
                 </div>
             </div>

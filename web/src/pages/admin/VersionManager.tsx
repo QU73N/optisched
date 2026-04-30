@@ -33,7 +33,7 @@ const VersionManager: React.FC = () => {
     const fetchSchedules = async () => {
         setLoading(true);
         const { data } = await supabase.from('schedules')
-            .select('*, subject:subjects(name, code), teacher:teachers(profile:profiles(full_name)), room:rooms(name), section:sections(name)')
+            .select('*, subject:subjects(name, code), teacher:teachers(profile_id:profiles(full_name)), room:rooms(name), section:sections(name)')
             .order('day_of_week');
         setSchedules(data || []);
         setLoading(false);

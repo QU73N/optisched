@@ -114,7 +114,7 @@ export const subscribeToConflicts = (
             async () => {
                 const { data } = await supabase
                     .from('schedules')
-                    .select('*, subject:subjects(*), teacher:teachers(*, profile:profiles(*)), room:rooms(*), section:sections(*)')
+                    .select('*, subject:subjects(*), teacher:teachers(*, profile_id:profiles(*)), room:rooms(*), section:sections(*)')
                     .eq('status', 'published');
 
                 if (data) {

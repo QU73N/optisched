@@ -29,6 +29,8 @@ const AdminDashboard: React.FC = () => {
     const [conflictsTrend, setConflictsTrend] = useState<ConflictsTrend[]>([]);
     const [roomLoad, setRoomLoad] = useState<{ name: string; count: number }[]>([]);
     const [requestFunnel, setRequestFunnel] = useState({ approved: 0, rejected: 0, pending: 0 });
+    
+    // System activity and audit event trends (for all admins)
 
     // Role detection
     const isPowerAdmin = hasAnyRole(roles, POWER_ADMIN_ROLES);
@@ -90,7 +92,7 @@ const AdminDashboard: React.FC = () => {
             const sevenDaysAgo = new Date(Date.now() - DASHBOARD_CONFIG.TIME.DAYS_7_MS).toISOString();
             const fourteenDaysAgo = new Date(Date.now() - DASHBOARD_CONFIG.TIME.DAYS_14_MS).toISOString();
             const [profiles, schedules, conflicts, roomsR, schedulesRecent, conflictsRecent, requestsRecent, conflictsAll, schedulesFull, roomsFull] = await Promise.all([
-                supabase.from('profiles').select('role', { count: 'exact' }),
+                supabase.from('profiles').select('role'),
                 supabase.from('schedules').select('id', { count: 'exact' }),
                 supabase.from('conflicts').select('id', { count: 'exact' }).eq('is_resolved', false),
                 supabase.from('rooms').select('id', { count: 'exact' }),
@@ -104,10 +106,11 @@ const AdminDashboard: React.FC = () => {
                 supabase.from('rooms').select('id, name'),
             ]);
             const all = profiles.data || [];
+            const totalUsers = all.length;
             setStats({
-                totalUsers: profiles.count || 0,
-                teachers: all.filter(p => p.role === 'teacher').length,
-                students: all.filter(p => p.role === 'student').length,
+                totalUsers,
+                teachers: all.filter((p: { role: string }) => p.role === 'teacher').length,
+                students: all.filter((p: { role: string }) => p.role === 'student').length,
                 schedules: schedules.count || 0,
                 conflicts: conflicts.count || 0,
                 rooms: roomsR.count || 0,
@@ -117,6 +120,7 @@ const AdminDashboard: React.FC = () => {
                 conflicts: conflictsRecent.count || 0,
                 requests: requestsRecent.count || 0,
             });
+            
             // Build 14-day conflicts trend
             const trendMap: Record<string, number> = {};
             for (let i = DASHBOARD_CONFIG.CHART.CONFLICTS_TREND_DAYS - 1; i >= 0; i--) {
@@ -124,7 +128,7 @@ const AdminDashboard: React.FC = () => {
                 const key = `${d.getMonth() + 1}/${d.getDate()}`;
                 trendMap[key] = 0;
             }
-            (conflictsAll.data || []).forEach((c: any) => {
+            (conflictsAll.data || []).forEach((c: { created_at: string }) => {
                 if (!c.created_at) return;
                 const d = new Date(c.created_at);
                 const key = `${d.getMonth() + 1}/${d.getDate()}`;
@@ -133,11 +137,11 @@ const AdminDashboard: React.FC = () => {
             setConflictsTrend(Object.entries(trendMap).map(([date, count]) => ({ date, count })));
             // Room load (top 8)
             const roomMap: Record<string, number> = {};
-            (schedulesFull.data || []).forEach((s: any) => {
+            (schedulesFull.data || []).forEach((s: { room_id: string }) => {
                 if (s.room_id) roomMap[s.room_id] = (roomMap[s.room_id] || 0) + 1;
             });
             const roomNameById: Record<string, string> = {};
-            (roomsFull.data || []).forEach((r: any) => { roomNameById[r.id] = r.name; });
+            (roomsFull.data || []).forEach((r: { id: string; name: string }) => { roomNameById[r.id] = r.name; });
             const loadList = Object.entries(roomMap)
                 .map(([id, count]) => ({ name: roomNameById[id] || 'Room', count }))
                 .sort((a, b) => b.count - a.count)
@@ -167,7 +171,7 @@ const AdminDashboard: React.FC = () => {
             }
             // Funnel last 30 days
             const f = { approved: 0, rejected: 0, pending: 0 };
-            (funnelAll.data || []).forEach((r: any) => {
+            (funnelAll.data || []).forEach((r: { status: string }) => {
                 if (r.status === 'approved') f.approved++;
                 else if (r.status === 'rejected') f.rejected++;
                 else f.pending++;
@@ -196,7 +200,7 @@ const AdminDashboard: React.FC = () => {
 
     const fetchRooms = async () => {
         const { data } = await supabase.from('rooms').select('id, name').order('name');
-        setRooms((data || []) as any[]);
+        setRooms((data || []) as DashboardRoom[]);
     };
 
     const fetchMessages = async () => {
@@ -269,7 +273,7 @@ const AdminDashboard: React.FC = () => {
         const title = ann.title.replace(/^\[.*?\]\s*/, '');
         setAnnTitle(title);
         setAnnContent(ann.content);
-        setAnnPriority(ann.priority as any);
+        setAnnPriority(ann.priority as 'normal' | 'important' | 'urgent');
         setAnnSection(ann.target_section || 'All Sections');
         setShowAnnModal(true);
     };

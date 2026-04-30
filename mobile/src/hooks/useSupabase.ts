@@ -181,7 +181,7 @@ export function useSchedules(filters?: {
 export function useTeachers() {
     const { data, loading, error, refetch } = useFetch<Teacher>(
         'teachers',
-        '*, profile:profiles(*)'
+        '*, profile_id:profiles(*)'
     );
 
     const updateTeacher = async (teacherId: string, updates: Partial<Teacher>) => {

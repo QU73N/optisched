@@ -85,10 +85,10 @@ export function useSchedules(filters?: {
             // Map RPC response to expected format
             const mappedData = (result || []).map((s: any) => ({
                 id: s.id,
-                subject_id: null,
-                teacher_id: null,
-                room_id: null,
-                section_id: null,
+                teacher_id: s.teacher_id,
+                subject_id: s.subject_id,
+                room_id: s.room_id,
+                section_id: s.section_id,
                 day_of_week: s.day_of_week,
                 start_time: s.start_time,
                 end_time: s.end_time,
@@ -96,19 +96,18 @@ export function useSchedules(filters?: {
                 semester: s.semester,
                 academic_year: s.academic_year,
                 subject: { name: s.subject_name, code: s.subject_code },
-                teacher: { id: '', profile: { full_name: s.teacher_name } },
-                room: { id: '', name: s.room_name, building: s.room_building },
-                section: { id: '', name: s.section_name, program: s.section_program },
+                teacher: { id: s.teacher_id, profile: { full_name: s.teacher_name } },
+                room: { id: s.room_id, name: s.room_name, building: s.room_building },
+                section: { id: s.section_id, name: s.section_name, program: s.section_program },
             }));
 
             // Apply filters on client side since RPC doesn't support them
             let filteredData = mappedData;
             if (filters?.teacherId) {
-                // Can't filter by teacher_id in RPC response since it's not included
-                // This would need to be handled differently if needed
+                filteredData = filteredData.filter((s: any) => s.teacher_id === filters.teacherId);
             }
             if (filters?.sectionId) {
-                filteredData = filteredData.filter((s: any) => s.section?.name === filters.sectionId);
+                filteredData = filteredData.filter((s: any) => s.section_id === filters.sectionId);
             }
             if (filters?.dayOfWeek) {
                 filteredData = filteredData.filter((s: any) => s.day_of_week === filters.dayOfWeek);
@@ -144,26 +143,73 @@ export function useSchedules(filters?: {
 // ============ Teachers ============
 
 export function useTeachers() {
-    // Use RPC function by default to bypass RLS join issues
-    const { data, loading, error, refetch } = useFetch<any>(
-        'teachers',
-        '*, profile:profiles(*)'
-    );
+    // Use RPC function to bypass RLS and join issues
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchTeachers = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            // Use RPC function
+            const { data: result, error: fetchError } = await supabase.rpc('get_teachers_with_profiles');
+            if (fetchError) throw fetchError;
+
+            // Map RPC response to expected format with nested profile
+            const mappedData = (result || []).map((t: any) => ({
+                id: t.id,
+                profile_id: t.profile_id,
+                department: t.department,
+                employment_type: t.employment_type,
+                max_hours: t.max_hours,
+                current_load_percentage: t.current_load_percentage,
+                is_active: t.is_active,
+                weight: t.weight,
+                priority_note: t.priority_note,
+                is_public: t.is_public,
+                profile: {  // Nested profile object for compatibility
+                    id: t.profile_id,
+                    full_name: t.full_name,
+                    email: t.email
+                }
+            }));
+
+            setData(mappedData);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            setError(message);
+            console.error('Error fetching teachers:', message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchTeachers();
+
+        const channel = supabase
+            .channel(`realtime-teachers-${Math.random().toString(36).slice(2, 8)}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'teachers'
+            }, () => {
+                fetchTeachers();
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [fetchTeachers]);
 
     const updateTeacher = async (teacherId: string, updates: any) => {
         const { error: err } = await supabase.from('teachers').update(updates).eq('id', teacherId);
         if (err) throw err;
-        await refetch();
+        await fetchTeachers();
     };
 
-    // RPC function to bypass RLS join issues
-    const fetchTeachersWithRPC = async () => {
-        const { data: rpcData, error: rpcError } = await supabase.rpc('get_teachers_with_profiles');
-        if (rpcError) throw rpcError;
-        return rpcData;
-    };
-
-    return { teachers: data, loading, error, refetch, updateTeacher, fetchTeachersWithRPC };
+    return { teachers: data, loading, error, refetch: fetchTeachers, updateTeacher };
 }
 
 // ============ Rooms ============
