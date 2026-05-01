@@ -303,6 +303,7 @@ export interface GenerateInput {
     sections: Section[];
     existing: ExistingSchedule[];
     config: GenerationConfig;
+    institutionalPolicies?: Record<string, unknown>; // Optional institutional policies
 }
 
 /** Does an existing schedule match the partial target? */

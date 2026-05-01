@@ -18,6 +18,7 @@ import {
     type Subject, type Teacher, type VersionSummary, type WorkflowState,
 } from './types';
 import { runGenerator } from './generator';
+import { getPoliciesAsRecord } from '../../../services/generationService';
 
 // ---------------------------------------------------------------------------
 // Root component
@@ -228,8 +229,17 @@ const ScheduleGenerate: React.FC = () => {
         setSaveError(null);
         cancelRef.current = false;
         try {
+            // Fetch institutional policies (optional, generation proceeds with defaults if fetch fails)
+            let institutionalPolicies: Record<string, unknown> = {};
+            try {
+                institutionalPolicies = await getPoliciesAsRecord();
+            } catch (error) {
+                console.warn('Failed to fetch institutional policies, using defaults:', error);
+                // Generation continues with empty policies (defaults)
+            }
+
             const res = await runGenerator(
-                { subjects, teachers, rooms, sections, existing, config },
+                { subjects, teachers, rooms, sections, existing, config, institutionalPolicies },
                 p => setProgress(p),
             );
             if (cancelRef.current) return;
