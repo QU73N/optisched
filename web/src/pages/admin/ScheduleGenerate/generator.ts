@@ -1452,6 +1452,21 @@ export async function runGenerator(
             }
         }
 
+        // Check if there are any tasks to place
+        if (rankedTasks.length === 0) {
+            return {
+                total: totalTasks,
+                placed: 0,
+                entries: [],
+                errors: ['No placement tasks generated. This may be due to subjects not matching any sections or invalid configuration.'],
+                score: 0,
+                highPriorityPlaced: 0,
+                highPriorityTotal: highPriorityIds.size,
+                mode: config.mode,
+                diff: [],
+            };
+        }
+
         for (let i = 0; i < rankedTasks.length; i++) {
             const task = rankedTasks[i];
             const sub = task.subject;
