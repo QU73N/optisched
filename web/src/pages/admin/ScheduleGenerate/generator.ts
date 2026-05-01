@@ -383,9 +383,8 @@ export type ProgressFn = (p: GenerationProgress) => void;
 // ============================================================================
 
 /**
- * Normalize all input data and apply institutional policies.
- * TODO: Integrate into generation pipeline after institutional policies are fetched from database.
- * Note: This function is now called in runGenerator but normalized data is not yet used throughout generation.
+ * Normalize data with institutional policies applied.
+ * Note: This function is called in runGenerator and normalized data is used throughout generation.
  */
 const normalizeData = (
     teachers: Teacher[],
@@ -1070,24 +1069,21 @@ export async function runGenerator(
     const target = isPartial ? config.partialTarget : null;
 
     // Step 2 (Data Normalizer): Normalize data with institutional policies
-    // TODO: In future integration, use normalized data throughout generation
-    // For now, we normalize but continue using raw data to avoid breaking changes
+    // Use normalized data in lookup maps for better data consistency
     const normalizedData = normalizeData(teachers, rooms, sections, subjects, institutionalPolicies);
-    // Normalized data is available for future integration steps
-    void normalizedData; // Prepared for future use
 
     // Step 4 (Constraint Classifier): Classify constraints into hard/soft/preference sets
     // TODO: In future integration, use classified constraints in placement validation
-    // For now, we classify but continue using existing constraint logic to avoid breaking changes
     const classifiedConstraints = classifyConstraints(config, institutionalPolicies);
     // Classified constraints are available for future integration steps
     void classifiedConstraints; // Prepared for future use
 
     // Lookup maps used for diff + room scoping.
-    const subjectMap = new Map(subjects.map(s => [s.id, s]));
-    const teacherMap = new Map(teachers.map(t => [t.id, t]));
-    const roomMap    = new Map(rooms.map(r => [r.id, r]));
-    const sectionMap = new Map(sections.map(s => [s.id, s]));
+    // Use normalized data for consistent access throughout generation
+    const subjectMap = new Map(normalizedData.normalizedSubjects.map(s => [s.id, s]));
+    const teacherMap = new Map(normalizedData.normalizedTeachers.map(t => [t.id, t]));
+    const roomMap    = new Map(normalizedData.normalizedRooms.map(r => [r.id, r]));
+    const sectionMap = new Map(normalizedData.normalizedSections.map(s => [s.id, s]));
 
     // Scope: restrict by selected sections (full mode) or by target (partial mode).
     let scopedSections: Section[];
@@ -1097,35 +1093,35 @@ export async function runGenerator(
             scopedSections = s ? [s] : [];
         } else if (target.kind === 'subject') {
             const sub = subjectMap.get(target.id);
-            scopedSections = sub ? sections.filter(s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level) : [];
+            scopedSections = sub ? normalizedData.normalizedSections.filter(s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level) : [];
         } else {
             // teacher or room: keep all sections in play; subjects will be filtered later.
-            scopedSections = sections;
+            scopedSections = normalizedData.normalizedSections;
         }
     } else {
         scopedSections = config.sectionIds.length
-            ? sections.filter(s => config.sectionIds.includes(s.id))
-            : sections;
+            ? normalizedData.normalizedSections.filter(s => config.sectionIds.includes(s.id))
+            : normalizedData.normalizedSections;
     }
     const scopedSectionIds = new Set(scopedSections.map(s => s.id));
 
     // Available rooms: in room-partial mode, restrict to the target room only.
     const availableRooms = (isPartial && target?.kind === 'room')
-        ? rooms.filter(r => r.id === target.id && r.is_available !== false)
-        : rooms.filter(r => r.is_available !== false);
+        ? normalizedData.normalizedRooms.filter(r => r.id === target.id && r.is_available !== false)
+        : normalizedData.normalizedRooms.filter(r => r.is_available !== false);
     const slots = buildSlots(config);
     const days = config.days.length ? config.days : ['Monday'];
 
     // Step 5 (Impossible Schedule Detector): Detect if schedule is impossible
     // If impossible, return early with actionable error messages
-    const impossibilityCheck = detectImpossibleSchedule(teachers, rooms, sections, subjects, days, slots, config);
+    const impossibilityCheck = detectImpossibleSchedule(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, slots, config);
     if (!impossibilityCheck.is_possible) {
-        const totalTasks = subjects.reduce((sum, s) => sum + sessionsNeeded(s, config.sessionMinutes), 0);
+        const totalTasks = normalizedData.normalizedSubjects.reduce((sum, s) => sum + sessionsNeeded(s, config.sessionMinutes), 0);
         // Calculate high priority count for early return
         const subjectP = config.priorities.subjects;
         const sectionP = config.priorities.sections;
-        const highPriorityTotal = subjects.filter(s => {
-            const sec = sections.find(x => (s.program === 'ALL' || x.program === s.program) && x.year_level === s.year_level);
+        const highPriorityTotal = normalizedData.normalizedSubjects.filter(s => {
+            const sec = normalizedData.normalizedSections.find(x => (s.program === 'ALL' || x.program === s.program) && x.year_level === s.year_level);
             const subScore = priorityOf(subjectP, s.id);
             const secScore = sec ? priorityOf(sectionP, sec.id) : 50;
             return subScore >= 70 || secScore >= 70;
@@ -1146,7 +1142,7 @@ export async function runGenerator(
     // Step 3 (Domain Builder): Build domains for early pruning in placement
     // TODO: In future integration, use domain-based lookups instead of maps
     // For now, we build but continue using existing lookup maps to avoid breaking changes
-    const domains = buildDomains(teachers, rooms, sections, subjects, days, slots);
+    const domains = buildDomains(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, slots);
     // Domain data is available for future integration steps
     void domains; // Prepared for future use
 
@@ -1156,13 +1152,13 @@ export async function runGenerator(
         totalAttempts: config.maxAttempts,
         placed: 0,
         total: 0,
-        message: `Loading data. ${scopedSections.length} sections, ${availableRooms.length} rooms, ${teachers.length} teachers`,
+        message: `Loading data. ${scopedSections.length} sections, ${availableRooms.length} rooms, ${normalizedData.normalizedTeachers.length} teachers`,
     });
     await new Promise(r => setTimeout(r, 120));
 
     // Candidates: subjects that need a slot for any scoped section.
     // We replicate the old behavior (one placement per subject matched to first section).
-    let scopedSubjects = subjects.filter(sub => {
+    let scopedSubjects = normalizedData.normalizedSubjects.filter(sub => {
         const hasSection = scopedSections.some(
             s => (sub.program === 'ALL' || s.program === sub.program) && sub.year_level === s.year_level,
         );
@@ -1321,8 +1317,8 @@ export async function runGenerator(
             }
 
             const teacher = sub.teacher_id
-                ? teachers.find(t => t.id === sub.teacher_id)
-                : teachers[Math.floor(Math.random() * teachers.length)];
+                ? teacherMap.get(sub.teacher_id)
+                : Array.from(teacherMap.values())[Math.floor(Math.random() * teacherMap.size)];
             if (!teacher) { errors.push(`No teacher for "${sub.name}"`); continue; }
 
             const section = task.section;
@@ -1450,9 +1446,9 @@ export async function runGenerator(
 
     // Step 9 (Soft Constraint Optimizer): Calculate soft constraint scores and identify violations
     // Use the soft constraint score in the final result for better accuracy
-    const softScore = calculateSoftConstraintScore(best.entries, teachers, rooms, sections, config.soft);
-    const violations = identifySoftConstraintViolations(best.entries, teachers, rooms);
-    const suggestions = generateOptimizationSuggestions(best.entries, violations, teachers, rooms);
+    const softScore = calculateSoftConstraintScore(best.entries, normalizedData.normalizedTeachers, availableRooms, scopedSections, config.soft);
+    const violations = identifySoftConstraintViolations(best.entries, normalizedData.normalizedTeachers, availableRooms);
+    const suggestions = generateOptimizationSuggestions(best.entries, violations, normalizedData.normalizedTeachers, availableRooms);
     // Update the final result with the soft constraint score
     best = { ...best, score: softScore };
     // Violations and suggestions are available for future integration steps
