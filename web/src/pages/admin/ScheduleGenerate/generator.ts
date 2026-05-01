@@ -341,9 +341,9 @@ const wouldExceedMaxHours = (
     currentEntries: PlacedEntry[],
     teacher: Teacher,
     sessionMinutes: number,
-    hardConstraints?: HardConstraintSet,
+    _hardConstraints?: HardConstraintSet,
 ): boolean => {
-    const maxHours = teacher.max_hours || (hardConstraints?.max_daily_load ?? 8) * 5 || 40;
+    const maxHours = teacher.max_hours || 40;
     const totalHours = (currentEntries.filter(e => e.teacherId === teacherId).length * sessionMinutes) / 60;
     return totalHours >= maxHours;
 };
