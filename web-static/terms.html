@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms and Conditions — OptiSched</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.7;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: fadeDown 0.6s ease-out;
+        }
+
+        @keyframes fadeDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -200% 0;
+            }
+
+            100% {
+                background-position: 200% 0;
+            }
+        }
+
+        .logo h1 {
+            font-size: 42px;
+            background: linear-gradient(135deg, #818cf8, #c084fc, #818cf8);
+            background-size: 200% auto;
+            animation: shimmer 3s linear infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 4px;
+            letter-spacing: -0.5px;
+        }
+
+        .logo .tagline {
+            font-size: 16px;
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        .logo .badge {
+            display: inline-block;
+            margin-top: 12px;
+            background: rgba(129, 140, 248, 0.12);
+            color: #a5b4fc;
+            font-size: 12px;
+            padding: 6px 18px;
+            border-radius: 99px;
+            font-weight: 500;
+            border: 1px solid rgba(129, 140, 248, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .logo .badge:hover {
+            background: rgba(129, 140, 248, 0.25);
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(129, 140, 248, 0.2);
+        }
+
+        h2 {
+            font-size: 22px;
+            color: #f1f5f9;
+            margin-top: 40px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+            animation: fadeUp 0.5s ease-out;
+        }
+
+        h3 {
+            font-size: 16px;
+            color: #cbd5e1;
+            margin-top: 20px;
+            margin-bottom: 8px;
+        }
+
+        p,
+        li {
+            color: #94a3b8;
+            margin-bottom: 12px;
+        }
+
+        ul,
+        ol {
+            padding-left: 24px;
+        }
+
+        li {
+            margin-bottom: 6px;
+            transition: all 0.2s ease;
+        }
+
+        li:hover {
+            color: #c7d2fe;
+            transform: translateX(4px);
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, rgba(129, 140, 248, 0.08), rgba(192, 132, 252, 0.08));
+            border-left: 3px solid #818cf8;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            transition: all 0.3s ease;
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        .highlight:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 20px rgba(129, 140, 248, 0.15);
+        }
+
+        .highlight p {
+            color: #c7d2fe;
+            margin-bottom: 0;
+        }
+
+        .warning {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.04));
+            border-left: 3px solid #ef4444;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            transition: all 0.3s ease;
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        .warning:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.12);
+        }
+
+        .warning p {
+            color: #fca5a5;
+            margin-bottom: 0;
+        }
+
+        .section-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 24px;
+            margin: 16px 0;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        .section-card:hover {
+            border-color: rgba(129, 140, 248, 0.3);
+            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .section-card h3 {
+            margin-top: 0;
+            color: #f1f5f9;
+            font-size: 15px;
+        }
+
+        .section-card .icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .rules-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .rule-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .rule-card:hover {
+            border-color: #818cf8;
+            background: rgba(129, 140, 248, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .rule-card .rule-icon {
+            font-size: 20px;
+            margin-bottom: 6px;
+        }
+
+        .rule-card strong {
+            font-size: 13px;
+            color: #f1f5f9;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .rule-card span {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        .ip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+            padding-left: 0;
+            list-style: none;
+        }
+
+        .ip-list li {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-bottom: 0;
+        }
+
+        .ip-list li:hover {
+            border-color: #f59e0b;
+            color: #fde68a;
+            background: rgba(245, 158, 11, 0.08);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
+        }
+
+        .effective {
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+            margin-top: 48px;
+            border-top: 1px solid #1e293b;
+            padding-top: 20px;
+        }
+
+        a {
+            color: #818cf8;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        a:hover {
+            color: #a5b4fc;
+            text-decoration: underline;
+        }
+
+        .nav {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 32px;
+            animation: fadeDown 0.6s ease-out 0.2s both;
+        }
+
+        .nav a {
+            color: #94a3b8;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav a:hover,
+        .nav a.active {
+            color: #818cf8;
+            border-color: #818cf8;
+            text-decoration: none;
+            background: rgba(129, 140, 248, 0.08);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(129, 140, 248, 0.1);
+        }
+
+        @media (max-width: 600px) {
+            .rules-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="logo">
+        <h1>OptiSched</h1>
+        <p class="tagline">Smart Scheduling, Simple Solutions</p>
+        <span class="badge">STI College Meycauayan • Branch ID: 401903</span>
+    </div>
+
+    <nav class="nav">
+        <a href="privacy.html">Privacy Policy</a>
+        <a class="active" href="terms.html">Terms of Service</a>
+        <a href="about.html">About</a>
+    </nav>
+
+    <h2>Terms and Conditions</h2>
+    <p>These Terms and Conditions ("Terms") govern your use of OptiSched, an automated academic scheduling platform
+        developed for STI College Meycauayan. By accessing or using the Platform, you agree to be bound by these Terms.
+    </p>
+
+    <h2>1. Acceptable Use</h2>
+    <p>OptiSched is provided exclusively for <strong>academic scheduling and institutional operations</strong> at STI
+        College Meycauayan.</p>
+
+    <div class="rules-grid">
+        <div class="rule-card">
+            <div class="rule-icon">✅</div>
+            <strong>Permitted</strong>
+            <span>Managing schedules, viewing timetables, and performing scheduling-related tasks.</span>
+        </div>
+        <div class="rule-card">
+            <div class="rule-icon">🚫</div>
+            <strong>AI Misuse Prohibited</strong>
+            <span>Do not use OptiBot for academic dishonesty — solving assignments, quizzes, or coursework.</span>
+        </div>
+        <div class="rule-card">
+            <div class="rule-icon">🛡️</div>
+            <strong>Respect Users</strong>
+            <span>Do not use the Platform to harass, defame, or discriminate against any user.</span>
+        </div>
+        <div class="rule-card">
+            <div class="rule-icon">🔒</div>
+            <strong>Stay In Your Role</strong>
+            <span>Do not attempt to access data or features outside your assigned role.</span>
+        </div>
+    </div>
+
+    <div class="warning">
+        <p><strong>⚠️ Academic Integrity Warning:</strong> The OptiBot AI assistant is programmed to refuse any requests
+            related to academic assignments or homework. Repeated attempts to misuse the AI for academic dishonesty may
+            result in account suspension and disciplinary referral.</p>
+    </div>
+
+    <h2>2. User Accounts</h2>
+    <div class="section-card">
+        <div class="icon">👤</div>
+        <h3>2.1 Account Creation</h3>
+        <p>Accounts are created by authorized administrators through the OptiSched admin panel. Each user receives
+            credentials corresponding to their institutional role.</p>
+    </div>
+
+    <div class="section-card">
+        <div class="icon">🔐</div>
+        <h3>2.2 Account Responsibility</h3>
+        <ul>
+            <li>Maintaining the confidentiality of your login credentials (email and password).</li>
+            <li>All activities that occur under your account.</li>
+            <li>Immediately notifying the Office of the Registrar if you suspect unauthorized access.</li>
+        </ul>
+    </div>
+
+    <div class="section-card">
+        <div class="icon">⛔</div>
+        <h3>2.3 Prohibited Account Activities</h3>
+        <ul>
+            <li>Sharing your account credentials with any other person.</li>
+            <li>Creating multiple accounts for a single individual.</li>
+            <li>Using another person's account without explicit authorization.</li>
+        </ul>
+    </div>
+
+    <h2>3. AI-Generated Schedules — Disclaimer</h2>
+    <div class="highlight">
+        <p>OptiSched uses artificial intelligence to generate and optimize academic schedules. While the system is
+            designed to minimize conflicts and maximize efficiency, <strong>AI-generated schedules are provided on an
+                "as-is" basis</strong>. OptiSched does not guarantee that every generated schedule will be free of
+            errors. <strong>Final verification and approval of all schedules lies with the human Registrar or authorized
+                administrator.</strong></p>
+    </div>
+
+    <h2>4. Intellectual Property</h2>
+    <p>The following are the intellectual property of the OptiSched research group and STI College Meycauayan:</p>
+    <ul class="ip-list">
+        <li>🧠 Scheduling Algorithm & Engine</li>
+        <li>🎨 Branding, Logos & Visual Designs</li>
+        <li>🤖 OptiBot AI System & Guardrails</li>
+        <li>💻 Source Code & Database Schemas</li>
+    </ul>
+    <p style="margin-top: 12px;">No user may copy, modify, distribute, or reverse-engineer any part of the Platform
+        without prior written consent.</p>
+
+    <h2>5. Limitation of Liability</h2>
+    <div class="section-card">
+        <div class="icon">⚖️</div>
+        <h3>To the maximum extent permitted by law:</h3>
+        <ul>
+            <li>OptiSched and its developers shall not be liable for any direct, indirect, incidental, or consequential
+                damages arising from the use of, or inability to use, the Platform.</li>
+            <li>This includes damages arising from scheduling errors, data loss, system downtime, or reliance on
+                AI-generated outputs.</li>
+        </ul>
+    </div>
+
+    <h2>6. Termination</h2>
+    <p>We reserve the right to suspend or terminate any user account that:</p>
+    <div class="rules-grid">
+        <div class="rule-card">
+            <div class="rule-icon">📜</div>
+            <strong>Terms Violation</strong>
+            <span>Violates these Terms of Service.</span>
+        </div>
+        <div class="rule-card">
+            <div class="rule-icon">🤖</div>
+            <strong>AI Exploitation</strong>
+            <span>Attempts to jailbreak, exploit, or abuse OptiBot.</span>
+        </div>
+        <div class="rule-card">
+            <div class="rule-icon">🔓</div>
+            <strong>Unauthorized Access</strong>
+            <span>Engages in unauthorized data access or manipulation.</span>
+        </div>
+        <div class="rule-card">
+            <div class="rule-icon">🎯</div>
+            <strong>Purpose Misuse</strong>
+            <span>Uses the Platform for purposes other than academic scheduling.</span>
+        </div>
+    </div>
+    <p style="margin-top: 12px;">Termination may be temporary (suspension) or permanent (ban), at the sole discretion of
+        the administrators.</p>
+
+    <h2>7. Modifications to Terms</h2>
+    <p>OptiSched reserves the right to modify these Terms at any time. Users will be notified of material changes
+        through the application or via institutional communication channels. Continued use of the Platform after such
+        changes constitutes acceptance of the revised Terms.</p>
+
+    <h2>8. Governing Law</h2>
+    <div class="highlight">
+        <p>These Terms shall be governed by and construed in accordance with the laws of the <strong>Republic of the
+                Philippines</strong>.
+            Any disputes arising from the use of OptiSched shall be subject to the exclusive jurisdiction of the courts
+            of
+            Meycauayan, Bulacan.</p>
+    </div>
+
+    <h2>9. Contact</h2>
+    <div class="section-card">
+        <div class="icon">📞</div>
+        <h3>Get in Touch</h3>
+        <p>For questions or concerns regarding these Terms:</p>
+        <p><strong>STI College Meycauayan — Office of the Registrar</strong><br>
+            Email: registrar@meycauayan.sti.edu.ph</p>
+    </div>
+
+    <p class="effective">Effective Date: February 28, 2026 &middot; OptiSched v1.0 &middot; © 2026 STI College
+        Meycauayan</p>
+</body>
+
+</html>

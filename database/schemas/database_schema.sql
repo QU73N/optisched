@@ -1,0 +1,560 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.admin_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  sender_id uuid NOT NULL,
+  sender_name text NOT NULL DEFAULT 'Unknown'::text,
+  recipient_id uuid,
+  message text NOT NULL,
+  direction text NOT NULL DEFAULT 'teacher_to_admin'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT admin_messages_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.admin_tasks (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  title text NOT NULL,
+  description text,
+  priority text NOT NULL CHECK (priority = ANY (ARRAY['high'::text, 'medium'::text, 'low'::text])),
+  progress integer DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text])),
+  assigned_to ARRAY DEFAULT '{}'::uuid[],
+  department text,
+  due_date date,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT admin_tasks_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.announcements (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  content text NOT NULL,
+  author_id uuid,
+  author_name text NOT NULL DEFAULT ''::text,
+  priority text NOT NULL DEFAULT 'normal'::text CHECK (priority = ANY (ARRAY['normal'::text, 'important'::text, 'urgent'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  expires_at timestamp with time zone,
+  target_section text,
+  CONSTRAINT announcements_pkey PRIMARY KEY (id),
+  CONSTRAINT announcements_author_id_fkey FOREIGN KEY (author_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.approval_audit_log (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  approval_request_id uuid NOT NULL,
+  action text NOT NULL CHECK (action = ANY (ARRAY['created'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text, 'commented'::text])),
+  performed_by uuid,
+  notes text,
+  previous_status text,
+  new_status text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT approval_audit_log_pkey PRIMARY KEY (id),
+  CONSTRAINT approval_audit_log_approval_request_id_fkey FOREIGN KEY (approval_request_id) REFERENCES public.approval_requests(id),
+  CONSTRAINT approval_audit_log_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.approval_requests (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  request_type text NOT NULL CHECK (request_type = ANY (ARRAY['schedule_change'::text, 'new_schedule'::text, 'delete_schedule'::text, 'bulk_change'::text])),
+  resource_type text NOT NULL CHECK (resource_type = ANY (ARRAY['schedule'::text, 'section'::text, 'teacher'::text, 'room'::text, 'subject'::text])),
+  resource_id uuid,
+  requested_by uuid NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text])),
+  title text NOT NULL,
+  description text,
+  change_data jsonb DEFAULT '{}'::jsonb,
+  approved_by uuid,
+  approved_at timestamp with time zone,
+  rejection_reason text,
+  academic_year text,
+  semester text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT approval_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT approval_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.profiles(id),
+  CONSTRAINT approval_requests_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.audit_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  actor_id uuid,
+  actor_role text,
+  action text NOT NULL,
+  target_table text,
+  target_id uuid,
+  details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ip_address inet,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  prev_hash text,
+  row_hash text,
+  CONSTRAINT audit_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT audit_logs_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.backup_jobs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  kind text NOT NULL CHECK (kind = ANY (ARRAY['full'::text, 'schema'::text, 'data'::text, 'manual'::text])),
+  status text NOT NULL DEFAULT 'queued'::text CHECK (status = ANY (ARRAY['queued'::text, 'running'::text, 'succeeded'::text, 'failed'::text, 'cancelled'::text])),
+  note text,
+  file_path text,
+  size_bytes bigint,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  started_at timestamp with time zone,
+  finished_at timestamp with time zone,
+  error_message text,
+  CONSTRAINT backup_jobs_pkey PRIMARY KEY (id),
+  CONSTRAINT backup_jobs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.chat_messages (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  content text NOT NULL,
+  is_bot boolean DEFAULT false,
+  metadata jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT chat_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT chat_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.client_error_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  url text NOT NULL,
+  message text NOT NULL,
+  stack text,
+  user_agent text,
+  component_stack text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  metadata jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT client_error_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT client_error_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.conflicts (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  type text NOT NULL CHECK (type = ANY (ARRAY['room_conflict'::text, 'teacher_overlap'::text, 'capacity_exceeded'::text, 'unassigned'::text])),
+  severity text NOT NULL CHECK (severity = ANY (ARRAY['high'::text, 'medium'::text, 'low'::text])),
+  title text NOT NULL,
+  description text NOT NULL,
+  schedule_a_id uuid,
+  schedule_b_id uuid,
+  is_resolved boolean DEFAULT false,
+  resolved_at timestamp with time zone,
+  resolved_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT conflicts_pkey PRIMARY KEY (id),
+  CONSTRAINT conflicts_schedule_a_id_fkey FOREIGN KEY (schedule_a_id) REFERENCES public.schedules(id),
+  CONSTRAINT conflicts_schedule_b_id_fkey FOREIGN KEY (schedule_b_id) REFERENCES public.schedules(id),
+  CONSTRAINT conflicts_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.custom_events (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  event_date date NOT NULL,
+  start_time time without time zone,
+  end_time time without time zone,
+  created_by uuid,
+  creator_name text,
+  creator_role text CHECK (creator_role = ANY (ARRAY['admin'::text, 'power_admin'::text, 'system_admin'::text, 'schedule_admin'::text, 'schedule_manager'::text, 'teacher'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  room text,
+  CONSTRAINT custom_events_pkey PRIMARY KEY (id),
+  CONSTRAINT custom_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.emergency_overrides (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  kind text NOT NULL CHECK (kind = ANY (ARRAY['disable_rate_limit'::text, 'disable_idle_timeout'::text, 'bypass_approval'::text, 'maintenance_mode'::text, 'custom'::text])),
+  reason text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active boolean NOT NULL DEFAULT true,
+  activated_by uuid,
+  activated_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone,
+  deactivated_by uuid,
+  deactivated_at timestamp with time zone,
+  CONSTRAINT emergency_overrides_pkey PRIMARY KEY (id),
+  CONSTRAINT emergency_overrides_activated_by_fkey FOREIGN KEY (activated_by) REFERENCES public.profiles(id),
+  CONSTRAINT emergency_overrides_deactivated_by_fkey FOREIGN KEY (deactivated_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.feature_flags (
+  key text NOT NULL,
+  label text NOT NULL,
+  description text,
+  enabled boolean NOT NULL DEFAULT false,
+  rollout_pct integer NOT NULL DEFAULT 0 CHECK (rollout_pct >= 0 AND rollout_pct <= 100),
+  audience text NOT NULL DEFAULT 'all'::text CHECK (audience = ANY (ARRAY['all'::text, 'admin'::text, 'teacher'::text, 'student'::text, 'beta'::text])),
+  updated_by uuid,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT feature_flags_pkey PRIMARY KEY (key),
+  CONSTRAINT feature_flags_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.institution_breaks (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  break_type text NOT NULL CHECK (break_type = ANY (ARRAY['lunch'::text, 'recess'::text, 'assembly'::text, 'other'::text])),
+  day_of_week text NOT NULL CHECK (day_of_week = ANY (ARRAY['Monday'::text, 'Tuesday'::text, 'Wednesday'::text, 'Thursday'::text, 'Friday'::text, 'Saturday'::text, 'all'::text])),
+  start_time text NOT NULL,
+  end_time text NOT NULL,
+  is_active boolean DEFAULT true,
+  academic_year text,
+  semester text,
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT institution_breaks_pkey PRIMARY KEY (id),
+  CONSTRAINT institution_breaks_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  type text NOT NULL CHECK (type = ANY (ARRAY['schedule_change'::text, 'sharing_request'::text, 'approval'::text, 'system'::text, 'reminder'::text])),
+  title text NOT NULL,
+  message text NOT NULL,
+  data jsonb DEFAULT '{}'::jsonb,
+  is_read boolean DEFAULT false,
+  action_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  expires_at timestamp with time zone,
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.password_reset_requests (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  email text NOT NULL,
+  user_id uuid,
+  status text NOT NULL DEFAULT 'pending'::text,
+  requested_at timestamp with time zone DEFAULT now(),
+  resolved_at timestamp with time zone,
+  resolved_by uuid,
+  CONSTRAINT password_reset_requests_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.priority_config (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  key text NOT NULL UNIQUE,
+  value jsonb NOT NULL DEFAULT '{}'::jsonb,
+  description text,
+  category text NOT NULL DEFAULT 'general'::text,
+  is_active boolean NOT NULL DEFAULT true,
+  updated_by uuid,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT priority_config_pkey PRIMARY KEY (id),
+  CONSTRAINT priority_config_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  email text NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['admin'::text, 'power_admin'::text, 'system_admin'::text, 'schedule_admin'::text, 'schedule_manager'::text, 'teacher'::text, 'student'::text])),
+  full_name text NOT NULL,
+  avatar_url text,
+  department text,
+  program text,
+  year_level integer,
+  section text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.rate_limit_buckets (
+  action text NOT NULL,
+  subject text NOT NULL,
+  window_start timestamp with time zone NOT NULL DEFAULT now(),
+  count integer NOT NULL DEFAULT 0,
+  last_hit timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT rate_limit_buckets_pkey PRIMARY KEY (action, subject)
+);
+CREATE TABLE public.room_issues (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  room_name text NOT NULL,
+  issue_description text NOT NULL,
+  reported_by uuid,
+  reporter_name text NOT NULL DEFAULT 'Teacher'::text,
+  status text NOT NULL DEFAULT 'open'::text,
+  admin_notes text,
+  resolved_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT room_issues_pkey PRIMARY KEY (id),
+  CONSTRAINT room_issues_reported_by_fkey FOREIGN KEY (reported_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.rooms (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL UNIQUE,
+  capacity integer NOT NULL DEFAULT 40,
+  type text NOT NULL CHECK (type = ANY (ARRAY['common'::text, 'special'::text])),
+  building text NOT NULL DEFAULT 'Main'::text,
+  floor integer NOT NULL DEFAULT 1,
+  equipment ARRAY DEFAULT '{}'::text[],
+  is_available boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  weight integer NOT NULL DEFAULT 50 CHECK (weight >= 0 AND weight <= 100),
+  priority_note text,
+  owner_id uuid,
+  is_public boolean DEFAULT false,
+  shared_with ARRAY DEFAULT '{}'::uuid[],
+  CONSTRAINT rooms_pkey PRIMARY KEY (id),
+  CONSTRAINT rooms_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.schedule_change_requests (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  teacher_id uuid,
+  teacher_name text NOT NULL DEFAULT ''::text,
+  schedule_id uuid,
+  request_type text NOT NULL DEFAULT 'reschedule'::text CHECK (request_type = ANY (ARRAY['reschedule'::text, 'cancel'::text, 'swap'::text])),
+  reason text NOT NULL DEFAULT ''::text,
+  proposed_day text,
+  proposed_time text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])),
+  admin_notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT schedule_change_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT schedule_change_requests_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.schedule_version_set_items (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  version_set_id uuid NOT NULL,
+  schedule_version_id uuid NOT NULL,
+  CONSTRAINT schedule_version_set_items_pkey PRIMARY KEY (id),
+  CONSTRAINT schedule_version_set_items_version_set_fkey FOREIGN KEY (version_set_id) REFERENCES public.schedule_version_sets(id),
+  CONSTRAINT schedule_version_set_items_schedule_version_fkey FOREIGN KEY (schedule_version_id) REFERENCES public.schedule_versions(id)
+);
+CREATE TABLE public.schedule_version_sets (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  description text,
+  academic_year text NOT NULL,
+  semester text NOT NULL,
+  is_published boolean NOT NULL DEFAULT false,
+  created_by uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT schedule_version_sets_pkey PRIMARY KEY (id),
+  CONSTRAINT schedule_version_sets_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.schedule_versions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  schedule_id uuid NOT NULL,
+  version_number integer NOT NULL,
+  snapshot jsonb NOT NULL,
+  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['created'::text, 'updated'::text, 'deleted'::text, 'status_change'::text, 'checkpoint'::text])),
+  change_summary text,
+  change_reason text,
+  changed_by uuid NOT NULL,
+  changed_at timestamp with time zone NOT NULL DEFAULT now(),
+  previous_version_id uuid,
+  CONSTRAINT schedule_versions_pkey PRIMARY KEY (id),
+  CONSTRAINT schedule_versions_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id),
+  CONSTRAINT schedule_versions_previous_version_fkey FOREIGN KEY (previous_version_id) REFERENCES public.schedule_versions(id)
+);
+CREATE TABLE public.schedules (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  subject_id uuid,
+  teacher_id uuid,
+  room_id uuid,
+  section_id uuid,
+  day_of_week text NOT NULL CHECK (day_of_week = ANY (ARRAY['Monday'::text, 'Tuesday'::text, 'Wednesday'::text, 'Thursday'::text, 'Friday'::text, 'Saturday'::text])),
+  start_time time without time zone NOT NULL,
+  end_time time without time zone NOT NULL,
+  semester text NOT NULL DEFAULT '1st Semester'::text,
+  academic_year text NOT NULL DEFAULT '2025-2026'::text,
+  status text NOT NULL DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'submitted'::text, 'approved'::text, 'published'::text, 'archived'::text, 'rejected'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  created_by uuid,
+  submitted_at timestamp with time zone,
+  approved_by uuid,
+  approved_at timestamp with time zone,
+  rejection_reason text,
+  is_locked boolean DEFAULT false,
+  locked_by uuid,
+  locked_at timestamp with time zone,
+  lock_reason text,
+  rejected_by uuid,
+  rejected_at timestamp with time zone,
+  deleted_at timestamp with time zone,
+  deleted_by uuid,
+  CONSTRAINT schedules_pkey PRIMARY KEY (id),
+  CONSTRAINT schedules_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
+  CONSTRAINT schedules_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
+  CONSTRAINT schedules_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id),
+  CONSTRAINT schedules_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id),
+  CONSTRAINT schedules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.sections (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL UNIQUE,
+  program text NOT NULL,
+  year_level integer NOT NULL,
+  student_count integer NOT NULL DEFAULT 30,
+  created_at timestamp with time zone DEFAULT now(),
+  parent_id uuid,
+  weight integer NOT NULL DEFAULT 50 CHECK (weight >= 0 AND weight <= 100),
+  path text NOT NULL DEFAULT ''::text,
+  node_type text NOT NULL DEFAULT 'section'::text CHECK (node_type = ANY (ARRAY['group'::text, 'section'::text])),
+  is_active boolean NOT NULL DEFAULT true,
+  description text,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  sort_order integer NOT NULL DEFAULT 0,
+  owner_id uuid,
+  is_public boolean DEFAULT false,
+  shared_with ARRAY DEFAULT '{}'::uuid[],
+  CONSTRAINT sections_pkey PRIMARY KEY (id),
+  CONSTRAINT sections_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.sections(id),
+  CONSTRAINT sections_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.sharing_requests (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  resource_type text NOT NULL CHECK (resource_type = ANY (ARRAY['teacher'::text, 'room'::text, 'subject'::text, 'section'::text])),
+  resource_id uuid NOT NULL,
+  from_user_id uuid NOT NULL,
+  to_user_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])),
+  message text,
+  created_at timestamp with time zone DEFAULT now(),
+  responded_at timestamp with time zone,
+  CONSTRAINT sharing_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT sharing_requests_from_user_id_fkey FOREIGN KEY (from_user_id) REFERENCES public.profiles(id),
+  CONSTRAINT sharing_requests_to_user_id_fkey FOREIGN KEY (to_user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.students (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  profile_id uuid NOT NULL,
+  section_id uuid NOT NULL,
+  student_number text,
+  enrollment_date timestamp with time zone DEFAULT now(),
+  is_active boolean DEFAULT true,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT students_pkey PRIMARY KEY (id),
+  CONSTRAINT students_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
+  CONSTRAINT students_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id)
+);
+CREATE TABLE public.subjects (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  code text NOT NULL UNIQUE,
+  name text NOT NULL,
+  units integer NOT NULL DEFAULT 3,
+  type text NOT NULL CHECK (type = ANY (ARRAY['common'::text, 'special'::text])),
+  duration_hours numeric NOT NULL DEFAULT 1.5,
+  program text NOT NULL,
+  year_level integer NOT NULL DEFAULT 1,
+  requires_lab boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  teacher_id uuid,
+  weight integer NOT NULL DEFAULT 50 CHECK (weight >= 0 AND weight <= 100),
+  priority_note text,
+  owner_id uuid,
+  is_public boolean DEFAULT false,
+  shared_with ARRAY DEFAULT '{}'::uuid[],
+  sessions_per_week integer,
+  CONSTRAINT subjects_pkey PRIMARY KEY (id),
+  CONSTRAINT subjects_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
+  CONSTRAINT subjects_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.system_rules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  rule_key text NOT NULL UNIQUE,
+  rule_value jsonb NOT NULL DEFAULT 'true'::jsonb,
+  description text,
+  category text NOT NULL DEFAULT 'general'::text,
+  updated_by uuid,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  role_overrides jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT system_rules_pkey PRIMARY KEY (id),
+  CONSTRAINT system_rules_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.teacher_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  sender_id uuid NOT NULL,
+  receiver_id uuid NOT NULL,
+  sender_name text,
+  receiver_name text,
+  message text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT teacher_messages_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.teacher_preferences (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  teacher_id uuid NOT NULL UNIQUE,
+  preferred_days ARRAY DEFAULT '{Monday,Tuesday,Wednesday,Thursday,Friday}'::text[],
+  preferred_subjects ARRAY DEFAULT '{}'::uuid[],
+  preferred_rooms ARRAY DEFAULT '{}'::uuid[],
+  notes text,
+  last_updated timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now(),
+  availability jsonb DEFAULT '{}'::jsonb,
+  preferred_time_start text DEFAULT '8:00'::text,
+  preferred_time_end text DEFAULT '17:00'::text,
+  max_classes_per_day integer DEFAULT 5,
+  max_consecutive_classes integer DEFAULT 3,
+  CONSTRAINT teacher_preferences_pkey PRIMARY KEY (id),
+  CONSTRAINT teacher_preferences_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id)
+);
+CREATE TABLE public.teachers (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  profile_id uuid NOT NULL UNIQUE,
+  department text NOT NULL,
+  employment_type text NOT NULL CHECK (employment_type = ANY (ARRAY['full-time'::text, 'part-time'::text])),
+  max_hours integer NOT NULL DEFAULT 40,
+  current_load_percentage numeric DEFAULT 0,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  weight integer NOT NULL DEFAULT 50 CHECK (weight >= 0 AND weight <= 100),
+  priority_note text,
+  owner_id uuid,
+  is_public boolean DEFAULT false,
+  shared_with ARRAY DEFAULT '{}'::uuid[],
+  CONSTRAINT teachers_pkey PRIMARY KEY (id),
+  CONSTRAINT teachers_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id),
+  CONSTRAINT teachers_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.user_activity_logs (
+  id bigint NOT NULL DEFAULT nextval('user_activity_logs_id_seq'::regclass),
+  user_id uuid,
+  action_type text NOT NULL,
+  resource text,
+  resource_id uuid,
+  details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  session_id text,
+  ip_address inet,
+  user_agent text,
+  success boolean NOT NULL DEFAULT true,
+  error_message text,
+  duration_ms integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT user_activity_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT user_activity_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.user_activity_logs_archive (
+  id bigint NOT NULL DEFAULT nextval('user_activity_logs_id_seq'::regclass),
+  user_id uuid,
+  action_type text NOT NULL,
+  resource text,
+  resource_id uuid,
+  details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  session_id text,
+  ip_address inet,
+  user_agent text,
+  success boolean NOT NULL DEFAULT true,
+  error_message text,
+  duration_ms integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  archived_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT user_activity_logs_archive_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.user_permission_overrides (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  rule_key text NOT NULL,
+  rule_value jsonb NOT NULL,
+  reason text,
+  set_by uuid,
+  expires_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT user_permission_overrides_pkey PRIMARY KEY (id),
+  CONSTRAINT user_permission_overrides_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT user_permission_overrides_set_by_fkey FOREIGN KEY (set_by) REFERENCES public.profiles(id)
+);

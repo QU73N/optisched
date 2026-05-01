@@ -1,0 +1,111 @@
+/* Print Stylesheet for OptiSched
+   Ensures clean, readable output when users print schedules, logs, or reports.
+*/
+
+@media print {
+    /* Hide navigation, controls, and interactive elements */
+    .sidebar,
+    .topbar,
+    .btn,
+    .dash-quick-actions,
+    .toast-overlay,
+    .skip-link,
+    .modal-overlay,
+    .pagination,
+    .filter-controls,
+    .refresh-btn,
+    .export-btn,
+    nav,
+    button {
+        display: none !important;
+    }
+
+    /* Force light theme for printing */
+    html,
+    body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+    }
+
+    /* Reset for print-friendly layout */
+    #root {
+        display: block !important;
+    }
+
+    .main-content {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Cards print nicely */
+    .card,
+    .dash-card,
+    .stat-card {
+        break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #d7e3f1 !important;
+        margin-bottom: 12px;
+    }
+
+    /* Tables print well */
+    table {
+        break-inside: avoid;
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        border: 1px solid #d7e3f1;
+        padding: 6px 8px;
+    }
+
+    /* Ensure text is readable */
+    .text-primary,
+    .text-secondary,
+    .text-muted {
+        color: #0f172a !important;
+    }
+
+    /* Hide background colors for ink saving */
+    .stat-warning,
+    .badge,
+    .status-badge {
+        background: none !important;
+        border: 1px solid #d7e3f1 !important;
+        color: #0f172a !important;
+    }
+
+    /* Page breaks */
+    .page-header {
+        break-after: avoid;
+        margin-bottom: 20px;
+    }
+
+    h1,
+    h2,
+    h3 {
+        break-after: avoid;
+    }
+
+    /* Show URLs for links */
+    a[href^="http"]::after {
+        content: " (" attr(href) ")";
+        font-size: 10px;
+        color: #64748b;
+    }
+
+    /* Print date/time footer */
+    body::after {
+        content: "OptiSched - Printed " attr(data-print-date);
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        text-align: center;
+        font-size: 10px;
+        color: #64748b;
+        padding: 8px;
+        border-top: 1px solid #d7e3f1;
+    }
+}

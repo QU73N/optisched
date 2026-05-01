@@ -1,0 +1,202 @@
+/* AuditLogPage + UserActivityPage shared styles */
+
+.audit-toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.audit-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    flex: 1;
+    min-width: 240px;
+    color: var(--text-muted);
+}
+
+.audit-search input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 13px;
+}
+
+.audit-time-range {
+    display: flex;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+}
+
+.audit-time-pill {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 5px 12px;
+    border-radius: var(--radius-xs);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 120ms;
+}
+
+.audit-time-pill:hover {
+    color: var(--text-primary);
+}
+
+.audit-time-pill-active {
+    background: var(--accent-primary);
+    color: var(--text-on-accent);
+}
+
+.audit-table-wrap {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.audit-table thead tr {
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.audit-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.audit-table th svg {
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+.audit-table td {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border-default);
+    vertical-align: top;
+    color: var(--text-secondary);
+}
+
+.audit-row {
+    cursor: pointer;
+    transition: background 120ms;
+}
+
+.audit-row:hover {
+    background: var(--bg-hover);
+}
+
+.audit-time {
+    color: var(--text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.audit-actor {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.audit-actor-name {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.audit-actor-role {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.audit-action {
+    background: var(--accent-primary-subtle);
+    color: var(--accent-primary);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.audit-target {
+    background: var(--bg-inset);
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+}
+
+.audit-details-preview {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.audit-row-detail {
+    background: var(--bg-inset);
+}
+
+.audit-row-detail td {
+    padding: 12px 14px;
+}
+
+.audit-json {
+    background: var(--bg-inset);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 11px;
+    color: var(--text-primary);
+    overflow-x: auto;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Activity log specific */
+.activity-user-picker {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.activity-user-picker label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.activity-action-success { color: var(--accent-success); }
+.activity-action-failure { color: var(--accent-error); }
+.activity-action-mutation { color: var(--accent-primary); }
+.activity-action-page { color: var(--text-muted); }
