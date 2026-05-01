@@ -1697,16 +1697,26 @@ const tryTimeSlotSwap = (
         // Check teacher availability
         if (!teacherAvailable(teacher, entry.day, slot.start)) continue;
         
-        // Check hard constraints
-        if (!isFree(busy.filter((_, i) => i !== idx), 'teacher', entry.teacherId, entry.day, startMin, endMin)) continue;
-        if (!isFree(busy.filter((_, i) => i !== idx), 'room', entry.roomId, entry.day, startMin, endMin)) continue;
-        if (!isFree(busy.filter((_, i) => i !== idx), 'section', entry.sectionId, entry.day, startMin, endMin)) continue;
+        // Check hard constraints - exclude current entry from busy check
+        const otherEntries = entries.filter(e => !(e.subjectId === entry.subjectId && e.sectionId === entry.sectionId && e.day === entry.day));
+        const otherBusy: Busy[] = otherEntries.map(e => ({
+            teacherId: e.teacherId,
+            roomId: e.roomId,
+            sectionId: e.sectionId,
+            day: e.day,
+            startMin: parseTime(e.start),
+            endMin: parseTime(e.end),
+        }));
+        
+        if (!isFree(otherBusy, 'teacher', entry.teacherId, entry.day, startMin, endMin)) continue;
+        if (!isFree(otherBusy, 'room', entry.roomId, entry.day, startMin, endMin)) continue;
+        if (!isFree(otherBusy, 'section', entry.sectionId, entry.day, startMin, endMin)) continue;
         
         // Check max classes per day
-        if (wouldExceedMaxClassesPerDay(entry.teacherId, entry.day, entries.filter((_, i) => i !== idx), teacher)) continue;
+        if (wouldExceedMaxClassesPerDay(entry.teacherId, entry.day, otherEntries, teacher)) continue;
         
         // Check max hours
-        if (wouldExceedMaxHours(entry.teacherId, entries.filter((_, i) => i !== idx), teacher, sessionDuration)) continue;
+        if (wouldExceedMaxHours(entry.teacherId, otherEntries, teacher, sessionDuration)) continue;
         
         // All constraints passed, create new entries array
         const newEntries = [...entries];
