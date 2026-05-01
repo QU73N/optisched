@@ -208,6 +208,50 @@ export interface GenerationConfig {
     optimizationTimeLimit: number;  // seconds
     optimizationMaxIterations: number;
     optimizationProfile: 'balanced' | 'compact' | 'teacher_friendly' | 'room_efficiency';
+    optimizationMode: 'safe' | 'advanced'; // safe = only improving changes, advanced = controlled exploration
+    optimizationSeed: number; // For deterministic behavior
+}
+
+export interface OptimizationReport {
+    initialScore: number;
+    finalScore: number;
+    scoreImprovement: number;
+    scoreBreakdown: {
+        initial: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number };
+        final: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number };
+    };
+    iterations: number;
+    acceptedMoves: number;
+    rejectedMoves: number;
+    movesByType: Record<string, number>;
+    terminationReason: 'no_improvement' | 'score_stabilized' | 'time_limit' | 'max_iterations';
+    changelog: OptimizationChange[];
+}
+
+export interface OptimizationChange {
+    sessionId: string;
+    subjectId: string;
+    subjectName: string;
+    sectionId: string;
+    teacherId: string;
+    roomId: string;
+    day: string;
+    before: {
+        start: string;
+        end: string;
+        teacherId: string;
+        roomId: string;
+    };
+    after: {
+        start: string;
+        end: string;
+        teacherId: string;
+        roomId: string;
+    };
+    moveType: 'time_slot_swap' | 'teacher_swap' | 'room_swap' | 'multi_swap' | 'local_rebuild';
+    scoreDelta: number;
+    reason: string;
+    iteration: number;
 }
 
 export interface PlacedEntry {
@@ -316,6 +360,8 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     optimizationTimeLimit: 30, // 30 seconds
     optimizationMaxIterations: 1000,
     optimizationProfile: 'balanced',
+    optimizationMode: 'safe', // Safe mode for demonstrations
+    optimizationSeed: 42, // Default seed for deterministic behavior
 };
 
 export const STAGES: { key: StageKey; label: string; hint: string }[] = [
