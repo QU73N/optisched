@@ -344,4 +344,71 @@ describe('Generator Integration Tests', () => {
             expect(result.score).toBeLessThanOrEqual(100);
         });
     });
+
+    describe('runGenerator - Forward Checking (Phase 7)', () => {
+        it('should avoid dead-end placements with scarce special rooms', async () => {
+            const progressFn = vi.fn();
+            
+            // Create a scenario with limited special rooms that forward checking should handle
+            const labSubjects: Subject[] = [
+                { id: 'lab1', code: 'LAB101', name: 'Lab Subject 1', program: 'BSIT', year_level: 1, teacher_id: 't1', duration_hours: 3, requires_lab: true, weight: 50, priority_note: null, monthly_hour_targets: null },
+                { id: 'lab2', code: 'LAB102', name: 'Lab Subject 2', program: 'BSIT', year_level: 2, teacher_id: 't2', duration_hours: 3, requires_lab: true, weight: 50, priority_note: null, monthly_hour_targets: null },
+            ];
+
+            const singleSpecialRoom: Room[] = [
+                { id: 'r1', name: 'Room 1', type: 'regular', building: 'A', floor: 1, is_available: true, weight: 50, priority_note: null, capacity: 30 },
+                { id: 'r2', name: 'Lab Room', type: 'special', building: 'B', floor: 1, is_available: true, weight: 50, priority_note: null, capacity: 30 },
+            ];
+
+            const result = await runGenerator(
+                {
+                    subjects: labSubjects,
+                    teachers: mockTeachers,
+                    rooms: singleSpecialRoom,
+                    sections: mockSections,
+                    existing: mockExisting,
+                    config: mockConfig,
+                    institutionalPolicies: {},
+                },
+                progressFn,
+            );
+
+            // Forward checking should help place at least one lab subject
+            // even with limited special rooms
+            expect(result).toBeDefined();
+            expect(result.placed).toBeGreaterThan(0);
+        });
+
+        it('should handle capacity-compliant room scarcity', async () => {
+            const progressFn = vi.fn();
+            
+            // Create a scenario with limited capacity-compliant rooms
+            const largeSection: Section[] = [
+                { id: 's1', name: 'Large Section', program: 'BSIT', year_level: 1, student_count: 50, parent_id: null, weight: 50, path: 'BSIT|1', node_type: 'section', is_active: true, description: null, metadata: {}, sort_order: 0, load_category: 'normal', special_scheduling_rules: {} },
+                { id: 's2', name: 'Small Section', program: 'BSIT', year_level: 2, student_count: 20, parent_id: null, weight: 50, path: 'BSIT|2', node_type: 'section', is_active: true, description: null, metadata: {}, sort_order: 0, load_category: 'normal', special_scheduling_rules: {} },
+            ];
+
+            const limitedCapacityRooms: Room[] = [
+                { id: 'r1', name: 'Small Room', type: 'regular', building: 'A', floor: 1, is_available: true, weight: 50, priority_note: null, capacity: 25 },
+                { id: 'r2', name: 'Large Room', type: 'regular', building: 'B', floor: 1, is_available: true, weight: 50, priority_note: null, capacity: 60 },
+            ];
+
+            const result = await runGenerator(
+                {
+                    subjects: mockSubjects,
+                    teachers: mockTeachers,
+                    rooms: limitedCapacityRooms,
+                    sections: largeSection,
+                    existing: mockExisting,
+                    config: mockConfig,
+                    institutionalPolicies: {},
+                },
+                progressFn,
+            );
+
+            // Forward checking should help place subjects in capacity-compliant rooms
+            expect(result).toBeDefined();
+            expect(result.placed).toBeGreaterThan(0);
+        });
+    });
 });
