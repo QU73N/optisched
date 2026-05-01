@@ -25,6 +25,7 @@ function useFetch<T>(
     const [data, setData] = useState<T[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const fetchDataRef = useRef<() => Promise<void>>(async () => {});
 
     const fetchData = useCallback(async () => {
         try {

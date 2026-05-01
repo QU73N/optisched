@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../config/supabase';
 
 export interface CustomEvent {
@@ -23,6 +23,7 @@ export interface CustomEvent {
 export function useCustomEvents(filterDate?: string, upcoming?: boolean) {
     const [events, setEvents] = useState<CustomEvent[]>([]);
     const [loading, setLoading] = useState(true);
+    const fetchFnRef = useRef<() => Promise<void>>(async () => {});
 
     const fetchEvents = useCallback(async () => {
         try {

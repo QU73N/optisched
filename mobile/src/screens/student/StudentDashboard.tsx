@@ -14,11 +14,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCustomEvents } from '../../hooks/useCustomEvents';
 import { cacheData, getCachedData } from '../../utils/localCache';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { useTheme } from '../../contexts/ThemeContext';
+import { StaggeredView } from '../../components/StaggeredView';
 
 const StudentDashboard: React.FC = () => {
     const greeting = getGreeting();
     const { profile, refreshProfile } = useAuth();
     const navigation = useNavigation<any>();
+    const { colors } = useTheme();
 
     // Force fresh profile on mount
     useEffect(() => { refreshProfile(); }, []);
@@ -167,12 +170,12 @@ const StudentDashboard: React.FC = () => {
     const firstName = profile?.full_name?.split(' ')[0] || profile?.full_name?.split(',')[0] || 'Student';
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
             <View style={styles.header}>
                 <View>
                     <Text style={styles.greeting}>{greeting}</Text>
-                    <Text style={styles.userName}>{firstName}</Text>
+                    <Text style={[styles.userName, { color: colors.textPrimary }]}>{firstName}</Text>
                 </View>
                 <View style={styles.headerActions}>
                     <AnimatedPressable style={styles.notifBtn} onPress={() => setShowAnnouncements(true)}>
@@ -243,6 +246,7 @@ const StudentDashboard: React.FC = () => {
                 )}
 
                 {/* Quick Links */}
+                <StaggeredView delay={80}>
                 <View style={styles.quickLinksRow}>
                     <AnimatedPressable style={styles.quickLink} onPress={() => setShowAnnouncements(true)}>
                         <View style={[styles.quickLinkIcon, { backgroundColor: 'rgba(251,146,60,0.15)' }]}>
@@ -263,8 +267,10 @@ const StudentDashboard: React.FC = () => {
                         <Text style={styles.quickLinkSub}>View all days</Text>
                     </AnimatedPressable>
                 </View>
+                </StaggeredView>
 
                 {/* Today's Timeline */}
+                <StaggeredView delay={140}>
                 <View style={styles.timelineSection}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>{scheduleLabel}</Text>
@@ -310,6 +316,7 @@ const StudentDashboard: React.FC = () => {
                         </View>
                     ))}
                 </View>
+                </StaggeredView>
 
                 {/* Upcoming Events */}
                 {upcomingEvents.length > 0 && (
@@ -345,7 +352,7 @@ const StudentDashboard: React.FC = () => {
                     <AnimatedPressable onPress={() => setShowAnnouncements(true)}><Text style={styles.viewAll}>View All</Text></AnimatedPressable>
                 </View>
                 {announcements.length === 0 ? (
-                    <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: '#1a1d24', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(51,65,85,0.5)' }}>
+                    <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border }}>
                         <MaterialIcons name="campaign" size={32} color={Colors.slate600} />
                         <Text style={{ color: Colors.slate400, marginTop: 8 }}>No announcements yet</Text>
                     </View>
@@ -354,7 +361,7 @@ const StudentDashboard: React.FC = () => {
                         {announcements.slice(0, 3).map((ann: any) => {
                             const pc = priorityConfig[ann.priority] || priorityConfig.normal;
                             return (
-                                <View key={ann.id} style={{ backgroundColor: '#1a1d24', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(51,65,85,0.5)', borderLeftWidth: 4, borderLeftColor: pc.color }}>
+                                <View key={ann.id} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.border, borderLeftWidth: 4, borderLeftColor: pc.color }}>
                                     <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.white, marginBottom: 2 }} numberOfLines={1}>{ann.title}</Text>
                                     <Text style={{ fontSize: 12, color: Colors.slate400, marginBottom: 4 }} numberOfLines={2}>{ann.content}</Text>
                                     <Text style={{ fontSize: 11, color: Colors.slate600 }}>{ann.created_at ? new Date(ann.created_at).toLocaleDateString() : ''}</Text>
@@ -371,8 +378,8 @@ const StudentDashboard: React.FC = () => {
             <Modal visible={showAnnouncements} animationType="slide" transparent>
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' }}>
                     <SafeAreaView style={{ flex: 1 }}>
-                        <View style={{ flex: 1, backgroundColor: '#0f1115', marginTop: 40, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#1a1d24' }}>
+                        <View style={{ flex: 1, backgroundColor: colors.background, marginTop: 40, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: colors.surface }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                     <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(251,146,60,0.15)', justifyContent: 'center', alignItems: 'center' }}>
                                         <MaterialIcons name="campaign" size={20} color="#fb923c" />
@@ -394,7 +401,7 @@ const StudentDashboard: React.FC = () => {
                                     announcements.map(ann => {
                                         const pc = priorityConfig[ann.priority] || priorityConfig.normal;
                                         return (
-                                            <View key={ann.id} style={{ backgroundColor: '#1a1d24', borderRadius: 16, padding: 18, marginTop: 12, borderWidth: 1, borderColor: 'rgba(51,65,85,0.5)', borderLeftWidth: 4, borderLeftColor: pc.color }}>
+                                            <View key={ann.id} style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 18, marginTop: 12, borderWidth: 1, borderColor: colors.border, borderLeftWidth: 4, borderLeftColor: pc.color }}>
                                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                         <View style={{ backgroundColor: pc.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -425,7 +432,7 @@ const StudentDashboard: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#0f1115' },
+    container: { flex: 1, backgroundColor: Colors.bgPrimary },
     header: {
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
         paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16
@@ -433,13 +440,13 @@ const styles = StyleSheet.create({
     greeting: { fontSize: 14, color: Colors.textSecondaryDark },
     userName: { fontSize: 22, fontWeight: '700', color: Colors.white },
     headerActions: { flexDirection: 'row', gap: 8 },
-    notifBtn: { padding: 8, backgroundColor: '#1e293b', borderRadius: 999, position: 'relative' },
+    notifBtn: { padding: 8, backgroundColor: Colors.bgSurface, borderRadius: 999, position: 'relative' },
     notifDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' },
     scrollView: { flex: 1, paddingHorizontal: 20 },
 
     // Current Card
     currentCard: {
-        backgroundColor: '#1e3a5f', borderRadius: 20, padding: 20, marginBottom: 24,
+        backgroundColor: Colors.bgElevated, borderRadius: 20, padding: 20, marginBottom: 24,
         borderWidth: 1, borderColor: 'rgba(59,130,246,0.3)'
     },
     currentBadgeRow: { marginBottom: 8 },
@@ -460,8 +467,8 @@ const styles = StyleSheet.create({
     // Quick Links
     quickLinksRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
     quickLink: {
-        flex: 1, backgroundColor: '#1a1d24', borderRadius: 16, padding: 16,
-        borderWidth: 1, borderColor: 'rgba(51,65,85,0.5)'
+        flex: 1, backgroundColor: Colors.bgSurface, borderRadius: 16, padding: 16,
+        borderWidth: 1, borderColor: Colors.borderDefault
     },
     quickLinkIcon: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
     quickLinkTitle: { fontSize: 14, fontWeight: '600', color: Colors.white },
@@ -484,8 +491,8 @@ const styles = StyleSheet.create({
     timelineConnectorDone: { backgroundColor: '#10b981' },
 
     timelineCard: {
-        flex: 1, backgroundColor: '#1a1d24', borderRadius: 12, padding: 16,
-        borderWidth: 1, borderColor: 'rgba(51,65,85,0.5)', marginBottom: 8
+        flex: 1, backgroundColor: Colors.bgSurface, borderRadius: 12, padding: 16,
+        borderWidth: 1, borderColor: Colors.borderDefault, marginBottom: 8
     },
     timelineCardActive: { borderColor: 'rgba(59,130,246,0.3)' },
     timelineCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },

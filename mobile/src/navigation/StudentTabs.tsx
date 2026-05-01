@@ -31,12 +31,17 @@ const StudentTabs: React.FC = () => {
                     height: 80,
                     paddingBottom: 16,
                     paddingTop: 8,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: -4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 12,
+                    elevation: 8,
                 },
-                tabBarActiveTintColor: Colors.primary,
-                tabBarInactiveTintColor: colors.isDark ? '#9da6b9' : Colors.slate400,
+                tabBarActiveTintColor: Colors.accentPrimaryHover,
+                tabBarInactiveTintColor: colors.isDark ? Colors.slate500 : Colors.slate400,
                 tabBarLabelStyle: {
                     fontSize: 10,
-                    fontWeight: '500',
+                    fontWeight: '600',
                 },
             }}
         >

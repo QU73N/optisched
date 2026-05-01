@@ -454,7 +454,7 @@ const AppSettings: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.backgroundDark },
+    container: { flex: 1, backgroundColor: Colors.bgPrimary },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         paddingHorizontal: 20, paddingVertical: 16
@@ -465,8 +465,8 @@ const styles = StyleSheet.create({
 
     profileCard: {
         flexDirection: 'row', alignItems: 'center', gap: 12,
-        backgroundColor: Colors.surfaceDark, borderRadius: 16, padding: 16,
-        borderWidth: 1, borderColor: Colors.borderDark, marginBottom: 24
+        backgroundColor: Colors.bgSurface, borderRadius: 16, padding: 16,
+        borderWidth: 1, borderColor: Colors.borderDefault, marginBottom: 24
     },
     profileAvatar: {
         width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary,
@@ -487,8 +487,8 @@ const styles = StyleSheet.create({
         letterSpacing: 1.5, marginBottom: 8, paddingLeft: 4
     },
     card: {
-        backgroundColor: Colors.surfaceDark, borderRadius: 16, padding: 4,
-        borderWidth: 1, borderColor: Colors.borderDark, marginBottom: 20
+        backgroundColor: Colors.bgSurface, borderRadius: 16, padding: 4,
+        borderWidth: 1, borderColor: Colors.borderDefault, marginBottom: 20
     },
     settingRow: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
     // Modal styles
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
     modalContent: {
-        backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        backgroundColor: Colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24,
         paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, maxHeight: '80%'
     },
     modalHeader: {
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
         marginBottom: 6, marginTop: 14
     },
     modalInput: {
-        backgroundColor: '#0f172a', borderWidth: 1, borderColor: Colors.borderDark,
+        backgroundColor: Colors.bgInset, borderWidth: 1, borderColor: Colors.borderDefault,
         borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
         color: Colors.white, fontSize: 14
     },

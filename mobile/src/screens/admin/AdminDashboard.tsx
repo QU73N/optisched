@@ -18,6 +18,7 @@ import AdminManageUsers from './AdminManageUsers';
 import { useCustomEvents } from '../../hooks/useCustomEvents';
 import { useToast } from '../../components/CustomToast';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { StaggeredView } from '../../components/StaggeredView';
 
 const AdminDashboard: React.FC = () => {
     const { stats, loading } = useAdminDashboardStats();
@@ -230,6 +231,7 @@ const AdminDashboard: React.FC = () => {
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Semester Hero Card */}
+                <StaggeredView delay={30}>
                 <View style={styles.heroCard}>
                     <View style={styles.heroGlow} />
                     <View style={styles.heroContent}>
@@ -255,6 +257,7 @@ const AdminDashboard: React.FC = () => {
                         </View>
                     </View>
                 </View>
+                </StaggeredView>
 
                 {/* Quick Actions */}
                 <View style={styles.quickActionsRow}>
@@ -320,7 +323,7 @@ const AdminDashboard: React.FC = () => {
                     style={{ marginBottom: 20 }}
                     onPress={() => setShowQuickActions(!showQuickActions)}
                 >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#1e293b', borderRadius: 10, paddingVertical: 10, borderWidth: 1, borderColor: '#334155' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.bgSurface, borderRadius: 10, paddingVertical: 10, borderWidth: 1, borderColor: Colors.borderDefault }}>
                         <MaterialIcons name={showQuickActions ? 'expand-less' : 'expand-more'} size={18} color={Colors.slate400} />
                         <Text style={{ color: Colors.slate400, fontSize: 12, fontWeight: '600' }}>{showQuickActions ? 'Hide' : 'More'} Quick Actions</Text>
                     </View>
@@ -334,7 +337,7 @@ const AdminDashboard: React.FC = () => {
                             { icon: 'warning', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Alerts', screen: 'alerts' },
                         ].map((item, i) => (
                             <AnimatedPressable key={i}
-                                style={{ flex: 1, minWidth: '30%', alignItems: 'center', gap: 6, backgroundColor: '#1e293b', borderRadius: 12, paddingVertical: 14, borderWidth: 1, borderColor: '#334155' }}
+                                style={{ flex: 1, minWidth: '30%', alignItems: 'center', gap: 6, backgroundColor: Colors.bgSurface, borderRadius: 12, paddingVertical: 14, borderWidth: 1, borderColor: Colors.borderDefault }}
                                 onPress={() => {
                                     setShowQuickActions(false);
                                     if (item.screen) setQuickScreen(item.screen as 'tasks' | 'data' | 'users' | 'alerts');
@@ -350,8 +353,10 @@ const AdminDashboard: React.FC = () => {
                 )}
 
                 {/* Stats Grid */}
+                <StaggeredView delay={100}>
                 <View style={styles.statsGrid}>
                     <View style={[styles.statCard, styles.glassCard]}>
+                        <View style={[styles.statAccentBar, { backgroundColor: '#34d399' }]} />
                         <View style={styles.statCardHeader}>
                             <View style={[styles.statIconBg, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
                                 <MaterialIcons name="meeting-room" size={22} color="#34d399" />
@@ -361,6 +366,7 @@ const AdminDashboard: React.FC = () => {
                         <Text style={styles.statLabel}>Conflict-Free</Text>
                     </View>
                     <View style={[styles.statCard, styles.glassCard]}>
+                        <View style={[styles.statAccentBar, { backgroundColor: '#fb923c' }]} />
                         <View style={styles.statCardHeader}>
                             <View style={[styles.statIconBg, { backgroundColor: 'rgba(251,146,60,0.1)' }]}>
                                 <MaterialIcons name="people" size={22} color="#fb923c" />
@@ -370,6 +376,7 @@ const AdminDashboard: React.FC = () => {
                         <Text style={styles.statLabel}>Total Faculty</Text>
                     </View>
                 </View>
+                </StaggeredView>
 
                 {/* Pending Schedule Requests */}
                 {requests.length > 0 && (
@@ -760,21 +767,21 @@ const AdminDashboard: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#0f172a' },
+    container: { flex: 1, backgroundColor: Colors.bgPrimary },
     header: {
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
         paddingHorizontal: 24, paddingVertical: 16
     },
     headerLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondaryDark, letterSpacing: 1.5 },
     headerTitle: { fontSize: 24, fontWeight: '700', color: Colors.white },
-    notifBtn: { padding: 8, borderRadius: 999, backgroundColor: '#1e293b', position: 'relative' },
+    notifBtn: { padding: 8, borderRadius: 999, backgroundColor: Colors.bgSurface, position: 'relative' },
     notifDot: {
         position: 'absolute', top: 6, right: 6, width: 8, height: 8,
-        borderRadius: 4, backgroundColor: Colors.error, borderWidth: 1, borderColor: '#1e293b'
+        borderRadius: 4, backgroundColor: Colors.error, borderWidth: 1, borderColor: Colors.bgSurface
     },
     scrollView: { flex: 1, paddingHorizontal: 24 },
 
-    heroCard: { borderRadius: 24, padding: 24, marginBottom: 24, overflow: 'hidden', position: 'relative', backgroundColor: '#3b6cf6' },
+    heroCard: { borderRadius: 24, padding: 24, marginBottom: 24, overflow: 'hidden', position: 'relative', backgroundColor: Colors.accentPrimary },
     heroGlow: { position: 'absolute', right: -24, top: -24, width: 128, height: 128, borderRadius: 64, backgroundColor: 'rgba(255,255,255,0.1)' },
     heroContent: { position: 'relative', zIndex: 1 },
     heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
@@ -792,15 +799,16 @@ const styles = StyleSheet.create({
     quickActionsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
     quickAction: {
         flex: 1, alignItems: 'center', gap: 6,
-        backgroundColor: '#1e293b', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 4,
-        borderWidth: 1, borderColor: '#334155'
+        backgroundColor: Colors.bgSurface, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 4,
+        borderWidth: 1, borderColor: Colors.borderDefault
     },
     quickActionIcon: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
     quickActionText: { fontSize: 11, fontWeight: '600', color: Colors.white, textAlign: 'center' },
 
     statsGrid: { flexDirection: 'row', gap: 16, marginBottom: 24 },
-    statCard: { flex: 1, padding: 16, borderRadius: 16, height: 120, justifyContent: 'space-between' },
-    glassCard: { backgroundColor: 'rgba(30,41,59,0.7)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+    statCard: { flex: 1, padding: 16, borderRadius: 16, height: 120, justifyContent: 'space-between', overflow: 'hidden' },
+    statAccentBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+    glassCard: { backgroundColor: Colors.bgSurface, borderWidth: 1, borderColor: Colors.borderDefault },
     statCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     statIconBg: { padding: 8, borderRadius: 8 },
     statValue: { fontSize: 24, fontWeight: '700', color: Colors.white },
@@ -812,7 +820,7 @@ const styles = StyleSheet.create({
     viewAllText: { fontSize: 12, color: '#818cf8', fontWeight: '600' },
 
     requestCard: {
-        backgroundColor: '#1e293b', borderRadius: 14, padding: 16, marginBottom: 8,
+        backgroundColor: Colors.bgSurface, borderRadius: 14, padding: 16, marginBottom: 8,
         borderWidth: 1, borderColor: 'rgba(251,191,36,0.2)'
     },
     requestHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
@@ -833,8 +841,8 @@ const styles = StyleSheet.create({
     rejectBtnText: { color: '#ef4444', fontSize: 13, fontWeight: '600' },
 
     announcementCard: {
-        flexDirection: 'row', gap: 12, backgroundColor: '#1e293b', borderRadius: 12,
-        padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#334155', overflow: 'hidden'
+        flexDirection: 'row', gap: 12, backgroundColor: Colors.bgSurface, borderRadius: 12,
+        padding: 14, marginBottom: 8, borderWidth: 1, borderColor: Colors.borderDefault, overflow: 'hidden'
     },
     annDot: { width: 4, borderRadius: 2 },
     annTitle: { fontSize: 14, fontWeight: '600', color: Colors.white, marginBottom: 2, flexShrink: 1 },
@@ -847,21 +855,21 @@ const styles = StyleSheet.create({
     },
 
     emptyCard: {
-        alignItems: 'center', paddingVertical: 24, backgroundColor: '#1e293b',
-        borderRadius: 14, borderWidth: 1, borderColor: '#334155'
+        alignItems: 'center', paddingVertical: 24, backgroundColor: Colors.bgSurface,
+        borderRadius: 14, borderWidth: 1, borderColor: Colors.borderDefault
     },
 
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
     modalContent: {
-        backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        backgroundColor: Colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24,
         paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40
     },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     modalTitle: { fontSize: 20, fontWeight: '700', color: Colors.white },
     fieldLabel: { fontSize: 10, fontWeight: '600', color: Colors.slate400, letterSpacing: 1.5, marginBottom: 6, marginTop: 12 },
     modalInput: {
-        backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155',
+        backgroundColor: Colors.bgInset, borderWidth: 1, borderColor: Colors.borderDefault,
         borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
         color: Colors.white, fontSize: 14
     },
