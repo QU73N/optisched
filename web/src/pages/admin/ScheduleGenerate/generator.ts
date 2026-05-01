@@ -925,11 +925,9 @@ const generateOptimizationSuggestions = (
 };
 
 /**
- * Generate scenario configurations for multi-scenario generation.
- * TODO: Integrate into generation pipeline for multi-scenario generator.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Generate multiple scenario configurations for comparison.
+ * Note: This function is now called in runGenerator but scenarios are not yet presented to users.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const generateScenarioConfigs = (baseConfig: GenerationConfig): ScenarioConfig[] => {
     const configs: ScenarioConfig[] = [];
 
@@ -1416,6 +1414,13 @@ export async function runGenerator(
     void softScore; // Prepared for future use
     void violations; // Prepared for future use
     void suggestions; // Prepared for future use
+
+    // Step 10 (Multi-Scenario Generator): Generate scenario configs
+    // TODO: In future integration, allow users to compare multiple generation scenarios
+    // For now, we generate but don't present scenarios to avoid breaking changes
+    const scenarios = generateScenarioConfigs(config);
+    // Scenario generation results are available for future integration steps
+    void scenarios; // Prepared for future use
 
     onProgress({
         subStage: 'done',
