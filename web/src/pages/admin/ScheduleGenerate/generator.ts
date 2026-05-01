@@ -583,10 +583,8 @@ const initializeGenerationMetadata = (
 
 /**
  * Update metadata after each generation attempt.
- * TODO: Integrate into generation pipeline to track attempts.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is called in runGenerator to track attempt metadata.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const updateAttemptMetadata = (
     metadata: { attempt_count: number; best_score: number },
     attemptNumber: number,
@@ -1275,6 +1273,10 @@ export async function runGenerator(
         diff: [],
     };
 
+    // Step 7 (Multi-Attempt Orchestrator): Track metadata across multiple attempts
+    // Initialize metadata for orchestrated multi-attempt logic
+    let attemptMetadata = { attempt_count: 0, best_score: 0 };
+
     for (let attempt = 0; attempt < config.maxAttempts; attempt++) {
         const busy: Busy[] = baseBusy.slice();
         const entries: PlacedEntry[] = [];
@@ -1453,6 +1455,8 @@ export async function runGenerator(
             (current.highPriorityPlaced === best.highPriorityPlaced && current.placed > best.placed) ||
             (current.highPriorityPlaced === best.highPriorityPlaced && current.placed === best.placed && current.score > best.score);
         if (isBetter) best = current;
+        // Step 7 (Multi-Attempt Orchestrator): Update metadata after each attempt
+        attemptMetadata = updateAttemptMetadata(attemptMetadata, attempt + 1, entries.length, score);
         if (best.placed === best.total && best.score >= 85) break;
     }
 
