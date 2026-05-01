@@ -1201,11 +1201,10 @@ export const optimizeSchedule = (
         
         if (moveResult) {
             // Apply move if accepted
-            if (moveResult.accepted && moveResult.moveResult) {
-                applyMove(state, moveResult.moveResult, busy, teachersMap, roomsMap, sections);
+            if (moveResult.accepted && moveResult.moveResult && moveResult.candidateEntries) {
+                applyMove(state, moveResult.moveResult, busy, teachersMap, roomsMap, sections, moveResult.candidateEntries);
             } else {
                 state.rejectedMoves++;
-                state.movesByType[moveType] = (state.movesByType[moveType] || 0) + 1;
                 state.noImprovementCount++;
             }
         } else {
@@ -1396,7 +1395,7 @@ const generateAndEvaluateMove = (
     moveType: MoveType,
     state: OptimizationState,
     rng: () => number,
-): { accepted: boolean; moveResult: OptimizationChange | null } | null => {
+): { accepted: boolean; moveResult: OptimizationChange | null; candidateEntries: PlacedEntry[] | null } | null => {
     let candidateEntries: PlacedEntry[] | null = null;
     let changeDetails: OptimizationChange | null = null;
     
@@ -1448,7 +1447,7 @@ const generateAndEvaluateMove = (
         changeDetails = generateChangeDetails(entries, candidateEntries, moveType, scoreDelta, state.iteration);
     }
     
-    return { accepted, moveResult: changeDetails };
+    return { accepted, moveResult: changeDetails, candidateEntries };
 };
 
 /**
@@ -1461,24 +1460,11 @@ const applyMove = (
     teachersMap: Map<string, Teacher>,
     roomsMap: Map<string, Room>,
     sections: Section[],
+    candidateEntries: PlacedEntry[],
 ): void => {
-    // Find and update the changed entry
-    state.currentEntries = state.currentEntries.map(entry => {
-        if (entry.subjectId === moveResult.subjectId && 
-            entry.sectionId === moveResult.sectionId && 
-            entry.day === moveResult.day) {
-            return {
-                ...entry,
-                start: moveResult.after.start,
-                end: moveResult.after.end,
-                teacherId: moveResult.after.teacherId,
-                teacherName: moveResult.after.teacherId,
-                roomId: moveResult.after.roomId,
-                roomName: moveResult.after.roomId,
-            };
-        }
-        return entry;
-    });
+    // Replace entire entries array with candidate entries
+    // This handles both single-entry and multi-entry changes correctly
+    state.currentEntries = [...candidateEntries];
     
     // Update score
     state.currentScore += moveResult.scoreDelta;
