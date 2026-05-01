@@ -1107,7 +1107,7 @@ const applyRepairs = (
  * 
  * The optimizer operates as a structured phase after generation.
  */
-const optimizeSchedule = (
+export const optimizeSchedule = (
     entries: PlacedEntry[],
     teachersMap: Map<string, Teacher>,
     roomsMap: Map<string, Room>,

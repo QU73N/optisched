@@ -3,8 +3,8 @@ import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
 import {
-    ArrowLeft, ArrowRight, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
-    Flag, GitBranch, Inbox, Layers, Lightbulb, ListChecks, Lock, MapPin, Play, Plus,
+    ArrowLeft, ArrowRight, Check, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
+    Flag, GitBranch, Inbox, Layers, Lightbulb, ListChecks, Lock, Loader2, MapPin, Play, Plus,
     RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, ShieldCheck, Sliders, Sparkles, Upload,
     Users, X, XCircle,
 } from 'lucide-react';
@@ -17,7 +17,7 @@ import {
     type PlacedEntry, type PriorityTier, type Room, type Section, type StageKey,
     type Subject, type Teacher, type VersionSummary, type WorkflowState,
 } from './types';
-import { runGenerator } from './generator';
+import { runGenerator, optimizeSchedule } from './generator';
 import { getPoliciesAsRecord, notifyStudentsOfScheduleChanges } from '../../../services/generationService';
 
 // ---------------------------------------------------------------------------
@@ -52,6 +52,11 @@ const ScheduleGenerate: React.FC = () => {
     const [workflowNote, setWorkflowNote] = useState<string | null>(null);
     const [workflowError, setWorkflowError] = useState<string | null>(null);
     const cancelRef = useRef(false);
+    
+    // Optimization state
+    const [optimizing, setOptimizing] = useState(false);
+    const [optimizationReport, setOptimizationReport] = useState<any>(null);
+    const [optimizedResult, setOptimizedResult] = useState<GenerationResult | null>(null);
 
     useEffect(() => {
         const load = async () => {
@@ -281,6 +286,50 @@ const ScheduleGenerate: React.FC = () => {
         setProgress(p => ({ ...p, subStage: 'idle', message: 'Cancelled' }));
     };
 
+    const runOptimization = async () => {
+        if (!result) return;
+        
+        setOptimizing(true);
+        setOptimizationReport(null);
+        setOptimizedResult(null);
+        
+        try {
+            // Build maps for optimization
+            const teachersMap = new Map(teachers.map(t => [t.id, t]));
+            const roomsMap = new Map(rooms.map(r => [r.id, r]));
+            
+            // Run optimization
+            const optimizedEntries = await optimizeSchedule(
+                result.entries,
+                teachersMap,
+                roomsMap,
+                sections,
+                config,
+                { hard: [], soft: config.soft, unclassified: [] }, // Simplified constraints
+                result.score,
+                (p) => setProgress(p),
+            );
+            
+            setOptimizedResult({
+                ...result,
+                entries: optimizedEntries.entries,
+                score: optimizedEntries.score,
+                breakdown: optimizedEntries.breakdown,
+            });
+            
+            setOptimizationReport({
+                initialScore: result.score,
+                finalScore: optimizedEntries.score,
+                improvement: optimizedEntries.score - result.score,
+            });
+            
+        } catch (error) {
+            console.error('Optimization failed:', error);
+        } finally {
+            setOptimizing(false);
+        }
+    };
+
     const saveAs = async (initialState: 'draft' | 'submitted') => {
         if (!result) return;
         setSaving(true); setSaveError(null);
@@ -437,6 +486,20 @@ const ScheduleGenerate: React.FC = () => {
                     {stage === 'results' && result && (
                         <ResultsStage result={result} />
                     )}
+                    {stage === 'optimize' && result && (
+                        <OptimizeStage
+                            result={result}
+                            optimizing={optimizing}
+                            optimizationReport={optimizationReport}
+                            optimizedResult={optimizedResult}
+                            onOptimize={runOptimization}
+                            onUseOptimized={() => {
+                                if (optimizedResult) {
+                                    setResult(optimizedResult);
+                                }
+                            }}
+                        />
+                    )}
                     {stage === 'save' && result && (
                         <SaveStage
                             result={result}
@@ -462,6 +525,10 @@ const ScheduleGenerate: React.FC = () => {
                             <Sparkles size={14} /> Start generation
                         </button>
                     ) : stage === 'results' ? (
+                        <button className="btn btn-primary" onClick={() => setStage('optimize')} disabled={!result || result.entries.length === 0}>
+                            Optimize Schedule <ArrowRight size={14} />
+                        </button>
+                    ) : stage === 'optimize' ? (
                         <button className="btn btn-primary" onClick={() => setStage('save')} disabled={!result || result.entries.length === 0}>
                             Continue to save <ArrowRight size={14} />
                         </button>
@@ -1291,6 +1358,126 @@ const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
                             ))}
                         </tbody>
                     </table>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Stage 7 — Optimize
+// ---------------------------------------------------------------------------
+
+const OptimizeStage: React.FC<{
+    result: GenerationResult;
+    optimizing: boolean;
+    optimizationReport: any;
+    optimizedResult: GenerationResult | null;
+    onOptimize: () => void;
+    onUseOptimized: () => void;
+}> = ({ result, optimizing, optimizationReport, optimizedResult, onOptimize, onUseOptimized }) => {
+    return (
+        <div>
+            <StageHeader
+                icon={<Sparkles size={16} />}
+                title="Optimize Schedule"
+                desc="Improve schedule quality using post-optimization without breaking hard constraints."
+            />
+
+            {!optimizedResult ? (
+                <div style={{ padding: '20px 0' }}>
+                    <div style={{ marginBottom: 20 }}>
+                        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Current Score</h3>
+                        <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent-primary)' }}>
+                            {result.score.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            {result.placed} of {result.total} sessions placed
+                        </div>
+                    </div>
+
+                    <button 
+                        className="btn btn-primary" 
+                        onClick={onOptimize} 
+                        disabled={optimizing}
+                        style={{ width: '100%' }}
+                    >
+                        {optimizing ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} />
+                                Optimizing...
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles size={16} style={{ marginRight: 8 }} />
+                                Run Optimization
+                            </>
+                        )}
+                    </button>
+
+                    <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+                        <p><strong>Safe Mode:</strong> Only accepts strictly improving changes. Ideal for demonstrations.</p>
+                        <p><strong>Advanced Mode:</strong> Uses simulated annealing to escape local optima. May temporarily accept small negative moves early in the process.</p>
+                    </div>
+                </div>
+            ) : (
+                <div style={{ padding: '20px 0' }}>
+                    <div style={{ marginBottom: 20 }}>
+                        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Optimization Complete</h3>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                            <div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Before</div>
+                                <div style={{ fontSize: 24, fontWeight: 600 }}>{result.score.toFixed(2)}</div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>After</div>
+                                <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--accent-success)' }}>
+                                    {optimizedResult.score.toFixed(2)}
+                                </div>
+                            </div>
+                        </div>
+
+                        {optimizationReport && (
+                            <div style={{ 
+                                padding: 12, 
+                                background: optimizationReport.improvement > 0 
+                                    ? 'var(--accent-success-alpha, rgba(47, 143, 91, 0.1)' 
+                                    : 'var(--accent-warning-alpha, rgba(211, 139, 32, 0.1))',
+                                borderRadius: 6,
+                                marginBottom: 16
+                            }}>
+                                <div style={{ 
+                                    fontSize: 18, 
+                                    fontWeight: 700,
+                                    color: optimizationReport.improvement > 0 ? 'var(--accent-success)' : 'var(--accent-warning)'
+                                }}>
+                                    {optimizationReport.improvement > 0 ? '+' : ''}{optimizationReport.improvement.toFixed(2)}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                    Score improvement
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <button 
+                        className="btn btn-primary" 
+                        onClick={onUseOptimized}
+                        style={{ width: '100%', marginBottom: 8 }}
+                    >
+                        <Check size={16} style={{ marginRight: 8 }} />
+                        Use Optimized Schedule
+                    </button>
+
+                    <button 
+                        className="btn btn-secondary" 
+                        onClick={() => window.location.reload()}
+                        style={{ width: '100%' }}
+                    >
+                        <X size={16} style={{ marginRight: 8 }} />
+                        Discard Optimization
+                    </button>
                 </div>
             )}
         </div>
