@@ -207,6 +207,7 @@ export interface GenerationConfig {
     enableOptimization: boolean;
     optimizationTimeLimit: number;  // seconds
     optimizationMaxIterations: number;
+    optimizationProfile: 'balanced' | 'compact' | 'teacher_friendly' | 'room_efficiency';
 }
 
 export interface PlacedEntry {
@@ -314,6 +315,7 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     enableOptimization: true, // Enabled by default
     optimizationTimeLimit: 30, // 30 seconds
     optimizationMaxIterations: 1000,
+    optimizationProfile: 'balanced',
 };
 
 export const STAGES: { key: StageKey; label: string; hint: string }[] = [

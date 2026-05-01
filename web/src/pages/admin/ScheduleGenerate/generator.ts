@@ -1061,8 +1061,9 @@ const applyRepairs = (
  * Takes a valid schedule and improves it without breaking hard constraints.
  * Uses a hybrid approach:
  * 1. Hill Climbing (Primary): Try small changes, keep if score improves
- * 2. Swap-Based Optimization: Swap teachers, rooms, or time slots
- * 3. Large Neighborhood Search: Destroy and rebuild weak areas
+ * 2. Simulated Annealing (Controlled Risk): Occasionally accept worse moves to escape local optima
+ * 3. Swap-Based Optimization: Swap teachers, rooms, or time slots
+ * 4. Large Neighborhood Search: Destroy and rebuild weak areas
  * 
  * Core Principle: Never break hard constraints, only improve soft constraints
  */
@@ -1087,6 +1088,18 @@ const optimizeSchedule = (
     let noImprovementCount = 0;
     const maxNoImprovement = 100; // Stop if no improvement after 100 iterations
     
+    // Optimization Guardrails
+    let totalChanges = 0;
+    const maxTotalChanges = maxIterations * 2; // Safety limit
+    
+    // Simulated Annealing parameters
+    const initialTemperature = 100;
+    const coolingRate = 0.95;
+    let temperature = initialTemperature;
+    
+    // Optimization Profiles - adjust scoring weights based on profile
+    const profileWeights = getOptimizationProfileWeights(config.optimizationProfile);
+    
     // Convert maps to arrays for easier access
     const teachers = Array.from(teachersMap.values());
     const rooms = Array.from(roomsMap.values());
@@ -1101,7 +1114,7 @@ const optimizeSchedule = (
         endMin: parseTime(e.end),
     }));
     
-    while (iterations < maxIterations && (Date.now() - startTime) < timeLimit && noImprovementCount < maxNoImprovement) {
+    while (iterations < maxIterations && (Date.now() - startTime) < timeLimit && noImprovementCount < maxNoImprovement && totalChanges < maxTotalChanges) {
         iterations++;
         
         // Update progress periodically
@@ -1114,47 +1127,67 @@ const optimizeSchedule = (
                 totalAttempts: maxIterations,
                 placed: bestEntries.length,
                 total: bestEntries.length,
-                message: `Optimizing... (${iterations}/${maxIterations}, ${remaining}s remaining)`,
+                message: `Optimizing... (${iterations}/${maxIterations}, ${remaining}s remaining, score: ${bestScore.toFixed(1)})`,
             });
         }
         
+        // Cool down temperature for simulated annealing
+        temperature *= coolingRate;
+        
         // Try different optimization strategies
-        const strategy = iterations % 3;
+        const strategy = iterations % 5;
         let candidateEntries: PlacedEntry[] | null = null;
         
         if (strategy === 0) {
-            // Strategy 1: Time slot swap (move a session to a different time)
+            // Strategy 1: Hill Climbing - Time slot swap (move a session to a different time)
             candidateEntries = tryTimeSlotSwap(bestEntries, teachersMap, roomsMap, sections, config, classifiedConstraints, busy);
         } else if (strategy === 1) {
             // Strategy 2: Teacher swap (swap teachers between two sessions)
             candidateEntries = tryTeacherSwap(bestEntries, teachersMap, roomsMap, config, classifiedConstraints, busy);
-        } else {
+        } else if (strategy === 2) {
             // Strategy 3: Room swap (swap rooms between two sessions)
             candidateEntries = tryRoomSwap(bestEntries, teachersMap, roomsMap, config, classifiedConstraints, busy);
+        } else if (strategy === 3) {
+            // Strategy 4: Multi-swap chain (A → B → C)
+            candidateEntries = tryMultiSwap(bestEntries, teachersMap, roomsMap, config, classifiedConstraints, busy);
+        } else {
+            // Strategy 5: Large Neighborhood Search - rebuild a weak area
+            candidateEntries = tryLargeNeighborhoodSearch(bestEntries, teachersMap, roomsMap, sections, config, classifiedConstraints, busy);
         }
         
         if (candidateEntries) {
-            // Calculate new score
-            const scoreResult = calculateSoftConstraintScore(candidateEntries, teachers, rooms, sections, config.soft);
+            // Calculate new score with profile weights
+            const scoreResult = calculateSoftConstraintScore(candidateEntries, teachers, rooms, sections, profileWeights);
             
-            // Accept if score improved
-            if (scoreResult.score > bestScore) {
-                bestEntries = candidateEntries;
-                bestScore = scoreResult.score;
-                _bestBreakdown = scoreResult.breakdown;
-                noImprovementCount = 0;
-                
-                // Update busy schedule
-                const newBusy: Busy[] = bestEntries.map(e => ({
-                    teacherId: e.teacherId,
-                    roomId: e.roomId,
-                    sectionId: e.sectionId,
-                    day: e.day,
-                    startMin: parseTime(e.start),
-                    endMin: parseTime(e.end),
-                }));
-                busy.length = 0;
-                busy.push(...newBusy);
+            // Calculate score difference
+            const scoreDiff = scoreResult.score - bestScore;
+            
+            // Accept if score improves, or use simulated annealing for worse moves
+            const shouldAccept = scoreDiff > 0 || (Math.random() < Math.exp(scoreDiff / temperature));
+            
+            if (shouldAccept) {
+                // Rollback guardrail: if score decreases significantly, reject
+                if (scoreDiff < -5) {
+                    noImprovementCount++;
+                } else {
+                    bestEntries = candidateEntries;
+                    bestScore = scoreResult.score;
+                    _bestBreakdown = scoreResult.breakdown;
+                    noImprovementCount = 0;
+                    totalChanges++;
+                    
+                    // Update busy schedule
+                    const newBusy: Busy[] = bestEntries.map(e => ({
+                        teacherId: e.teacherId,
+                        roomId: e.roomId,
+                        sectionId: e.sectionId,
+                        day: e.day,
+                        startMin: parseTime(e.start),
+                        endMin: parseTime(e.end),
+                    }));
+                    busy.length = 0;
+                    busy.push(...newBusy);
+                }
             } else {
                 noImprovementCount++;
             }
@@ -1163,7 +1196,7 @@ const optimizeSchedule = (
         }
     }
     
-    // Final score calculation
+    // Final score calculation with original weights
     const finalScoreResult = calculateSoftConstraintScore(bestEntries, teachers, rooms, sections, config.soft);
     
     return {
@@ -1171,6 +1204,49 @@ const optimizeSchedule = (
         score: finalScoreResult.score,
         breakdown: finalScoreResult.breakdown,
     };
+};
+
+/**
+ * Get optimization profile weights based on selected profile
+ */
+const getOptimizationProfileWeights = (profile: 'balanced' | 'compact' | 'teacher_friendly' | 'room_efficiency'): SoftWeights => {
+    const baseWeights = {
+        balancedLoad: 60,
+        compactSchedule: 70,
+        minimizeRoomSwitch: 50,
+        teacherPreferredTime: 60,
+        dailyLoadBalance: 50,
+        workloadFairness: 60,
+        subjectSpacing: 50,
+        roomUtilization: 40,
+    };
+    
+    switch (profile) {
+        case 'balanced':
+            return baseWeights;
+        case 'compact':
+            return {
+                ...baseWeights,
+                compactSchedule: 90, // Prioritize compact schedules
+                balancedLoad: 70,
+                dailyLoadBalance: 70,
+            };
+        case 'teacher_friendly':
+            return {
+                ...baseWeights,
+                teacherPreferredTime: 90, // Prioritize teacher preferences
+                minimizeRoomSwitch: 80, // Reduce room changes
+                dailyLoadBalance: 80, // Even daily load
+            };
+        case 'room_efficiency':
+            return {
+                ...baseWeights,
+                roomUtilization: 90, // Prioritize room utilization
+                balancedLoad: 70, // Even distribution
+            };
+        default:
+            return baseWeights;
+    }
 };
 
 /**
@@ -1378,6 +1454,157 @@ const tryRoomSwap = (
     newEntries[idx2] = { ...entry2, roomId: room1.id, roomName: room1.name };
     
     return newEntries;
+};
+
+/**
+ * Try multi-swap chain (A → B → C) - Advanced swap-based optimization
+ * This creates a chain of swaps that can lead to better local optima
+ */
+const tryMultiSwap = (
+    entries: PlacedEntry[],
+    teachersMap: Map<string, Teacher>,
+    _roomsMap: Map<string, Room>,
+    _config: GenerationConfig,
+    _classifiedConstraints: ClassifiedConstraints,
+    busy: Busy[],
+): PlacedEntry[] | null => {
+    if (entries.length < 3) return null;
+    
+    // Pick 3 random entries for a chain swap
+    const indices = Array.from({ length: 3 }, () => Math.floor(Math.random() * entries.length));
+    const [idx1, idx2, idx3] = indices;
+    
+    if (idx1 === idx2 || idx2 === idx3 || idx1 === idx3) return null;
+    
+    const entry1 = entries[idx1];
+    const entry2 = entries[idx2];
+    const entry3 = entries[idx3];
+    
+    // Try a teacher chain swap: T1→T2, T2→T3, T3→T1
+    const teacher1 = teachersMap.get(entry1.teacherId);
+    const teacher2 = teachersMap.get(entry2.teacherId);
+    const teacher3 = teachersMap.get(entry3.teacherId);
+    
+    if (!teacher1 || !teacher2 || !teacher3) return null;
+    
+    // Check availability at swapped times
+    if (!teacherAvailable(teacher2, entry1.day, entry1.start)) return null;
+    if (!teacherAvailable(teacher3, entry2.day, entry2.start)) return null;
+    if (!teacherAvailable(teacher1, entry3.day, entry3.start)) return null;
+    
+    // Check hard constraints
+    const startMin1 = parseTime(entry1.start);
+    const endMin1 = parseTime(entry1.end);
+    const startMin2 = parseTime(entry2.start);
+    const endMin2 = parseTime(entry2.end);
+    const startMin3 = parseTime(entry3.start);
+    const endMin3 = parseTime(entry3.end);
+    
+    const filteredBusy = busy.filter((_, i) => !indices.includes(i));
+    
+    if (!isFree(filteredBusy, 'teacher', entry2.teacherId, entry1.day, startMin1, endMin1)) return null;
+    if (!isFree(filteredBusy, 'teacher', entry3.teacherId, entry2.day, startMin2, endMin2)) return null;
+    if (!isFree(filteredBusy, 'teacher', entry1.teacherId, entry3.day, startMin3, endMin3)) return null;
+    
+    // Check max classes per day
+    if (wouldExceedMaxClassesPerDay(entry2.teacherId, entry1.day, entries.filter((_, i) => i !== idx1), teacher2)) return null;
+    if (wouldExceedMaxClassesPerDay(entry3.teacherId, entry2.day, entries.filter((_, i) => i !== idx2), teacher3)) return null;
+    if (wouldExceedMaxClassesPerDay(entry1.teacherId, entry3.day, entries.filter((_, i) => i !== idx3), teacher1)) return null;
+    
+    // All constraints passed, create new entries with teacher chain swap
+    const newEntries = [...entries];
+    newEntries[idx1] = { ...entry1, teacherId: teacher2.id, teacherName: teacher2.full_name };
+    newEntries[idx2] = { ...entry2, teacherId: teacher3.id, teacherName: teacher3.full_name };
+    newEntries[idx3] = { ...entry3, teacherId: teacher1.id, teacherName: teacher1.full_name };
+    
+    return newEntries;
+};
+
+/**
+ * Try Large Neighborhood Search - destroy and rebuild a weak area
+ * This identifies a weak section of the schedule (e.g., one section's Friday)
+ * and attempts to rebuild it better
+ */
+const tryLargeNeighborhoodSearch = (
+    entries: PlacedEntry[],
+    teachersMap: Map<string, Teacher>,
+    _roomsMap: Map<string, Room>,
+    sections: Section[],
+    config: GenerationConfig,
+    _classifiedConstraints: ClassifiedConstraints,
+    busy: Busy[],
+): PlacedEntry[] | null => {
+    if (entries.length < 5) return null;
+    
+    // Pick a random section and day to rebuild
+    const randomSection = sections[Math.floor(Math.random() * sections.length)];
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const randomDay = days[Math.floor(Math.random() * days.length)];
+    
+    // Find all entries for this section on this day
+    const sectionDayIndices = entries
+        .map((e, i) => ({ e, i }))
+        .filter(({ e }) => e.sectionId === randomSection.id && e.day === randomDay);
+    
+    if (sectionDayIndices.length === 0 || sectionDayIndices.length > 5) return null;
+    
+    // Try to move these entries to different time slots on the same day
+    const sessionDuration = config.sessionMinutes;
+    const dayStart = parseTime(config.dayStart);
+    const dayEnd = parseTime(config.dayEnd);
+    
+    // Generate all possible time slots
+    const slots: { start: string; end: string }[] = [];
+    for (let time = dayStart; time + sessionDuration <= dayEnd; time += sessionDuration) {
+        const duringBreak = config.breaks.some(b => {
+            const breakStart = parseTime(b.start);
+            const breakEnd = parseTime(b.end);
+            return time < breakEnd && time + sessionDuration > breakStart;
+        });
+        if (duringBreak) continue;
+        
+        slots.push({
+            start: formatTime(time),
+            end: formatTime(time + sessionDuration),
+        });
+    }
+    
+    // Try to reassign time slots to these entries
+    const newEntries = [...entries];
+    const usedSlots = new Set<string>();
+    let hasChanges = false;
+    
+    for (const { e: entry, i: originalIdx } of sectionDayIndices) {
+        const originalStart = entry.start;
+        
+        // Find an available slot
+        for (const slot of slots) {
+            if (usedSlots.has(slot.start)) continue;
+            if (slot.start === originalStart) continue;
+            
+            const startMin = parseTime(slot.start);
+            const endMin = parseTime(slot.end);
+            
+            // Check constraints
+            const teacher = teachersMap.get(entry.teacherId);
+            if (teacher && !teacherAvailable(teacher, randomDay, slot.start)) continue;
+            
+            if (!isFree(busy, 'teacher', entry.teacherId, randomDay, startMin, endMin)) continue;
+            if (!isFree(busy, 'room', entry.roomId, randomDay, startMin, endMin)) continue;
+            if (!isFree(busy, 'section', entry.sectionId, randomDay, startMin, endMin)) continue;
+            
+            if (teacher && wouldExceedMaxClassesPerDay(entry.teacherId, randomDay, entries, teacher)) continue;
+            if (teacher && wouldExceedMaxHours(entry.teacherId, entries, teacher, sessionDuration)) continue;
+            
+            // Found a valid slot, update the entry
+            newEntries[originalIdx] = { ...entry, start: slot.start, end: slot.end };
+            usedSlots.add(slot.start);
+            hasChanges = true;
+            break;
+        }
+    }
+    
+    return hasChanges ? newEntries : null;
 };
 
 /**
