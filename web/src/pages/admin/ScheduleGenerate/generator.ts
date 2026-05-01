@@ -84,6 +84,96 @@ const isFree = (
     return b.sectionId === id;
 });
 
+/**
+ * Forward Checking: Check if placing a session would make it impossible to place remaining sessions.
+ * This is a conservative implementation that checks resource scarcity without full domain mutation.
+ * Aligns with Generation_System.md Phase 7: Forward Checking and Propagation.
+ * Note: This function is integrated into the placement loop to avoid dead-end placements.
+ */
+const checkForwardConstraints = (
+    teacherId: string,
+    roomId: string,
+    sectionId: string,
+    day: string,
+    startMin: number,
+    endMin: number,
+    busy: Busy[],
+    remainingTasks: Array<{ subject: Subject; section: Section }>,
+    teacherMap: Map<string, Teacher>,
+    roomMap: Map<string, Room>,
+    slots: { start: string; end: string }[],
+    days: string[],
+): boolean => {
+    // Simulate the placement in a temporary busy array
+    const tempBusy = [...busy, { teacherId, roomId, sectionId, day, startMin, endMin }];
+
+    // Check if this placement would consume the last available slot for a scarce resource
+    // Count remaining slots for each resource
+    const teacherSlotCount = new Map<string, number>();
+    const roomSlotCount = new Map<string, number>();
+    const sectionSlotCount = new Map<string, number>();
+
+    for (const d of days) {
+        for (const slot of slots) {
+            const sMin = toMin(slot.start);
+            const eMin = toMin(slot.end);
+            
+            // Count free teacher slots
+            for (const [tid] of teacherMap) {
+                if (isFree(tempBusy, 'teacher', tid, d, sMin, eMin)) {
+                    teacherSlotCount.set(tid, (teacherSlotCount.get(tid) || 0) + 1);
+                }
+            }
+            
+            // Count free room slots
+            for (const [rid] of roomMap) {
+                if (isFree(tempBusy, 'room', rid, d, sMin, eMin)) {
+                    roomSlotCount.set(rid, (roomSlotCount.get(rid) || 0) + 1);
+                }
+            }
+            
+            // Count free section slots
+            for (const task of remainingTasks) {
+                if (isFree(tempBusy, 'section', task.section.id, d, sMin, eMin)) {
+                    sectionSlotCount.set(task.section.id, (sectionSlotCount.get(task.section.id) || 0) + 1);
+                }
+            }
+        }
+    }
+
+    // Check if any remaining task would have zero valid slots after this placement
+    for (const task of remainingTasks) {
+        const subject = task.subject;
+        const section = task.section;
+        
+        // Check if subject requires lab and if there are still special room slots
+        if (subject.requires_lab) {
+            const specialRooms = Array.from(roomMap.values()).filter(r => 
+                (r.type || '').toLowerCase().includes('special')
+            );
+            const hasSpecialRoomSlot = specialRooms.some(r => 
+                (roomSlotCount.get(r.id) || 0) > 0
+            );
+            if (!hasSpecialRoomSlot) {
+                return false; // Would consume last special room slot
+            }
+        }
+
+        // Check if section has enough capacity-compliant room slots
+        const capacityRooms = Array.from(roomMap.values()).filter(r => 
+            (r.capacity || 0) >= (section.student_count || 0)
+        );
+        const hasCapacityRoomSlot = capacityRooms.some(r => 
+            (roomSlotCount.get(r.id) || 0) > 0
+        );
+        if (!hasCapacityRoomSlot && capacityRooms.length > 0) {
+            return false; // Would consume last capacity-compliant room slot
+        }
+    }
+
+    return true; // Placement is safe from forward checking perspective
+};
+
 const roomCompatible = (room: Room, subject: Subject, section: Section): boolean => {
     if (subject.requires_lab) {
         const t = (room.type || '').toLowerCase();
@@ -1381,6 +1471,28 @@ export async function runGenerator(
 
                     for (const room of sortedRooms) {
                         if (!isFree(busy, 'room', room.id, day, sMin, eMin)) continue;
+                        
+                        // Forward Checking: Check if this placement would make remaining tasks impossible
+                        // Aligns with Generation_System.md Phase 7: Forward Checking and Propagation
+                        const remainingTasks = rankedTasks.slice(i + 1);
+                        if (remainingTasks.length > 0 && !checkForwardConstraints(
+                            teacher.id,
+                            room.id,
+                            section.id,
+                            day,
+                            sMin,
+                            eMin,
+                            busy,
+                            remainingTasks,
+                            teacherMap,
+                            roomMap,
+                            slots,
+                            days,
+                        )) {
+                            // Skip this placement as it would lead to a dead end
+                            continue;
+                        }
+                        
                         entries.push({
                             subjectId: sub.id,
                             subjectCode: sub.code,
