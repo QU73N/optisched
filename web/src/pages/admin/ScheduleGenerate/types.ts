@@ -203,6 +203,10 @@ export interface GenerationConfig {
     overflowPolicy: 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only';
     // Phase 7: Forward Checking - Enable/disable forward checking (can be expensive on large datasets)
     enableForwardChecking: boolean;
+    // Phase 15: Optimization Engine - Post-generation optimization settings
+    enableOptimization: boolean;
+    optimizationTimeLimit: number;  // seconds
+    optimizationMaxIterations: number;
 }
 
 export interface PlacedEntry {
@@ -273,7 +277,7 @@ export interface GenerationResult {
 }
 
 export interface GenerationProgress {
-    subStage: 'loading' | 'ranking' | 'placing' | 'resolving' | 'scoring' | 'done' | 'idle';
+    subStage: 'loading' | 'ranking' | 'placing' | 'resolving' | 'optimizing' | 'scoring' | 'done' | 'idle';
     attempt: number;
     totalAttempts: number;
     placed: number;
@@ -307,6 +311,9 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     maxAttempts: 100,
     overflowPolicy: 'relax_soft',
     enableForwardChecking: false, // Disabled by default for performance
+    enableOptimization: true, // Enabled by default
+    optimizationTimeLimit: 30, // 30 seconds
+    optimizationMaxIterations: 1000,
 };
 
 export const STAGES: { key: StageKey; label: string; hint: string }[] = [

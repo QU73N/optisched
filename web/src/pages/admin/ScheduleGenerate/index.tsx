@@ -1100,6 +1100,7 @@ const SUBSTAGES: { key: GenerationProgress['subStage']; label: string }[] = [
     { key: 'ranking', label: 'Ranking subjects' },
     { key: 'placing', label: 'Placing sessions' },
     { key: 'resolving', label: 'Resolving conflicts' },
+    { key: 'optimizing', label: 'Optimizing schedule' },
     { key: 'scoring', label: 'Scoring' },
 ];
 
