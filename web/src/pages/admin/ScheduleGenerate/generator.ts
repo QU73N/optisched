@@ -810,11 +810,11 @@ const constructDomains = (
 const detectImpossibleSchedule = (
     teachers: Teacher[],
     rooms: Room[],
-    _sections: Section[],
+    sections: Section[],
     subjects: Subject[],
     days: string[],
     slots: { start: string; end: string }[],
-    _config: GenerationConfig, // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
+    config: GenerationConfig,
 ): {
     is_possible: boolean;
     reasons: string[];
@@ -823,10 +823,21 @@ const detectImpossibleSchedule = (
     const reasons: string[] = [];
 
     // Check if total required hours exceed teacher capacity
-    const totalRequiredHours = subjects.reduce((sum, s) => sum + (s.duration_hours || 1), 0);
+    // Calculate based on actual tasks (subject + section combinations)
+    const sessionMinutes = config.sessionMinutes;
+    let totalRequiredMinutes = 0;
+    for (const subject of subjects) {
+        const subjectSections = sections.filter(s => 
+            (subject.program === 'ALL' || s.program === subject.program) && 
+            s.year_level === subject.year_level
+        );
+        const sessionsPerSubject = sessionsNeeded(subject, sessionMinutes);
+        totalRequiredMinutes += subjectSections.length * sessionsPerSubject * sessionMinutes;
+    }
+    const totalRequiredHours = totalRequiredMinutes / 60;
     const totalTeacherCapacity = teachers.reduce((sum, t) => sum + (t.max_hours || 40), 0);
     if (totalRequiredHours > totalTeacherCapacity) {
-        reasons.push(`Total required hours (${totalRequiredHours}) exceed total teacher capacity (${totalTeacherCapacity})`);
+        reasons.push(`Total required hours (${totalRequiredHours.toFixed(1)}) exceed total teacher capacity (${totalTeacherCapacity})`);
     }
 
     // Check if there are enough rooms
