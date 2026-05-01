@@ -733,9 +733,8 @@ const applyRepairStrategy = (
 /**
  * Generate attempt configurations for multi-attempt generation.
  * TODO: Integrate into generation pipeline for multi-attempt orchestrator.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is now called in runGenerator but configs are not yet used throughout generation.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const generateAttemptConfigs = (
     baseConfig: GenerationConfig,
     maxAttempts: number,
@@ -1225,6 +1224,13 @@ export async function runGenerator(
     const metadata = initializeGenerationMetadata(totalTasks);
     // Metadata is available for future integration steps
     void metadata; // Prepared for future use
+
+    // Step 7 (Multi-Attempt Orchestrator): Generate attempt configurations for multi-attempt generation
+    // TODO: In future integration, use orchestrated multi-attempt logic instead of simple loop
+    // For now, we generate configs but continue with existing loop to avoid breaking changes
+    const attemptConfigs = generateAttemptConfigs(config, config.maxAttempts);
+    // Attempt configs are available for future integration steps
+    void attemptConfigs; // Prepared for future use
 
     let best: GenerationResult = {
         total: totalTasks,
