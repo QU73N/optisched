@@ -10,8 +10,8 @@ import {
 } from 'lucide-react';
 import '../Dashboard.css';
 import {
-    ALL_DAYS, DEFAULT_CONFIG, HARD_CONSTRAINTS, PARTIAL_KIND_LABELS, PRIORITY_TIERS,
-    PRIORITY_VALUES, STAGES, WORKFLOW_META, tierFromValue,
+    ALL_DAYS, DEFAULT_CONFIG, HARD_CONSTRAINTS, MODE_LABELS, PARTIAL_KIND_LABELS, PRIORITY_TIERS,
+    PRIORITY_VALUES, STAGES, WORKFLOW_META, tierFromValue, type GenerationMode,
     type BreakWindow, type DiffEntry, type ExistingSchedule, type GenerationConfig,
     type GenerationProgress, type GenerationResult, type PartialKind, type PartialTarget,
     type PlacedEntry, type PriorityTier, type Room, type Section, type StageKey,
@@ -577,33 +577,27 @@ const ScopeStage: React.FC<{
         <div>
             <StageHeader icon={<Users size={16} />} title="Scope" desc="Pick a generation mode, then choose what to generate." compact={compact} />
 
-            <div className="sg-mode-toggle" role="radiogroup" aria-label="Generation mode">
-                <button
-                    type="button"
-                    role="radio"
-                    aria-checked={config.mode === 'full'}
-                    className={`sg-mode ${config.mode === 'full' ? 'sg-mode-active' : ''}`}
-                    onClick={() => setMode('full')}
-                >
-                    <Sparkles size={14} />
-                    <span className="sg-mode-label">
-                        <span className="sg-mode-title">Full generation</span>
-                        {!compact && <span className="sg-mode-desc">Solve the whole week for every picked section.</span>}
-                    </span>
-                </button>
-                <button
-                    type="button"
-                    role="radio"
-                    aria-checked={config.mode === 'partial'}
-                    className={`sg-mode ${config.mode === 'partial' ? 'sg-mode-active' : ''}`}
-                    onClick={() => setMode('partial')}
-                >
-                    <GitBranch size={14} />
-                    <span className="sg-mode-label">
-                        <span className="sg-mode-title">Partial regeneration</span>
-                        {!compact && <span className="sg-mode-desc">Re-solve one slice. Everything else stays locked.</span>}
-                    </span>
-                </button>
+            <div className="sg-fields">
+                <div>
+                    <div className="sg-field-label">Generation mode</div>
+                    <select 
+                        className="input" 
+                        value={config.mode} 
+                        onChange={e => setMode(e.target.value as GenerationMode)}
+                        style={{ maxWidth: 400 }}
+                    >
+                        {(Object.keys(MODE_LABELS) as GenerationMode[]).map(mode => (
+                            <option key={mode} value={mode}>
+                                {MODE_LABELS[mode].label}
+                            </option>
+                        ))}
+                    </select>
+                    {!compact && (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                            {MODE_LABELS[config.mode].desc}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {config.mode === 'full' ? (
@@ -863,7 +857,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                             <select 
                                 className="input" 
                                 value={config.overflowPolicy || 'fail'} 
-                                onChange={e => setConfig(c => ({ ...c, overflowPolicy: e.target.value as any }))}
+                                onChange={e => setConfig(c => ({ ...c, overflowPolicy: e.target.value as 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only' }))}
                             >
                                 <option value="fail">Fail on overflow</option>
                                 <option value="relax_soft">Relax soft constraints</option>

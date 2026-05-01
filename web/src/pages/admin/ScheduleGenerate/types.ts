@@ -155,7 +155,17 @@ export interface Priorities {
     specialRoomBias: number;          // 0..100, how strongly special subjects prefer special rooms
 }
 
-export type GenerationMode = 'full' | 'partial';
+export type GenerationMode = 'full' | 'partial' | 'draft' | 'locked' | 'whatif' | 'emergency' | 'multiscenario';
+
+export const MODE_LABELS: Record<GenerationMode, { label: string; desc: string }> = {
+    full: { label: 'Full generation', desc: 'Rebuild the selected scope from scratch.' },
+    partial: { label: 'Partial regeneration', desc: 'Recalculate only affected sections while preserving the rest.' },
+    draft: { label: 'Draft generation', desc: 'Create a temporary schedule for review without overwriting.' },
+    locked: { label: 'Locked regeneration', desc: 'Regenerate only inside allowed slots while keeping approved sessions fixed.' },
+    whatif: { label: 'What-if simulation', desc: 'Test a scheduling scenario without saving for comparison.' },
+    emergency: { label: 'Emergency repair', desc: 'Repair only the impacted area after sudden changes.' },
+    multiscenario: { label: 'Multi-scenario', desc: 'Generate several candidate schedules and compare side by side.' },
+};
 export type PartialKind = 'section' | 'teacher' | 'room' | 'subject';
 
 export interface PartialTarget {
