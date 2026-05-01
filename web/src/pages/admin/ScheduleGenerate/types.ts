@@ -22,6 +22,8 @@ export interface Subject {
     teacher_id: string | null;
     weight: number;
     priority_note: string | null;
+    monthly_hour_targets?: number | null; // optional monthly targets
+    teacher_eligibility_pool?: Record<string, unknown>; // which teachers can teach this
     // For split sessions: number of sessions per week (calculated from duration_hours / session_minutes if not set)
     sessions_per_week?: number | null;
 }
@@ -32,6 +34,7 @@ export interface Teacher {
     full_name: string;
     weight: number;
     priority_note: string | null;
+    shared_assignment?: boolean | null; // can teach across programs
     // Preferences (from teacher_preferences; optional to stay backward-compatible)
     preferred_days?: string[];
     preferred_time_start?: string | null; // HH:MM
@@ -52,6 +55,9 @@ export interface Room {
     is_available: boolean | null;
     weight: number;
     priority_note: string | null;
+    subject_compatibility?: Record<string, unknown>; // which subjects can use this room
+    equipment_available?: Record<string, unknown>; // lab equipment, etc.
+    movement_cost?: number | null; // cost to move between buildings/floors
 }
 
 export interface Section {
@@ -68,6 +74,8 @@ export interface Section {
     description: string | null;
     metadata: Record<string, unknown>;
     sort_order: number;
+    load_category?: 'light' | 'normal' | 'heavy' | null;
+    special_scheduling_rules?: Record<string, unknown>; // custom rules
 }
 
 export interface ExistingSchedule {
@@ -81,6 +89,9 @@ export interface ExistingSchedule {
     end_time: string;
     status: string | null;
     created_at: string | null;
+    is_protected?: boolean | null; // for locked regeneration
+    protection_level?: 'none' | 'approved' | 'published' | 'admin_locked' | null;
+    protected_version_id?: string | null;
 }
 
 export type WorkflowState = 'draft' | 'submitted' | 'approved' | 'published';
@@ -282,3 +293,210 @@ export const HARD_CONSTRAINTS: string[] = [
     'Fixed-time enforcement',
     'Locked schedule enforcement',
 ];
+
+// ============================================================================
+// Generation System Types
+// ============================================================================
+
+export type GenerationModeExtended = 'full' | 'partial' | 'draft' | 'locked' | 'what-if' | 'emergency' | 'multi-scenario';
+
+export interface GenerationRun {
+    id: string;
+    config: GenerationConfig;
+    scope: {
+        sections: string[];
+        teachers: string[];
+        rooms: string[];
+        subjects: string[];
+    };
+    seed: number;
+    priority_settings: Priorities;
+    constraint_settings: SoftWeights;
+    attempt_scores?: Array<{
+        attempt: number;
+        score: number;
+        placed: number;
+        total: number;
+    }>;
+    final_schedule?: PlacedEntry[];
+    repair_actions?: Array<{
+        type: string;
+        description: string;
+        affected_sessions: string[];
+    }>;
+    invalid_sessions?: Array<{
+        sessionId: string;
+        reason: string;
+    }>;
+    failure_reason?: string;
+    failure_category?: 'specific' | 'general';
+    actionable_options?: Array<{
+        option: string;
+        description: string;
+    }>;
+    total_sessions: number;
+    placed_sessions: number;
+    score?: number;
+    mode: GenerationModeExtended;
+    partial_target?: PartialTarget;
+    status: 'running' | 'completed' | 'failed';
+    started_at: string;
+    completed_at?: string;
+    created_by?: string;
+}
+
+export interface InstitutionalPolicy {
+    id: string;
+    institution_id: string;
+    policy_name: string;
+    policy_value: Record<string, unknown>;
+    policy_category: 'scheduling' | 'breaks' | 'approvals' | 'regeneration' | 'overflow' | 'priority_override';
+    is_active: boolean;
+    version: number;
+    created_at: string;
+    updated_at: string;
+    created_by?: string;
+}
+
+export interface NormalizedTeacher extends Teacher {
+    qualified_subjects: string[]; // subject IDs this teacher can teach
+    role_based_load_limits: {
+        max_hours_per_week: number;
+        max_hours_per_day: number;
+        max_consecutive_hours: number;
+    };
+    shared_assignment_flag: boolean;
+}
+
+export interface NormalizedRoom extends Room {
+    special_room_status: boolean;
+    building_location: string;
+    floor_location: number;
+    subject_compatibility_map: Record<string, boolean>; // subjectId -> compatible
+    equipment_map: Record<string, boolean>; // equipment type -> available
+    movement_cost_value: number;
+}
+
+export interface NormalizedSection extends Section {
+    student_size: number;
+    hierarchy_path: string[];
+    priority_weight: number;
+    subject_requirements: string[]; // subject IDs required
+    load_category_value: 'light' | 'normal' | 'heavy';
+    special_rules: Record<string, unknown>;
+}
+
+export interface NormalizedSubject extends Subject {
+    required_weekly_hours: number;
+    optional_monthly_targets: number | null;
+    session_duration_preferences: number;
+    split_session_rules: {
+        max_parts: number;
+        min_duration: number;
+    };
+    teacher_eligibility: string[]; // teacher IDs
+    room_compatibility: string[]; // room IDs
+    priority_level: 'high' | 'normal' | 'low';
+}
+
+export interface HardConstraintSet {
+    no_teacher_overlap: boolean;
+    no_room_overlap: boolean;
+    no_section_overlap: boolean;
+    room_capacity_compliance: boolean;
+    teacher_qualification_enforcement: boolean;
+    teacher_availability_enforcement: boolean;
+    max_consecutive_hours: number;
+    max_daily_load: number;
+    subject_hour_completion: boolean;
+    special_subject_room_priority: boolean;
+    break_enforcement: boolean;
+    schedule_lock_protection: boolean;
+}
+
+export interface SoftConstraintSet {
+    balanced_weekly_load: boolean;
+    reduced_idle_gaps: boolean;
+    compact_section_schedules: boolean;
+    room_movement_minimization: boolean;
+    time_of_day_preference: boolean;
+    room_utilization_efficiency: boolean;
+    schedule_compactness: boolean;
+    fairness_between_teachers: boolean;
+    priority_weighting: boolean;
+}
+
+export interface PreferenceConstraintSet {
+    preferred_rooms: Record<string, string[]>; // subjectId -> roomIds
+    preferred_time_windows: Record<string, { start: string; end: string }>; // teacherId -> window
+    preferred_days: Record<string, string[]>; // teacherId -> days
+    preferred_sequencing: Record<string, string[]>; // sectionId -> subject order
+    preferred_special_room_use: boolean;
+}
+
+export interface PlacementTask {
+    subject: NormalizedSubject;
+    section: NormalizedSection;
+    sessionIndex: number; // 0-based index for split sessions
+    priority_tier: 'high' | 'normal' | 'low';
+    mrv_score: number; // minimum remaining values
+}
+
+export interface TeacherDomain {
+    teacher_id: string;
+    valid_days: string[];
+    valid_time_slots: Array<{ start: string; end: string }>;
+}
+
+export interface RoomDomain {
+    room_id: string;
+    valid_subjects: string[];
+}
+
+export interface SectionDomain {
+    section_id: string;
+    valid_subjects: string[];
+}
+
+// ============================================================================
+// Generation System Additional Types
+// ============================================================================
+
+export interface ClassifiedConstraints {
+    hard: HardConstraintSet;
+    soft: SoftConstraintSet;
+    preferences: PreferenceConstraintSet;
+}
+
+export interface SoftConstraintViolation {
+    violation_type: 'unbalanced_load' | 'idle_gaps' | 'room_switching' | 'time_preference' | 'subject_stacking';
+    affected_entities: string[]; // teacher IDs, section IDs, etc.
+    severity: 'low' | 'medium' | 'high';
+    description: string;
+    potential_score_impact: number;
+}
+
+export interface OptimizationSuggestion {
+    suggestion_type: 'swap_time_slot' | 'swap_room' | 'swap_teacher' | 'adjust_session_length';
+    expected_improvement: number;
+    effort: 'low' | 'medium' | 'high';
+    description: string;
+}
+
+export interface ScenarioConfig {
+    id: string;
+    name: string;
+    description: string;
+    soft_weights: SoftWeights;
+    strategy: 'balanced' | 'load_focused' | 'compact_focused' | 'room_focused';
+    max_attempts: number;
+}
+
+export interface ScenarioResult {
+    scenario_id: string;
+    placed_entries: PlacedEntry[];
+    score: number;
+    violations: SoftConstraintViolation[];
+    generation_time_ms: number;
+    success: boolean;
+}
