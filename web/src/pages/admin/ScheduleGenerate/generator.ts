@@ -1018,8 +1018,7 @@ const recommendScenario = (
 
 /**
  * Build domains for early pruning in placement.
- * TODO: Integrate into generation pipeline for domain builder.
- * Note: This function is now called in runGenerator but domains are not yet used throughout generation.
+ * Note: This function is called in runGenerator and domains are used for early pruning.
  */
 const buildDomains = (
     teachers: Teacher[],
@@ -1143,11 +1142,12 @@ export async function runGenerator(
     }
 
     // Step 3 (Domain Builder): Build domains for early pruning in placement
-    // TODO: In future integration, use domain-based lookups instead of maps
-    // For now, we build but continue using existing lookup maps to avoid breaking changes
+    // Use domain-based lookups to enable early pruning of invalid placements
     const domains = buildDomains(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, slots);
-    // Domain data is available for future integration steps
-    void domains; // Prepared for future use
+    // Create domain maps for efficient lookup
+    const teacherDomainMap = new Map(domains.teacher_domains.map(d => [d.teacher_id, d]));
+    const roomDomainMap = new Map(domains.room_domains.map(d => [d.room_id, d]));
+    const sectionDomainMap = new Map(domains.section_domains.map(d => [d.section_id, d]));
 
     onProgress({
         subStage: 'loading',
@@ -1343,6 +1343,9 @@ export async function runGenerator(
                 if (!dayIsPreferred(teacher, day)) continue;
                 // Hard: check max_classes_per_day constraint
                 if (wouldExceedMaxClassesPerDay(teacher.id, day, entries, teacher, classifiedConstraints.hard)) continue;
+                // Domain-based: check if day is in teacher's valid_days from domain
+                const teacherDomain = teacherDomainMap.get(teacher.id);
+                if (teacherDomain && !teacherDomain.valid_days.includes(day)) continue;
                 for (const slot of slots) {
                     if (placed) break;
                     const sMin = toMin(slot.start);
@@ -1354,7 +1357,18 @@ export async function runGenerator(
                     // Hard: check max_hours constraint
                     if (wouldExceedMaxHours(teacher.id, entries, teacher, config.sessionMinutes, classifiedConstraints.hard)) continue;
 
-                    const compat = availableRooms.filter(r => roomCompatible(r, sub, section));
+                    let compat = availableRooms.filter(r => roomCompatible(r, sub, section));
+                    // Domain-based: filter rooms by valid_subjects from domain
+                    compat = compat.filter(r => {
+                        const roomDomain = roomDomainMap.get(r.id);
+                        return !roomDomain || roomDomain.valid_subjects.includes(sub.id);
+                    });
+                    // Domain-based: check if subject is valid for section from domain
+                    const sectionDomain = sectionDomainMap.get(section.id);
+                    if (sectionDomain && !sectionDomain.valid_subjects.includes(sub.id)) {
+                        errors.push(`Subject "${sub.name}" is not valid for section "${section.name}"`);
+                        break;
+                    }
                     if (compat.length === 0) { errors.push(`No compatible room for "${sub.name}"`); break; }
 
                     // Special-room bias: if subject needs lab or bias is strong, prefer special rooms.
