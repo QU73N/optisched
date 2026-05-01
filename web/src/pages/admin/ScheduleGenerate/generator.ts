@@ -626,11 +626,9 @@ const finalizeGenerationMetadata = (
 };
 
 /**
- * Analyze a failed generation attempt to identify conflicts.
- * TODO: Integrate into generation pipeline for repair engine.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Analyze conflicts in a generated schedule.
+ * Note: This function is called in runGenerator to analyze conflicts for repair strategies.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const analyzeConflicts = (
     placed: PlacedEntry[],
     _teachers: Teacher[], // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
@@ -664,8 +662,7 @@ const analyzeConflicts = (
 
 /**
  * Generate repair strategies for conflicts.
- * TODO: Integrate into generation pipeline for repair engine.
- * Note: This function is now called in runGenerator but strategies are not yet applied throughout generation.
+ * Note: This function is called in runGenerator to generate repair strategies for incomplete results.
  */
 const generateRepairStrategies = (
     conflicts: {
@@ -714,9 +711,9 @@ const generateRepairStrategies = (
 
 /**
  * Apply a repair strategy to fix conflicts.
- * TODO: Integrate into generation pipeline for repair engine.
- * Note: This function is now called in runGenerator but repairs are not yet applied throughout generation.
+ * Note: This function is a placeholder - actual repair logic is deferred to future integration.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Placeholder for future repair logic
 const applyRepairStrategy = (
     placed: PlacedEntry[],
     _strategy: { strategy_type: string; target: string }, // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
@@ -1261,20 +1258,6 @@ export async function runGenerator(
     // Attempt configs are available for future integration steps
     void attemptConfigs; // Prepared for future use
 
-    // Step 8 (Repair Engine): Generate repair strategies for conflict resolution
-    // Note: Repair engine is prepared and called with placeholder data
-    // Actual repair application requires complex conflict analysis and is deferred to future integration
-    const conflicts = {
-        teacher_conflicts: [],
-        room_conflicts: [],
-        section_conflicts: [],
-    };
-    const repairStrategies = generateRepairStrategies(conflicts);
-    const repairStrategy = applyRepairStrategy([], { strategy_type: 'placeholder', target: 'placeholder' }, [], []);
-    // Repair engine results are available for future integration steps
-    void repairStrategies; // Prepared for future use
-    void repairStrategy; // Prepared for future use
-
     let best: GenerationResult = {
         total: totalTasks,
         placed: 0,
@@ -1477,6 +1460,19 @@ export async function runGenerator(
     // Compute diff against previous entries only in partial mode.
     if (isPartial) {
         best = { ...best, diff: buildDiff(previousEntries, best.entries) };
+    }
+
+    // Step 8 (Repair Engine): Analyze conflicts and generate repair strategies
+    // Phase 8 from Generation_System.md: Repair and Local Backtracking
+    // If generation didn't achieve full placement, analyze conflicts and generate repair strategies
+    if (best.placed < best.total) {
+        // Analyze conflicts in the current best result
+        const conflicts = analyzeConflicts(best.entries, normalizedData.normalizedTeachers, availableRooms, scopedSections, days, slots, []);
+        // Generate repair strategies based on conflicts
+        const repairStrategies = generateRepairStrategies(conflicts);
+        // Repair strategies are available for future integration
+        // Actual repair application requires complex move logic and is deferred
+        void repairStrategies; // Prepared for future use
     }
 
     // Step 9 (Soft Constraint Optimizer): Calculate soft constraint scores and identify violations
