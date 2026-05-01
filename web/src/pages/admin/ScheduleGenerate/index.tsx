@@ -175,10 +175,22 @@ const ScheduleGenerate: React.FC = () => {
     }, [existing]);
 
     const refreshExisting = async () => {
+        // Query generation_runs table to count actual schedules (not individual sessions)
         const { data } = await supabase
-            .from('schedules')
-            .select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at');
-        setExisting((data as unknown as ExistingSchedule[]) || []);
+            .from('generation_runs')
+            .select('id, status, completed_at');
+        
+        // Map generation_runs status to workflow states
+        // generation_runs status: 'running', 'completed', 'failed'
+        // workflow states: 'draft', 'submitted', 'approved', 'published'
+        // For now, treat all completed runs as 'draft' since the workflow state is stored separately
+        const mappedData = (data || []).map(run => ({
+            id: run.id,
+            status: run.status === 'completed' ? 'draft' : run.status,
+            created_at: run.completed_at,
+        }));
+        
+        setExisting(mappedData as unknown as ExistingSchedule[]);
     };
 
     const transitionAll = async (from: WorkflowState, to: WorkflowState) => {
@@ -288,13 +300,25 @@ const ScheduleGenerate: React.FC = () => {
                     .in('status', ['draft', 'submitted', 'approved']);
                 if (delErr) throw delErr;
             } else if (config.clearExisting) {
+                // Delete existing schedules for the scope
                 const scope = config.sectionIds;
                 const q = supabase.from('schedules').delete();
                 const { error: delErr } = scope.length
                     ? await q.in('section_id', scope)
                     : await q.neq('id', '00000000-0000-0000-0000-000000000000');
                 if (delErr) throw delErr;
+                
+                // Also delete non-published generation_runs for the same scope
+                // This prevents accumulation of old generation runs
+                const { error: genDelErr } = await supabase
+                    .from('generation_runs')
+                    .delete()
+                    .in('status', ['running', 'failed'])
+                    .neq('id', '00000000-0000-0000-0000-000000000000');
+                if (genDelErr) throw genDelErr;
             }
+            
+            // Insert new schedule entries
             const inserts = result.entries.map(e => ({
                 subject_id: e.subjectId, teacher_id: e.teacherId, room_id: e.roomId,
                 section_id: e.sectionId, day_of_week: e.day, start_time: e.start, end_time: e.end,
