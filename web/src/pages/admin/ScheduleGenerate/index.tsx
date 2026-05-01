@@ -395,7 +395,6 @@ const ScheduleGenerate: React.FC = () => {
                             blockers={blockers}
                             counts={{ subjects: subjects.length, teachers: teachers.length, rooms: rooms.length, sections: sections.length, existing: existing.length }}
                             targetLabel={resolveTargetLabel(config.partialTarget, { sections, teachers, rooms, subjects })}
-                            onStart={() => { setStage('generate'); setTimeout(startGeneration, 50); }}
                         />
                     )}
                     {stage === 'generate' && (
@@ -946,9 +945,7 @@ const ReviewStage: React.FC<{
     blockers: string[];
     counts: { subjects: number; teachers: number; rooms: number; sections: number; existing: number };
     targetLabel: string;
-    onStart: () => void;
-}> = ({ config, blockers, counts, targetLabel, onStart }) => {
-    const ready = blockers.length === 0;
+}> = ({ config, blockers, counts, targetLabel }) => {
     return (
         <div>
             <StageHeader icon={<ListChecks size={16} />} title="Review inputs" desc="Quick summary before running the engine." />
@@ -1009,12 +1006,6 @@ const ReviewStage: React.FC<{
                     <ul>{blockers.map((b, i) => <li key={i}>{b}</li>)}</ul>
                 </div>
             )}
-
-            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
-                <button className="btn btn-primary" onClick={onStart} disabled={!ready}>
-                    <Sparkles size={14} /> Start generation
-                </button>
-            </div>
         </div>
     );
 };
