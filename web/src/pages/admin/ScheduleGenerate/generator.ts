@@ -1590,27 +1590,26 @@ export async function runGenerator(
                 return aUsed - bUsed;
             });
 
-            for (const day of availableDays) {
-                if (placed) break;
-                // Hard: skip days the teacher has explicitly removed from preferred_days.
-                // (Empty preferred_days means "all days OK"; see dayIsPreferred.)
-                if (!dayIsPreferred(teacher, day)) continue;
-                // Hard: check max_classes_per_day constraint
-                if (wouldExceedMaxClassesPerDay(teacher.id, day, entries, teacher, classifiedConstraints.hard)) continue;
-                // Domain-based: check if day is in teacher's valid_days from domain
-                const teacherDomain = teacherDomainMap.get(teacher.id);
-                if (teacherDomain && !teacherDomain.valid_days.includes(day)) continue;
-                for (const slot of slots) {
-                    if (placed) break;
-                    const sMin = toMin(slot.start);
-                    const eMin = toMin(slot.end);
-                    // Hard: respect teacher's explicit per-slot availability map.
-                    if (!teacherAvailable(teacher, day, slot.start)) continue;
-                    if (!isFree(busy, 'teacher', teacher.id, day, sMin, eMin)) continue;
-                    if (!isFree(busy, 'section', section.id, day, sMin, eMin)) continue;
-                    // Hard: check max_hours constraint
-                    if (wouldExceedMaxHours(teacher.id, entries, teacher, config.sessionMinutes, classifiedConstraints.hard)) continue;
+            // OPTIMIZATION: If subject has no fixed teacher, try multiple teacher assignments
+            const teachersToTry = sub.teacher_id 
+                ? [teacher] 
+                : Array.from(teacherMap.values()).slice().sort(() => Math.random() - 0.5);
 
+            for (const currentTeacher of teachersToTry) {
+                if (placed) break;
+
+                for (const day of availableDays) {
+                    if (placed) break;
+                    // Hard: skip days the teacher has explicitly removed from preferred_days.
+                    // (Empty preferred_days means "all days OK"; see dayIsPreferred.)
+                    if (!dayIsPreferred(currentTeacher, day)) continue;
+                    // Hard: check max_classes_per_day constraint
+                    if (wouldExceedMaxClassesPerDay(currentTeacher.id, day, entries, currentTeacher, classifiedConstraints.hard)) continue;
+                    // Domain-based: check if day is in teacher's valid_days from domain
+                    const teacherDomain = teacherDomainMap.get(currentTeacher.id);
+                    if (teacherDomain && !teacherDomain.valid_days.includes(day)) continue;
+
+                    // OPTIMIZATION: Pre-filter compatible rooms before checking slots
                     let compat = availableRooms.filter(r => roomCompatible(r, sub, section));
                     // Domain-based: filter rooms by valid_subjects from domain
                     compat = compat.filter(r => {
@@ -1625,65 +1624,82 @@ export async function runGenerator(
                     }
                     if (compat.length === 0) { errors.push(`No compatible room for "${sub.name}"`); break; }
 
-                    // Special-room bias: if subject needs lab or bias is strong, prefer special rooms.
-                    const bias = config.priorities.specialRoomBias;
-                    const sortedRooms = compat.slice().sort((a, b) => {
-                        const aS = isSpecialRoom(a) ? 1 : 0;
-                        const bS = isSpecialRoom(b) ? 1 : 0;
-                        if (sub.requires_lab) return bS - aS; // always prefer special for lab subjects
-                        return (bS - aS) * (bias / 100);
-                    });
+                    for (const slot of slots) {
+                        if (placed) break;
+                        const sMin = toMin(slot.start);
+                        const eMin = toMin(slot.end);
+                        // Hard: respect teacher's explicit per-slot availability map.
+                        if (!teacherAvailable(currentTeacher, day, slot.start)) continue;
+                        if (!isFree(busy, 'teacher', currentTeacher.id, day, sMin, eMin)) continue;
+                        if (!isFree(busy, 'section', section.id, day, sMin, eMin)) continue;
+                        // Hard: check max_hours constraint
+                        if (wouldExceedMaxHours(currentTeacher.id, entries, currentTeacher, config.sessionMinutes, classifiedConstraints.hard)) continue;
 
-                    for (const room of sortedRooms) {
-                        if (!isFree(busy, 'room', room.id, day, sMin, eMin)) continue;
-                        
-                        // Forward Checking: Check if this placement would make remaining tasks impossible
-                        // Aligns with Generation_System.md Phase 7: Forward Checking and Propagation
-                        const remainingTasks = rankedTasks.slice(i + 1);
-                        if (remainingTasks.length > 0 && !checkForwardConstraints(
-                            teacher.id,
-                            room.id,
-                            section.id,
-                            day,
-                            sMin,
-                            eMin,
-                            busy,
-                            remainingTasks,
-                            teacherMap,
-                            roomMap,
-                            slots,
-                            days,
-                        )) {
-                            // Skip this placement as it would lead to a dead end
-                            continue;
+                        // Special-room bias: if subject needs lab or bias is strong, prefer special rooms.
+                        const bias = config.priorities.specialRoomBias;
+                        const sortedRooms = compat.slice().sort((a, b) => {
+                            const aS = isSpecialRoom(a) ? 1 : 0;
+                            const bS = isSpecialRoom(b) ? 1 : 0;
+                            if (sub.requires_lab) return bS - aS; // always prefer special for lab subjects
+                            return (bS - aS) * (bias / 100);
+                        });
+
+                        for (const room of sortedRooms) {
+                            if (!isFree(busy, 'room', room.id, day, sMin, eMin)) continue;
+                            
+                            // Forward Checking: Check if this placement would make remaining tasks impossible
+                            // DISABLED: Forward checking is too strict and rejects many valid placements
+                            // Re-enabling it would require a more sophisticated implementation that considers
+                            // alternative placement options for remaining tasks rather than just slot availability.
+                            // Aligns with Generation_System.md Phase 7: Forward Checking and Propagation
+                            /*
+                            const remainingTasks = rankedTasks.slice(i + 1);
+                            if (remainingTasks.length > 0 && !checkForwardConstraints(
+                                currentTeacher.id,
+                                room.id,
+                                section.id,
+                                day,
+                                sMin,
+                                eMin,
+                                busy,
+                                remainingTasks,
+                                teacherMap,
+                                roomMap,
+                                slots,
+                                days,
+                            )) {
+                                // Skip this placement as it would lead to a dead end
+                                continue;
+                            }
+                            */
+                            
+                            entries.push({
+                                subjectId: sub.id,
+                                subjectCode: sub.code,
+                                subjectName: sub.name,
+                                teacherId: currentTeacher.id,
+                                teacherName: currentTeacher.full_name,
+                                roomId: room.id,
+                                roomName: room.name,
+                                sectionId: section.id,
+                                sectionName: section.name,
+                                day,
+                                start: slot.start,
+                                end: slot.end,
+                            });
+                            busy.push({
+                                teacherId: currentTeacher.id,
+                                roomId: room.id,
+                                sectionId: section.id,
+                                day,
+                                startMin: sMin,
+                                endMin: eMin,
+                            });
+                            usedDays.add(day);
+                            usedDaysByTask.set(taskKey, usedDays);
+                            placed = true;
+                            break;
                         }
-                        
-                        entries.push({
-                            subjectId: sub.id,
-                            subjectCode: sub.code,
-                            subjectName: sub.name,
-                            teacherId: teacher.id,
-                            teacherName: teacher.full_name,
-                            roomId: room.id,
-                            roomName: room.name,
-                            sectionId: section.id,
-                            sectionName: section.name,
-                            day,
-                            start: slot.start,
-                            end: slot.end,
-                        });
-                        busy.push({
-                            teacherId: teacher.id,
-                            roomId: room.id,
-                            sectionId: section.id,
-                            day,
-                            startMin: sMin,
-                            endMin: eMin,
-                        });
-                        usedDays.add(day);
-                        usedDaysByTask.set(taskKey, usedDays);
-                        placed = true;
-                        break;
                     }
                 }
             }
