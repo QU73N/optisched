@@ -57,6 +57,7 @@ const ScheduleGenerate: React.FC = () => {
     const [optimizing, setOptimizing] = useState(false);
     const [optimizationReport, setOptimizationReport] = useState<any>(null);
     const [optimizedResult, setOptimizedResult] = useState<GenerationResult | null>(null);
+    const [optimizationError, setOptimizationError] = useState<string | null>(null);
 
     useEffect(() => {
         const load = async () => {
@@ -292,6 +293,7 @@ const ScheduleGenerate: React.FC = () => {
         setOptimizing(true);
         setOptimizationReport(null);
         setOptimizedResult(null);
+        setOptimizationError(null);
         
         try {
             // Build maps for optimization
@@ -361,6 +363,8 @@ const ScheduleGenerate: React.FC = () => {
             
         } catch (error) {
             console.error('Optimization failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred during optimization';
+            setOptimizationError(errorMessage);
         } finally {
             setOptimizing(false);
         }
@@ -433,6 +437,7 @@ const ScheduleGenerate: React.FC = () => {
         setSaveError(null);
         setOptimizedResult(null);
         setOptimizationReport(null);
+        setOptimizationError(null);
         setOptimizing(false);
         setStage('scope');
     };
@@ -531,6 +536,7 @@ const ScheduleGenerate: React.FC = () => {
                             optimizing={optimizing}
                             optimizationReport={optimizationReport}
                             optimizedResult={optimizedResult}
+                            optimizationError={optimizationError}
                             onOptimize={runOptimization}
                             onUseOptimized={() => {
                                 if (optimizedResult) {
@@ -1414,9 +1420,10 @@ const OptimizeStage: React.FC<{
     optimizing: boolean;
     optimizationReport: any;
     optimizedResult: GenerationResult | null;
+    optimizationError: string | null;
     onOptimize: () => void;
     onUseOptimized: () => void;
-}> = ({ result, optimizing, optimizationReport, optimizedResult, onOptimize, onUseOptimized }) => {
+}> = ({ result, optimizing, optimizationReport, optimizedResult, optimizationError, onOptimize, onUseOptimized }) => {
     return (
         <div>
             <StageHeader
@@ -1427,6 +1434,12 @@ const OptimizeStage: React.FC<{
 
             {!optimizedResult ? (
                 <div style={{ padding: '20px 0' }}>
+                    {optimizationError && (
+                        <div className="sg-banner sg-banner-error" style={{ marginBottom: 16 }}>
+                            <XCircle size={14} /> {optimizationError}
+                        </div>
+                    )}
+                    
                     <div style={{ marginBottom: 20 }}>
                         <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Current Score</h3>
                         <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent-primary)' }}>
