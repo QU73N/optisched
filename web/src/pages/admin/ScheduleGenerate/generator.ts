@@ -1649,7 +1649,7 @@ const tryTimeSlotSwap = (
     sections: Section[],
     config: GenerationConfig,
     _classifiedConstraints: ClassifiedConstraints,
-    busy: Busy[],
+    _busy: Busy[],
     rng: () => number,
 ): PlacedEntry[] | null => {
     if (entries.length === 0) return null;
@@ -1746,7 +1746,7 @@ const tryTeacherSwap = (
     _roomsMap: Map<string, Room>,
     _config: GenerationConfig,
     _classifiedConstraints: ClassifiedConstraints,
-    busy: Busy[],
+    _busy: Busy[],
     rng: () => number,
 ): PlacedEntry[] | null => {
     if (entries.length < 2) return null;
@@ -1780,13 +1780,24 @@ const tryTeacherSwap = (
     const startMin2 = parseTime(entry2.start);
     const endMin2 = parseTime(entry2.end);
     
+    // Build busy array excluding both entries being swapped
+    const otherEntries = entries.filter((_, i) => i !== idx1 && i !== idx2);
+    const otherBusy: Busy[] = otherEntries.map(e => ({
+        teacherId: e.teacherId,
+        roomId: e.roomId,
+        sectionId: e.sectionId,
+        day: e.day,
+        startMin: parseTime(e.start),
+        endMin: parseTime(e.end),
+    }));
+    
     // Check teacher availability at new times
-    if (!isFree(busy.filter((_, i) => i !== idx1 && i !== idx2), 'teacher', entry2.teacherId, entry1.day, startMin1, endMin1)) return null;
-    if (!isFree(busy.filter((_, i) => i !== idx1 && i !== idx2), 'teacher', entry1.teacherId, entry2.day, startMin2, endMin2)) return null;
+    if (!isFree(otherBusy, 'teacher', entry2.teacherId, entry1.day, startMin1, endMin1)) return null;
+    if (!isFree(otherBusy, 'teacher', entry1.teacherId, entry2.day, startMin2, endMin2)) return null;
     
     // Check max classes per day
-    if (wouldExceedMaxClassesPerDay(entry2.teacherId, entry1.day, entries.filter((_, i) => i !== idx1), teacher2)) return null;
-    if (wouldExceedMaxClassesPerDay(entry1.teacherId, entry2.day, entries.filter((_, i) => i !== idx2), teacher1)) return null;
+    if (wouldExceedMaxClassesPerDay(entry2.teacherId, entry1.day, otherEntries, teacher2)) return null;
+    if (wouldExceedMaxClassesPerDay(entry1.teacherId, entry2.day, otherEntries, teacher1)) return null;
     
     // All constraints passed, create new entries array with swapped teachers
     const newEntries = [...entries];
@@ -1805,7 +1816,7 @@ const tryRoomSwap = (
     roomsMap: Map<string, Room>,
     _config: GenerationConfig,
     _classifiedConstraints: ClassifiedConstraints,
-    busy: Busy[],
+    _busy: Busy[],
     rng: () => number,
 ): PlacedEntry[] | null => {
     if (entries.length < 2) return null;
@@ -1837,8 +1848,19 @@ const tryRoomSwap = (
     const startMin2 = parseTime(entry2.start);
     const endMin2 = parseTime(entry2.end);
     
-    if (!isFree(busy.filter((_, i) => i !== idx1 && i !== idx2), 'room', entry2.roomId, entry1.day, startMin1, endMin1)) return null;
-    if (!isFree(busy.filter((_, i) => i !== idx1 && i !== idx2), 'room', entry1.roomId, entry2.day, startMin2, endMin2)) return null;
+    // Build busy array excluding both entries being swapped
+    const otherEntries = entries.filter((_, i) => i !== idx1 && i !== idx2);
+    const otherBusy: Busy[] = otherEntries.map(e => ({
+        teacherId: e.teacherId,
+        roomId: e.roomId,
+        sectionId: e.sectionId,
+        day: e.day,
+        startMin: parseTime(e.start),
+        endMin: parseTime(e.end),
+    }));
+    
+    if (!isFree(otherBusy, 'room', entry2.roomId, entry1.day, startMin1, endMin1)) return null;
+    if (!isFree(otherBusy, 'room', entry1.roomId, entry2.day, startMin2, endMin2)) return null;
     
     // All constraints passed, create new entries array with swapped rooms
     const newEntries = [...entries];
@@ -1858,7 +1880,7 @@ const tryMultiSwap = (
     _roomsMap: Map<string, Room>,
     _config: GenerationConfig,
     _classifiedConstraints: ClassifiedConstraints,
-    busy: Busy[],
+    _busy: Busy[],
     rng: () => number,
 ): PlacedEntry[] | null => {
     if (entries.length < 3) return null;
@@ -1893,16 +1915,25 @@ const tryMultiSwap = (
     const startMin3 = parseTime(entry3.start);
     const endMin3 = parseTime(entry3.end);
     
-    const filteredBusy = busy.filter((_, i) => !indices.includes(i));
+    // Build busy array excluding all 3 entries being swapped
+    const otherEntries = entries.filter((_, i) => !indices.includes(i));
+    const otherBusy: Busy[] = otherEntries.map(e => ({
+        teacherId: e.teacherId,
+        roomId: e.roomId,
+        sectionId: e.sectionId,
+        day: e.day,
+        startMin: parseTime(e.start),
+        endMin: parseTime(e.end),
+    }));
     
-    if (!isFree(filteredBusy, 'teacher', entry2.teacherId, entry1.day, startMin1, endMin1)) return null;
-    if (!isFree(filteredBusy, 'teacher', entry3.teacherId, entry2.day, startMin2, endMin2)) return null;
-    if (!isFree(filteredBusy, 'teacher', entry1.teacherId, entry3.day, startMin3, endMin3)) return null;
+    if (!isFree(otherBusy, 'teacher', entry2.teacherId, entry1.day, startMin1, endMin1)) return null;
+    if (!isFree(otherBusy, 'teacher', entry3.teacherId, entry2.day, startMin2, endMin2)) return null;
+    if (!isFree(otherBusy, 'teacher', entry1.teacherId, entry3.day, startMin3, endMin3)) return null;
     
     // Check max classes per day
-    if (wouldExceedMaxClassesPerDay(entry2.teacherId, entry1.day, entries.filter((_, i) => i !== idx1), teacher2)) return null;
-    if (wouldExceedMaxClassesPerDay(entry3.teacherId, entry2.day, entries.filter((_, i) => i !== idx2), teacher3)) return null;
-    if (wouldExceedMaxClassesPerDay(entry1.teacherId, entry3.day, entries.filter((_, i) => i !== idx3), teacher1)) return null;
+    if (wouldExceedMaxClassesPerDay(entry2.teacherId, entry1.day, otherEntries, teacher2)) return null;
+    if (wouldExceedMaxClassesPerDay(entry3.teacherId, entry2.day, otherEntries, teacher3)) return null;
+    if (wouldExceedMaxClassesPerDay(entry1.teacherId, entry3.day, otherEntries, teacher1)) return null;
     
     // All constraints passed, create new entries with teacher chain swap
     const newEntries = [...entries];
@@ -1925,7 +1956,7 @@ const tryLargeNeighborhoodSearch = (
     sections: Section[],
     config: GenerationConfig,
     _classifiedConstraints: ClassifiedConstraints,
-    busy: Busy[],
+    _busy: Busy[],
     rng: () => number,
 ): PlacedEntry[] | null => {
     if (entries.length < 5) return null;
@@ -1974,6 +2005,18 @@ const tryLargeNeighborhoodSearch = (
     const usedSlots = new Set<string>();
     let hasChanges = false;
     
+    // Build busy array excluding the section/day entries being rebuilt
+    const sectionDayIndicesList = sectionDayIndices.map(({ i }) => i);
+    const otherEntries = entries.filter((_, i) => !sectionDayIndicesList.includes(i));
+    const otherBusy: Busy[] = otherEntries.map(e => ({
+        teacherId: e.teacherId,
+        roomId: e.roomId,
+        sectionId: e.sectionId,
+        day: e.day,
+        startMin: parseTime(e.start),
+        endMin: parseTime(e.end),
+    }));
+    
     for (const { e: entry, i: originalIdx } of sectionDayIndices) {
         const originalStart = entry.start;
         
@@ -1989,12 +2032,12 @@ const tryLargeNeighborhoodSearch = (
             const teacher = teachersMap.get(entry.teacherId);
             if (teacher && !teacherAvailable(teacher, randomDay, slot.start)) continue;
             
-            if (!isFree(busy, 'teacher', entry.teacherId, randomDay, startMin, endMin)) continue;
-            if (!isFree(busy, 'room', entry.roomId, randomDay, startMin, endMin)) continue;
-            if (!isFree(busy, 'section', entry.sectionId, randomDay, startMin, endMin)) continue;
+            if (!isFree(otherBusy, 'teacher', entry.teacherId, randomDay, startMin, endMin)) continue;
+            if (!isFree(otherBusy, 'room', entry.roomId, randomDay, startMin, endMin)) continue;
+            if (!isFree(otherBusy, 'section', entry.sectionId, randomDay, startMin, endMin)) continue;
             
-            if (teacher && wouldExceedMaxClassesPerDay(entry.teacherId, randomDay, entries, teacher)) continue;
-            if (teacher && wouldExceedMaxHours(entry.teacherId, entries, teacher, sessionDuration)) continue;
+            if (teacher && wouldExceedMaxClassesPerDay(entry.teacherId, randomDay, otherEntries, teacher)) continue;
+            if (teacher && wouldExceedMaxHours(entry.teacherId, otherEntries, teacher, sessionDuration)) continue;
             
             // Found a valid slot, update the entry
             newEntries[originalIdx] = { ...entry, start: slot.start, end: slot.end };
