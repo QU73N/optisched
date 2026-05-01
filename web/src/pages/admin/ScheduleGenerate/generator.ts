@@ -1117,11 +1117,31 @@ export async function runGenerator(
     const days = config.days.length ? config.days : ['Monday'];
 
     // Step 5 (Impossible Schedule Detector): Detect if schedule is impossible
-    // TODO: In future integration, return early with actionable options if impossible
-    // For now, we detect but continue with generation to avoid breaking changes
+    // If impossible, return early with actionable error messages
     const impossibilityCheck = detectImpossibleSchedule(teachers, rooms, sections, subjects, days, slots, config);
-    // Impossibility check result is available for future integration steps
-    void impossibilityCheck; // Prepared for future use
+    if (!impossibilityCheck.is_possible) {
+        const totalTasks = subjects.reduce((sum, s) => sum + sessionsNeeded(s, config.sessionMinutes), 0);
+        // Calculate high priority count for early return
+        const subjectP = config.priorities.subjects;
+        const sectionP = config.priorities.sections;
+        const highPriorityTotal = subjects.filter(s => {
+            const sec = sections.find(x => (s.program === 'ALL' || x.program === s.program) && x.year_level === s.year_level);
+            const subScore = priorityOf(subjectP, s.id);
+            const secScore = sec ? priorityOf(sectionP, sec.id) : 50;
+            return subScore >= 70 || secScore >= 70;
+        }).length;
+        return {
+            total: totalTasks,
+            placed: 0,
+            entries: [],
+            errors: impossibilityCheck.reasons,
+            score: 0,
+            highPriorityPlaced: 0,
+            highPriorityTotal,
+            mode: config.mode,
+            diff: [],
+        };
+    }
 
     // Step 3 (Domain Builder): Build domains for early pruning in placement
     // TODO: In future integration, use domain-based lookups instead of maps

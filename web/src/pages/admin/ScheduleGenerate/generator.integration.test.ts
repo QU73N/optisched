@@ -246,6 +246,29 @@ describe('Generator Integration Tests', () => {
             expect(result.placed).toBeLessThan(result.total);
         });
 
+        it('should return early if schedule is impossible', async () => {
+            const progressFn = vi.fn();
+            const noRooms: Room[] = [];
+
+            const result = await runGenerator(
+                {
+                    subjects: mockSubjects,
+                    teachers: mockTeachers,
+                    rooms: noRooms,
+                    sections: mockSections,
+                    existing: mockExisting,
+                    config: mockConfig,
+                    institutionalPolicies: {},
+                },
+                progressFn,
+            );
+
+            // Should return early with errors explaining why impossible
+            expect(result.placed).toBe(0);
+            expect(result.errors.length).toBeGreaterThan(0);
+            expect(result.errors.some(e => e.includes('No available rooms'))).toBe(true);
+        });
+
         it('should handle no available rooms', async () => {
             const progressFn = vi.fn();
             const unavailableRooms = [
