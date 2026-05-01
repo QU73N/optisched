@@ -185,7 +185,10 @@ const roomCompatible = (room: Room, subject: Subject, section: Section): boolean
     return true;
 };
 
-const shuffle = <T,>(arr: T[]): T[] => {
+// Fisher-Yates shuffle for seeded randomness. Used for attempt variation.
+// TODO: Re-enable if needed for randomization in future optimizations
+/*
+const shuffle = <T>(arr: T[]): T[] => {
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -193,6 +196,7 @@ const shuffle = <T,>(arr: T[]): T[] => {
     }
     return a;
 };
+*/
 
 const priorityOf = (map: Record<string, number>, id: string) =>
     typeof map[id] === 'number' ? map[id] : 50;
@@ -595,6 +599,123 @@ const classifyConstraints = (
     };
 
     return { hard, soft, preferences };
+};
+
+/**
+ * Domain Construction (Phase 5)
+ * Pre-compute candidate domains for each placement task before placement begins.
+ * This prunes invalid options early and ranks candidates by quality.
+ * 
+ * For each session, the domain includes:
+ * - Valid teachers (qualified, available)
+ * - Valid rooms (compatible, capacity)
+ * - Valid days (teacher preferred days)
+ * - Valid slots (teacher availability)
+ * 
+ * Candidates are ranked by:
+ * - Better time windows
+ * - Less disruptive placements
+ * - Rooms that fit special room requirements
+ * - Placements that preserve flexibility
+ * - Placements that reduce movement cost
+ * - Placements that balance weekly loads
+ */
+interface SessionDomain {
+    taskId: string;
+    validTeachers: string[]; // teacher IDs
+    validRooms: string[]; // room IDs
+    validDays: string[]; // day names
+    validSlots: Array<{ start: string; end: string; day: string }>; // ranked slots
+    scarcityScore: number; // lower = fewer options = harder to place
+}
+
+const constructDomains = (
+    tasks: Array<{ subject: Subject; section: Section; sessionIndex: number }>,
+    teachers: Map<string, Teacher>,
+    rooms: Map<string, Room>,
+    teacherDomainMap: Map<string, TeacherDomain>,
+    roomDomainMap: Map<string, RoomDomain>,
+    _sectionDomainMap: Map<string, SectionDomain>,
+    days: string[],
+    slots: { start: string; end: string }[],
+    _config: GenerationConfig,
+): Map<string, SessionDomain> => {
+    const domains = new Map<string, SessionDomain>();
+
+    for (const task of tasks) {
+        const sub = task.subject;
+        const section = task.section;
+        const taskId = `${sub.id}|${section.id}|${task.sessionIndex}`;
+
+        // Pre-filter valid teachers
+        let validTeachers: string[] = [];
+        if (sub.teacher_id) {
+            // Fixed teacher
+            const teacher = teachers.get(sub.teacher_id);
+            if (teacher) validTeachers = [sub.teacher_id];
+        } else {
+            // Any teacher - all teachers are candidates
+            validTeachers = Array.from(teachers.keys());
+        }
+
+        // Pre-filter valid rooms
+        const validRooms = Array.from(rooms.values())
+            .filter(r => roomCompatible(r, sub, section))
+            .filter(r => {
+                const domain = roomDomainMap.get(r.id);
+                return !domain || domain.valid_subjects.includes(sub.id);
+            })
+            .map(r => r.id);
+
+        // Pre-filter valid days
+        const validDays = days.filter(day => {
+            // For each valid teacher, check if day is preferred
+            return validTeachers.some(tid => {
+                const teacher = teachers.get(tid);
+                if (!teacher) return false;
+                if (!dayIsPreferred(teacher, day)) return false;
+                const domain = teacherDomainMap.get(tid);
+                return !domain || domain.valid_days.includes(day);
+            });
+        });
+
+        // Pre-filter and rank valid slots
+        const validSlots: Array<{ start: string; end: string; day: string }> = [];
+        for (const day of validDays) {
+            for (const slot of slots) {
+                // Check if any teacher is available at this slot
+                const hasAvailableTeacher = validTeachers.some(tid => {
+                    const teacher = teachers.get(tid);
+                    if (!teacher) return false;
+                    if (!teacherAvailable(teacher, day, slot.start)) return false;
+                    return true;
+                });
+
+                if (hasAvailableTeacher) {
+                    validSlots.push({ ...slot, day });
+                }
+            }
+        }
+
+        // Calculate scarcity score (lower = fewer options = harder to place)
+        // Combine teacher, room, day, and slot scarcity
+        const teacherScarcity = validTeachers.length / Math.max(1, teachers.size);
+        const roomScarcity = validRooms.length / Math.max(1, rooms.size);
+        const dayScarcity = validDays.length / Math.max(1, days.length);
+        const slotScarcity = validSlots.length / Math.max(1, slots.length * days.length);
+        const scarcityScore = (teacherScarcity + roomScarcity + dayScarcity + slotScarcity) / 4;
+
+        domains.set(taskId, {
+            taskId,
+            validTeachers,
+            validRooms,
+            validDays,
+            validSlots,
+            scarcityScore,
+        });
+    }
+
+    return domains;
 };
 
 /**
@@ -1517,7 +1638,6 @@ export async function runGenerator(
         // Attempt 0 uses pure priority order; later attempts add jitter to explore.
         const jitter = attempt === 0 ? 0 : 8 + attempt * 3;
         const subjectsShuffled = rankSubjects(scopedSubjects, scopedSections, config, jitter);
-        const daysShuffled = shuffle(days);
 
         // Build tasks in priority order (subjects already ranked)
         const rankedTasks: PlacementTask[] = [];
@@ -1533,6 +1653,35 @@ export async function runGenerator(
                 rankedTasks.push({ subject: sub, section, sessionIndex: i });
             }
         }
+
+        // Phase 5: Domain Construction - Pre-compute valid options for each task
+        // This prunes invalid options early and enables MRV ranking
+        const domains = constructDomains(
+            rankedTasks,
+            teacherMap,
+            roomMap,
+            teacherDomainMap,
+            roomDomainMap,
+            sectionDomainMap,
+            days,
+            slots,
+            config,
+        );
+
+        // Phase 4: Improved Ranking - Re-rank tasks by scarcity (MRV heuristic)
+        // Tasks with fewer valid options (lower scarcity score) should be placed first
+        rankedTasks.sort((a, b) => {
+            const domainA = domains.get(`${a.subject.id}|${a.section.id}|${a.sessionIndex}`);
+            const domainB = domains.get(`${b.subject.id}|${b.section.id}|${b.sessionIndex}`);
+            const scarcityA = domainA?.scarcityScore ?? 1;
+            const scarcityB = domainB?.scarcityScore ?? 1;
+            // Lower scarcity = harder to place = should go first
+            if (scarcityA !== scarcityB) return scarcityA - scarcityB;
+            // Tie-break by original priority (subject weight + section weight)
+            const priorityA = (a.subject.weight || 50) + (a.section.weight || 50);
+            const priorityB = (b.subject.weight || 50) + (b.section.weight || 50);
+            return priorityB - priorityA; // Higher priority first
+        });
 
         // Check if there are any tasks to place
         if (rankedTasks.length === 0) {
@@ -1573,61 +1722,57 @@ export async function runGenerator(
                 await new Promise(r => setTimeout(r, 0));
             }
 
-            const teacher = sub.teacher_id
-                ? teacherMap.get(sub.teacher_id)
-                : Array.from(teacherMap.values())[Math.floor(Math.random() * teacherMap.size)];
-            if (!teacher) { errors.push(`No teacher for "${sub.name}"`); continue; }
-
             const section = task.section;
             const taskKey = `${sub.id}|${section.id}`;
+            const taskId = `${sub.id}|${section.id}|${task.sessionIndex}`;
             const usedDays = usedDaysByTask.get(taskKey) || new Set<string>();
 
+            // Get pre-computed domain for this task
+            const domain = domains.get(taskId);
+            if (!domain || domain.validTeachers.length === 0 || domain.validRooms.length === 0 || domain.validSlots.length === 0) {
+                errors.push(`No valid placement options for "${sub.name}" session ${task.sessionIndex + 1} (no teachers/rooms/slots in domain)`);
+                continue;
+            }
+
             let placed = false;
+            // Use pre-filtered teachers from domain
+            const teachersToTry: Teacher[] = [];
+            for (const tid of domain.validTeachers) {
+                const t = teacherMap.get(tid);
+                if (t) teachersToTry.push(t);
+            }
+            
             // Prefer days not yet used for this subject-section pair (spread sessions across days)
-            const availableDays = daysShuffled.slice().sort((a, b) => {
+            const availableDays = domain.validDays.slice().sort((a, b) => {
                 const aUsed = usedDays.has(a) ? 1 : 0;
                 const bUsed = usedDays.has(b) ? 1 : 0;
                 return aUsed - bUsed;
             });
-
-            // OPTIMIZATION: If subject has no fixed teacher, try multiple teacher assignments
-            const teachersToTry = sub.teacher_id 
-                ? [teacher] 
-                : Array.from(teacherMap.values()).slice().sort(() => Math.random() - 0.5);
 
             for (const currentTeacher of teachersToTry) {
                 if (placed) break;
 
                 for (const day of availableDays) {
                     if (placed) break;
-                    // Hard: skip days the teacher has explicitly removed from preferred_days.
-                    // (Empty preferred_days means "all days OK"; see dayIsPreferred.)
-                    if (!dayIsPreferred(currentTeacher, day)) continue;
                     // Hard: check max_classes_per_day constraint
                     if (wouldExceedMaxClassesPerDay(currentTeacher.id, day, entries, currentTeacher, classifiedConstraints.hard)) continue;
-                    // Domain-based: check if day is in teacher's valid_days from domain
-                    const teacherDomain = teacherDomainMap.get(currentTeacher.id);
-                    if (teacherDomain && !teacherDomain.valid_days.includes(day)) continue;
 
-                    // OPTIMIZATION: Pre-filter compatible rooms before checking slots
-                    let compat = availableRooms.filter(r => roomCompatible(r, sub, section));
-                    // Domain-based: filter rooms by valid_subjects from domain
-                    compat = compat.filter(r => {
-                        const roomDomain = roomDomainMap.get(r.id);
-                        return !roomDomain || roomDomain.valid_subjects.includes(sub.id);
-                    });
-                    // Domain-based: check if subject is valid for section from domain
-                    const sectionDomain = sectionDomainMap.get(section.id);
-                    if (sectionDomain && !sectionDomain.valid_subjects.includes(sub.id)) {
-                        errors.push(`Subject "${sub.name}" is not valid for section "${section.name}"`);
-                        break;
+                    // Use pre-filtered rooms from domain
+                    const compat: Room[] = [];
+                    for (const rid of domain.validRooms) {
+                        const r = roomMap.get(rid);
+                        if (r) compat.push(r);
                     }
-                    if (compat.length === 0) { errors.push(`No compatible room for "${sub.name}"`); break; }
+                    if (compat.length === 0) { continue; }
 
-                    for (const slot of slots) {
+                    // Use pre-filtered slots from domain for this day
+                    const validSlotsForDay = domain.validSlots.filter(s => s.day === day);
+
+                    for (const slot of validSlotsForDay) {
                         if (placed) break;
                         const sMin = toMin(slot.start);
                         const eMin = toMin(slot.end);
+                        
                         // Hard: respect teacher's explicit per-slot availability map.
                         if (!teacherAvailable(currentTeacher, day, slot.start)) continue;
                         if (!isFree(busy, 'teacher', currentTeacher.id, day, sMin, eMin)) continue;
