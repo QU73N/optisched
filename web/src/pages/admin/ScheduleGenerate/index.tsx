@@ -1149,14 +1149,19 @@ const GenerateStage: React.FC<{
         };
     }, [generating]);
 
-    // Calculate estimated time remaining
+    // Calculate estimated time remaining for all attempts combined
     let estimatedTimeText = '';
-    if (generationStartTime && progress.total && progress.total > 0 && progress.placed > 0) {
+    if (generationStartTime && progress.total && progress.total > 0 && progress.totalAttempts > 0) {
         const elapsed = currentTime - generationStartTime;
         if (elapsed >= 1000) {
-            const progressPct = progress.placed / progress.total;
-            if (progressPct > 0) {
-                const estimatedTotal = elapsed / progressPct;
+            // Calculate total progress across all attempts
+            // Progress = (completed attempts + current attempt progress) / total attempts
+            const completedAttempts = progress.attempt - 1;
+            const currentAttemptProgress = progress.placed / progress.total;
+            const totalProgress = (completedAttempts + currentAttemptProgress) / progress.totalAttempts;
+            
+            if (totalProgress > 0) {
+                const estimatedTotal = elapsed / totalProgress;
                 const remaining = estimatedTotal - elapsed;
                 if (remaining > 0) {
                     if (remaining < 60000) {
