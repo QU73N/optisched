@@ -939,41 +939,18 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
             </button>
             {policiesOpen && (
                 <div className="sg-hard-list-expanded" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div className="sg-grid-3">
-                        <div>
-                            <div className="sg-field-label">Overflow Policy</div>
-                            <select
-                                className="input"
-                                value={config.overflowPolicy || 'relax_soft'}
-                                onChange={e => setConfig(c => ({ ...c, overflowPolicy: e.target.value as 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only' }))}
-                            >
-                                <option value="fail">Fail on Overflow</option>
-                                <option value="relax_soft">Relax Soft Constraints</option>
-                                <option value="expand_scope">Expand Search Scope</option>
-                                <option value="partial_only">Partial Only</option>
-                            </select>
-                        </div>
-                        <div>
-                            <div className="sg-field-label">Max Room Capacity</div>
-                            <input
-                                type="number"
-                                className="input"
-                                value={config.maxCapacity || 100}
-                                onChange={e => setConfig(c => ({ ...c, maxCapacity: Number(e.target.value) }))}
-                                min="1"
-                            />
-                        </div>
-                        <div>
-                            <div className="sg-field-label">Allow Overflow %</div>
-                            <input
-                                type="number"
-                                className="input"
-                                value={config.overflowPercent || 10}
-                                onChange={e => setConfig(c => ({ ...c, overflowPercent: Number(e.target.value) }))}
-                                min="0"
-                                max="100"
-                            />
-                        </div>
+                    <div>
+                        <div className="sg-field-label">Overflow Policy</div>
+                        <select
+                            className="input"
+                            value={config.overflowPolicy || 'relax_soft'}
+                            onChange={e => setConfig(c => ({ ...c, overflowPolicy: e.target.value as 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only' }))}
+                        >
+                            <option value="fail">Fail on Overflow</option>
+                            <option value="relax_soft">Relax Soft Constraints</option>
+                            <option value="expand_scope">Expand Search Scope</option>
+                            <option value="partial_only">Partial Only</option>
+                        </select>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                         Overflow policy controls how the generator handles sections that exceed room capacity. 

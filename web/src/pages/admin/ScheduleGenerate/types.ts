@@ -201,9 +201,6 @@ export interface GenerationConfig {
     maxAttempts: number;
     // Phase 11: Institutional Options - Overflow Policy
     overflowPolicy: 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only';
-    // Additional institutional policy options
-    maxCapacity?: number | null;
-    overflowPercent?: number | null;
 }
 
 export interface PlacedEntry {
