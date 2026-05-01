@@ -1124,8 +1124,11 @@ export const optimizeSchedule = (
     const teachers = Array.from(teachersMap.values());
     const rooms = Array.from(roomsMap.values());
     
-    // Calculate initial score breakdown
-    const initialScoreResult = calculateSoftConstraintScore(entries, teachers, rooms, sections, config.soft);
+    // Get optimization profile weights for consistent scoring throughout optimization
+    const profileWeights = getOptimizationProfileWeights(config.optimizationProfile);
+    
+    // Calculate initial score breakdown using profile weights
+    const initialScoreResult = calculateSoftConstraintScore(entries, teachers, rooms, sections, profileWeights);
     
     // Initialize optimization state
     const state: OptimizationState = {
@@ -1230,8 +1233,8 @@ export const optimizeSchedule = (
         }
     }
     
-    // Calculate final score with original weights
-    const finalScoreResult = calculateSoftConstraintScore(state.bestEntries, teachers, rooms, sections, config.soft);
+    // Calculate final score with profile weights for consistency
+    const finalScoreResult = calculateSoftConstraintScore(state.bestEntries, teachers, rooms, sections, profileWeights);
     
     // Log optimization report
     const report = generateOptimizationReport(state, initialScoreResult, finalScoreResult);
@@ -3173,8 +3176,8 @@ export async function runGenerator(
         
         const optimizedResult = optimizeSchedule(
             best.entries,
-            normalizedData.normalizedTeachers,
-            availableRooms,
+            teacherMap,
+            roomMap,
             scopedSections,
             config,
             classifiedConstraints,
