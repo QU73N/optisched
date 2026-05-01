@@ -831,6 +831,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 className="sg-hard-constraints-btn"
                 onClick={() => setHardConstraintsOpen(!hardConstraintsOpen)}
                 aria-expanded={hardConstraintsOpen}
+                style={{ marginBottom: 16 }}
             >
                 <span>View {HARD_CONSTRAINTS.length} hard constraints</span>
                 {hardConstraintsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -843,7 +844,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 </ul>
             )}
 
-            <div className="sg-subhead" style={{ marginTop: hardConstraintsOpen ? 20 : 0 }}><Sliders size={12} /> Soft optimization weights</div>
+            <div className="sg-subhead" style={{ marginTop: 0 }}><Sliders size={12} /> Soft optimization weights</div>
             <div className="sg-sliders">
                 <SoftSlider label="Balanced teacher load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} compact={compact} />
                 <SoftSlider label="Compact schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} compact={compact} />
