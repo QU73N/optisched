@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { ApprovalRequest, ApprovalAuditLog } from '../types/database';
+import { notifyStudentsOfScheduleChanges } from './generationService';
 
 export async function createApprovalRequest(
     requestType: 'schedule_change' | 'new_schedule' | 'delete_schedule' | 'bulk_change',
@@ -81,12 +82,57 @@ export async function approveRequest(requestId: string, notes?: string): Promise
     const user = authData?.user;
     if (!user) throw new Error('User not authenticated');
 
+    // Get the approval request details to extract section IDs
+    const { data: request, error: fetchError } = await supabase
+        .from('approval_requests')
+        .select('resource_type, resource_id, change_data')
+        .eq('id', requestId)
+        .single();
+
+    if (fetchError) throw fetchError;
+
     const { data, error } = await supabase.rpc('approve_request', {
         p_request_id: requestId,
         p_approved_by: user.id,
         p_notes: notes || null
     });
     if (error) throw error;
+
+    // Notify students if this is a schedule-related approval
+    if (request && request.resource_type === 'schedule') {
+        try {
+            // Extract section IDs from change_data or get them from the schedules table
+            let sectionIds: string[] = [];
+
+            if (request.change_data && typeof request.change_data === 'object') {
+                const changeData = request.change_data as Record<string, unknown>;
+                if (Array.isArray(changeData.section_ids)) {
+                    sectionIds = changeData.section_ids as string[];
+                }
+            }
+
+            // If no section IDs in change_data, try to get them from the resource
+            if (sectionIds.length === 0 && request.resource_id) {
+                const { data: schedules } = await supabase
+                    .from('schedules')
+                    .select('section_id')
+                    .eq('id', request.resource_id);
+                
+                if (schedules && schedules.length > 0) {
+                    sectionIds = schedules.map(s => s.section_id).filter(Boolean);
+                }
+            }
+
+            // Notify students of the approval
+            if (sectionIds.length > 0) {
+                await notifyStudentsOfScheduleChanges(sectionIds, 'approved', true);
+            }
+        } catch (notifyError) {
+            console.error('Failed to notify students of schedule approval:', notifyError);
+            // Don't fail the approval if notification fails
+        }
+    }
+
     return data || false;
 }
 

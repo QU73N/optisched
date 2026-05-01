@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { createNotification } from './notificationService';
 
 export interface InstitutionalPolicy {
     id: string;
@@ -108,3 +109,81 @@ export async function saveGenerationMetadata(input: SaveGenerationMetadataInput)
         return null;
     }
 }
+
+/**
+ * Notify students in affected sections about schedule changes
+ * @param sectionIds - Array of section IDs that were affected by the schedule change
+ * @param status - The status of the schedule (draft, submitted, approved, published)
+ * @param isUpdate - Whether this is an update to an existing schedule or a new one
+ */
+export async function notifyStudentsOfScheduleChanges(
+    sectionIds: string[],
+    status: 'draft' | 'submitted' | 'approved' | 'published',
+    isUpdate: boolean = false
+): Promise<void> {
+    if (sectionIds.length === 0) return;
+
+    try {
+        // Get all active students in the affected sections
+        const { data: students, error: studentsError } = await supabase
+            .from('students')
+            .select('profile_id, section_id')
+            .in('section_id', sectionIds)
+            .eq('is_active', true);
+
+        if (studentsError) {
+            console.error('Failed to fetch students for notification:', studentsError);
+            return;
+        }
+
+        if (!students || students.length === 0) {
+            return; // No students to notify
+        }
+
+        // Group students by profile_id to avoid duplicate notifications
+        const studentMap = new Map<string, string[]>();
+        for (const student of students) {
+            if (!studentMap.has(student.profile_id)) {
+                studentMap.set(student.profile_id, []);
+            }
+            studentMap.get(student.profile_id)?.push(student.section_id);
+        }
+
+        // Create notifications for each unique student
+        const notificationPromises = Array.from(studentMap.entries()).map(async ([profileId, affectedSectionIds]) => {
+            const action = isUpdate ? 'updated' : 'created';
+            const statusLabel = status === 'published' ? 'published' : status;
+            const title = `Schedule ${action}`;
+            const message = `Your class schedule has been ${action} and is now ${statusLabel}. Check your schedule for the latest updates.`;
+            const actionUrl = '/student/schedule';
+
+            try {
+                await createNotification(
+                    profileId,
+                    'schedule_change',
+                    title,
+                    message,
+                    { section_ids: affectedSectionIds, status },
+                    actionUrl,
+                    168 // 7 days
+                );
+            } catch (error) {
+                console.error(`Failed to create notification for student ${profileId}:`, error);
+            }
+        });
+
+        await Promise.all(notificationPromises);
+        console.log(`Notified ${studentMap.size} students of schedule changes`);
+    } catch (error) {
+        console.error('Failed to notify students of schedule changes:', error);
+    }
+}
+
+/**
+ * Notify students when a schedule is published
+ * @param sectionIds - Array of section IDs that were published
+ */
+export async function notifyStudentsOfSchedulePublication(sectionIds: string[]): Promise<void> {
+    await notifyStudentsOfScheduleChanges(sectionIds, 'published', false);
+}
+

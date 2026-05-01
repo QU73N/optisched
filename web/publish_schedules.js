@@ -41,6 +41,10 @@ async function publishSchedules() {
   }
   console.log(`Found ${drafts.length} draft schedules to publish`);
 
+  // Extract unique section IDs for notifications
+  const sectionIds = [...new Set(drafts.map(s => s.section_id).filter(Boolean))];
+  console.log(`Affected sections: ${sectionIds.length}`);
+
   // Step 3: Publish them one by one
   let published = 0;
   let failed = 0;
@@ -64,7 +68,56 @@ async function publishSchedules() {
 
   console.log(`\nDone: ${published} published, ${failed} failed`);
 
-  // Step 4: Verify MAWD-12a
+  // Step 4: Notify students of publication
+  if (sectionIds.length > 0) {
+    console.log("Notifying students of schedule publication...");
+    try {
+      // Get all active students in affected sections
+      const { data: students, error: studentsError } = await supabase
+        .from('students')
+        .select('profile_id, section_id')
+        .in('section_id', sectionIds)
+        .eq('is_active', true);
+
+      if (studentsError) {
+        console.error("Failed to fetch students for notification:", studentsError);
+      } else if (students && students.length > 0) {
+        // Group students by profile_id to avoid duplicate notifications
+        const studentMap = new Map();
+        for (const student of students) {
+          if (!studentMap.has(student.profile_id)) {
+            studentMap.set(student.profile_id, []);
+          }
+          studentMap.get(student.profile_id).push(student.section_id);
+        }
+
+        // Create notifications for each unique student
+        let notified = 0;
+        for (const [profileId, affectedSectionIds] of studentMap.entries()) {
+          const { error: notifyError } = await supabase
+            .from('notifications')
+            .insert({
+              user_id: profileId,
+              type: 'schedule_change',
+              title: 'Schedule published',
+              message: 'Your class schedule has been published and is now available. Check your schedule for the latest updates.',
+              data: { section_ids: affectedSectionIds, status: 'published' },
+              action_url: '/student/schedule',
+              expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+            });
+
+          if (!notifyError) {
+            notified++;
+          }
+        }
+        console.log(`Notified ${notified} students (${studentMap.size} unique profiles)`);
+      }
+    } catch (notifyError) {
+      console.error("Failed to notify students:", notifyError);
+    }
+  }
+
+  // Step 5: Verify MAWD-12a
   const { data: verify } = await supabase
     .from('schedules')
     .select('status')

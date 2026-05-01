@@ -18,7 +18,7 @@ import {
     type Subject, type Teacher, type VersionSummary, type WorkflowState,
 } from './types';
 import { runGenerator } from './generator';
-import { getPoliciesAsRecord } from '../../../services/generationService';
+import { getPoliciesAsRecord, notifyStudentsOfScheduleChanges } from '../../../services/generationService';
 
 // ---------------------------------------------------------------------------
 // Root component
@@ -291,6 +291,10 @@ const ScheduleGenerate: React.FC = () => {
             if (error) throw error;
             setSavedId(data && data[0] ? data[0].id : 'ok');
             await refreshExisting();
+
+            // Notify students of schedule changes
+            const affectedSectionIds = Array.from(new Set(result.entries.map(e => e.sectionId)));
+            await notifyStudentsOfScheduleChanges(affectedSectionIds, initialState, false);
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Unknown error';
             setSaveError(msg);
