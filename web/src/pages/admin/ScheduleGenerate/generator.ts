@@ -518,7 +518,7 @@ const normalizeData = (
     const normalizedSections: NormalizedSection[] = sections.map(s => ({
         ...s,
         student_size: s.student_count || 0,
-        hierarchy_path: s.path.split('|'),
+        hierarchy_path: [s.program || 'Unknown', s.year_level ? `Year ${s.year_level}` : 'Unknown', s.name],
         priority_weight: s.weight,
         subject_requirements: [], // TODO: Populate from curriculum
         load_category_value: s.load_category || 'normal',

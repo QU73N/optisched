@@ -60,7 +60,7 @@ const ScheduleGenerate: React.FC = () => {
                     supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id, sessions_per_week, weight, priority_note'),
                     supabase.from('teachers').select('id, max_hours, weight, priority_note, profile_id'),
                     supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available, weight, priority_note'),
-                    supabase.from('sections').select('id, name, program, year_level, student_count, weight'),
+                    supabase.from('sections').select('id, name, program, year_level, student_count, parent_id, weight, path, node_type, is_active, description, metadata, sort_order, load_category, special_scheduling_rules'),
                     supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at'),
                     supabase.from('teacher_preferences').select('teacher_id, preferred_days, preferred_time_start, preferred_time_end, max_classes_per_day, max_consecutive_classes, availability'),
                     supabase.from('profiles').select('id, full_name'),
