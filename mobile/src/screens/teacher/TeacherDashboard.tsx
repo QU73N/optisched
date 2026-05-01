@@ -16,6 +16,7 @@ import { useCustomEvents } from '../../hooks/useCustomEvents';
 import { useRooms } from '../../hooks/useSupabase';
 import { useToast } from '../../components/CustomToast';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { StaggeredView } from '../../components/StaggeredView';
 
 const TeacherDashboard: React.FC = () => {
     const greeting = getGreeting();
@@ -314,7 +315,7 @@ const TeacherDashboard: React.FC = () => {
                 </View>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginHorizontal: 20, marginBottom: 24 }}>
                     <AnimatedPressable
-                        style={{ width: '48%', backgroundColor: '#1e293b', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' }}
+                        style={{ width: '48%', backgroundColor: Colors.bgSurface, borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.borderDefault }}
                         onPress={() => navigation.navigate('Messages')}
                     >
                         <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(99,102,241,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
@@ -324,7 +325,7 @@ const TeacherDashboard: React.FC = () => {
                     </AnimatedPressable>
 
                     <AnimatedPressable
-                        style={{ width: '48%', backgroundColor: '#1e293b', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' }}
+                        style={{ width: '48%', backgroundColor: Colors.bgSurface, borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.borderDefault }}
                         onPress={() => {
                             if (todaySchedule.length > 0) {
                                 setSelectedClassId(todaySchedule[0].id);
@@ -340,7 +341,7 @@ const TeacherDashboard: React.FC = () => {
                     </AnimatedPressable>
 
                     <AnimatedPressable
-                        style={{ width: '48%', backgroundColor: '#1e293b', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' }}
+                        style={{ width: '48%', backgroundColor: Colors.bgSurface, borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.borderDefault }}
                         onPress={() => setShowReportRoom(true)}
                     >
                         <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
@@ -350,7 +351,7 @@ const TeacherDashboard: React.FC = () => {
                     </AnimatedPressable>
 
                     <AnimatedPressable
-                        style={{ width: '48%', backgroundColor: '#1e293b', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' }}
+                        style={{ width: '48%', backgroundColor: Colors.bgSurface, borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.borderDefault }}
                         onPress={() => setShowEventModal(true)}
                     >
                         <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
@@ -428,7 +429,7 @@ const TeacherDashboard: React.FC = () => {
                             };
                             const sc = statusColors[req.status] || statusColors.pending;
                             return (
-                                <View key={req.id} style={{ backgroundColor: '#1e293b', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#334155' }}>
+                                <View key={req.id} style={{ backgroundColor: Colors.bgSurface, borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: Colors.borderDefault }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                         <Text style={{ fontSize: 11, fontWeight: '600', color: Colors.slate400, textTransform: 'uppercase' }}>{req.request_type}</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -468,7 +469,7 @@ const TeacherDashboard: React.FC = () => {
                     <Text style={styles.sectionTitle}>Recent Announcements</Text>
                 </View>
                 {announcements.length === 0 ? (
-                    <View style={{ alignItems: 'center', paddingVertical: 24, marginHorizontal: 20, backgroundColor: '#1e293b', borderRadius: 14, borderWidth: 1, borderColor: '#334155' }}>
+                    <View style={{ alignItems: 'center', paddingVertical: 24, marginHorizontal: 20, backgroundColor: Colors.bgSurface, borderRadius: 14, borderWidth: 1, borderColor: Colors.borderDefault }}>
                         <MaterialIcons name="campaign" size={32} color={Colors.slate600} />
                         <Text style={{ color: Colors.slate400, marginTop: 8 }}>No announcements yet</Text>
                     </View>
@@ -477,7 +478,7 @@ const TeacherDashboard: React.FC = () => {
                         {announcements.slice(0, 3).map((ann: any) => {
                             const dotColor = ann.priority === 'urgent' ? '#ef4444' : ann.priority === 'important' ? '#f59e0b' : '#22c55e';
                             return (
-                                <View key={ann.id} style={{ flexDirection: 'row', gap: 12, backgroundColor: '#1e293b', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#334155' }}>
+                                <View key={ann.id} style={{ flexDirection: 'row', gap: 12, backgroundColor: Colors.bgSurface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.borderDefault }}>
                                     <View style={{ width: 4, borderRadius: 2, backgroundColor: dotColor }} />
                                     <View style={{ flex: 1 }}>
                                         <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.white, marginBottom: 2 }} numberOfLines={1}>{ann.title}</Text>
@@ -496,7 +497,7 @@ const TeacherDashboard: React.FC = () => {
             {/* Schedule Change Request Modal */}
             <Modal visible={showRequestModal} animationType="slide" transparent>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowRequestModal(false)}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
+                    <View style={{ backgroundColor: Colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                             <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.white }}>Request Schedule Change</Text>
                             <AnimatedPressable onPress={() => setShowRequestModal(false)}>
@@ -535,8 +536,8 @@ const TeacherDashboard: React.FC = () => {
             <Modal visible={showAnnouncements} animationType="slide" transparent>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowAnnouncements(false)}>
                     <SafeAreaView style={{ flex: 1 }} pointerEvents="box-none">
-                        <View style={{ flex: 1, backgroundColor: '#0f172a', marginTop: 40, borderTopLeftRadius: 24, borderTopRightRadius: 24 }} onStartShouldSetResponder={() => true}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#1e293b' }}>
+                        <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, marginTop: 40, borderTopLeftRadius: 24, borderTopRightRadius: 24 }} onStartShouldSetResponder={() => true}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: Colors.bgSurface }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                     <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(251,146,60,0.15)', justifyContent: 'center', alignItems: 'center' }}>
                                         <MaterialIcons name="campaign" size={20} color="#fb923c" />
@@ -558,7 +559,7 @@ const TeacherDashboard: React.FC = () => {
                                     announcements.map(ann => {
                                         const pc = priorityConfig[ann.priority] || priorityConfig.normal;
                                         return (
-                                            <View key={ann.id} style={{ backgroundColor: '#1e293b', borderRadius: 16, padding: 18, marginTop: 12, borderWidth: 1, borderColor: '#334155', borderLeftWidth: 4, borderLeftColor: pc.color }}>
+                                            <View key={ann.id} style={{ backgroundColor: Colors.bgSurface, borderRadius: 16, padding: 18, marginTop: 12, borderWidth: 1, borderColor: Colors.borderDefault, borderLeftWidth: 4, borderLeftColor: pc.color }}>
                                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                         <View style={{ backgroundColor: pc.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -594,14 +595,14 @@ const TeacherDashboard: React.FC = () => {
             {/* Quick Actions Modal */}
             <Modal visible={showQuickActions} animationType="slide" transparent>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }} onPress={() => setShowQuickActions(false)}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
+                    <View style={{ backgroundColor: Colors.bgElevated, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ alignItems: 'center', marginBottom: 16 }}>
                             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#475569' }} />
                         </View>
                         <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.white, marginBottom: 16 }}>Quick Actions</Text>
 
                         <AnimatedPressable
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#334155' }}
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.bgPrimary, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderDefault }}
                             onPress={() => { setShowQuickActions(false); setSelectedClassName('General'); setSelectedClassId('general'); setShowRequestModal(true); }}
                         >
                             <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
@@ -615,7 +616,7 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
 
                         <AnimatedPressable
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#334155' }}
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.bgPrimary, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderDefault }}
                             onPress={() => { setShowQuickActions(false); setShowMessageAdmin(true); }}
                         >
                             <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(16,185,129,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
@@ -629,7 +630,7 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
 
                         <AnimatedPressable
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#334155' }}
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.bgPrimary, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderDefault }}
                             onPress={() => { setShowQuickActions(false); setShowReportRoom(true); }}
                         >
                             <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
@@ -643,7 +644,7 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
 
                         <AnimatedPressable
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#334155' }}
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.bgPrimary, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderDefault }}
                             onPress={() => { setShowQuickActions(false); setShowTeacherAnnounce(true); }}
                         >
                             <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
@@ -662,7 +663,7 @@ const TeacherDashboard: React.FC = () => {
             {/* Report Room Issue Modal */}
             <Modal visible={showReportRoom} animationType="slide" transparent>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowReportRoom(false)}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
+                    <View style={{ backgroundColor: Colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center' }}>
@@ -728,7 +729,7 @@ const TeacherDashboard: React.FC = () => {
             {/* Message Admin Modal */}
             <Modal visible={showMessageAdmin} animationType="slide" transparent>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowMessageAdmin(false)}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
+                    <View style={{ backgroundColor: Colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(16,185,129,0.15)', justifyContent: 'center', alignItems: 'center' }}>
@@ -776,7 +777,7 @@ const TeacherDashboard: React.FC = () => {
             {/* Teacher Announcement Modal */}
             <Modal visible={showTeacherAnnounce} animationType="slide" transparent>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowTeacherAnnounce(false)}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, maxHeight: '90%' }} onStartShouldSetResponder={() => true}>
+                    <View style={{ backgroundColor: Colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, maxHeight: '90%' }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center' }}>
@@ -932,7 +933,7 @@ const TeacherDashboard: React.FC = () => {
             {/* Create Event Modal */}
             <Modal visible={showEventModal} animationType="slide" transparent>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowEventModal(false)}>
-                    <View style={{ backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
+                    <View style={{ backgroundColor: Colors.bgElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.white }}>Create Event</Text>
                             <AnimatedPressable onPress={() => setShowEventModal(false)}>
@@ -1033,7 +1034,7 @@ const TeacherDashboard: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#0f172a' },
+    container: { flex: 1, backgroundColor: Colors.bgPrimary },
     header: {
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
         paddingHorizontal: 20, paddingVertical: 16
@@ -1048,13 +1049,13 @@ const styles = StyleSheet.create({
     scrollView: { flex: 1, paddingHorizontal: 20 },
 
     statsRow: {
-        flexDirection: 'row', backgroundColor: Colors.surfaceDark,
-        borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderDark, marginBottom: 24
+        flexDirection: 'row', backgroundColor: Colors.bgSurface,
+        borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.borderDefault, marginBottom: 24
     },
     statBox: { flex: 1, alignItems: 'center', gap: 4 },
     statBoxBorder: {
         borderLeftWidth: 1, borderRightWidth: 1,
-        borderColor: 'rgba(51,65,85,0.5)'
+        borderColor: Colors.borderDefault
     },
     statNumber: { fontSize: 24, fontWeight: '700', color: Colors.white },
     statLabel: { fontSize: 11, color: Colors.slate400 },
@@ -1070,8 +1071,8 @@ const styles = StyleSheet.create({
     emptySubtext: { fontSize: 13, color: Colors.slate600 },
 
     classCard: {
-        flexDirection: 'row', backgroundColor: Colors.surfaceDark,
-        borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderDark,
+        flexDirection: 'row', backgroundColor: Colors.bgSurface,
+        borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderDefault,
         overflow: 'hidden'
     },
     colorStripe: { width: 4 },
