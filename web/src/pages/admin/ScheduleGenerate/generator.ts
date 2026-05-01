@@ -560,9 +560,8 @@ const detectImpossibleSchedule = (
 /**
  * Initialize generation metadata for tracking a generation run.
  * TODO: Integrate into generation pipeline to track generation runs.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is now called in runGenerator but metadata is not yet saved to database.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const initializeGenerationMetadata = (
     totalSubjects: number,
 ): {
@@ -1218,6 +1217,13 @@ export async function runGenerator(
     for (const sub of scopedSubjects) {
         totalTasks += sessionsNeeded(sub, config.sessionMinutes);
     }
+
+    // Step 6 (Generation Metadata Recorder): Initialize metadata for tracking generation
+    // TODO: In future integration, save metadata to generation_runs table
+    // For now, we initialize but don't save to database to avoid breaking changes
+    const metadata = initializeGenerationMetadata(totalTasks);
+    // Metadata is available for future integration steps
+    void metadata; // Prepared for future use
 
     let best: GenerationResult = {
         total: totalTasks,
