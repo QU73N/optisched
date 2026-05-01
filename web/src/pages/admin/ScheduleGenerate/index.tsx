@@ -674,7 +674,7 @@ const PartialTargetPicker: React.FC<{
     return (
         <div className="sg-partial">
             <div className="sg-field-label">Target</div>
-            <div className="sg-tabs-mini" style={{ marginBottom: 12 }}>
+            <div className="sg-tabs-mini" style={{ marginBottom: 16 }}>
                 {(Object.keys(PARTIAL_KIND_LABELS) as PartialKind[]).map(k => (
                     <button
                         key={k}
