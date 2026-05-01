@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     View, Text, ScrollView, StyleSheet,
     ActivityIndicator, Dimensions, Modal, Pressable
@@ -13,6 +13,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCustomEvents } from '../../hooks/useCustomEvents';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const HOUR_HEIGHT = 72;
@@ -20,16 +22,7 @@ const START_HOUR = 7;
 const END_HOUR = 18;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
 
-const COLORS = [
-    { bg: 'rgba(99,102,241,0.18)', border: '#818cf8', text: '#a5b4fc', solid: '#6366f1' },
-    { bg: 'rgba(236,72,153,0.18)', border: '#ec4899', text: '#f9a8d4', solid: '#ec4899' },
-    { bg: 'rgba(16,185,129,0.18)', border: '#34d399', text: '#6ee7b7', solid: '#3FAF73' },
-    { bg: 'rgba(245,158,11,0.18)', border: '#E6A23C', text: '#fcd34d', solid: '#E6A23C' },
-    { bg: 'rgba(59,130,246,0.18)', border: '#4988C4', text: '#BDE8F5', solid: '#4988C4' },
-    { bg: 'rgba(168,85,247,0.18)', border: '#a855f7', text: '#c4b5fd', solid: '#a855f7' },
-    { bg: 'rgba(239,68,68,0.18)', border: '#E05D5D', text: '#fca5a5', solid: '#E05D5D' },
-    { bg: 'rgba(20,184,166,0.18)', border: '#14b8a6', text: '#5eead4', solid: '#14b8a6' },
-];
+// Colors mapped dynamically inside the component
 
 const ScheduleView: React.FC = () => {
     const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -43,6 +36,23 @@ const ScheduleView: React.FC = () => {
     const [weekOffset, setWeekOffset] = useState(0);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [pickerMonthOffset, setPickerMonthOffset] = useState(0);
+    const { colors } = useTheme();
+    const scheduleRef = useRef<View>(null);
+
+    const exportSchedule = async () => {
+        try {
+            if (!scheduleRef.current) return;
+            const uri = await captureRef(scheduleRef.current, {
+                format: 'png',
+                quality: 1,
+            });
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri);
+            }
+        } catch (e) {
+            console.error('Export failed', e);
+        }
+    };
 
     // Refresh "now" every minute to keep dates current
     useEffect(() => {
@@ -174,6 +184,17 @@ const ScheduleView: React.FC = () => {
     };
 
     const scheduleItems = useMemo(() => {
+        const SCHEDULE_COLORS = [
+            { bg: colors.isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.08)', border: '#818cf8', text: colors.isDark ? '#a5b4fc' : '#4338ca', solid: '#6366f1' },
+            { bg: colors.isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.08)', border: '#ec4899', text: colors.isDark ? '#f9a8d4' : '#be185d', solid: '#ec4899' },
+            { bg: colors.isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', border: '#34d399', text: colors.isDark ? '#6ee7b7' : '#047857', solid: '#3FAF73' },
+            { bg: colors.isDark ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.08)', border: '#E6A23C', text: colors.isDark ? '#fcd34d' : '#b45309', solid: '#E6A23C' },
+            { bg: colors.isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)', border: '#4988C4', text: colors.isDark ? '#BDE8F5' : '#1d4ed8', solid: '#4988C4' },
+            { bg: colors.isDark ? 'rgba(168,85,247,0.12)' : 'rgba(168,85,247,0.08)', border: '#a855f7', text: colors.isDark ? '#c4b5fd' : '#7e22ce', solid: '#a855f7' },
+            { bg: colors.isDark ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.08)', border: '#E05D5D', text: colors.isDark ? '#fca5a5' : '#b91c1c', solid: '#E05D5D' },
+            { bg: colors.isDark ? 'rgba(20,184,166,0.12)' : 'rgba(20,184,166,0.08)', border: '#14b8a6', text: colors.isDark ? '#5eead4' : '#0f766e', solid: '#14b8a6' },
+        ];
+
         return schedules.map((s, i) => ({
             id: s.id,
             subject: s.subject?.name || 'Subject',
@@ -183,9 +204,9 @@ const ScheduleView: React.FC = () => {
             instructor: s.teacher?.profile?.full_name || '',
             startTime: s.start_time || '08:00',
             endTime: s.end_time || '09:00',
-            color: COLORS[i % COLORS.length]
+            color: SCHEDULE_COLORS[i % SCHEDULE_COLORS.length]
         }));
-    }, [schedules]);
+    }, [schedules, colors.isDark]);
 
     // Compute overlap columns for timeline blocks
     const layoutItems = useMemo(() => {
@@ -236,7 +257,7 @@ const ScheduleView: React.FC = () => {
 
     const isToday = currentDayIdx > 0 && currentDayIdx < 7 && selectedDay === currentDayIdx - 1;
 
-    const { colors } = useTheme();
+    // colors already extracted above where useTheme was placed originally, but I moved useTheme to top. Wait, let me make sure.
 
     const CONTENT_WIDTH = SCREEN_WIDTH - 56 - 20 - 48; // reserve 48px for event indicators
 
@@ -255,20 +276,20 @@ const ScheduleView: React.FC = () => {
         return (
             <Modal visible={showDatePicker} transparent animationType="fade">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                    <View style={{ width: '100%', maxWidth: 360, backgroundColor: '#263241', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#1E2935' }}>
+                    <View style={{ width: '100%', maxWidth: 360, backgroundColor: colors.elevated, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                             <AnimatedPressable onPress={() => setPickerMonthOffset(o => o - 1)} style={{ padding: 8 }}>
-                                <MaterialIcons name="chevron-left" size={24} color={Colors.white} />
+                                <MaterialIcons name="chevron-left" size={24} color={colors.textPrimary} />
                             </AnimatedPressable>
-                            <Text style={{ color: Colors.white, fontSize: 16, fontWeight: '700' }}>{monthName}</Text>
+                            <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700' }}>{monthName}</Text>
                             <AnimatedPressable onPress={() => setPickerMonthOffset(o => o + 1)} style={{ padding: 8 }}>
-                                <MaterialIcons name="chevron-right" size={24} color={Colors.white} />
+                                <MaterialIcons name="chevron-right" size={24} color={colors.textPrimary} />
                             </AnimatedPressable>
                         </View>
 
                         <View style={{ flexDirection: 'row', marginBottom: 8 }}>
                             {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-                                <Text key={d} style={{ flex: 1, textAlign: 'center', color: Colors.slate400, fontSize: 13, fontWeight: '600' }}>{d}</Text>
+                                <Text key={d} style={{ flex: 1, textAlign: 'center', color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>{d}</Text>
                             ))}
                         </View>
 
@@ -309,7 +330,7 @@ const ScheduleView: React.FC = () => {
                                                 setTimeout(() => setPickerMonthOffset(0), 300);
                                             }}
                                         >
-                                            <Text style={{ color: Colors.white, fontSize: 14, fontWeight: '500' }}>{d}</Text>
+                                            <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '500' }}>{d}</Text>
                                         </AnimatedPressable>
                                     )}
                                 </View>
@@ -318,7 +339,7 @@ const ScheduleView: React.FC = () => {
 
                         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
                             <AnimatedPressable onPress={() => { setShowDatePicker(false); setPickerMonthOffset(0); }} style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}>
-                                <Text style={{ color: Colors.slate300, fontWeight: '600' }}>Cancel</Text>
+                                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
                             </AnimatedPressable>
                         </View>
                     </View>
@@ -330,45 +351,44 @@ const ScheduleView: React.FC = () => {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
                 <View style={styles.headerTop}>
-                    <View>
-                        <Text style={styles.headerTitle}>My Schedule</Text>
-                        <Text style={styles.headerSub}>{currentMonth} • {daysFull[selectedDay]}{isToday ? ' • Today' : ''}</Text>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                        <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>My Schedule</Text>
+                        <Text style={[styles.headerSub, { color: colors.textMuted }]} numberOfLines={1}>{currentMonth} • {daysFull[selectedDay]}{isToday ? ' • Today' : ''}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <AnimatedPressable
-                            style={[styles.viewToggle, viewMode === 'timeline' && styles.viewToggleActive]}
-                            onPress={() => setViewMode('timeline')}
-                        >
-                            <MaterialIcons name="view-agenda" size={18} color={viewMode === 'timeline' ? '#818cf8' : Colors.slate500} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <AnimatedPressable onPress={exportSchedule} style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.borderSubtle }}>
+                            <MaterialIcons name="share" size={18} color={colors.textSecondary} />
                         </AnimatedPressable>
-                        <AnimatedPressable
-                            style={[styles.viewToggle, viewMode === 'list' && styles.viewToggleActive]}
-                            onPress={() => setViewMode('list')}
-                        >
-                            <MaterialIcons name="view-list" size={18} color={viewMode === 'list' ? '#818cf8' : Colors.slate500} />
-                        </AnimatedPressable>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <AnimatedPressable onPress={() => setWeekOffset(w => w - 1)} style={{ padding: 5, backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 8 }}>
-                            <MaterialIcons name="chevron-left" size={18} color="#818cf8" />
-                        </AnimatedPressable>
-                        {weekOffset !== 0 && (
-                            <AnimatedPressable onPress={() => setWeekOffset(0)} style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 8 }}>
-                                <Text style={{ color: '#818cf8', fontSize: 11, fontWeight: '600' }}>Today</Text>
-                            </AnimatedPressable>
-                        )}
-                        <AnimatedPressable onPress={() => setShowDatePicker(true)} style={{ padding: 5, backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 8 }}>
-                            <MaterialIcons name="calendar-today" size={18} color="#818cf8" />
-                        </AnimatedPressable>
-                        <AnimatedPressable onPress={() => setWeekOffset(w => w + 1)} style={{ padding: 5, backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 8 }}>
-                            <MaterialIcons name="chevron-right" size={18} color="#818cf8" />
+                        <AnimatedPressable onPress={() => setViewMode(v => v === 'timeline' ? 'list' : 'timeline')} style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.borderSubtle }}>
+                            <MaterialIcons name={viewMode === 'timeline' ? 'view-list' : 'view-agenda'} size={18} color={colors.textSecondary} />
                         </AnimatedPressable>
                     </View>
                 </View>
 
-                {/* Calendar strip */}
+                {/* Week Navigation */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 }}>
+                    <AnimatedPressable onPress={() => setShowDatePicker(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: colors.surface, borderRadius: 8, borderWidth: 1, borderColor: colors.borderSubtle }}>
+                        <MaterialIcons name="calendar-month" size={16} color={colors.accentPrimary} />
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>Select Date</Text>
+                    </AnimatedPressable>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <AnimatedPressable onPress={() => setWeekOffset(w => w - 1)} style={{ padding: 4, backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 8 }}>
+                            <MaterialIcons name="chevron-left" size={20} color="#818cf8" />
+                        </AnimatedPressable>
+                        {weekOffset !== 0 && (
+                            <AnimatedPressable onPress={() => setWeekOffset(0)} style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 8 }}>
+                                <Text style={{ color: '#818cf8', fontSize: 11, fontWeight: '700' }}>Today</Text>
+                            </AnimatedPressable>
+                        )}
+                        <AnimatedPressable onPress={() => setWeekOffset(w => w + 1)} style={{ padding: 4, backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 8 }}>
+                            <MaterialIcons name="chevron-right" size={20} color="#818cf8" />
+                        </AnimatedPressable>
+                    </View>
+                </View>
+
                 <View style={styles.calendarStrip}>
                     {daysOfWeek.map((day, index) => {
                         const isActive = selectedDay === index;
@@ -379,8 +399,8 @@ const ScheduleView: React.FC = () => {
                                 style={[styles.calendarDay, isActive && styles.calendarDayActive]}
                                 onPress={() => setSelectedDay(index)}
                             >
-                                <Text style={[styles.calendarDayLabel, isActive && styles.calendarDayLabelActive]}>{day}</Text>
-                                <Text style={[styles.calendarDate, isActive && styles.calendarDateActive]}>{dates[index].date}</Text>
+                                <Text style={[styles.calendarDayLabel, { color: colors.textMuted }, isActive && styles.calendarDayLabelActive]}>{day}</Text>
+                                <Text style={[styles.calendarDate, { color: colors.textSecondary }, isActive && styles.calendarDateActive]}>{dates[index].date}</Text>
                                 {isTodayItem && !isActive && <View style={styles.todayDot} />}
                             </Pressable>
                         );
@@ -388,54 +408,50 @@ const ScheduleView: React.FC = () => {
                 </View>
             </View>
 
-            {/* Class count summary */}
             <View style={styles.summaryRow}>
-                <View style={styles.summaryChip}>
+                <View style={[styles.summaryChip, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
                     <MaterialIcons name="wb-sunny" size={14} color="#fbbf24" />
-                    <Text style={styles.summaryText}>{morningCount} AM</Text>
+                    <Text style={[styles.summaryText, { color: colors.textSecondary }]}>{morningCount} AM</Text>
                 </View>
-                <View style={styles.summaryChip}>
+                <View style={[styles.summaryChip, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
                     <MaterialIcons name="nights-stay" size={14} color="#818cf8" />
-                    <Text style={styles.summaryText}>{afternoonCount} PM</Text>
+                    <Text style={[styles.summaryText, { color: colors.textSecondary }]}>{afternoonCount} PM</Text>
                 </View>
-                <View style={styles.summaryChip}>
+                <View style={[styles.summaryChip, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
                     <MaterialIcons name="school" size={14} color="#34d399" />
-                    <Text style={styles.summaryText}>{scheduleItems.length} Total</Text>
+                    <Text style={[styles.summaryText, { color: colors.textSecondary }]}>{scheduleItems.length} Total</Text>
                 </View>
             </View>
 
-            {/* Content */}
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                <View ref={scheduleRef} collapsable={false} style={{ flex: 1, backgroundColor: colors.background, paddingBottom: 24 }}>
                 {loading ? (
                     <View style={{ paddingTop: 80, alignItems: 'center' }}>
                         <ActivityIndicator size="large" color={Colors.primary} />
-                        <Text style={{ color: Colors.slate400, marginTop: 12, fontSize: 14 }}>Loading schedule...</Text>
+                        <Text style={{ color: colors.textMuted, marginTop: 12, fontSize: 14 }}>Loading schedule...</Text>
                     </View>
                 ) : scheduleItems.length === 0 ? (
                     <View style={{ paddingTop: 80, alignItems: 'center' }}>
                         <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(99,102,241,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
                             <MaterialIcons name="event-available" size={36} color="#818cf8" />
                         </View>
-                        <Text style={{ color: Colors.white, fontSize: 18, fontWeight: '600', marginBottom: 4 }}>No Classes</Text>
-                        <Text style={{ color: Colors.slate500, fontSize: 14 }}>You're free on {daysFull[selectedDay]}!</Text>
+                        <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '600', marginBottom: 4 }}>No Classes</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 14 }}>You're free on {daysFull[selectedDay]}!</Text>
                     </View>
                 ) : viewMode === 'timeline' ? (
-                    /* Timeline View */
                     <View style={styles.timelineContainer}>
-                        {/* Time axis lines */}
                         {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
                             const hour = START_HOUR + i;
                             const ampm = hour >= 12 ? 'PM' : 'AM';
                             const hr = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
                             return (
                                 <View key={i} style={[styles.timeRow, { top: i * HOUR_HEIGHT + 14 }]}>
-                                    <Text style={styles.timeLabel}>{hr} {ampm}</Text>
+                                    <Text style={[styles.timeLabel, { color: colors.textSecondary }]}>{hr} {ampm}</Text>
                                     <View style={styles.timeLine} />
                                 </View>
                             );
                         })}
 
-                        {/* Schedule blocks positioned by time — with overlap detection */}
                         {layoutItems.items.map(item => {
                             const startMin = timeToMinutes(item.startTime) - START_HOUR * 60;
                             const endMin = timeToMinutes(item.endTime) - START_HOUR * 60;
@@ -456,35 +472,37 @@ const ScheduleView: React.FC = () => {
                                         left: leftOffset,
                                         width: colWidth - 4,
                                         right: undefined,
-                                        backgroundColor: item.color.bg,
-                                        borderLeftColor: item.color.border
+                                        backgroundColor: colors.surface,
+                                        borderColor: colors.borderSubtle,
+                                        borderWidth: 1,
+                                        borderLeftWidth: 3,
+                                        borderLeftColor: item.color.solid
                                     }]}
                                 >
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={[styles.blockSubject, { color: item.color.text }]} numberOfLines={1}>{item.subject}</Text>
-                                            <Text style={[styles.blockCode, { color: item.color.text + '99' }]} numberOfLines={1}>{item.code}{item.section ? ` • ${item.section}` : ''}</Text>
+                                            <Text style={[styles.blockSubject, { color: colors.textPrimary }]} numberOfLines={1}>{item.subject}</Text>
+                                            <Text style={[styles.blockCode, { color: colors.textSecondary }]} numberOfLines={1}>{item.code}{item.section ? ` • ${item.section}` : ''}</Text>
                                         </View>
                                         {totalCols <= 2 && (
-                                            <View style={[styles.timeBadge, { backgroundColor: item.color.solid + '30' }]}>
-                                                <Text style={{ fontSize: 9, fontWeight: '700', color: item.color.text }}>{formatTime(item.startTime)}</Text>
+                                            <View style={[styles.timeBadge, { backgroundColor: item.color.solid + '15' }]}>
+                                                <Text style={{ fontSize: 9, fontWeight: '700', color: item.color.solid }}>{formatTime(item.startTime)}</Text>
                                             </View>
                                         )}
                                     </View>
                                     {height > 55 && (
                                         <View style={{ flexDirection: 'row', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                                            <View style={styles.blockMeta}><MaterialIcons name="schedule" size={10} color={item.color.text + '99'} /><Text style={[styles.blockMetaText, { color: item.color.text + '99' }]}>{formatTime(item.startTime)}-{formatTime(item.endTime)}</Text></View>
-                                            <View style={styles.blockMeta}><MaterialIcons name="meeting-room" size={10} color={item.color.text + '99'} /><Text style={[styles.blockMetaText, { color: item.color.text + '99' }]}>{item.room}</Text></View>
+                                            <View style={styles.blockMeta}><MaterialIcons name="schedule" size={10} color={colors.textMuted} /><Text style={[styles.blockMetaText, { color: colors.textSecondary }]}>{formatTime(item.startTime)}-{formatTime(item.endTime)}</Text></View>
+                                            <View style={styles.blockMeta}><MaterialIcons name="meeting-room" size={10} color={colors.textMuted} /><Text style={[styles.blockMetaText, { color: colors.textSecondary }]}>{item.room}</Text></View>
                                         </View>
                                     )}
                                     {height > 75 && (
-                                        <View style={[styles.blockMeta, { marginTop: 2 }]}><MaterialIcons name="person" size={10} color={item.color.text + '99'} /><Text style={[styles.blockMetaText, { color: item.color.text + '99' }]} numberOfLines={1}>{item.instructor}</Text></View>
+                                        <View style={[styles.blockMeta, { marginTop: 2 }]}><MaterialIcons name="person" size={10} color={colors.textMuted} /><Text style={[styles.blockMetaText, { color: colors.textSecondary }]} numberOfLines={1}>{item.instructor}</Text></View>
                                     )}
                                 </AnimatedPressable>
                             );
                         })}
 
-                        {/* Custom events — rendered as full-width blocks with distinct styling */}
                         {dayEvents.filter(e => e.start_time && e.end_time).map(evt => {
                             const startMin = timeToMinutes(evt.start_time!) - START_HOUR * 60;
                             const endMin = timeToMinutes(evt.end_time!) - START_HOUR * 60;
@@ -537,22 +555,21 @@ const ScheduleView: React.FC = () => {
                         <View style={{ height: TOTAL_HOURS * HOUR_HEIGHT + 80 }} />
                     </View>
                 ) : (
-                    /* List View */
                     <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
                         {scheduleItems
                             .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
                             .map((item, i) => (
-                                <AnimatedPressable key={item.id} activeOpacity={0.8} onPress={() => setSelectedItem(item)} style={[styles.listCard, { borderLeftColor: item.color.border }]}>
+                                <AnimatedPressable key={item.id} activeOpacity={0.8} onPress={() => setSelectedItem(item)} style={[styles.listCard, { borderLeftColor: item.color.border, backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.white, marginBottom: 2 }}>{item.subject}</Text>
-                                            <Text style={{ fontSize: 12, color: Colors.slate400 }}>{item.code} • {item.section}</Text>
+                                            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 }}>{item.subject}</Text>
+                                            <Text style={{ fontSize: 12, color: colors.textMuted }}>{item.code} • {item.section}</Text>
                                         </View>
                                         <View style={[styles.orderBadge, { backgroundColor: item.color.bg }]}>
                                             <Text style={{ fontSize: 12, fontWeight: '800', color: item.color.text }}>{i + 1}</Text>
                                         </View>
                                     </View>
-                                    <View style={styles.listCardDivider} />
+                                    <View style={[styles.listCardDivider, { backgroundColor: colors.borderSubtle }]} />
                                     <View style={{ flexDirection: 'row', gap: 16 }}>
                                         <View style={styles.blockMeta}><MaterialIcons name="schedule" size={13} color={item.color.solid} /><Text style={styles.listMetaText}>{formatTime(item.startTime)} - {formatTime(item.endTime)}</Text></View>
                                         <View style={styles.blockMeta}><MaterialIcons name="meeting-room" size={13} color={item.color.solid} /><Text style={styles.listMetaText}>{item.room}</Text></View>
@@ -563,62 +580,62 @@ const ScheduleView: React.FC = () => {
                         <View style={{ height: 100 }} />
                     </View>
                 )}
+                </View>
             </ScrollView>
 
-            {/* Detail Modal */}
             <Modal visible={!!selectedItem} transparent animationType="fade" onRequestClose={() => setSelectedItem(null)}>
                 <AnimatedPressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 }} activeOpacity={1} onPress={() => setSelectedItem(null)}>
-                    <AnimatedPressable activeOpacity={1} style={{ backgroundColor: '#263241', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: '#1E2935' }}>
+                    <AnimatedPressable activeOpacity={1} style={{ backgroundColor: colors.elevated, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: colors.border }}>
                         {selectedItem && (
                             <>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 22, fontWeight: '800', color: Colors.white, marginBottom: 4 }}>{selectedItem.subject}</Text>
-                                        <Text style={{ fontSize: 14, color: Colors.slate400 }}>{selectedItem.code}{selectedItem.section ? ` • ${selectedItem.section}` : ''}</Text>
+                                        <Text style={{ fontSize: 22, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 }}>{selectedItem.subject}</Text>
+                                        <Text style={{ fontSize: 14, color: colors.textMuted }}>{selectedItem.code}{selectedItem.section ? ` • ${selectedItem.section}` : ''}</Text>
                                     </View>
                                     <AnimatedPressable onPress={() => setSelectedItem(null)} style={{ padding: 4 }}>
-                                        <MaterialIcons name="close" size={22} color={Colors.slate400} />
+                                        <MaterialIcons name="close" size={22} color={colors.textMuted} />
                                     </AnimatedPressable>
                                 </View>
 
-                                <View style={{ backgroundColor: '#0B0F14', borderRadius: 14, padding: 16, gap: 14 }}>
+                                <View style={{ backgroundColor: colors.inset, borderRadius: 14, padding: 16, gap: 14 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                         <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(99,102,241,0.12)', justifyContent: 'center', alignItems: 'center' }}>
                                             <MaterialIcons name="schedule" size={18} color="#818cf8" />
                                         </View>
                                         <View>
-                                            <Text style={{ fontSize: 11, color: Colors.slate500, fontWeight: '600', letterSpacing: 1 }}>TIME</Text>
-                                            <Text style={{ fontSize: 15, color: Colors.white, fontWeight: '600' }}>{formatTime(selectedItem.startTime)} — {formatTime(selectedItem.endTime)}</Text>
+                                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600', letterSpacing: 1 }}>TIME</Text>
+                                            <Text style={{ fontSize: 15, color: colors.textPrimary, fontWeight: '600' }}>{formatTime(selectedItem.startTime)} — {formatTime(selectedItem.endTime)}</Text>
                                         </View>
                                     </View>
-                                    <View style={{ height: 1, backgroundColor: '#263241' }} />
+                                    <View style={{ height: 1, backgroundColor: colors.border }} />
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                         <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(16,185,129,0.12)', justifyContent: 'center', alignItems: 'center' }}>
                                             <MaterialIcons name="meeting-room" size={18} color="#34d399" />
                                         </View>
                                         <View>
-                                            <Text style={{ fontSize: 11, color: Colors.slate500, fontWeight: '600', letterSpacing: 1 }}>ROOM</Text>
-                                            <Text style={{ fontSize: 15, color: Colors.white, fontWeight: '600' }}>{selectedItem.room || 'Not assigned'}</Text>
+                                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600', letterSpacing: 1 }}>ROOM</Text>
+                                            <Text style={{ fontSize: 15, color: colors.textPrimary, fontWeight: '600' }}>{selectedItem.room || 'Not assigned'}</Text>
                                         </View>
                                     </View>
-                                    <View style={{ height: 1, backgroundColor: '#263241' }} />
+                                    <View style={{ height: 1, backgroundColor: colors.border }} />
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                         <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(236,72,153,0.12)', justifyContent: 'center', alignItems: 'center' }}>
                                             <MaterialIcons name="person" size={18} color="#ec4899" />
                                         </View>
                                         <View>
-                                            <Text style={{ fontSize: 11, color: Colors.slate500, fontWeight: '600', letterSpacing: 1 }}>INSTRUCTOR</Text>
-                                            <Text style={{ fontSize: 15, color: Colors.white, fontWeight: '600' }}>{selectedItem.instructor || 'Not assigned'}</Text>
+                                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600', letterSpacing: 1 }}>INSTRUCTOR</Text>
+                                            <Text style={{ fontSize: 15, color: colors.textPrimary, fontWeight: '600' }}>{selectedItem.instructor || 'Not assigned'}</Text>
                                         </View>
                                     </View>
-                                    <View style={{ height: 1, backgroundColor: '#263241' }} />
+                                    <View style={{ height: 1, backgroundColor: colors.border }} />
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                         <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(245,158,11,0.12)', justifyContent: 'center', alignItems: 'center' }}>
                                             <MaterialIcons name="calendar-today" size={18} color="#E6A23C" />
                                         </View>
                                         <View>
-                                            <Text style={{ fontSize: 11, color: Colors.slate500, fontWeight: '600', letterSpacing: 1 }}>DAY</Text>
-                                            <Text style={{ fontSize: 15, color: Colors.white, fontWeight: '600' }}>{daysFull[selectedDay]}</Text>
+                                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600', letterSpacing: 1 }}>DAY</Text>
+                                            <Text style={{ fontSize: 15, color: colors.textPrimary, fontWeight: '600' }}>{daysFull[selectedDay]}</Text>
                                         </View>
                                     </View>
                                 </View>
@@ -633,17 +650,17 @@ const ScheduleView: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#0B0F14' },
-    header: { backgroundColor: '#0B0F14', borderBottomWidth: 1, borderBottomColor: '#263241' },
+    container: { flex: 1 },
+    header: { borderBottomWidth: 1 },
     headerTop: {
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
         paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4
     },
-    headerTitle: { fontSize: 22, fontWeight: '800', color: Colors.white },
-    headerSub: { fontSize: 13, color: Colors.slate400, marginTop: 2 },
+    headerTitle: { fontSize: 22, fontWeight: '800' },
+    headerSub: { fontSize: 13, marginTop: 2 },
     viewToggle: {
         width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center',
-        backgroundColor: '#263241', borderWidth: 1, borderColor: '#1E2935'
+        borderWidth: 1
     },
     viewToggleActive: { borderColor: '#818cf8', backgroundColor: 'rgba(99,102,241,0.1)' },
 
@@ -657,42 +674,42 @@ const styles = StyleSheet.create({
         shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3, shadowRadius: 8, elevation: 4
     },
-    calendarDayLabel: { fontSize: 11, color: Colors.slate500, fontWeight: '600', marginBottom: 4 },
+    calendarDayLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
     calendarDayLabelActive: { color: '#BDE8F5' },
-    calendarDate: { fontSize: 18, fontWeight: '700', color: Colors.slate300 },
-    calendarDateActive: { color: Colors.white },
+    calendarDate: { fontSize: 18, fontWeight: '700' },
+    calendarDateActive: { color: '#ffffff' },
     todayDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.primary, marginTop: 4 },
 
     summaryRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingVertical: 10 },
     summaryChip: {
         flexDirection: 'row', alignItems: 'center', gap: 6,
-        backgroundColor: '#263241', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
-        borderWidth: 1, borderColor: '#1E2935'
+        borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
+        borderWidth: 1
     },
-    summaryText: { fontSize: 12, fontWeight: '600', color: Colors.slate300 },
+    summaryText: { fontSize: 12, fontWeight: '600' },
 
     // Timeline
     timelineContainer: { paddingLeft: 56, paddingRight: 20, position: 'relative', paddingTop: 28, height: TOTAL_HOURS * HOUR_HEIGHT + 56 },
     timeRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', height: 20, overflow: 'visible' as any },
-    timeLabel: { width: 48, textAlign: 'right', fontSize: 11, color: '#A9B4C2', fontWeight: '600', paddingRight: 8 },
-    timeLine: { flex: 1, height: 1, backgroundColor: 'rgba(51,65,85,0.6)' },
+    timeLabel: { width: 48, textAlign: 'right', fontSize: 11, fontWeight: '600', paddingRight: 8 },
+    timeLine: { flex: 1, height: 1, backgroundColor: 'rgba(51,65,85,0.3)' },
     timeBlock: {
         position: 'absolute', left: 56, right: 0, borderRadius: 12, borderLeftWidth: 3,
         paddingHorizontal: 12, paddingVertical: 10, overflow: 'hidden'
     },
     blockSubject: { fontSize: 14, fontWeight: '700' },
-    blockCode: { fontSize: 11, color: Colors.slate500, marginTop: 1 },
+    blockCode: { fontSize: 11, marginTop: 1 },
     timeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     blockMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    blockMetaText: { fontSize: 11, color: Colors.slate500 },
+    blockMetaText: { fontSize: 11 },
 
     // List
     listCard: {
-        backgroundColor: '#263241', borderRadius: 16, padding: 16, marginBottom: 10,
-        borderLeftWidth: 4, borderWidth: 1, borderColor: '#1E2935'
+        borderRadius: 16, padding: 16, marginBottom: 10,
+        borderLeftWidth: 4, borderWidth: 1
     },
-    listCardDivider: { height: 1, backgroundColor: '#1E2935', marginVertical: 10 },
-    listMetaText: { fontSize: 12, color: Colors.slate300, fontWeight: '500' },
+    listCardDivider: { height: 1, marginVertical: 10 },
+    listMetaText: { fontSize: 12, fontWeight: '500' },
     orderBadge: {
         width: 30, height: 30, borderRadius: 10, justifyContent: 'center', alignItems: 'center'
     }

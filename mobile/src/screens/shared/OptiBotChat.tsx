@@ -10,9 +10,12 @@ import { ChatMessage } from '../../types/database';
 import { sendToGemini, GeminiMessage } from '../../services/optibotService';
 import { useAuth } from '../../contexts/AuthContext';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { useTheme } from '../../contexts/ThemeContext';
+import { supabase } from '../../config/supabase';
 
 const OptiBotChat: React.FC = () => {
     const { profile } = useAuth();
+    const { colors } = useTheme();
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: '1', user_id: 'bot', is_bot: true, metadata: null, created_at: new Date().toISOString(),
@@ -24,27 +27,43 @@ const OptiBotChat: React.FC = () => {
     const scrollViewRef = useRef<ScrollView>(null);
     const conversationHistoryRef = useRef<GeminiMessage[]>([]);
 
+    const role = profile?.role || 'student';
+    const CHAT_LIMIT = role === 'admin' ? Infinity : (role === 'teacher' ? 20 : 10);
+    
+    const [chatCount, setChatCount] = useState(0);
+
+    React.useEffect(() => {
+        if (profile) {
+            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local time
+            if (profile.ai_chat_reset_date !== todayStr) {
+                setChatCount(0);
+            } else {
+                setChatCount(profile.ai_chat_count || 0);
+            }
+        }
+    }, [profile]);
+
     // Simple markdown renderer for bot messages
     const renderMarkdown = (text: string) => {
         const lines = text.split('\n');
         return lines.map((line, lineIdx) => {
             // Headers
             if (line.startsWith('### ')) {
-                return <Text key={lineIdx} style={{ fontSize: 14, fontWeight: '700', color: '#c4b5fd', marginTop: 8, marginBottom: 4 }}>{line.slice(4)}{'\n'}</Text>;
+                return <Text key={lineIdx} style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginTop: 8, marginBottom: 4 }}>{line.slice(4)}{'\n'}</Text>;
             }
             if (line.startsWith('## ')) {
-                return <Text key={lineIdx} style={{ fontSize: 15, fontWeight: '700', color: '#a78bfa', marginTop: 8, marginBottom: 4 }}>{line.slice(3)}{'\n'}</Text>;
+                return <Text key={lineIdx} style={{ fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginTop: 8, marginBottom: 4 }}>{line.slice(3)}{'\n'}</Text>;
             }
             if (line.startsWith('# ')) {
-                return <Text key={lineIdx} style={{ fontSize: 16, fontWeight: '700', color: '#818cf8', marginTop: 8, marginBottom: 4 }}>{line.slice(2)}{'\n'}</Text>;
+                return <Text key={lineIdx} style={{ fontSize: 16, fontWeight: '700', color: colors.primary || '#818cf8', marginTop: 8, marginBottom: 4 }}>{line.slice(2)}{'\n'}</Text>;
             }
             // Bullet points
             if (line.match(/^[\s]*[-•*]\s/)) {
                 const content = line.replace(/^[\s]*[-•*]\s/, '');
-                return <Text key={lineIdx} style={{ color: '#e2e8f0', fontSize: 14, lineHeight: 21 }}>  •  {renderInline(content)}{'\n'}</Text>;
+                return <Text key={lineIdx} style={{ color: colors.textPrimary, fontSize: 14, lineHeight: 21 }}>  •  {renderInline(content)}{'\n'}</Text>;
             }
             // Regular line with inline formatting
-            return <Text key={lineIdx} style={{ color: '#e2e8f0', fontSize: 14, lineHeight: 21 }}>{renderInline(line)}{lineIdx < lines.length - 1 ? '\n' : ''}</Text>;
+            return <Text key={lineIdx} style={{ color: colors.textPrimary, fontSize: 14, lineHeight: 21 }}>{renderInline(line)}{lineIdx < lines.length - 1 ? '\n' : ''}</Text>;
         });
     };
 
@@ -60,11 +79,11 @@ const OptiBotChat: React.FC = () => {
                 parts.push(text.slice(lastIndex, match.index));
             }
             if (match[2]) { // **bold**
-                parts.push(<Text key={key++} style={{ fontWeight: '700', color: '#c4b5fd' }}>{match[2]}</Text>);
+                parts.push(<Text key={key++} style={{ fontWeight: '700', color: colors.textPrimary }}>{match[2]}</Text>);
             } else if (match[3]) { // *italic*
-                parts.push(<Text key={key++} style={{ fontStyle: 'italic', color: '#BDE8F5' }}>{match[3]}</Text>);
+                parts.push(<Text key={key++} style={{ fontStyle: 'italic', color: colors.textSecondary }}>{match[3]}</Text>);
             } else if (match[4]) { // `code`
-                parts.push(<Text key={key++} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', backgroundColor: 'rgba(99,102,241,0.15)', color: '#a5b4fc', paddingHorizontal: 4, borderRadius: 4, fontSize: 13 }}>{match[4]}</Text>);
+                parts.push(<Text key={key++} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', backgroundColor: colors.inset, color: colors.textPrimary, paddingHorizontal: 4, borderRadius: 4, fontSize: 13 }}>{match[4]}</Text>);
             }
             lastIndex = match.index + match[0].length;
         }
@@ -74,7 +93,6 @@ const OptiBotChat: React.FC = () => {
         return parts.length > 0 ? parts : [text];
     };
 
-    const role = profile?.role || 'student';
     const quickActions = role === 'admin' ? [
         { label: 'Find Conflicts', query: 'Are there any scheduling conflicts right now?' },
         { label: 'Room Status', query: 'Show me the available rooms and their status' },
@@ -83,12 +101,25 @@ const OptiBotChat: React.FC = () => {
     ] : [
         { label: 'Next Class', query: 'When is my next class?' },
         { label: 'Next Break', query: 'When is my next break or free period?' },
-        { label: 'Today\'s Schedule', query: 'Show me my complete schedule for today' },
-        { label: 'This Week', query: 'Show my full schedule for this week' },
+        { label: "Today's Schedule", query: 'Show me my complete schedule for today' },
     ];
 
     const sendMessage = async (text: string) => {
         if (!text.trim() || isTyping) return;
+
+        if (chatCount >= CHAT_LIMIT) {
+            const limitMsg: ChatMessage = {
+                id: Date.now().toString(),
+                user_id: 'bot',
+                is_bot: true,
+                content: `⚠️ **Daily Limit Reached**\n\nYou have reached your limit of ${CHAT_LIMIT} AI chats for today. Please try again tomorrow.`,
+                metadata: null,
+                created_at: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, limitMsg]);
+            setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+            return;
+        }
 
         const userMessage: ChatMessage = {
             id: Date.now().toString(),
@@ -136,6 +167,19 @@ const OptiBotChat: React.FC = () => {
                 created_at: new Date().toISOString()
             };
             setMessages(prev => [...prev, botMessage]);
+
+            // Increment counter on success
+            if (role !== 'admin' && profile) {
+                const newCount = chatCount + 1;
+                setChatCount(newCount);
+                const todayStr = new Date().toLocaleDateString('en-CA');
+                supabase.from('profiles').update({
+                    ai_chat_count: newCount,
+                    ai_chat_reset_date: todayStr
+                }).eq('id', profile.id).then(({ error }) => {
+                    if (error) console.error('[OptiBot] Error updating chat count:', error.message);
+                });
+            }
         } catch (error) {
             const errorMessage: ChatMessage = {
                 id: (Date.now() + 1).toString(),
@@ -153,18 +197,18 @@ const OptiBotChat: React.FC = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
                 <View style={styles.headerInfo}>
                     <View style={styles.botAvatarSmall}>
                         <MaterialIcons name="smart-toy" size={20} color="#818cf8" />
                     </View>
                     <View>
-                        <Text style={styles.headerTitle}>OptiBot</Text>
+                        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>OptiBot</Text>
                         <View style={styles.onlineRow}>
                             <View style={styles.onlineDot} />
-                            <Text style={styles.onlineText}>Powered by Gemini AI</Text>
+                            <Text style={[styles.onlineText, { color: colors.textMuted }]}>Powered by Gemini AI</Text>
                         </View>
                     </View>
                 </View>
@@ -172,7 +216,7 @@ const OptiBotChat: React.FC = () => {
                     setMessages([messages[0]]);
                     conversationHistoryRef.current = [];
                 }}>
-                    <MaterialIcons name="refresh" size={24} color={Colors.slate400} />
+                    <MaterialIcons name="refresh" size={24} color={colors.textMuted} />
                 </AnimatedPressable>
             </View>
 
@@ -193,7 +237,7 @@ const OptiBotChat: React.FC = () => {
                                 <MaterialIcons name="smart-toy" size={16} color="#818cf8" />
                             </View>
                         )}
-                        <View style={[styles.bubbleContent, msg.is_bot ? styles.botContent : styles.userContent]}>
+                        <View style={[styles.bubbleContent, msg.is_bot ? [styles.botContent, { backgroundColor: colors.surface }] : styles.userContent]}>
                             {msg.is_bot ? (
                                 <Text style={[styles.messageText, styles.botText]}>
                                     {renderMarkdown(msg.content)}
@@ -213,10 +257,10 @@ const OptiBotChat: React.FC = () => {
                         <View style={styles.botAvatar}>
                             <MaterialIcons name="smart-toy" size={16} color="#818cf8" />
                         </View>
-                        <View style={[styles.bubbleContent, styles.botContent]}>
+                        <View style={[styles.bubbleContent, styles.botContent, { backgroundColor: colors.surface }]}>
                             <View style={styles.typingRow}>
                                 <ActivityIndicator size="small" color="#818cf8" />
-                                <Text style={styles.typingText}>OptiBot is thinking...</Text>
+                                <Text style={[styles.typingText, { color: colors.textPrimary }]}>OptiBot is thinking...</Text>
                             </View>
                         </View>
                     </View>
@@ -225,16 +269,16 @@ const OptiBotChat: React.FC = () => {
                 {/* Quick Actions (show when few messages) */}
                 {messages.length <= 2 && !isTyping && (
                     <View style={styles.quickActionsSection}>
-                        <Text style={styles.quickActionsLabel}>QUICK ACTIONS</Text>
+                        <Text style={[styles.quickActionsLabel, { color: colors.textMuted }]}>QUICK ACTIONS</Text>
                         <View style={styles.quickActionsGrid}>
                             {quickActions.map((action, index) => (
                                 <AnimatedPressable
                                     key={index}
-                                    style={styles.quickActionBtn}
+                                    style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.isDark ? 'rgba(30,41,59,0.5)' : colors.surface }]}
                                     onPress={() => sendMessage(action.query)}
                                     activeOpacity={0.7}
                                 >
-                                    <Text style={styles.quickActionText}>{action.label}</Text>
+                                    <Text style={[styles.quickActionText, { color: colors.textPrimary }]}>{action.label}</Text>
                                 </AnimatedPressable>
                             ))}
                         </View>
@@ -242,17 +286,26 @@ const OptiBotChat: React.FC = () => {
                 )}
             </ScrollView>
 
+            {/* Remaining Messages Indicator */}
+            {role !== 'admin' && (
+                <View style={{ alignItems: 'center', backgroundColor: colors.background, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 11, color: chatCount >= CHAT_LIMIT ? '#ef4444' : colors.textMuted, fontWeight: '600' }}>
+                        {Math.max(0, CHAT_LIMIT - chatCount)} messages remaining today
+                    </Text>
+                </View>
+            )}
+
             {/* Input Area */}
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 keyboardVerticalOffset={88}
             >
-                <View style={styles.inputArea}>
+                <View style={[styles.inputArea, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
                     <View style={styles.inputRow}>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: colors.elevated, color: colors.textPrimary, borderColor: colors.border }]}
                             placeholder="Ask OptiBot anything..."
-                            placeholderTextColor={Colors.slate500}
+                            placeholderTextColor={colors.textMuted}
                             value={inputText}
                             onChangeText={setInputText}
                             multiline
@@ -260,11 +313,11 @@ const OptiBotChat: React.FC = () => {
                             editable={!isTyping}
                         />
                         <AnimatedPressable
-                            style={[styles.sendBtn, (!inputText.trim() || isTyping) && styles.sendBtnDisabled]}
+                            style={[styles.sendBtn, (!inputText.trim() || isTyping) && [styles.sendBtnDisabled, { backgroundColor: colors.surface }]]}
                             onPress={() => sendMessage(inputText)}
                             disabled={!inputText.trim() || isTyping}
                         >
-                            <MaterialIcons name="send" size={20} color={inputText.trim() && !isTyping ? Colors.white : Colors.slate600} />
+                            <MaterialIcons name="send" size={20} color={inputText.trim() && !isTyping ? '#ffffff' : colors.textMuted} />
                         </AnimatedPressable>
                     </View>
                 </View>
@@ -306,7 +359,7 @@ const styles = StyleSheet.create({
     botContent: { backgroundColor: '#263241', borderBottomLeftRadius: 4 },
     userContent: { backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
     messageText: { fontSize: 14, lineHeight: 21 },
-    botText: { color: '#e2e8f0' },
+    botText: { color: '#e2e8f0' }, // Kept for reference but overridden inline
     userText: { color: Colors.white },
 
     typingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

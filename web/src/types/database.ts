@@ -86,6 +86,8 @@ export interface Profile {
     program: string | null;
     year_level: number | null;
     section: string | null;
+    ai_chat_count?: number;
+    ai_chat_reset_date?: string;
     created_at: string;
     updated_at: string;
 }

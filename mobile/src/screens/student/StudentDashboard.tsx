@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
     View, Text, ScrollView, StyleSheet,
     ActivityIndicator, Modal
@@ -7,18 +7,20 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
-import { getGreeting, formatTime } from '../../utils/helpers';
+import { formatTime } from '../../utils/helpers';
 import { useAnnouncements } from '../../hooks/useSupabase';
 import { supabase } from '../../config/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCustomEvents } from '../../hooks/useCustomEvents';
-import { cacheData, getCachedData } from '../../utils/localCache';
+import { getCachedData } from '../../utils/localCache';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme } from '../../contexts/ThemeContext';
 import { StaggeredView } from '../../components/StaggeredView';
+import { StatCard, SectionHeader, ClassCard, AnnouncementItem, EventItem } from '../../components/DashCard';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 
 const StudentDashboard: React.FC = () => {
-    const greeting = getGreeting();
     const { profile, refreshProfile } = useAuth();
     const navigation = useNavigation<any>();
     const { colors } = useTheme();
@@ -57,10 +59,12 @@ const StudentDashboard: React.FC = () => {
     const dayIndex = new Date().getDay();
     const isOffDay = dayIndex === 0; // Sunday
     const scheduleDayName = isOffDay ? 'Monday' : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
-    const scheduleLabel = isOffDay ? "Tomorrow's Schedule" : "Today's Schedule";
+    const tomorrowDayIndex = (dayIndex + 1) % 7;
+    const tomorrowDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][tomorrowDayIndex];
 
     // Fetch schedules using section_id lookup (same pattern as web)
     const [schedules, setSchedules] = useState<any[]>([]);
+    const [tomorrowSchedules, setTomorrowSchedules] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -85,11 +89,12 @@ const StudentDashboard: React.FC = () => {
 
                 // Filter client-side: section + day + published
                 const normalizedSection = sectionName.toLowerCase();
-                const filtered = (rpcData || [])
+                
+                const processSchedules = (dayName: string) => (rpcData || [])
                     .filter((s: any) => 
                         s.status === 'published' &&
                         (s.section_name || '').toLowerCase() === normalizedSection &&
-                        s.day_of_week === scheduleDayName
+                        s.day_of_week === dayName
                     )
                     .map((s: any) => ({
                         id: s.id,
@@ -104,8 +109,12 @@ const StudentDashboard: React.FC = () => {
                     }))
                     .sort((a: any, b: any) => (a.start_time || '').localeCompare(b.start_time || ''));
 
-                console.log('[StudentDashboard] Fetched', filtered.length, 'schedules for section', sectionName, 'on', scheduleDayName);
-                setSchedules(filtered);
+                const filteredToday = processSchedules(scheduleDayName);
+                const filteredTomorrow = processSchedules(tomorrowDayName);
+
+                console.log('[StudentDashboard] Fetched', filteredToday.length, 'schedules for section', sectionName, 'on', scheduleDayName);
+                setSchedules(filteredToday);
+                setTomorrowSchedules(filteredTomorrow);
             } catch (err) {
                 console.error('[StudentDashboard] Exception:', err);
             } finally {
@@ -124,7 +133,7 @@ const StudentDashboard: React.FC = () => {
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [mySection, profile?.section, scheduleDayName]);
+    }, [mySection, profile?.section, scheduleDayName, tomorrowDayName]);
 
     const { announcements: allAnnouncements } = useAnnouncements();
 
@@ -152,11 +161,24 @@ const StudentDashboard: React.FC = () => {
         });
     }, [allAnnouncements, profile?.section]);
 
-    const todayStr = new Date().toISOString().split('T')[0];
     const { events: upcomingEvents } = useCustomEvents(undefined, true);
-
-    const subjectColorList = ['#4988C4', '#3FAF73', '#8b5cf6', '#E6A23C', '#ec4899', '#06b6d4'];
     const [showAnnouncements, setShowAnnouncements] = useState(false);
+    const todayRef = useRef<View>(null);
+
+    const exportToday = async () => {
+        try {
+            if (!todayRef.current) return;
+            const uri = await captureRef(todayRef.current, {
+                format: 'png',
+                quality: 1,
+            });
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri);
+            }
+        } catch (e) {
+            console.error('Export failed', e);
+        }
+    };
     const [currentTime, setCurrentTime] = useState(() => new Date());
 
     // Real-time clock: update every 30 seconds for progress
@@ -171,6 +193,15 @@ const StudentDashboard: React.FC = () => {
         normal: { color: '#4988C4', bg: 'rgba(59,130,246,0.12)', icon: 'info', label: 'INFO' }
     };
 
+    // Build today's schedule with status — matches web pattern
+    const statusStyles: Record<string, { bg: string; text: string; label: string }> = {
+        finished: { bg: 'rgba(148,163,184,0.1)', text: '#94a3b8', label: 'Done' },
+        ongoing: { bg: 'rgba(16,185,129,0.15)', text: '#10b981', label: 'Now' },
+        upcoming: { bg: 'rgba(59,130,246,0.1)', text: '#60a5fa', label: 'Next' }
+    };
+
+    const subjectColorList = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
+
     const todaySchedule = useMemo(() => {
         if (schedules.length === 0) return [];
         const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
@@ -181,22 +212,21 @@ const StudentDashboard: React.FC = () => {
             const startMin = startH * 60 + startM;
             const endMin = endH * 60 + endM;
 
-            // On off-days (Sunday), everything is upcoming since classes aren't happening today
-            let status: 'done' | 'current' | 'upcoming' = 'upcoming';
+            let status: 'finished' | 'ongoing' | 'upcoming' = 'upcoming';
             let progress = 0;
             if (!isOffDay) {
                 if (currentMinutes >= endMin) {
-                    status = 'done';
+                    status = 'finished';
                     progress = 100;
                 } else if (currentMinutes >= startMin && currentMinutes < endMin) {
-                    status = 'current';
+                    status = 'ongoing';
                     const elapsed = currentMinutes - startMin;
                     const total = endMin - startMin;
                     progress = total > 0 ? Math.round((elapsed / total) * 100) : 0;
                 }
             }
 
-            const formatTime = (h: number, m: number) => {
+            const fmt = (h: number, m: number) => {
                 const ampm = h >= 12 ? 'PM' : 'AM';
                 const hr = h > 12 ? h - 12 : h === 0 ? 12 : h;
                 return `${hr}:${String(m).padStart(2, '0')} ${ampm}`;
@@ -205,226 +235,230 @@ const StudentDashboard: React.FC = () => {
             return {
                 id: s.id,
                 subject: s.subject?.name || 'Unknown',
-                room: s.room?.name || '',
-                time: `${formatTime(startH, startM)} - ${formatTime(endH, endM)}`,
-                instructor: s.teacher?.profile?.full_name || '',
-                status,
-                progress,
+                teacher: s.teacher?.profile?.full_name || 'TBA',
+                room: s.room?.name || 'TBA',
+                time: `${fmt(startH, startM)} – ${fmt(endH, endM)}`,
+                status, progress,
                 color: subjectColorList[i % subjectColorList.length]
             };
         });
     }, [schedules, currentTime, isOffDay]);
 
-    const currentClass = todaySchedule.find(s => s.status === 'current');
+    const ongoingClass = todaySchedule.find(s => s.status === 'ongoing');
+    const nextClass = todaySchedule.find(s => s.status === 'upcoming');
     const firstName = profile?.full_name?.split(' ')[0] || profile?.full_name?.split(',')[0] || 'Student';
+    const todayStr = new Date().toISOString().split('T')[0];
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <View>
-                    <Text style={[styles.greeting, { color: colors.textSecondary }]}>{greeting}</Text>
-                    <Text style={[styles.userName, { color: colors.textPrimary }]}>{firstName}</Text>
+            {/* ─── Greeting bar (matches web .dash-greeting) ─── */}
+            <View style={[styles.greetingBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={{ flex: 1 }}>
+                    <View style={styles.greetingTitleRow}>
+                        {ongoingClass && <View style={styles.liveDot} />}
+                        <Text style={[styles.greetingTitle, { color: colors.textPrimary }]}>
+                            {ongoingClass ? 'In Class Now' : `Welcome back, ${firstName}`}
+                        </Text>
+                    </View>
+                    <Text style={[styles.greetingSub, { color: colors.textMuted }]}>
+                        {ongoingClass
+                            ? `${ongoingClass.subject} with ${ongoingClass.teacher} in ${ongoingClass.room}`
+                            : nextClass
+                                ? `Next class: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}`
+                                : profile?.section ? `Section ${profile.section}` : 'Your daily schedule overview'}
+                    </Text>
                 </View>
-                <View style={styles.headerActions}>
-                    <AnimatedPressable style={[styles.notifBtn, { backgroundColor: colors.surface }]} onPress={() => setShowAnnouncements(true)}>
-                        <MaterialIcons name="notifications" size={24} color={colors.textPrimary} />
-                        {announcements.length > 0 && <View style={styles.notifDot} />}
-                    </AnimatedPressable>
+                <View style={[styles.dayBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={[styles.dayBadgeText, { color: colors.textSecondary }]}>
+                        {isOffDay ? 'Tomorrow: Mon' : scheduleDayName.slice(0, 3)}
+                    </Text>
                 </View>
             </View>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                {/* Current Class Card */}
-                {loading ? (
-                    <View style={[styles.currentCard, { alignItems: 'center', paddingVertical: 40, backgroundColor: colors.elevated }]}>
-                        <ActivityIndicator size="large" color={colors.accentPrimary} />
-                        <Text style={{ color: colors.textSecondary, marginTop: 12 }}>⌛ Loading schedule...</Text>
-                    </View>
-                ) : currentClass ? (
-                    <View style={[styles.currentCard, { backgroundColor: colors.elevated }]}>
-                        <View style={styles.currentBadgeRow}>
-                            <View style={styles.liveBadge}>
-                                <View style={styles.liveDot} />
-                                <Text style={styles.liveText}>🔴 Happening Now</Text>
+                {/* ─── Single Hero Summary Card ─── */}
+                <StaggeredView delay={60}>
+                    <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={styles.summaryRow}>
+                            <View style={styles.summaryItem}>
+                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(59,130,246,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                                    <MaterialIcons name="menu-book" size={18} color="#60a5fa" />
+                                </View>
+                                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{loading ? '-' : todaySchedule.length}</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Classes</Text>
                             </View>
-                        </View>
-                        <Text style={[styles.currentSubject, { color: colors.textPrimary }]} numberOfLines={2}>{currentClass.subject}</Text>
-                        <Text style={[styles.currentSection, { color: colors.accentPrimary }]}>{profile?.section || ''}</Text>
-
-                        <View style={styles.currentDetailsCol}>
-                            <View style={styles.currentDetail}>
-                                <MaterialIcons name="meeting-room" size={16} color={colors.accentPrimary} />
-                                <Text style={[styles.currentDetailText, { color: colors.textSecondary }]} numberOfLines={1}>{currentClass.room}</Text>
+                            <View style={styles.summaryDivider} />
+                            <View style={styles.summaryItem}>
+                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                                    <MaterialIcons name="schedule" size={18} color="#10b981" />
+                                </View>
+                                <Text style={[styles.summaryValue, { color: '#10b981' }]}>{loading ? '-' : todaySchedule.filter(s => s.status === 'ongoing').length}</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Ongoing</Text>
                             </View>
-                            <View style={styles.currentDetail}>
-                                <MaterialIcons name="person" size={16} color={colors.accentPrimary} />
-                                <Text style={[styles.currentDetailText, { color: colors.textSecondary }]} numberOfLines={1}>{currentClass.instructor}</Text>
+                            <View style={styles.summaryDivider} />
+                            <View style={styles.summaryItem}>
+                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                                    <MaterialIcons name="campaign" size={18} color="#f59e0b" />
+                                </View>
+                                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{announcements.length}</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Alerts</Text>
                             </View>
-                            <View style={styles.currentDetail}>
-                                <MaterialIcons name="schedule" size={16} color={colors.accentPrimary} />
-                                <Text style={[styles.currentDetailText, { color: colors.textSecondary }]} numberOfLines={1}>{currentClass.time}</Text>
-                            </View>
-                        </View>
-
-                        {/* Real-time Progress Bar */}
-                        <View style={styles.progressSection}>
-                            <View style={styles.progressRow}>
-                                <Text style={[styles.progressText, { color: colors.textSecondary }]}>In progress</Text>
-                                <Text style={[styles.progressText, { color: colors.textSecondary }]}>{currentClass.progress}%</Text>
-                            </View>
-                            <View style={styles.progressBar}>
-                                <View style={[styles.progressFill, { width: `${currentClass.progress}%` }]} />
+                            <View style={styles.summaryDivider} />
+                            <View style={styles.summaryItem}>
+                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(167,139,250,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                                    <MaterialIcons name="event" size={18} color="#a78bfa" />
+                                </View>
+                                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{upcomingEvents.length}</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Events</Text>
                             </View>
                         </View>
                     </View>
-                ) : (
-                    <View style={[styles.currentCard, { alignItems: 'center', paddingVertical: 30, backgroundColor: colors.elevated }]}>
-                        <MaterialIcons name="event-available" size={40} color={colors.accentPrimary} />
-                        <Text style={[styles.currentSubject, { color: colors.textPrimary }]}>
-                            {isOffDay ? 'No classes today' : todaySchedule.length > 0 ? 'No class right now' : 'No classes today'}
-                        </Text>
-                        <Text style={[styles.currentSection, { color: colors.textSecondary }]}>
-                            {isOffDay
-                                ? `${todaySchedule.length} classes tomorrow`
-                                : todaySchedule.length > 0
-                                    ? `${todaySchedule.filter(s => s.status === 'upcoming').length} upcoming classes`
-                                    : 'Enjoy your day off!'}
-                        </Text>
-                    </View>
-                )}
-
-                {/* Quick Links */}
-                <StaggeredView delay={80}>
-                <View style={styles.quickLinksRow}>
-                    <AnimatedPressable style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => setShowAnnouncements(true)}>
-                        <View style={[styles.quickLinkIcon, { backgroundColor: 'rgba(251,146,60,0.15)' }]}>
-                            <MaterialIcons name="campaign" size={24} color="#fb923c" />
-                        </View>
-                        <Text style={[styles.quickLinkTitle, { color: colors.textPrimary }]}>Announcements</Text>
-                        {announcements.length > 0 && (
-                            <View style={styles.quickLinkBadge}>
-                                <Text style={styles.quickLinkBadgeText}>{announcements.length} new</Text>
-                            </View>
-                        )}
-                    </AnimatedPressable>
-                    <AnimatedPressable style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => navigation.navigate('Schedule')}>
-                        <View style={[styles.quickLinkIcon, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
-                            <MaterialIcons name="calendar-month" size={24} color="#4988C4" />
-                        </View>
-                        <Text style={[styles.quickLinkTitle, { color: colors.textPrimary }]}>Full Schedule</Text>
-                        <Text style={[styles.quickLinkSub, { color: colors.textMuted }]}>View all days</Text>
-                    </AnimatedPressable>
-                </View>
                 </StaggeredView>
 
-                {/* Today's Timeline */}
-                <StaggeredView delay={140}>
-                <View style={styles.timelineSection}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{scheduleLabel}</Text>
-                        <AnimatedPressable onPress={() => navigation.navigate('Schedule')}><Text style={[styles.viewAll, { color: colors.accentPrimary }]}>View All</Text></AnimatedPressable>
+                {/* ─── Announcements ─── */}
+                <StaggeredView delay={120}>
+                    <SectionHeader
+                        title="Announcements"
+                        icon="campaign"
+                        count={announcements.length > 0 ? announcements.length : undefined}
+                        rightElement={
+                            <AnimatedPressable onPress={() => setShowAnnouncements(true)}>
+                                <Text style={{ color: colors.accentPrimary, fontSize: 13, fontWeight: '500' }}>View All</Text>
+                            </AnimatedPressable>
+                        }
+                    />
+                    <View style={[styles.schedulePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        {announcements.length === 0 ? (
+                            <View style={[styles.panelEmpty, { paddingVertical: 24 }]}>
+                                <MaterialIcons name="campaign" size={24} color={colors.textMuted} style={{ opacity: 0.35 }} />
+                                <Text style={{ color: colors.textMuted, fontSize: 12.5, marginTop: 4 }}>No announcements</Text>
+                            </View>
+                        ) : announcements.slice(0, 3).map((ann: any) => (
+                            <AnnouncementItem
+                                key={ann.id}
+                                title={ann.title}
+                                content={ann.content}
+                                meta={`${ann.author_name || ''} · ${ann.created_at ? new Date(ann.created_at).toLocaleDateString() : ''}`}
+                                priority={ann.priority}
+                            />
+                        ))}
                     </View>
-
-                    {todaySchedule.map((item, index) => (
-                        <View key={item.id} style={styles.timelineItem}>
-                            {/* Timeline line */}
-                            <View style={styles.timelineLine}>
-                                <View style={[
-                                    styles.timelineDot,
-                                    { borderColor: colors.textMuted },
-                                    item.status === 'current' && styles.timelineDotActive,
-                                    item.status === 'done' && styles.timelineDotDone,
-                                ]} />
-                                {index < todaySchedule.length - 1 && (
-                                    <View style={[styles.timelineConnector, { backgroundColor: colors.border }, item.status === 'done' && styles.timelineConnectorDone]} />
-                                )}
-                            </View>
-                            <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }, item.status === 'current' && styles.timelineCardActive]}>
-                                <View style={styles.timelineCardTop}>
-                                    <View>
-                                        <Text style={[styles.timelineSubject, { color: colors.textPrimary }, item.status === 'done' && { color: colors.textMuted }]}>{item.subject}</Text>
-                                        <Text style={[styles.timelineInstructor, { color: colors.textMuted }]}>{item.instructor}</Text>
-                                    </View>
-                                    {item.status === 'current' && (
-                                        <View style={styles.currentDotBadge}>
-                                            <View style={styles.currentDotInner} />
-                                        </View>
-                                    )}
-                                </View>
-                                <View style={styles.timelineCardBottom}>
-                                    <View style={styles.timelineDetail}>
-                                        <MaterialIcons name="meeting-room" size={12} color={colors.textMuted} />
-                                        <Text style={[styles.timelineDetailText, { color: colors.textMuted }]}>{item.room}</Text>
-                                    </View>
-                                    <View style={styles.timelineDetail}>
-                                        <MaterialIcons name="schedule" size={12} color={colors.textMuted} />
-                                        <Text style={[styles.timelineDetailText, { color: colors.textMuted }]}>{item.time}</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </View>
-                    ))}
-                </View>
                 </StaggeredView>
 
-                {/* Upcoming Events */}
-                {upcomingEvents.length > 0 && (
-                    <>
-                        <View style={styles.sectionHeader}>
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Upcoming Events</Text>
-                        </View>
-                        <View style={{ gap: 8, marginBottom: 8 }}>
-                            {upcomingEvents.map(evt => {
-                                const isToday = evt.event_date === todayStr;
-                                const dateLabel = isToday ? 'Today' : new Date(evt.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                return (
-                                    <View key={evt.id} style={{ backgroundColor: 'rgba(16,185,129,0.08)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(16,185,129,0.2)', borderLeftWidth: 4, borderLeftColor: isToday ? '#3FAF73' : '#4988C4' }}>
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                            <Text style={{ color: '#34d399', fontSize: 14, fontWeight: '700' }}>{evt.title}</Text>
-                                            <Text style={{ color: isToday ? '#34d399' : '#4988C4', fontSize: 11, fontWeight: '600' }}>{dateLabel}</Text>
-                                        </View>
-                                        {evt.description && <Text style={{ color: '#A9B4C2', fontSize: 12, marginTop: 2 }}>{evt.description}</Text>}
-                                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 6 }}>
-                                            {evt.start_time && <Text style={{ color: '#64748b', fontSize: 11 }}>{formatTime(evt.start_time)}{evt.end_time ? ` - ${formatTime(evt.end_time)}` : ''}</Text>}
-                                            <Text style={{ color: '#64748b', fontSize: 11 }}>By {evt.creator_name}</Text>
-                                        </View>
-                                    </View>
-                                );
-                            })}
-                        </View>
-                    </>
-                )}
-
-                {/* Recent Announcements */}
-                <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recent Announcements</Text>
-                    <AnimatedPressable onPress={() => setShowAnnouncements(true)}><Text style={[styles.viewAll, { color: colors.accentPrimary }]}>View All</Text></AnimatedPressable>
-                </View>
-                {announcements.length === 0 ? (
-                    <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border }}>
-                        <MaterialIcons name="campaign" size={32} color={colors.textMuted} />
-                        <Text style={{ color: colors.textMuted, marginTop: 8 }}>No announcements yet</Text>
-                    </View>
-                ) : (
-                    <View style={{ gap: 8 }}>
-                        {announcements.slice(0, 3).map((ann: any) => {
-                            const pc = priorityConfig[ann.priority] || priorityConfig.normal;
+                {/* ─── Today's Schedule ─── */}
+                <StaggeredView delay={180}>
+                    <SectionHeader
+                        title="Today's Schedule"
+                        icon="event"
+                        count={todaySchedule.length > 0 ? todaySchedule.length : undefined}
+                        rightElement={
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                <AnimatedPressable onPress={exportToday} style={{ padding: 6, backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 8 }}>
+                                    <MaterialIcons name="share" size={18} color={colors.accentPrimary} />
+                                </AnimatedPressable>
+                                <AnimatedPressable onPress={() => navigation.navigate('Schedule')}>
+                                    <Text style={{ color: colors.accentPrimary, fontSize: 13, fontWeight: '500' }}>View All</Text>
+                                </AnimatedPressable>
+                            </View>
+                        }
+                    />
+                    <View ref={todayRef} collapsable={false} style={[styles.schedulePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        {loading ? (
+                            <View style={styles.panelEmpty}>
+                                <ActivityIndicator size="large" color={colors.accentPrimary} />
+                            </View>
+                        ) : todaySchedule.length === 0 ? (
+                            <View style={styles.panelEmpty}>
+                                <MaterialIcons name="event" size={36} color={colors.textMuted} style={{ opacity: 0.35 }} />
+                                <Text style={{ color: colors.textMuted, fontSize: 12.5, marginTop: 4 }}>No classes scheduled today</Text>
+                            </View>
+                        ) : todaySchedule.map(item => {
+                            const sty = statusStyles[item.status];
                             return (
-                                <View key={ann.id} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.border, borderLeftWidth: 4, borderLeftColor: pc.color }}>
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.white, marginBottom: 2 }} numberOfLines={1}>{ann.title}</Text>
-                                    <Text style={{ fontSize: 12, color: Colors.slate400, marginBottom: 4 }} numberOfLines={2}>{ann.content}</Text>
-                                    <Text style={{ fontSize: 11, color: Colors.slate600 }}>{ann.created_at ? new Date(ann.created_at).toLocaleDateString() : ''}</Text>
-                                </View>
+                                <ClassCard
+                                    key={item.id}
+                                    subject={item.subject}
+                                    color={item.color}
+                                    statusLabel={sty.label}
+                                    statusBg={sty.bg}
+                                    statusText={sty.text}
+                                    isOngoing={item.status === 'ongoing'}
+                                    progress={item.progress}
+                                    details={[
+                                        { icon: 'person', text: item.teacher },
+                                        { icon: 'place', text: item.room },
+                                        { icon: 'schedule', text: item.time },
+                                    ]}
+                                />
                             );
                         })}
                     </View>
-                )}
+                </StaggeredView>
+
+                {/* ─── Next Class and Next Break ─── */}
+                <StaggeredView delay={240}>
+                    <SectionHeader title="Up Next" icon="schedule" />
+                    <View style={[styles.schedulePanel, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, flexDirection: 'row', gap: 12 }]}>
+                        <View style={{ flex: 1, backgroundColor: colors.surface, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.borderSubtle }}>
+                            <MaterialIcons name="class" size={18} color={colors.accentPrimary} style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600', marginBottom: 2 }}>NEXT CLASS</Text>
+                            <Text style={{ fontSize: 14, color: colors.textPrimary, fontWeight: '700' }} numberOfLines={1}>
+                                {nextClass ? nextClass.subject : 'None'}
+                            </Text>
+                            <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
+                                {nextClass ? nextClass.time.split('–')[0].trim() : 'You are free'}
+                            </Text>
+                        </View>
+                        <View style={{ flex: 1, backgroundColor: colors.surface, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.borderSubtle }}>
+                            <MaterialIcons name="free-breakfast" size={18} color="#10b981" style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600', marginBottom: 2 }}>NEXT BREAK</Text>
+                            <Text style={{ fontSize: 14, color: colors.textPrimary, fontWeight: '700' }} numberOfLines={1}>
+                                {ongoingClass ? ongoingClass.time.split('–')[1].trim() : nextClass ? 'Before ' + nextClass.time.split('–')[0].trim() : 'Free rest of day'}
+                            </Text>
+                            <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
+                                Time to recharge
+                            </Text>
+                        </View>
+                    </View>
+                </StaggeredView>
+
+                {/* ─── Tomorrow's Classes ─── */}
+                <StaggeredView delay={300}>
+                    <SectionHeader title="Tomorrow's Classes" icon="event-note" count={tomorrowSchedules.length > 0 ? tomorrowSchedules.length : undefined} />
+                    <View style={[styles.schedulePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        {loading ? (
+                            <View style={styles.panelEmpty}>
+                                <ActivityIndicator size="large" color={colors.accentPrimary} />
+                            </View>
+                        ) : tomorrowSchedules.length === 0 ? (
+                            <View style={styles.panelEmpty}>
+                                <MaterialIcons name="free-breakfast" size={36} color={colors.textMuted} style={{ opacity: 0.35 }} />
+                                <Text style={{ color: colors.textMuted, fontSize: 12.5, marginTop: 4 }}>No classes tomorrow</Text>
+                            </View>
+                        ) : tomorrowSchedules.slice(0, 4).map((item, index) => (
+                            <View key={item.id} style={{ paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: index < Math.min(tomorrowSchedules.length, 4) - 1 ? 1 : 0, borderBottomColor: colors.borderSubtle }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <View style={{ flex: 1, paddingRight: 12 }}>
+                                        <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 14, marginBottom: 2 }}>{item.subject.name}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <MaterialIcons name="meeting-room" size={12} color={colors.textMuted} />
+                                            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{item.room.name}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>{formatTime(item.start_time)}</Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 11 }}>{formatTime(item.end_time)}</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                </StaggeredView>
 
                 <View style={{ height: 32 }} />
             </ScrollView>
 
-            {/* Announcements Modal */}
+            {/* ─── Announcements Modal ─── */}
             <Modal visible={showAnnouncements} animationType="slide" transparent>
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' }}>
                     <SafeAreaView style={{ flex: 1 }}>
@@ -434,18 +468,18 @@ const StudentDashboard: React.FC = () => {
                                     <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(251,146,60,0.15)', justifyContent: 'center', alignItems: 'center' }}>
                                         <MaterialIcons name="campaign" size={20} color="#fb923c" />
                                     </View>
-                                    <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.white }}>Announcements</Text>
+                                    <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textPrimary }}>Announcements</Text>
                                 </View>
                                 <AnimatedPressable onPress={() => setShowAnnouncements(false)} style={{ padding: 4 }}>
-                                    <MaterialIcons name="close" size={24} color={Colors.slate400} />
+                                    <MaterialIcons name="close" size={24} color={colors.textMuted} />
                                 </AnimatedPressable>
                             </View>
                             <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} showsVerticalScrollIndicator={false}>
                                 {announcements.length === 0 ? (
                                     <View style={{ alignItems: 'center', paddingVertical: 60 }}>
-                                        <MaterialIcons name="notifications-none" size={56} color={Colors.slate600} />
-                                        <Text style={{ color: Colors.slate400, fontSize: 16, fontWeight: '500', marginTop: 12 }}>No announcements yet</Text>
-                                        <Text style={{ color: Colors.slate600, fontSize: 13, marginTop: 4 }}>Check back later for updates</Text>
+                                        <MaterialIcons name="notifications-none" size={56} color={colors.textMuted} />
+                                        <Text style={{ color: colors.textSecondary, fontSize: 16, fontWeight: '500', marginTop: 12 }}>No announcements yet</Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>Check back later for updates</Text>
                                     </View>
                                 ) : (
                                     announcements.map(ann => {
@@ -459,13 +493,13 @@ const StudentDashboard: React.FC = () => {
                                                             <Text style={{ color: pc.color, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>{pc.label}</Text>
                                                         </View>
                                                     </View>
-                                                    <Text style={{ color: Colors.slate600, fontSize: 11 }}>{new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                                                    <Text style={{ color: colors.textMuted, fontSize: 11 }}>{new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
                                                 </View>
-                                                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.white, marginBottom: 6 }}>{ann.title}</Text>
-                                                <Text style={{ fontSize: 14, color: Colors.slate400, lineHeight: 20 }}>{ann.content}</Text>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(51,65,85,0.4)' }}>
-                                                    <MaterialIcons name="person" size={14} color={Colors.slate500} />
-                                                    <Text style={{ color: Colors.slate500, fontSize: 12 }}>{ann.author_name}</Text>
+                                                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 }}>{ann.title}</Text>
+                                                <Text style={{ fontSize: 14, color: colors.textSecondary, lineHeight: 20 }}>{ann.content}</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
+                                                    <MaterialIcons name="person" size={14} color={colors.textMuted} />
+                                                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>{ann.author_name}</Text>
                                                 </View>
                                             </View>
                                         );
@@ -483,77 +517,102 @@ const StudentDashboard: React.FC = () => {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16
+
+    /* Greeting bar — matches web .dash-greeting */
+    greetingBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 16,
+        marginHorizontal: 20,
+        marginTop: 16,
+        marginBottom: 16,
+        padding: 16,
+        paddingHorizontal: 20,
+        borderRadius: 14,
+        borderWidth: 1,
     },
-    greeting: { fontSize: 14 },
-    userName: { fontSize: 22, fontWeight: '700' },
-    headerActions: { flexDirection: 'row', gap: 8 },
-    notifBtn: { padding: 8, borderRadius: 999, position: 'relative' },
-    notifDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#E05D5D' },
+    greetingTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 2,
+    },
+    liveDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#3FAF73',
+    },
+    greetingTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        letterSpacing: -0.2,
+    },
+    greetingSub: {
+        fontSize: 13,
+    },
+    dayBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+    },
+    dayBadgeText: {
+        fontSize: 11.5,
+        fontWeight: '600',
+        letterSpacing: 0.2,
+    },
+
     scrollView: { flex: 1, paddingHorizontal: 20 },
 
-    // Current Card
-    currentCard: {
-        borderRadius: 20, padding: 20, marginBottom: 24,
-        borderWidth: 1, borderColor: 'rgba(73,136,196,0.3)'
+    statsGrid: {
+        marginBottom: 20,
     },
-    currentBadgeRow: { marginBottom: 8 },
-    liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
-    liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' },
-    liveText: { color: '#86efac', fontSize: 12, fontWeight: '600' },
-    currentSubject: { fontSize: 22, fontWeight: '700', marginBottom: 4 },
-    currentSection: { fontSize: 14, marginBottom: 16 },
-    currentDetailsCol: { gap: 8, marginBottom: 16 },
-    currentDetail: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    currentDetailText: { fontSize: 13, flex: 1 },
-    progressSection: { marginTop: 4 },
-    progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-    progressBar: { height: 6, backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 3, overflow: 'hidden' },
-    progressFill: { height: '100%', backgroundColor: '#4988C4', borderRadius: 3 },
-    progressText: { fontSize: 11 },
-
-    // Quick Links
-    quickLinksRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-    quickLink: {
-        flex: 1, borderRadius: 16, padding: 16,
-        borderWidth: 1
+    summaryCard: {
+        paddingVertical: 20,
+        borderRadius: 16,
+        borderWidth: 1,
+        marginBottom: 20,
     },
-    quickLinkIcon: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-    quickLinkTitle: { fontSize: 14, fontWeight: '600' },
-    quickLinkSub: { fontSize: 12, marginTop: 2 },
-    quickLinkBadge: { backgroundColor: 'rgba(251,146,60,0.15)', alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4 },
-    quickLinkBadgeText: { color: '#fb923c', fontSize: 11, fontWeight: '600' },
-
-    // Timeline
-    timelineSection: {},
-    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    sectionTitle: { fontSize: 18, fontWeight: '700' },
-    viewAll: { fontSize: 14, fontWeight: '500' },
-
-    timelineItem: { flexDirection: 'row', gap: 12, marginBottom: 4 },
-    timelineLine: { width: 24, alignItems: 'center' },
-    timelineDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, backgroundColor: 'transparent', zIndex: 1, marginTop: 16 },
-    timelineDotActive: { borderColor: '#4988C4', backgroundColor: '#4988C4' },
-    timelineDotDone: { borderColor: '#3FAF73', backgroundColor: '#3FAF73' },
-    timelineConnector: { width: 2, flex: 1, marginTop: 4 },
-    timelineConnectorDone: { backgroundColor: '#3FAF73' },
-
-    timelineCard: {
-        flex: 1, borderRadius: 12, padding: 16,
-        borderWidth: 1, marginBottom: 8
+    summaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-evenly',
+        alignItems: 'center',
     },
-    timelineCardActive: { borderColor: 'rgba(73,136,196,0.3)' },
-    timelineCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-    timelineSubject: { fontSize: 14, fontWeight: '600' },
-    timelineSubjectDone: {},
-    timelineInstructor: { fontSize: 12, marginTop: 2 },
-    currentDotBadge: { width: 12, height: 12, borderRadius: 6, backgroundColor: 'rgba(73,136,196,0.3)', justifyContent: 'center', alignItems: 'center' },
-    currentDotInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#4988C4' },
-    timelineCardBottom: { flexDirection: 'row', gap: 16 },
-    timelineDetail: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    timelineDetailText: { fontSize: 11 }
+    summaryItem: {
+        alignItems: 'center',
+        flex: 1,
+    },
+    summaryValue: {
+        fontSize: 22,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    summaryLabel: {
+        fontSize: 11,
+        fontWeight: '500',
+    },
+    summaryDivider: {
+        width: 1,
+        height: 32,
+        backgroundColor: 'rgba(150,150,150,0.2)',
+    },
+
+    /* Schedule panel — matches web .dash-schedule-panel */
+    schedulePanel: {
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 12,
+        gap: 0,
+        minHeight: 80,
+        marginBottom: 24,
+    },
+    panelEmpty: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 32,
+    },
 });
 
 export default StudentDashboard;

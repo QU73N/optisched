@@ -30,6 +30,9 @@
         "projectId": "fb3d258d-8783-4693-89f4-7c798ba961dc"
       }
     },
-    "owner": "astrekkuno"
+    "owner": "astrekkuno",
+    "plugins": [
+      "expo-sharing"
+    ]
   }
 }
