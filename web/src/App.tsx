@@ -18,6 +18,7 @@ const ConstraintSettings = lazy(() => import('./pages/admin/ConstraintSettings')
 const Analytics = lazy(() => import('./pages/admin/Analytics'));
 const ScheduleViews = lazy(() => import('./pages/admin/ScheduleViews'));
 const CommunicationHub = lazy(() => import('./pages/shared/CommunicationHub'));
+const GroupChats = lazy(() => import('./pages/shared/GroupChats'));
 const AuditLogLegacy = lazy(() => import('./pages/admin/AuditLog'));
 const ScheduleGenerate = lazy(() => import('./pages/admin/ScheduleGenerate'));
 const FacultyHub = lazy(() => import('./pages/admin/FacultyHub'));
@@ -144,6 +145,7 @@ function App() {
             <Route path="analytics" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><Analytics /></Suspense>} />
             <Route path="views" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleViews /></Suspense>} />
             <Route path="messages" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><CommunicationHub /></Suspense>} />
+            <Route path="group-chats" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><GroupChats /></Suspense>} />
             <Route path="audit" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AuditLogPage /></Suspense>} />
             <Route path="audit-legacy" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AuditLogLegacy /></Suspense>} />
             <Route path="generate" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleGenerate /></Suspense>} />
@@ -190,6 +192,7 @@ function App() {
             <Route path="sections" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherSections /></Suspense>} />
             <Route path="announcements" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AnnouncementsPage /></Suspense>} />
             <Route path="chat" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherChatHub /></Suspense>} />
+            <Route path="group-chats" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><GroupChats /></Suspense>} />
             <Route path="peer-chat" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><TeacherToTeacherChat /></Suspense>} />
             <Route path="optibot" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><OptiBotPage /></Suspense>} />
             <Route path="settings" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AppSettings /></Suspense>} />

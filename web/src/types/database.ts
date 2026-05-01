@@ -339,3 +339,32 @@ export interface Conflict {
     schedule_a?: Schedule;
     schedule_b?: Schedule;
 }
+
+export interface GroupChat {
+    id: string;
+    name: string;
+    type: 'department' | 'section' | 'schedule_managers';
+    institution_id: string | null;
+    department_name: string | null;
+    section_id: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface GroupChatMember {
+    id: string;
+    group_chat_id: string;
+    user_id: string;
+    joined_at: string;
+    user?: Profile;
+}
+
+export interface GroupChatMessage {
+    id: string;
+    group_chat_id: string;
+    sender_id: string;
+    message: string;
+    created_at: string;
+    is_read: boolean;
+    sender?: Profile;
+}

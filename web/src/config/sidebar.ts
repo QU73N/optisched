@@ -64,6 +64,7 @@ export const POWER_ADMIN_NAV: NavGroup[] = [
         links: [
             { to: '/admin/announcements', icon: Megaphone, label: 'Announcements' },
             { to: '/admin/messages', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
+            { to: '/admin/group-chats', icon: Users, label: 'Group Chats' },
         ],
     },
     {
@@ -101,6 +102,7 @@ export const SYSTEM_ADMIN_NAV: NavGroup[] = [
         links: [
             { to: '/admin/announcements', icon: Megaphone, label: 'Announcements' },
             { to: '/admin/messages', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
+            { to: '/admin/group-chats', icon: Users, label: 'Group Chats' },
         ],
     },
     {
@@ -136,6 +138,7 @@ export const SCHEDULE_ADMIN_NAV: NavGroup[] = [
         links: [
             { to: '/admin/announcements', icon: Megaphone, label: 'Announcements' },
             { to: '/admin/messages', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
+            { to: '/admin/group-chats', icon: Users, label: 'Group Chats' },
         ],
     },
     {
@@ -202,6 +205,7 @@ export const TEACHER_NAV: NavGroup[] = [
         label: 'Communication',
         links: [
             { to: '/teacher/chat', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
+            { to: '/teacher/group-chats', icon: Users, label: 'Group Chats' },
             { to: '/teacher/announcements', icon: Megaphone, label: 'Announcements' },
         ],
     },

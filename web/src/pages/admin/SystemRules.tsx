@@ -56,6 +56,7 @@ const SystemRules: React.FC = () => {
     const [overrideValue, setOverrideValue] = useState('');
     const [overrideReason, setOverrideReason] = useState('');
     const [overrideExpiresAt, setOverrideExpiresAt] = useState('');
+    const [institutionName, setInstitutionName] = useState('');
 
     useEffect(() => {
         const run = async () => {
@@ -70,6 +71,12 @@ const SystemRules: React.FC = () => {
                 setRules((rulesData || []) as RuleRow[]);
                 setUsers((usersData || []) as ProfileLite[]);
                 setUserOverrides(((overridesData || []) as unknown) as UserOverrideRow[]);
+                
+                // Load institution name
+                const instRule = (rulesData || []).find((r: RuleRow) => r.rule_key === 'institution_name');
+                if (instRule) {
+                    setInstitutionName(formatValue(instRule.rule_value));
+                }
             } catch (err) {
                 console.error('[SystemRules] load failed', err);
             } finally {
@@ -221,6 +228,24 @@ const SystemRules: React.FC = () => {
         [users, perms.myRank]
     );
 
+    const updateInstitutionName = async (newName: string) => {
+        setSaving('institution_name');
+        try {
+            const { error } = await supabase
+                .from('system_rules')
+                .update({ rule_value: newName, updated_at: new Date().toISOString() })
+                .eq('rule_key', 'institution_name');
+            if (error) throw error;
+            setInstitutionName(newName);
+            await logAudit('institution_name.update', 'system_rules', null, { new_name: newName });
+        } catch (err) {
+            console.error('[SystemRules] update institution name failed', err);
+            alert('Failed to update institution name.');
+        } finally {
+            setSaving(null);
+        }
+    };
+
     if (!perms.isSystemAdmin) {
         return (
             <div className="dashboard">
@@ -245,6 +270,32 @@ const SystemRules: React.FC = () => {
                     Permission Rules Engine. Three tiers: <strong>Global</strong> · <strong>Role override</strong> · <strong>Per-user override</strong>.
                     Most-specific tier wins. All edits are audit-logged.
                 </p>
+            </div>
+
+            {/* Institution Name Editor */}
+            <div className="card" style={{ marginBottom: 20 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Globe size={14} /> Institution Name
+                </h3>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                    The institution name is used in group chat names. Updating this will automatically update all group chat names.
+                </p>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <input
+                        className="input"
+                        value={institutionName}
+                        onChange={(e) => setInstitutionName(e.target.value)}
+                        placeholder="Enter institution name"
+                        style={{ flex: 1, maxWidth: 400 }}
+                    />
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => updateInstitutionName(institutionName)}
+                        disabled={saving === 'institution_name'}
+                    >
+                        {saving === 'institution_name' ? <Loader2 className="spin" size={14} /> : <Save size={14} />} Save
+                    </button>
+                </div>
             </div>
 
             {/* Filter bar */}
