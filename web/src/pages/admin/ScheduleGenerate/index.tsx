@@ -234,7 +234,7 @@ const ScheduleGenerate: React.FC = () => {
             attempt: 0,
             totalAttempts: config.maxAttempts,
             placed: 0,
-            total: 0,
+            total: undefined, // Will be set by generator
             message: 'Initializing...',
         });
         try {
@@ -1128,7 +1128,7 @@ const GenerateStage: React.FC<{
     onCancel: () => void;
     onRun: () => void;
 }> = ({ progress, generating, onCancel, onRun }) => {
-    const pct = progress.total > 0 ? Math.round((progress.placed / progress.total) * 100) : 0;
+    const pct = progress.total && progress.total > 0 ? Math.round((progress.placed / progress.total) * 100) : 0;
     const currentIdx = SUBSTAGES.findIndex(s => s.key === progress.subStage);
     return (
         <div>

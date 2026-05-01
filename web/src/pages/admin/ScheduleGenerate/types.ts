@@ -276,7 +276,7 @@ export interface GenerationProgress {
     attempt: number;
     totalAttempts: number;
     placed: number;
-    total: number;
+    total?: number;
     message: string;
 }
 
