@@ -85,10 +85,12 @@ const isFree = (
 });
 
 /**
- * Forward Checking: Check if placing a session would make it impossible to place remaining sessions.
- * This is a conservative implementation that checks resource scarcity without full domain mutation.
+ * Forward Checking (Phase 7) - Improved implementation using domain information.
+ * Check if placing a session would make it impossible to place remaining sessions.
+ * This is a smarter implementation that uses pre-computed domains and only blocks
+ * placements that would truly make a task impossible (zero valid combinations).
+ * 
  * Aligns with Generation_System.md Phase 7: Forward Checking and Propagation.
- * Note: This function is integrated into the placement loop to avoid dead-end placements.
  */
 const checkForwardConstraints = (
     teacherId: string,
@@ -98,80 +100,115 @@ const checkForwardConstraints = (
     startMin: number,
     endMin: number,
     busy: Busy[],
-    remainingTasks: Array<{ subject: Subject; section: Section }>,
+    remainingTasks: Array<{ subject: Subject; section: Section; sessionIndex: number }>,
     teacherMap: Map<string, Teacher>,
     roomMap: Map<string, Room>,
-    slots: { start: string; end: string }[],
-    days: string[],
+    domains: Map<string, SessionDomain>,
 ): boolean => {
     // Simulate the placement in a temporary busy array
     const tempBusy = [...busy, { teacherId, roomId, sectionId, day, startMin, endMin }];
 
-    // Check if this placement would consume the last available slot for a scarce resource
-    // Count remaining slots for each resource
-    const teacherSlotCount = new Map<string, number>();
-    const roomSlotCount = new Map<string, number>();
-    const sectionSlotCount = new Map<string, number>();
-
-    for (const d of days) {
-        for (const slot of slots) {
-            const sMin = toMin(slot.start);
-            const eMin = toMin(slot.end);
-            
-            // Count free teacher slots
-            for (const [tid] of teacherMap) {
-                if (isFree(tempBusy, 'teacher', tid, d, sMin, eMin)) {
-                    teacherSlotCount.set(tid, (teacherSlotCount.get(tid) || 0) + 1);
-                }
-            }
-            
-            // Count free room slots
-            for (const [rid] of roomMap) {
-                if (isFree(tempBusy, 'room', rid, d, sMin, eMin)) {
-                    roomSlotCount.set(rid, (roomSlotCount.get(rid) || 0) + 1);
-                }
-            }
-            
-            // Count free section slots
-            for (const task of remainingTasks) {
-                if (isFree(tempBusy, 'section', task.section.id, d, sMin, eMin)) {
-                    sectionSlotCount.set(task.section.id, (sectionSlotCount.get(task.section.id) || 0) + 1);
-                }
-            }
-        }
-    }
-
-    // Check if any remaining task would have zero valid slots after this placement
+    // For each remaining task, check if it still has at least one valid placement option
     for (const task of remainingTasks) {
-        const subject = task.subject;
-        const section = task.section;
-        
-        // Check if subject requires lab and if there are still special room slots
-        if (subject.requires_lab) {
-            const specialRooms = Array.from(roomMap.values()).filter(r => 
-                (r.type || '').toLowerCase().includes('special')
-            );
-            const hasSpecialRoomSlot = specialRooms.some(r => 
-                (roomSlotCount.get(r.id) || 0) > 0
-            );
-            if (!hasSpecialRoomSlot) {
-                return false; // Would consume last special room slot
+        const taskId = `${task.subject.id}|${task.section.id}|${task.sessionIndex}`;
+        const domain = domains.get(taskId);
+
+        if (!domain) {
+            // No domain computed - skip forward checking for this task
+            continue;
+        }
+
+        // Check if task still has valid teacher options
+        let hasValidTeacher = false;
+        for (const tid of domain.validTeachers) {
+            const teacher = teacherMap.get(tid);
+            if (!teacher) continue;
+
+            // Check if this teacher still has any available slots
+            let teacherHasSlot = false;
+            for (const d of domain.validDays) {
+                for (const slot of domain.validSlots) {
+                    if (slot.day !== d) continue;
+                    const sMin = toMin(slot.start);
+                    const eMin = toMin(slot.end);
+
+                    // Check if teacher is available and free at this slot
+                    if (teacherAvailable(teacher, d, slot.start) && 
+                        isFree(tempBusy, 'teacher', tid, d, sMin, eMin)) {
+                        teacherHasSlot = true;
+                        break;
+                    }
+                }
+                if (teacherHasSlot) break;
+            }
+
+            if (teacherHasSlot) {
+                hasValidTeacher = true;
+                break;
             }
         }
 
-        // Check if section has enough capacity-compliant room slots
-        const capacityRooms = Array.from(roomMap.values()).filter(r => 
-            (r.capacity || 0) >= (section.student_count || 0)
-        );
-        const hasCapacityRoomSlot = capacityRooms.some(r => 
-            (roomSlotCount.get(r.id) || 0) > 0
-        );
-        if (!hasCapacityRoomSlot && capacityRooms.length > 0) {
-            return false; // Would consume last capacity-compliant room slot
+        if (!hasValidTeacher) {
+            // This task would have no valid teacher options after placement
+            return false;
+        }
+
+        // Check if task still has valid room options
+        let hasValidRoom = false;
+        for (const rid of domain.validRooms) {
+            const room = roomMap.get(rid);
+            if (!room) continue;
+
+            // Check if this room still has any available slots
+            let roomHasSlot = false;
+            for (const d of domain.validDays) {
+                for (const slot of domain.validSlots) {
+                    if (slot.day !== d) continue;
+                    const sMin = toMin(slot.start);
+                    const eMin = toMin(slot.end);
+
+                    if (isFree(tempBusy, 'room', rid, d, sMin, eMin)) {
+                        roomHasSlot = true;
+                        break;
+                    }
+                }
+                if (roomHasSlot) break;
+            }
+
+            if (roomHasSlot) {
+                hasValidRoom = true;
+                break;
+            }
+        }
+
+        if (!hasValidRoom) {
+            // This task would have no valid room options after placement
+            return false;
+        }
+
+        // Check if task still has valid section options
+        let hasValidSection = false;
+        for (const d of domain.validDays) {
+            for (const slot of domain.validSlots) {
+                if (slot.day !== d) continue;
+                const sMin = toMin(slot.start);
+                const eMin = toMin(slot.end);
+
+                if (isFree(tempBusy, 'section', task.section.id, d, sMin, eMin)) {
+                    hasValidSection = true;
+                    break;
+                }
+            }
+            if (hasValidSection) break;
+        }
+
+        if (!hasValidSection) {
+            // This task would have no valid section options after placement
+            return false;
         }
     }
 
-    return true; // Placement is safe from forward checking perspective
+    return true; // All remaining tasks still have valid options
 };
 
 const roomCompatible = (room: Room, subject: Subject, section: Section): boolean => {
@@ -638,7 +675,6 @@ const constructDomains = (
     _sectionDomainMap: Map<string, SectionDomain>,
     days: string[],
     slots: { start: string; end: string }[],
-    _config: GenerationConfig,
 ): Map<string, SessionDomain> => {
     const domains = new Map<string, SessionDomain>();
 
@@ -921,18 +957,187 @@ const generateRepairStrategies = (
 };
 
 /**
- * Apply a repair strategy to fix conflicts.
- * Note: This function is a placeholder - actual repair logic is deferred to future integration.
+ * Apply repair strategies to improve placement rate (Phase 8).
+ * This function attempts to place unplaced tasks by:
+ * 1. Trying alternative slots for unplaced tasks
+ * 2. Moving existing sessions to free up slots if needed
+ * 
+ * Returns the improved entries array with additional placements.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Placeholder for future repair logic
-const applyRepairStrategy = (
-    placed: PlacedEntry[],
-    _strategy: { strategy_type: string; target: string }, // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
-    _teachers: Teacher[], // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
-    _rooms: Room[], // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
+const applyRepairs = (
+    entries: PlacedEntry[],
+    unplacedTasks: Array<{ subject: Subject; section: Section; sessionIndex: number }>,
+    teacherMap: Map<string, Teacher>,
+    roomMap: Map<string, Room>,
+    domains: Map<string, SessionDomain>,
+    config: GenerationConfig,
+    classifiedConstraints: ClassifiedConstraints,
 ): PlacedEntry[] => {
-    // Placeholder implementation - actual repair logic would go here
-    return placed;
+    const repairedEntries = [...entries];
+    const busy: Busy[] = entries.map(e => ({
+        teacherId: e.teacherId,
+        roomId: e.roomId,
+        sectionId: e.sectionId,
+        day: e.day,
+        startMin: toMin(e.start),
+        endMin: toMin(e.end),
+    }));
+
+    for (const task of unplacedTasks) {
+        const taskId = `${task.subject.id}|${task.section.id}|${task.sessionIndex}`;
+        const domain = domains.get(taskId);
+
+        if (!domain) continue;
+
+        // Try to place this unplaced task using its domain
+        let placed = false;
+
+        for (const tid of domain.validTeachers) {
+            if (placed) break;
+            const teacher = teacherMap.get(tid);
+            if (!teacher) continue;
+
+            for (const rid of domain.validRooms) {
+                if (placed) break;
+                const room = roomMap.get(rid);
+                if (!room) continue;
+
+                for (const d of domain.validDays) {
+                    if (placed) break;
+                    for (const slot of domain.validSlots) {
+                        if (slot.day !== d) continue;
+                        const sMin = toMin(slot.start);
+                        const eMin = toMin(slot.end);
+
+                        // Check if this slot is free
+                        if (!teacherAvailable(teacher, d, slot.start)) continue;
+                        if (!isFree(busy, 'teacher', tid, d, sMin, eMin)) continue;
+                        if (!isFree(busy, 'room', rid, d, sMin, eMin)) continue;
+                        if (!isFree(busy, 'section', task.section.id, d, sMin, eMin)) continue;
+
+                        // Check hard constraints
+                        if (wouldExceedMaxClassesPerDay(tid, d, repairedEntries, teacher, classifiedConstraints.hard)) continue;
+                        if (wouldExceedMaxHours(tid, repairedEntries, teacher, config.sessionMinutes, classifiedConstraints.hard)) continue;
+
+                        // Place the session
+                        const newEntry: PlacedEntry = {
+                            subjectId: task.subject.id,
+                            subjectCode: task.subject.code,
+                            subjectName: task.subject.name,
+                            teacherId: tid,
+                            teacherName: teacher.full_name,
+                            roomId: rid,
+                            roomName: room.name,
+                            sectionId: task.section.id,
+                            sectionName: task.section.name,
+                            day: d,
+                            start: slot.start,
+                            end: slot.end,
+                        };
+
+                        repairedEntries.push(newEntry);
+                        busy.push({
+                            teacherId: tid,
+                            roomId: rid,
+                            sectionId: task.section.id,
+                            day: d,
+                            startMin: sMin,
+                            endMin: eMin,
+                        });
+                        placed = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return repairedEntries;
+};
+
+/**
+ * Analyze generation failures and provide actionable recommendations (Phase 12).
+ * This helps users understand why the schedule failed and what they can do about it.
+ */
+const analyzeFailureAndProvideRecommendations = (
+    errors: string[],
+    placed: number,
+    total: number,
+    config: GenerationConfig,
+): string[] => {
+    const recommendations: string[] = [];
+
+    if (placed === total) {
+        return recommendations; // No failure
+    }
+
+    // Analyze error patterns
+    const noFreeSlotErrors = errors.filter(e => e.includes('No free slot')).length;
+    const noTeacherErrors = errors.filter(e => e.includes('No valid teacher')).length;
+    const noRoomErrors = errors.filter(e => e.includes('No valid room')).length;
+    const capacityErrors = errors.filter(e => e.includes('capacity')).length;
+    const maxHoursErrors = errors.filter(e => e.includes('max_hours')).length;
+    const maxClassesPerDayErrors = errors.filter(e => e.includes('max_classes_per_day')).length;
+
+    const placementRate = placed / total;
+
+    // Provide recommendations based on failure patterns
+    if (placementRate < 0.5) {
+        recommendations.push('Critical: Less than 50% of sessions could be placed. Consider reducing the scope or requirements.');
+    }
+
+    if (noFreeSlotErrors > total * 0.3) {
+        recommendations.push('Many sessions could not find available time slots. Consider:');
+        recommendations.push('  - Expanding the time window (earlier start or later end)');
+        recommendations.push('  - Reducing session duration');
+        recommendations.push('  - Removing or shortening break periods');
+    }
+
+    if (noTeacherErrors > total * 0.2) {
+        recommendations.push('Many sessions lack qualified teachers. Consider:');
+        recommendations.push('  - Adding more teachers or adjusting qualifications');
+        recommendations.push('  - Reducing teacher load requirements (max_hours, max_classes_per_day)');
+        recommendations.push('  - Checking teacher availability preferences');
+    }
+
+    if (noRoomErrors > total * 0.2) {
+        recommendations.push('Many sessions lack suitable rooms. Consider:');
+        recommendations.push('  - Adding more rooms, especially special rooms (labs, etc.)');
+        recommendations.push('  - Relaxing room type requirements');
+        recommendations.push('  - Increasing room capacity');
+    }
+
+    if (capacityErrors > 0) {
+        recommendations.push('Some sections exceed room capacity. Consider:');
+        recommendations.push('  - Using larger rooms');
+        recommendations.push('  - Splitting large sections into smaller ones');
+    }
+
+    if (maxHoursErrors > 0) {
+        recommendations.push('Teachers are hitting max hours limits. Consider:');
+        recommendations.push('  - Increasing max_hours for affected teachers');
+        recommendations.push('  - Distributing load more evenly across teachers');
+    }
+
+    if (maxClassesPerDayErrors > 0) {
+        recommendations.push('Teachers are hitting daily class limits. Consider:');
+        recommendations.push('  - Increasing max_classes_per_day for affected teachers');
+        recommendations.push('  - Spreading sessions across more days');
+    }
+
+    if (config.overflowPolicy === 'fail') {
+        recommendations.push('Current overflow policy is set to "fail". Consider changing to "relax_soft" to accept partial results.');
+    }
+
+    // General recommendations if no specific patterns found
+    if (recommendations.length === 0) {
+        recommendations.push('Schedule could not be completed. Try:');
+        recommendations.push('  - Running generation with more attempts');
+        recommendations.push('  - Enabling forward checking (enableForwardChecking: true)');
+        recommendations.push('  - Reviewing subject priorities and section requirements');
+    }
+
+    return recommendations;
 };
 
 /**
@@ -1640,6 +1845,7 @@ export async function runGenerator(
         const subjectsShuffled = rankSubjects(scopedSubjects, scopedSections, config, jitter);
 
         // Build tasks in priority order (subjects already ranked)
+        // This is done once per attempt and used for both placement and repair
         const rankedTasks: PlacementTask[] = [];
         for (const sub of subjectsShuffled) {
             const matchSections = scopedSections.filter(
@@ -1665,7 +1871,6 @@ export async function runGenerator(
             sectionDomainMap,
             days,
             slots,
-            config,
         );
 
         // Phase 4: Improved Ranking - Re-rank tasks by scarcity (MRV heuristic)
@@ -1792,31 +1997,27 @@ export async function runGenerator(
                         for (const room of sortedRooms) {
                             if (!isFree(busy, 'room', room.id, day, sMin, eMin)) continue;
                             
-                            // Forward Checking: Check if this placement would make remaining tasks impossible
-                            // DISABLED: Forward checking is too strict and rejects many valid placements
-                            // Re-enabling it would require a more sophisticated implementation that considers
-                            // alternative placement options for remaining tasks rather than just slot availability.
-                            // Aligns with Generation_System.md Phase 7: Forward Checking and Propagation
-                            /*
-                            const remainingTasks = rankedTasks.slice(i + 1);
-                            if (remainingTasks.length > 0 && !checkForwardConstraints(
-                                currentTeacher.id,
-                                room.id,
-                                section.id,
-                                day,
-                                sMin,
-                                eMin,
-                                busy,
-                                remainingTasks,
-                                teacherMap,
-                                roomMap,
-                                slots,
-                                days,
-                            )) {
-                                // Skip this placement as it would lead to a dead end
-                                continue;
+                            // Forward Checking (Phase 7): Check if this placement would make remaining tasks impossible
+                            // Uses improved implementation with domain information to avoid false negatives
+                            // Only enabled if config.enableForwardChecking is true (can be expensive on large datasets)
+                            if (config.enableForwardChecking) {
+                                const remainingTasks = rankedTasks.slice(i + 1);
+                                if (remainingTasks.length > 0 && !checkForwardConstraints(
+                                    currentTeacher.id,
+                                    room.id,
+                                    section.id,
+                                    day,
+                                    sMin,
+                                    eMin,
+                                    busy,
+                                    remainingTasks,
+                                    teacherMap,
+                                    roomMap,
+                                    domains,
+                                )) {
+                                    continue; // Skip this placement as it would make remaining tasks impossible
+                                }
                             }
-                            */
                             
                             entries.push({
                                 subjectId: sub.id,
@@ -1895,22 +2096,70 @@ export async function runGenerator(
         if (best.placed === best.total && best.score >= 85) break;
     }
 
+    // Step 8 (Repair Engine): Apply repair strategies to improve placement rate
+    // Phase 8 from Generation_System.md: Repair and Local Backtracking
+    // If generation didn't achieve full placement, attempt repairs
+    if (best.placed < best.total) {
+        // Build list of unplaced tasks
+        const unplacedTasks: Array<{ subject: Subject; section: Section; sessionIndex: number }> = [];
+        
+        // Rebuild task list for repair (using no jitter for consistency)
+        const repairSubjects = rankSubjects(scopedSubjects, scopedSections, config, 0);
+        for (const sub of repairSubjects) {
+            const matchSections = scopedSections.filter(
+                s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
+            );
+            const section = matchSections[0] || scopedSections[0];
+            if (!section) continue;
+
+            // Count how many sessions of this subject-section pair are placed
+            const placedCount = best.entries.filter(e => e.subjectId === sub.id && e.sectionId === section.id).length;
+            const neededCount = sessionsNeeded(sub, config.sessionMinutes);
+            
+            for (let i = placedCount; i < neededCount; i++) {
+                unplacedTasks.push({ subject: sub, section, sessionIndex: i });
+            }
+        }
+
+        // Reconstruct domains for repair
+        const repairDomains = constructDomains(
+            unplacedTasks,
+            teacherMap,
+            roomMap,
+            teacherDomainMap,
+            roomDomainMap,
+            sectionDomainMap,
+            days,
+            slots,
+        );
+
+        // Apply repairs to try to place unplaced tasks
+        if (unplacedTasks.length > 0) {
+            const repairedEntries = applyRepairs(
+                best.entries,
+                unplacedTasks,
+                teacherMap,
+                roomMap,
+                repairDomains,
+                config,
+                classifiedConstraints,
+            );
+            
+            // Update best result if repairs improved placement
+            if (repairedEntries.length > best.entries.length) {
+                best = {
+                    ...best,
+                    entries: repairedEntries,
+                    placed: repairedEntries.length,
+                    errors: best.errors.filter(e => !e.includes('No free slot')), // Remove some errors if repairs helped
+                };
+            }
+        }
+    }
+
     // Compute diff against previous entries only in partial mode.
     if (isPartial) {
         best = { ...best, diff: buildDiff(previousEntries, best.entries) };
-    }
-
-    // Step 8 (Repair Engine): Analyze conflicts and generate repair strategies
-    // Phase 8 from Generation_System.md: Repair and Local Backtracking
-    // If generation didn't achieve full placement, analyze conflicts and generate repair strategies
-    if (best.placed < best.total) {
-        // Analyze conflicts in the current best result
-        const conflicts = analyzeConflicts(best.entries, normalizedData.normalizedTeachers, availableRooms, scopedSections, days, slots, []);
-        // Generate repair strategies based on conflicts
-        const repairStrategies = generateRepairStrategies(conflicts);
-        // Repair strategies are available for future integration
-        // Actual repair application requires complex move logic and is deferred
-        void repairStrategies; // Prepared for future use
     }
 
     // Step 9 (Soft Constraint Optimizer): Calculate soft constraint scores and identify violations
@@ -1924,6 +2173,13 @@ export async function runGenerator(
     best = { ...best, attemptMetadata: { attemptCount: attemptMetadata.attempt_count, bestScore: attemptMetadata.best_score } };
     // Add scope summary to result
     best = { ...best, scopeSummary: { sectionsCount: scopedSections.length, teachersCount: normalizedData.normalizedTeachers.length, roomsCount: availableRooms.length, subjectsCount: scopedSubjects.length } };
+    
+    // Phase 12: Impossible Schedule Handling - Provide actionable recommendations
+    const recommendations = analyzeFailureAndProvideRecommendations(best.errors, best.placed, best.total, config);
+    if (recommendations.length > 0) {
+        best = { ...best, recommendations };
+    }
+    
     // Add hard constraint compliance status to result (all placements satisfy hard constraints by construction)
     best = { ...best, hardConstraintComplianceStatus: { noTeacherOverlap: true, noRoomOverlap: true, noSectionOverlap: true, roomCapacityCompliance: true, teacherQualificationEnforcement: true, teacherAvailabilityEnforcement: true } };
     // Violations and suggestions are available for future integration steps
@@ -1946,28 +2202,43 @@ export async function runGenerator(
         message: `Done. ${best.placed} of ${best.total} placed, score ${best.score}.`,
     });
 
-    // Step 6 (Generation Metadata Recorder): Save generation metadata to database
-    // Save asynchronously without blocking the result
     // Phase 11: Institutional Options - Overflow Policy
-    // Current implementation uses 'fail' policy: return best result even if incomplete
-    // Other policies (relax_soft, expand_scope, partial_only) would require additional logic
-    void saveGenerationMetadata({
+    // Handle different overflow policies for impossible schedules
+    if (config.overflowPolicy === 'fail' && best.placed < best.total) {
+        // Fail policy: Return error if not all tasks placed
+        throw new Error(`Failed to place all sessions. Only ${best.placed} of ${best.total} placed.`);
+    }
+    // 'relax_soft', 'expand_scope', and 'partial_only' all return the best result even if incomplete
+    // 'expand_scope' would require additional logic to expand the scope (future enhancement)
+
+    // Step 6 (Generation Metadata Recorder): Save generation metadata to database
+    // Phase 13: Versioning and Reproducibility
+    // Store complete metadata for reproducibility, auditability, and version tracking
+    // Save asynchronously without blocking the result
+    saveGenerationMetadata({
         config: config as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
         scope: { sections: scopedSections.map(s => s.id), mode: config.mode },
         seed: 0, // Seed is not currently in GenerationConfig, using default
         priority_settings: config.priorities as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
-        constraint_settings: { soft: config.soft, breaks: config.breaks, overflow_policy: config.overflowPolicy } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
-        attempt_scores: {},
-        final_schedule: { entries: best.entries } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
+        constraint_settings: { 
+            soft: config.soft, 
+            breaks: config.breaks, 
+            overflow_policy: config.overflowPolicy, 
+            enable_forward_checking: config.enableForwardChecking,
+            repair_applied: best.placed < best.total,
+            error_count: best.errors.length,
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
+        attempt_scores: attemptMetadata as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
+        final_schedule: { entries: best.entries, diff: best.diff } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
         total_sessions: best.total,
         placed_sessions: best.placed,
         score: best.score,
         mode: config.mode,
         partial_target: config.partialTarget as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
-        status: best.placed === best.total ? 'completed' : 'failed',
+        status: best.placed === best.total ? 'completed' : 'partial',
         completed_at: new Date(),
         created_by: null, // TODO: Add user ID when auth is integrated
-    });
+    }).catch(err => console.error('Failed to save generation metadata:', err));
 
     return best;
 }

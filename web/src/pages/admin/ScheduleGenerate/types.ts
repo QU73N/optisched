@@ -201,6 +201,8 @@ export interface GenerationConfig {
     maxAttempts: number;
     // Phase 11: Institutional Options - Overflow Policy
     overflowPolicy: 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only';
+    // Phase 7: Forward Checking - Enable/disable forward checking (can be expensive on large datasets)
+    enableForwardChecking: boolean;
 }
 
 export interface PlacedEntry {
@@ -266,6 +268,8 @@ export interface GenerationResult {
         roomsCount: number;
         subjectsCount: number;
     };
+    // Phase 12: Impossible Schedule Handling - Actionable recommendations
+    recommendations?: string[];
 }
 
 export interface GenerationProgress {
@@ -302,6 +306,7 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     priorities: { sections: {}, subjects: {}, specialRoomBias: 70 },
     maxAttempts: 100,
     overflowPolicy: 'relax_soft',
+    enableForwardChecking: false, // Disabled by default for performance
 };
 
 export const STAGES: { key: StageKey; label: string; hint: string }[] = [

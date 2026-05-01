@@ -95,7 +95,8 @@ describe('Generator Performance Tests', () => {
             subjectSpacing: 50,
             roomUtilization: 50,
         },
-        overflowPolicy: 'fail',
+        overflowPolicy: 'relax_soft',
+        enableForwardChecking: false,
     };
 
     it('should complete small dataset (10 subjects, 5 teachers, 5 rooms, 5 sections) in under 2 seconds', async () => {

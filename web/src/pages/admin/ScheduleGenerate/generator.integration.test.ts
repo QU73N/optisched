@@ -51,7 +51,8 @@ const mockConfig: GenerationConfig = {
         subjectSpacing: 50,
         roomUtilization: 50,
     },
-    overflowPolicy: 'fail',
+    overflowPolicy: 'relax_soft',
+    enableForwardChecking: false,
 };
 
 describe('Generator Integration Tests', () => {
