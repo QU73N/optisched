@@ -1227,6 +1227,15 @@ export async function runGenerator(
             const secScore = sec ? priorityOf(sectionP, sec.id) : 50;
             return subScore >= 70 || secScore >= 70;
         }).length;
+        // Update progress with error before returning
+        onProgress({
+            subStage: 'idle',
+            attempt: 0,
+            totalAttempts: config.maxAttempts,
+            placed: 0,
+            total: totalTasks,
+            message: `Schedule impossible: ${impossibilityCheck.reasons[0] || 'Unknown reason'}`,
+        });
         return {
             total: totalTasks,
             placed: 0,
@@ -1260,6 +1269,14 @@ export async function runGenerator(
 
     // Check if there are any sections to schedule
     if (scopedSections.length === 0) {
+        onProgress({
+            subStage: 'idle',
+            attempt: 0,
+            totalAttempts: config.maxAttempts,
+            placed: 0,
+            total: 0,
+            message: 'No sections found to schedule. Please ensure you have sections defined and selected in the scope.',
+        });
         return {
             total: 0,
             placed: 0,
@@ -1275,6 +1292,14 @@ export async function runGenerator(
 
     // Check if there are any teachers available
     if (normalizedData.normalizedTeachers.length === 0) {
+        onProgress({
+            subStage: 'idle',
+            attempt: 0,
+            totalAttempts: config.maxAttempts,
+            placed: 0,
+            total: 0,
+            message: 'No teachers found. Please ensure you have teachers defined in the system.',
+        });
         return {
             total: 0,
             placed: 0,
@@ -1290,6 +1315,14 @@ export async function runGenerator(
 
     // Check if there are any rooms available
     if (availableRooms.length === 0) {
+        onProgress({
+            subStage: 'idle',
+            attempt: 0,
+            totalAttempts: config.maxAttempts,
+            placed: 0,
+            total: 0,
+            message: 'No rooms available. Please ensure you have rooms defined and marked as available.',
+        });
         return {
             total: 0,
             placed: 0,
@@ -1324,6 +1357,14 @@ export async function runGenerator(
 
     // Check if there are any subjects to place
     if (scopedSubjects.length === 0) {
+        onProgress({
+            subStage: 'idle',
+            attempt: 0,
+            totalAttempts: config.maxAttempts,
+            placed: 0,
+            total: 0,
+            message: 'No subjects found to place. Please ensure you have subjects defined and sections selected.',
+        });
         return {
             total: 0,
             placed: 0,
@@ -1454,6 +1495,14 @@ export async function runGenerator(
 
         // Check if there are any tasks to place
         if (rankedTasks.length === 0) {
+            onProgress({
+                subStage: 'idle',
+                attempt: 0,
+                totalAttempts: config.maxAttempts,
+                placed: 0,
+                total: totalTasks,
+                message: 'No placement tasks generated. This may be due to subjects not matching any sections or invalid configuration.',
+            });
             return {
                 total: totalTasks,
                 placed: 0,
