@@ -80,9 +80,9 @@ The OptiSched generation system redesign has been successfully completed with al
 
 | Dataset Size | Subjects | Teachers | Rooms | Sections | Time | Status |
 |--------------|----------|----------|-------|----------|------|--------|
-| Small | 10 | 5 | 5 | 5 | 445ms | ✅ Under 2s |
-| Medium | 50 | 10 | 10 | 10 | 548ms | ✅ Under 5s |
-| Large | 100 | 20 | 20 | 20 | 5.2s | ✅ Under 10s |
+| Small | 10 | 5 | 5 | 5 | 459ms | ✅ Under 2s |
+| Medium | 50 | 10 | 10 | 10 | 597ms | ✅ Under 5s |
+| Large | 100 | 20 | 20 | 20 | 5.0s | ✅ Under 10s |
 | Scarce | 30 (lab) | 10 | 3 | 10 | 3.3s | ✅ Under 5s |
 
 **Key Findings:**
@@ -150,7 +150,7 @@ The OptiSched generation system redesign has been successfully completed with al
 
 ## Git History
 
-**Total Commits:** 19
+**Total Commits:** 21
 
 **Key Commits:**
 - 0170be8: Security: Fix XSS vulnerabilities in AI chat components
@@ -172,6 +172,9 @@ The OptiSched generation system redesign has been successfully completed with al
 - 979112d: Generation System Redesign: Restore Files After Git Pull
 - ceb3008: Generation System Redesign: Update package-lock.json for vitest
 - aea400c: Generation System Redesign: Update Phase 4 Documentation
+- ab2fd8f: Generation System Redesign: Final Report
+- 4ee7ed6: Reorganize documentation: Move all report files to docs folder
+- 648b828: Delete outdated documentation files
 
 ---
 
