@@ -385,9 +385,8 @@ export type ProgressFn = (p: GenerationProgress) => void;
 /**
  * Normalize all input data and apply institutional policies.
  * TODO: Integrate into generation pipeline after institutional policies are fetched from database.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is now called in runGenerator but normalized data is not yet used throughout generation.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const normalizeData = (
     teachers: Teacher[],
     rooms: Room[],
@@ -1078,10 +1077,17 @@ export async function runGenerator(
     input: GenerateInput,
     onProgress: ProgressFn,
 ): Promise<GenerationResult> {
-    const { subjects, teachers, rooms, sections, existing, config } = input;
+    const { subjects, teachers, rooms, sections, existing, config, institutionalPolicies = {} } = input;
 
     const isPartial = config.mode === 'partial' && !!config.partialTarget;
     const target = isPartial ? config.partialTarget : null;
+
+    // Step 2 (Data Normalizer): Normalize data with institutional policies
+    // TODO: In future integration, use normalized data throughout generation
+    // For now, we normalize but continue using raw data to avoid breaking changes
+    const normalizedData = normalizeData(teachers, rooms, sections, subjects, institutionalPolicies);
+    // Normalized data is available for future integration steps
+    void normalizedData; // Prepared for future use
 
     // Lookup maps used for diff + room scoping.
     const subjectMap = new Map(subjects.map(s => [s.id, s]));
