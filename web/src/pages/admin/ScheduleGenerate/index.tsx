@@ -41,6 +41,7 @@ const ScheduleGenerate: React.FC = () => {
     const [progress, setProgress] = useState<GenerationProgress>({
         subStage: 'idle', attempt: 0, totalAttempts: 0, placed: 0, total: 0, message: 'Ready',
     });
+    const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
     const [result, setResult] = useState<GenerationResult | null>(null);
     const [generating, setGenerating] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -228,6 +229,7 @@ const ScheduleGenerate: React.FC = () => {
         setSavedId(null);
         setSaveError(null);
         cancelRef.current = false;
+        setGenerationStartTime(Date.now());
         // Initialize progress with config values
         setProgress({
             subStage: 'loading',
@@ -256,12 +258,14 @@ const ScheduleGenerate: React.FC = () => {
             setStage('results');
         } finally {
             setGenerating(false);
+            setGenerationStartTime(null);
         }
     };
 
     const cancelGeneration = () => {
         cancelRef.current = true;
         setGenerating(false);
+        setGenerationStartTime(null);
         setProgress(p => ({ ...p, subStage: 'idle', message: 'Cancelled' }));
     };
 
@@ -401,6 +405,7 @@ const ScheduleGenerate: React.FC = () => {
                         <GenerateStage
                             progress={progress}
                             generating={generating}
+                            generationStartTime={generationStartTime}
                             onCancel={cancelGeneration}
                             onRun={startGeneration}
                         />
@@ -1125,18 +1130,54 @@ const SUBSTAGES: { key: GenerationProgress['subStage']; label: string }[] = [
 const GenerateStage: React.FC<{
     progress: GenerationProgress;
     generating: boolean;
+    generationStartTime: number | null;
     onCancel: () => void;
     onRun: () => void;
-}> = ({ progress, generating, onCancel, onRun }) => {
+}> = ({ progress, generating, generationStartTime, onCancel, onRun }) => {
     const pct = progress.total && progress.total > 0 ? Math.round((progress.placed / progress.total) * 100) : 0;
     const currentIdx = SUBSTAGES.findIndex(s => s.key === progress.subStage);
+    const [currentTime, setCurrentTime] = useState(0);
+
+    // Update current time every second when generating
+    useEffect(() => {
+        if (!generating) return;
+        const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
+        // Set initial time after a brief delay to avoid synchronous setState
+        const timeout = setTimeout(() => setCurrentTime(Date.now()), 0);
+        return () => {
+            clearInterval(interval);
+            clearTimeout(timeout);
+        };
+    }, [generating]);
+
+    // Calculate estimated time remaining
+    let estimatedTimeText = '';
+    if (generationStartTime && progress.total && progress.total > 0 && progress.placed > 0) {
+        const elapsed = currentTime - generationStartTime;
+        if (elapsed >= 1000) {
+            const progressPct = progress.placed / progress.total;
+            if (progressPct > 0) {
+                const estimatedTotal = elapsed / progressPct;
+                const remaining = estimatedTotal - elapsed;
+                if (remaining > 0) {
+                    if (remaining < 60000) {
+                        estimatedTimeText = `~${Math.round(remaining / 1000)}s`;
+                    } else if (remaining < 3600000) {
+                        estimatedTimeText = `~${Math.round(remaining / 60000)}m`;
+                    } else {
+                        estimatedTimeText = `~${Math.round(remaining / 3600000)}h`;
+                    }
+                }
+            }
+        }
+    }
     return (
         <div>
             <StageHeader icon={<Sparkles size={16} />} title="Generate" desc="The engine is running. You can cancel and adjust inputs at any time." />
             <div className="sg-progress-wrap">
                 <div className="sg-progress-bar"><div className="sg-progress-fill" style={{ width: `${pct}%` }} /></div>
                 <div className="sg-progress-meta">
-                    <span>Attempt {progress.attempt} of {progress.totalAttempts || '?'}</span>
+                    <span>Attempt {progress.attempt} of {progress.totalAttempts || '?'}{estimatedTimeText && ` (${estimatedTimeText})`}</span>
                     <span>{progress.placed} of {progress.total || '?'} placed</span>
                 </div>
                 <div className="sg-progress-msg">{progress.message}</div>
