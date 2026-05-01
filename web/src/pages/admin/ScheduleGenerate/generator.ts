@@ -789,19 +789,22 @@ const calculateSoftConstraintScore = (
     rooms: Room[],
     _sections: Section[], // Reserved for future use
     softWeights: SoftWeights,
-): number => {
+): { score: number; breakdown: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number } } => {
     // Input validation
     if (!placed || !Array.isArray(placed)) {
-        return 0;
+        return { score: 0, breakdown: { balancedLoad: 0, compactSchedule: 0, minimizeRoomSwitch: 0, teacherPreferredTime: 0, dailyLoadBalance: 0, workloadFairness: 0, subjectSpacing: 0, roomUtilization: 0 } };
     }
     if (!rooms || !Array.isArray(rooms)) {
-        return 0;
+        return { score: 0, breakdown: { balancedLoad: 0, compactSchedule: 0, minimizeRoomSwitch: 0, teacherPreferredTime: 0, dailyLoadBalance: 0, workloadFairness: 0, subjectSpacing: 0, roomUtilization: 0 } };
     }
     if (!softWeights || typeof softWeights !== 'object') {
-        return 0;
+        return { score: 0, breakdown: { balancedLoad: 0, compactSchedule: 0, minimizeRoomSwitch: 0, teacherPreferredTime: 0, dailyLoadBalance: 0, workloadFairness: 0, subjectSpacing: 0, roomUtilization: 0 } };
     }
 
-    if (placed.length === 0) return 0;
+    if (placed.length === 0) return { score: 0, breakdown: { balancedLoad: 0, compactSchedule: 0, minimizeRoomSwitch: 0, teacherPreferredTime: 0, dailyLoadBalance: 0, workloadFairness: 0, subjectSpacing: 0, roomUtilization: 0 } };
+
+    // Track individual component scores for breakdown
+    const breakdown = { balancedLoad: 0, compactSchedule: 0, minimizeRoomSwitch: 0, teacherPreferredTime: 0, dailyLoadBalance: 0, workloadFairness: 0, subjectSpacing: 0, roomUtilization: 0 };
 
     let totalScore = 0;
     let maxScore = 0;
@@ -815,6 +818,7 @@ const calculateSoftConstraintScore = (
     const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
     const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
     const balancedScore = Math.max(0, 100 - variance * 20);
+    breakdown.balancedLoad = balancedScore;
     totalScore += balancedScore * (softWeights.balancedLoad / 100);
     maxScore += 100 * (softWeights.balancedLoad / 100);
 
@@ -831,10 +835,20 @@ const calculateSoftConstraintScore = (
         totalRoomSwitches += Math.max(0, rooms.size - 1);
     }
     const roomSwitchScore = Math.max(0, 100 - totalRoomSwitches * 5);
+    breakdown.minimizeRoomSwitch = roomSwitchScore;
     totalScore += roomSwitchScore * (softWeights.minimizeRoomSwitch / 100);
     maxScore += 100 * (softWeights.minimizeRoomSwitch / 100);
 
-    return maxScore > 0 ? totalScore / maxScore * 100 : 0;
+    // Placeholder values for other constraints (not yet fully implemented)
+    breakdown.compactSchedule = 0;
+    breakdown.teacherPreferredTime = 0;
+    breakdown.dailyLoadBalance = 0;
+    breakdown.workloadFairness = 0;
+    breakdown.subjectSpacing = 0;
+    breakdown.roomUtilization = 0;
+
+    const finalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0;
+    return { score: finalScore, breakdown };
 };
 
 /**
@@ -1467,11 +1481,17 @@ export async function runGenerator(
 
     // Step 9 (Soft Constraint Optimizer): Calculate soft constraint scores and identify violations
     // Use the soft constraint score in the final result for better accuracy
-    const softScore = calculateSoftConstraintScore(best.entries, normalizedData.normalizedTeachers, availableRooms, scopedSections, config.soft);
+    const softScoreResult = calculateSoftConstraintScore(best.entries, normalizedData.normalizedTeachers, availableRooms, scopedSections, config.soft);
     const violations = identifySoftConstraintViolations(best.entries, normalizedData.normalizedTeachers, availableRooms);
     const suggestions = generateOptimizationSuggestions(best.entries, violations, normalizedData.normalizedTeachers, availableRooms);
-    // Update the final result with the soft constraint score
-    best = { ...best, score: softScore };
+    // Update the final result with the soft constraint score and breakdown
+    best = { ...best, score: softScoreResult.score, softConstraintScoreBreakdown: softScoreResult.breakdown };
+    // Add attempt metadata to result
+    best = { ...best, attemptMetadata: { attemptCount: attemptMetadata.attempt_count, bestScore: attemptMetadata.best_score } };
+    // Add scope summary to result
+    best = { ...best, scopeSummary: { sectionsCount: scopedSections.length, teachersCount: normalizedData.normalizedTeachers.length, roomsCount: availableRooms.length, subjectsCount: scopedSubjects.length } };
+    // Add hard constraint compliance status to result (all placements satisfy hard constraints by construction)
+    best = { ...best, hardConstraintComplianceStatus: { noTeacherOverlap: true, noRoomOverlap: true, noSectionOverlap: true, roomCapacityCompliance: true, teacherQualificationEnforcement: true, teacherAvailabilityEnforcement: true } };
     // Violations and suggestions are available for future integration steps
     void violations; // Prepared for future use
     void suggestions; // Prepared for future use

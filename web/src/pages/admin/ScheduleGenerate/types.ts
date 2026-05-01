@@ -225,6 +225,35 @@ export interface GenerationResult {
     highPriorityTotal: number;
     mode: GenerationMode;
     diff: DiffEntry[]; // empty when mode is full
+    // Phase 15: Output and Review enhancements
+    softConstraintScoreBreakdown?: {
+        balancedLoad: number;
+        compactSchedule: number;
+        minimizeRoomSwitch: number;
+        teacherPreferredTime: number;
+        dailyLoadBalance: number;
+        workloadFairness: number;
+        subjectSpacing: number;
+        roomUtilization: number;
+    };
+    hardConstraintComplianceStatus?: {
+        noTeacherOverlap: boolean;
+        noRoomOverlap: boolean;
+        noSectionOverlap: boolean;
+        roomCapacityCompliance: boolean;
+        teacherQualificationEnforcement: boolean;
+        teacherAvailabilityEnforcement: boolean;
+    };
+    attemptMetadata?: {
+        attemptCount: number;
+        bestScore: number;
+    };
+    scopeSummary?: {
+        sectionsCount: number;
+        teachersCount: number;
+        roomsCount: number;
+        subjectsCount: number;
+    };
 }
 
 export interface GenerationProgress {
