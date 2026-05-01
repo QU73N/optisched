@@ -562,8 +562,74 @@ const ScopeStage: React.FC<{
         }).filter(([, list]) => list.length > 0);
     }, [grouped, studentFilter]);
 
+    // Get default institutional policies for each mode
+    const getModePolicies = (mode: GenerationConfig['mode']) => {
+        switch (mode) {
+            case 'full':
+                // Full generation: prioritize getting everything scheduled
+                return {
+                    overflowPolicy: 'relax_soft' as const,
+                    maxCapacity: 100,
+                    overflowPercent: 15,
+                };
+            case 'partial':
+                // Partial regeneration: conservative to avoid disrupting existing schedules
+                return {
+                    overflowPolicy: 'partial_only' as const,
+                    maxCapacity: 100,
+                    overflowPercent: 10,
+                };
+            case 'draft':
+                // Draft mode: flexible to explore options
+                return {
+                    overflowPolicy: 'relax_soft' as const,
+                    maxCapacity: 100,
+                    overflowPercent: 20,
+                };
+            case 'locked':
+                // Locked mode: strict to avoid conflicts with locked items
+                return {
+                    overflowPolicy: 'fail' as const,
+                    maxCapacity: 100,
+                    overflowPercent: 5,
+                };
+            case 'whatif':
+                // What-if: flexible to explore different configurations
+                return {
+                    overflowPolicy: 'expand_scope' as const,
+                    maxCapacity: 100,
+                    overflowPercent: 25,
+                };
+            case 'emergency':
+                // Emergency: very flexible to get a working schedule quickly
+                return {
+                    overflowPolicy: 'expand_scope' as const,
+                    maxCapacity: 100,
+                    overflowPercent: 50,
+                };
+            case 'multiscenario':
+                // Multi-scenario: balanced approach for valid comparisons
+                return {
+                    overflowPolicy: 'relax_soft' as const,
+                    maxCapacity: 100,
+                    overflowPercent: 15,
+                };
+            default:
+                return {
+                    overflowPolicy: 'fail' as const,
+                    maxCapacity: 100,
+                    overflowPercent: 0,
+                };
+        }
+    };
+
     const setMode = (mode: GenerationConfig['mode']) =>
-        setConfig(c => ({ ...c, mode, partialTarget: mode === 'full' ? null : c.partialTarget }));
+        setConfig(c => ({
+            ...c,
+            mode,
+            partialTarget: mode === 'full' ? null : c.partialTarget,
+            ...getModePolicies(mode),
+        }));
 
     const setPartialKind = (kind: PartialKind) =>
         setConfig(c => ({ ...c, partialTarget: { kind, id: '' } }));
