@@ -63,7 +63,6 @@ export const POWER_ADMIN_NAV: NavGroup[] = [
         label: 'Communication',
         links: [
             { to: '/admin/announcements', icon: Megaphone, label: 'Announcements' },
-            { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
             { to: '/admin/messages', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
         ],
     },
@@ -101,7 +100,6 @@ export const SYSTEM_ADMIN_NAV: NavGroup[] = [
         label: 'Communication',
         links: [
             { to: '/admin/announcements', icon: Megaphone, label: 'Announcements' },
-            { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
             { to: '/admin/messages', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
         ],
     },

@@ -116,7 +116,7 @@ const AdminBackup: React.FC = () => {
                     <PlayCircle size={16} /> Queue a new backup
                 </h2>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                    <div style={{ flex: '0 0 180px' }}>
+                    <div style={{ flex: '0 0 220px' }}>
                         <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Kind</label>
                         <select className="input" value={kind} onChange={e => setKind(e.target.value as BackupKind)} style={{ marginTop: 6 }}>
                             <option value="full">Full (schema + data)</option>
