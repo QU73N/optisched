@@ -148,10 +148,11 @@ const wouldExceedMaxClassesPerDay = (
     day: string,
     currentEntries: PlacedEntry[],
     teacher: Teacher,
+    hardConstraints?: HardConstraintSet,
 ): boolean => {
-    if (!teacher.max_classes_per_day) return false;
+    const maxClasses = teacher.max_classes_per_day || hardConstraints?.max_daily_load || 8;
     const dayCount = currentEntries.filter(e => e.teacherId === teacherId && e.day === day).length;
-    return dayCount >= teacher.max_classes_per_day;
+    return dayCount >= maxClasses;
 };
 
 /** Check if placing this session would exceed teacher's max_hours (total weekly). */
@@ -160,10 +161,11 @@ const wouldExceedMaxHours = (
     currentEntries: PlacedEntry[],
     teacher: Teacher,
     sessionMinutes: number,
+    hardConstraints?: HardConstraintSet,
 ): boolean => {
-    if (!teacher.max_hours) return false;
+    const maxHours = teacher.max_hours || (hardConstraints?.max_daily_load ?? 8) * 5 || 40;
     const totalHours = (currentEntries.filter(e => e.teacherId === teacherId).length * sessionMinutes) / 60;
-    return totalHours >= teacher.max_hours;
+    return totalHours >= maxHours;
 };
 
 /** Stable sort subjects by combined priority (higher first), with small jitter per attempt. */
@@ -457,8 +459,7 @@ const normalizeData = (
 
 /**
  * Classify constraints into hard, soft, and preference sets.
- * TODO: Integrate into generation pipeline to use classified constraints in placement validation.
- * Note: This function is now called in runGenerator but classified constraints are not yet used throughout generation.
+ * Note: This function is called in runGenerator and hard constraints are used in placement validation.
  */
 const classifyConstraints = (
     config: GenerationConfig,
@@ -1073,10 +1074,11 @@ export async function runGenerator(
     const normalizedData = normalizeData(teachers, rooms, sections, subjects, institutionalPolicies);
 
     // Step 4 (Constraint Classifier): Classify constraints into hard/soft/preference sets
-    // TODO: In future integration, use classified constraints in placement validation
+    // Use hard constraints in placement validation as fallback when teacher-specific limits are not set
     const classifiedConstraints = classifyConstraints(config, institutionalPolicies);
-    // Classified constraints are available for future integration steps
-    void classifiedConstraints; // Prepared for future use
+    // Soft and preference constraints are available for future integration steps
+    void classifiedConstraints.soft; // Prepared for future use
+    void classifiedConstraints.preferences; // Prepared for future use
 
     // Lookup maps used for diff + room scoping.
     // Use normalized data for consistent access throughout generation
@@ -1339,7 +1341,7 @@ export async function runGenerator(
                 // (Empty preferred_days means "all days OK"; see dayIsPreferred.)
                 if (!dayIsPreferred(teacher, day)) continue;
                 // Hard: check max_classes_per_day constraint
-                if (wouldExceedMaxClassesPerDay(teacher.id, day, entries, teacher)) continue;
+                if (wouldExceedMaxClassesPerDay(teacher.id, day, entries, teacher, classifiedConstraints.hard)) continue;
                 for (const slot of slots) {
                     if (placed) break;
                     const sMin = toMin(slot.start);
@@ -1349,7 +1351,7 @@ export async function runGenerator(
                     if (!isFree(busy, 'teacher', teacher.id, day, sMin, eMin)) continue;
                     if (!isFree(busy, 'section', section.id, day, sMin, eMin)) continue;
                     // Hard: check max_hours constraint
-                    if (wouldExceedMaxHours(teacher.id, entries, teacher, config.sessionMinutes)) continue;
+                    if (wouldExceedMaxHours(teacher.id, entries, teacher, config.sessionMinutes, classifiedConstraints.hard)) continue;
 
                     const compat = availableRooms.filter(r => roomCompatible(r, sub, section));
                     if (compat.length === 0) { errors.push(`No compatible room for "${sub.name}"`); break; }
