@@ -1514,12 +1514,15 @@ export async function runGenerator(
 
     // Step 6 (Generation Metadata Recorder): Save generation metadata to database
     // Save asynchronously without blocking the result
+    // Phase 11: Institutional Options - Overflow Policy
+    // Current implementation uses 'fail' policy: return best result even if incomplete
+    // Other policies (relax_soft, expand_scope, partial_only) would require additional logic
     void saveGenerationMetadata({
         config: config as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
         scope: { sections: scopedSections.map(s => s.id), mode: config.mode },
         seed: 0, // Seed is not currently in GenerationConfig, using default
         priority_settings: config.priorities as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
-        constraint_settings: { soft: config.soft, breaks: config.breaks } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
+        constraint_settings: { soft: config.soft, breaks: config.breaks, overflow_policy: config.overflowPolicy } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
         attempt_scores: {},
         final_schedule: { entries: best.entries } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
         total_sessions: best.total,

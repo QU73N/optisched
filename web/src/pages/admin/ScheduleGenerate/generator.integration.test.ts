@@ -51,6 +51,7 @@ const mockConfig: GenerationConfig = {
         subjectSpacing: 50,
         roomUtilization: 50,
     },
+    overflowPolicy: 'fail',
 };
 
 describe('Generator Integration Tests', () => {

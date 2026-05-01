@@ -189,6 +189,8 @@ export interface GenerationConfig {
     priorities: Priorities;
     // Run
     maxAttempts: number;
+    // Phase 11: Institutional Options - Overflow Policy
+    overflowPolicy: 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only';
 }
 
 export interface PlacedEntry {
@@ -289,6 +291,7 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     },
     priorities: { sections: {}, subjects: {}, specialRoomBias: 70 },
     maxAttempts: 100,
+    overflowPolicy: 'fail',
 };
 
 export const STAGES: { key: StageKey; label: string; hint: string }[] = [
