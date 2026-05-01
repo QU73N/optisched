@@ -298,14 +298,51 @@ const ScheduleGenerate: React.FC = () => {
             const teachersMap = new Map(teachers.map(t => [t.id, t]));
             const roomsMap = new Map(rooms.map(r => [r.id, r]));
             
-            // Run optimization
-            const optimizedEntries = await optimizeSchedule(
+            // Build proper ClassifiedConstraints structure
+            // Note: optimizer only uses hard constraints, soft is converted internally
+            const classifiedConstraints = {
+                hard: {
+                    no_teacher_overlap: true,
+                    no_room_overlap: true,
+                    no_section_overlap: true,
+                    room_capacity_compliance: true,
+                    teacher_qualification_enforcement: true,
+                    teacher_availability_enforcement: true,
+                    max_consecutive_hours: 4,
+                    max_daily_load: 6,
+                    subject_hour_completion: false,
+                    special_subject_room_priority: false,
+                    break_enforcement: config.breaks.length > 0,
+                    schedule_lock_protection: false,
+                },
+                soft: {
+                    balanced_weekly_load: config.soft.balancedLoad > 0,
+                    reduced_idle_gaps: config.soft.compactSchedule > 0,
+                    compact_section_schedules: config.soft.compactSchedule > 0,
+                    room_movement_minimization: config.soft.minimizeRoomSwitch > 0,
+                    time_of_day_preference: config.soft.teacherPreferredTime > 0,
+                    room_utilization_efficiency: config.soft.roomUtilization > 0,
+                    schedule_compactness: config.soft.compactSchedule > 0,
+                    fairness_between_teachers: config.soft.workloadFairness > 0,
+                    priority_weighting: config.soft.dailyLoadBalance > 0,
+                },
+                preferences: {
+                    preferred_rooms: {},
+                    preferred_time_windows: {},
+                    preferred_days: {},
+                    preferred_sequencing: {},
+                    preferred_special_room_use: false,
+                },
+            };
+            
+            // Run optimization (synchronous function)
+            const optimizedEntries = optimizeSchedule(
                 result.entries,
                 teachersMap,
                 roomsMap,
                 sections,
                 config,
-                { hard: [], soft: config.soft, unclassified: [] }, // Simplified constraints
+                classifiedConstraints,
                 result.score,
                 (p) => setProgress(p),
             );
@@ -314,7 +351,6 @@ const ScheduleGenerate: React.FC = () => {
                 ...result,
                 entries: optimizedEntries.entries,
                 score: optimizedEntries.score,
-                breakdown: optimizedEntries.breakdown,
             });
             
             setOptimizationReport({
