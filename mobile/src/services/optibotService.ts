@@ -3,10 +3,10 @@
 
 import { supabase, supabaseAdmin } from '../config/supabase';
 
-// === API Keys ===
-const GEMINI_API_KEY = 'AIzaSyDNXUThYPQGLqhIaGge_Nu6dYEZrFwRHL8';
-const GROQ_API_KEY = 'gsk_YOUR_GROQ_API_KEY_HERE'; // Masked for GitHub Push Protection
-const OPENROUTER_API_KEY = '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';
+// === API Keys (read from .env — never commit keys to source) ===
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
+const OPENROUTER_API_KEY = process.env.EXPO_PUBLIC_OPENROUTER_API_KEY || '';
 
 // === API URLs ===
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
