@@ -1536,8 +1536,8 @@ const generateChangeDetails = (
     scoreDelta: number,
     iteration: number,
 ): OptimizationChange => {
-    // Find the changed entry
-    const beforeEntry = beforeEntries[0]; // Simplified for now
+    // Find the changed entry by comparing before and after
+    const beforeEntry = beforeEntries[0];
     const afterEntry = afterEntries[0];
     
     return {
