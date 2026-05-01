@@ -304,7 +304,7 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     },
     priorities: { sections: {}, subjects: {}, specialRoomBias: 70 },
     maxAttempts: 100,
-    overflowPolicy: 'fail',
+    overflowPolicy: 'relax_soft',
 };
 
 export const STAGES: { key: StageKey; label: string; hint: string }[] = [
@@ -321,22 +321,22 @@ export const STAGES: { key: StageKey; label: string; hint: string }[] = [
 export const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export const HARD_CONSTRAINTS: string[] = [
-    'No teacher overlap',
-    'No room overlap',
-    'No section overlap',
-    'Room capacity compliance',
-    'Room and subject compatibility',
-    'Teacher qualification enforcement',
-    'Teacher availability enforcement',
-    'Maximum consecutive hours per day',
-    'Maximum daily teaching hours',
-    'Maximum classes per day (teacher)',
-    'Maximum total hours per week (teacher)',
-    'Break enforcement when enabled',
-    'Single teacher per session',
-    'Single room per session',
-    'Fixed-time enforcement',
-    'Locked schedule enforcement',
+    'No Teacher Overlap',
+    'No Room Overlap',
+    'No Section Overlap',
+    'Room Capacity Compliance',
+    'Room and Subject Compatibility',
+    'Teacher Qualification Enforcement',
+    'Teacher Availability Enforcement',
+    'Maximum Consecutive Hours Per Day',
+    'Maximum Daily Teaching Hours',
+    'Maximum Classes Per Day (Teacher)',
+    'Maximum Total Hours Per Week (Teacher)',
+    'Break Enforcement When Enabled',
+    'Single Teacher Per Session',
+    'Single Room Per Session',
+    'Fixed-Time Enforcement',
+    'Locked Schedule Enforcement',
 ];
 
 // ============================================================================

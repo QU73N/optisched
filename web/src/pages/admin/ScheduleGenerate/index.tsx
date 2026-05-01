@@ -594,7 +594,7 @@ const ScopeStage: React.FC<{
             case 'locked':
                 // Locked mode: strict to avoid conflicts with locked items
                 return {
-                    overflowPolicy: 'fail' as const,
+                    overflowPolicy: 'relax_soft' as const,
                     maxCapacity: 100,
                     overflowPercent: 5,
                 };
@@ -896,7 +896,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
         <div>
             <StageHeader icon={<Sliders size={16} />} title="Constraints" desc="Hard rules are always enforced. Tune soft weights to guide optimization." compact={compact} />
 
-            <div className="sg-subhead"><Lock size={12} /> Hard constraints. Always on.</div>
+            <div className="sg-subhead"><Lock size={12} /> Hard Constraints. Always On.</div>
             <button
                 type="button"
                 className="sg-hard-constraints-btn"
@@ -904,7 +904,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 aria-expanded={hardConstraintsOpen}
                 style={{ marginBottom: 16 }}
             >
-                <span>View {HARD_CONSTRAINTS.length} hard constraints</span>
+                <span>View {HARD_CONSTRAINTS.length} Hard Constraints</span>
                 {hardConstraintsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {hardConstraintsOpen && (
@@ -915,19 +915,19 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 </ul>
             )}
 
-            <div className="sg-subhead" style={{ marginTop: 0 }}><Sliders size={12} /> Soft optimization weights</div>
+            <div className="sg-subhead" style={{ marginTop: 0 }}><Sliders size={12} /> Soft Optimization Weights</div>
             <div className="sg-sliders">
-                <SoftSlider label="Balanced teacher load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} compact={compact} />
-                <SoftSlider label="Compact schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} compact={compact} />
-                <SoftSlider label="Minimize room switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} compact={compact} />
-                <SoftSlider label="Teacher preferred time" desc="Honor each teacher's preferred days and time window." value={config.soft.teacherPreferredTime} onChange={v => updateSoft('teacherPreferredTime', v)} compact={compact} />
-                <SoftSlider label="Daily load balance" desc="Even teaching load per teacher per day." value={config.soft.dailyLoadBalance} onChange={v => updateSoft('dailyLoadBalance', v)} compact={compact} />
-                <SoftSlider label="Workload fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} compact={compact} />
-                <SoftSlider label="Subject spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} compact={compact} />
-                <SoftSlider label="Room utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} />
+                <SoftSlider label="Balanced Teacher Load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} compact={compact} />
+                <SoftSlider label="Compact Schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} compact={compact} />
+                <SoftSlider label="Minimize Room Switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} compact={compact} />
+                <SoftSlider label="Teacher Preferred Time" desc="Honor each teacher's preferred days and time window." value={config.soft.teacherPreferredTime} onChange={v => updateSoft('teacherPreferredTime', v)} compact={compact} />
+                <SoftSlider label="Daily Load Balance" desc="Even teaching load per teacher per day." value={config.soft.dailyLoadBalance} onChange={v => updateSoft('dailyLoadBalance', v)} compact={compact} />
+                <SoftSlider label="Workload Fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} compact={compact} />
+                <SoftSlider label="Subject Spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} compact={compact} />
+                <SoftSlider label="Room Utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} />
             </div>
 
-            <div className="sg-subhead" style={{ marginTop: 20 }}><ShieldCheck size={12} /> Institutional policies</div>
+            <div className="sg-subhead" style={{ marginTop: 20 }}><ShieldCheck size={12} /> Institutional Policies</div>
             <button
                 type="button"
                 className="sg-hard-constraints-btn"
@@ -941,34 +941,34 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 <div className="sg-hard-list-expanded" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div className="sg-grid-3">
                         <div>
-                            <div className="sg-field-label">Overflow policy</div>
-                            <select 
-                                className="input" 
-                                value={config.overflowPolicy || 'fail'} 
+                            <div className="sg-field-label">Overflow Policy</div>
+                            <select
+                                className="input"
+                                value={config.overflowPolicy || 'relax_soft'}
                                 onChange={e => setConfig(c => ({ ...c, overflowPolicy: e.target.value as 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only' }))}
                             >
-                                <option value="fail">Fail on overflow</option>
-                                <option value="relax_soft">Relax soft constraints</option>
-                                <option value="expand_scope">Expand search scope</option>
-                                <option value="partial_only">Partial only</option>
+                                <option value="fail">Fail on Overflow</option>
+                                <option value="relax_soft">Relax Soft Constraints</option>
+                                <option value="expand_scope">Expand Search Scope</option>
+                                <option value="partial_only">Partial Only</option>
                             </select>
                         </div>
                         <div>
-                            <div className="sg-field-label">Max room capacity</div>
-                            <input 
-                                type="number" 
-                                className="input" 
-                                value={config.maxCapacity || 100} 
+                            <div className="sg-field-label">Max Room Capacity</div>
+                            <input
+                                type="number"
+                                className="input"
+                                value={config.maxCapacity || 100}
                                 onChange={e => setConfig(c => ({ ...c, maxCapacity: Number(e.target.value) }))}
                                 min="1"
                             />
                         </div>
                         <div>
-                            <div className="sg-field-label">Allow overflow %</div>
-                            <input 
-                                type="number" 
-                                className="input" 
-                                value={config.overflowPercent || 10} 
+                            <div className="sg-field-label">Allow Overflow %</div>
+                            <input
+                                type="number"
+                                className="input"
+                                value={config.overflowPercent || 10}
                                 onChange={e => setConfig(c => ({ ...c, overflowPercent: Number(e.target.value) }))}
                                 min="0"
                                 max="100"
@@ -1054,20 +1054,19 @@ const ReviewStage: React.FC<{
                         ['Breaks', config.breaks.map(b => `${b.label} ${b.start} to ${b.end}`).join(', ') || 'None'],
                     ]}
                 />
-                <ReviewBlock title="Soft weights"
+                <ReviewBlock title="Soft Weights"
                     items={[
-                        ['Balanced load', `${config.soft.balancedLoad}`],
+                        ['Balanced Load', `${config.soft.balancedLoad}`],
                         ['Compact', `${config.soft.compactSchedule}`],
-                        ['Minimize room switch', `${config.soft.minimizeRoomSwitch}`],
                         ['Attempts', String(config.maxAttempts)],
                     ]}
                 />
                 <ReviewBlock title="Priorities"
                     items={[
-                        ['High priority sections', String(Object.values(config.priorities.sections).filter(v => v >= 70).length)],
-                        ['High priority subjects', String(Object.values(config.priorities.subjects).filter(v => v >= 70).length)],
-                        ['Low priority items', String([...Object.values(config.priorities.sections), ...Object.values(config.priorities.subjects)].filter(v => v <= 30).length)],
-                        ['Special room bias', `${config.priorities.specialRoomBias}`],
+                        ['High Priority Sections', String(Object.values(config.priorities.sections).filter(v => v >= 70).length)],
+                        ['High Priority Subjects', String(Object.values(config.priorities.subjects).filter(v => v >= 70).length)],
+                        ['Low Priority Items', String([...Object.values(config.priorities.sections), ...Object.values(config.priorities.subjects)].filter(v => v <= 30).length)],
+                        ['Special Room Bias', `${config.priorities.specialRoomBias}`],
                     ]}
                 />
             </div>
@@ -1623,7 +1622,7 @@ const PrioritiesStage: React.FC<{
             <div className="sg-prio-bias">
                 <div className="sg-slider-head">
                     <div>
-                        <div className="sg-slider-label">Special room bias</div>
+                        <div className="sg-slider-label">Special Room Bias</div>
                         {!compact && <div className="sg-slider-desc">How strongly to reserve labs and studios for subjects that need them. Lab subjects always get labs.</div>}
                     </div>
                     <div className="sg-slider-val">{config.priorities.specialRoomBias}</div>
@@ -1660,7 +1659,7 @@ const PrioritiesStage: React.FC<{
                         ? 'Flag larger sections as high, smaller as low'
                         : 'Flag lab subjects as high, electives as low'}
                 >
-                    <Lightbulb size={13} /> Smart suggest
+                    <Lightbulb size={13} /> Smart Suggest
                 </button>
                 <button className="sg-icon-btn sg-reset-btn" onClick={resetAll} disabled={touched === 0} title="Reset to normal">
                     <RotateCcw size={13} /> Reset
