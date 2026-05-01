@@ -431,6 +431,9 @@ const ScheduleGenerate: React.FC = () => {
         setResult(null);
         setSavedId(null);
         setSaveError(null);
+        setOptimizedResult(null);
+        setOptimizationReport(null);
+        setOptimizing(false);
         setStage('scope');
     };
 
@@ -532,6 +535,8 @@ const ScheduleGenerate: React.FC = () => {
                             onUseOptimized={() => {
                                 if (optimizedResult) {
                                     setResult(optimizedResult);
+                                    setOptimizedResult(null);
+                                    setOptimizationReport(null);
                                 }
                             }}
                         />
