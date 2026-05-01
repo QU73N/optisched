@@ -228,6 +228,15 @@ const ScheduleGenerate: React.FC = () => {
         setSavedId(null);
         setSaveError(null);
         cancelRef.current = false;
+        // Initialize progress with config values
+        setProgress({
+            subStage: 'loading',
+            attempt: 0,
+            totalAttempts: config.maxAttempts,
+            placed: 0,
+            total: 0,
+            message: 'Initializing...',
+        });
         try {
             // Fetch institutional policies (optional, generation proceeds with defaults if fetch fails)
             let institutionalPolicies: Record<string, unknown> = {};

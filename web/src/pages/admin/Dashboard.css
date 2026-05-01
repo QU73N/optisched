@@ -2324,6 +2324,12 @@
     font-weight: 700;
     border-radius: var(--radius-full);
     background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.sg-tab-mini-active .sg-tab-mini-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--text-on-accent);
 }
 
 .sg-tab-mini:not(.sg-tab-mini-active) .sg-tab-mini-count {
