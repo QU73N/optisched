@@ -2202,20 +2202,11 @@ export async function runGenerator(
         message: `Done. ${best.placed} of ${best.total} placed, score ${best.score}.`,
     });
 
-    // Phase 11: Institutional Options - Overflow Policy
-    // Handle different overflow policies for impossible schedules
-    if (config.overflowPolicy === 'fail' && best.placed < best.total) {
-        // Fail policy: Return error if not all tasks placed
-        throw new Error(`Failed to place all sessions. Only ${best.placed} of ${best.total} placed.`);
-    }
-    // 'relax_soft', 'expand_scope', and 'partial_only' all return the best result even if incomplete
-    // 'expand_scope' would require additional logic to expand the scope (future enhancement)
-
     // Step 6 (Generation Metadata Recorder): Save generation metadata to database
     // Phase 13: Versioning and Reproducibility
     // Store complete metadata for reproducibility, auditability, and version tracking
-    // Save asynchronously without blocking the result
-    saveGenerationMetadata({
+    // Save synchronously to ensure it completes before overflow check
+    await saveGenerationMetadata({
         config: config as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
         scope: { sections: scopedSections.map(s => s.id), mode: config.mode },
         seed: 0, // Seed is not currently in GenerationConfig, using default
@@ -2238,7 +2229,16 @@ export async function runGenerator(
         status: best.placed === best.total ? 'completed' : 'partial',
         completed_at: new Date(),
         created_by: null, // TODO: Add user ID when auth is integrated
-    }).catch(err => console.error('Failed to save generation metadata:', err));
+    });
+
+    // Phase 11: Institutional Options - Overflow Policy
+    // Handle different overflow policies for impossible schedules
+    if (config.overflowPolicy === 'fail' && best.placed < best.total) {
+        // Fail policy: Return error if not all tasks placed
+        throw new Error(`Failed to place all sessions. Only ${best.placed} of ${best.total} placed.`);
+    }
+    // 'relax_soft', 'expand_scope', and 'partial_only' all return the best result even if incomplete
+    // 'expand_scope' would require additional logic to expand the scope (future enhancement)
 
     return best;
 }
