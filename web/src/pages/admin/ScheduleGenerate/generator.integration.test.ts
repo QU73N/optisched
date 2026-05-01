@@ -321,5 +321,26 @@ describe('Generator Integration Tests', () => {
 
             expect(result.highPriorityTotal).toBeGreaterThan(0);
         });
+
+        it('should use soft constraint score in final result', async () => {
+            const progressFn = vi.fn();
+
+            const result = await runGenerator(
+                {
+                    subjects: mockSubjects,
+                    teachers: mockTeachers,
+                    rooms: mockRooms,
+                    sections: mockSections,
+                    existing: mockExisting,
+                    config: mockConfig,
+                    institutionalPolicies: {},
+                },
+                progressFn,
+            );
+
+            // The score should be between 0 and 100 (soft constraint score range)
+            expect(result.score).toBeGreaterThanOrEqual(0);
+            expect(result.score).toBeLessThanOrEqual(100);
+        });
     });
 });

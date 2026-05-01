@@ -782,7 +782,7 @@ const selectBestResult = (
 
 /**
  * Calculate soft constraint score for a schedule.
- * Note: This function is now called in runGenerator but score is not yet used throughout generation.
+ * Note: This function is called in runGenerator and the score is used in the final result.
  */
 const calculateSoftConstraintScore = (
     placed: PlacedEntry[],
@@ -1449,13 +1449,13 @@ export async function runGenerator(
     }
 
     // Step 9 (Soft Constraint Optimizer): Calculate soft constraint scores and identify violations
-    // TODO: In future integration, apply optimizations to improve soft constraint scores
-    // For now, we calculate but don't apply optimizations to avoid breaking changes
+    // Use the soft constraint score in the final result for better accuracy
     const softScore = calculateSoftConstraintScore(best.entries, teachers, rooms, sections, config.soft);
     const violations = identifySoftConstraintViolations(best.entries, teachers, rooms);
     const suggestions = generateOptimizationSuggestions(best.entries, violations, teachers, rooms);
-    // Soft constraint optimization results are available for future integration steps
-    void softScore; // Prepared for future use
+    // Update the final result with the soft constraint score
+    best = { ...best, score: softScore };
+    // Violations and suggestions are available for future integration steps
     void violations; // Prepared for future use
     void suggestions; // Prepared for future use
 
