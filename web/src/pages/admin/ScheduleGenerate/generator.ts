@@ -31,6 +31,7 @@ import type {
     SectionDomain,
     SoftWeights,
 } from './types';
+import { saveGenerationMetadata } from '../../../services/generationService';
 
 const toMin = (t: string) => {
     const [h, m] = t.split(':').map(Number);
@@ -1471,6 +1472,26 @@ export async function runGenerator(
         placed: best.placed,
         total: best.total,
         message: `Done. ${best.placed} of ${best.total} placed, score ${best.score}.`,
+    });
+
+    // Step 6 (Generation Metadata Recorder): Save generation metadata to database
+    // Save asynchronously without blocking the result
+    void saveGenerationMetadata({
+        config: config as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
+        scope: { sections: scopedSections.map(s => s.id), mode: config.mode },
+        seed: 0, // Seed is not currently in GenerationConfig, using default
+        priority_settings: config.priorities as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
+        constraint_settings: { soft: config.soft, breaks: config.breaks } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
+        attempt_scores: {},
+        final_schedule: { entries: best.entries } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
+        total_sessions: best.total,
+        placed_sessions: best.placed,
+        score: best.score,
+        mode: config.mode,
+        partial_target: config.partialTarget as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
+        status: best.placed === best.total ? 'completed' : 'failed',
+        completed_at: new Date(),
+        created_by: null, // TODO: Add user ID when auth is integrated
     });
 
     return best;
