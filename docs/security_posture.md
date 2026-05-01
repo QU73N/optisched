@@ -205,12 +205,12 @@ If Power Admin loses access:
 
 ## Deployment Checklist
 
-- [ ] Enable "Leaked password protection" in Supabase Auth
+- [ ] Enable "Leaked password protection" in Supabase Auth (SKIPPED - presentation deployment)
 - [ ] Configure JWT expiry in Supabase Auth
 - [ ] Set up session timeout per role rank
-- [ ] Verify RLS policies are active on all tables
-- [ ] Verify SECURITY DEFINER functions have search_path = public
-- [ ] Verify anon cannot execute sensitive functions
+- [ ] Verify RLS policies are active on all tables ✅
+- [ ] Verify SECURITY DEFINER functions have search_path = public ✅
+- [ ] Verify anon cannot execute sensitive functions ✅
 - [ ] Verify storage policies disable listing
 - [ ] Test rate limiting endpoints
 - [ ] Test audit log tamper-evidence

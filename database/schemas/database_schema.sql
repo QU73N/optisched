@@ -558,3 +558,17 @@ CREATE TABLE public.user_permission_overrides (
   CONSTRAINT user_permission_overrides_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
   CONSTRAINT user_permission_overrides_set_by_fkey FOREIGN KEY (set_by) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.user_preferences (
+  user_id uuid NOT NULL,
+  theme text DEFAULT 'light'::text CHECK (theme = ANY (ARRAY['light'::text, 'dark'::text])),
+  time_format text DEFAULT '24h'::text CHECK (time_format = ANY (ARRAY['12h'::text, '24h'::text])),
+  landing_animations boolean DEFAULT true,
+  dashboard_animations boolean DEFAULT false,
+  email_notifications boolean DEFAULT true,
+  schedule_notifications boolean DEFAULT true,
+  announcement_notifications boolean DEFAULT true,
+  updated_at timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id),
+  CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
