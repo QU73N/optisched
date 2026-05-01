@@ -1258,6 +1258,51 @@ export async function runGenerator(
     });
     await new Promise(r => setTimeout(r, 120));
 
+    // Check if there are any sections to schedule
+    if (scopedSections.length === 0) {
+        return {
+            total: 0,
+            placed: 0,
+            entries: [],
+            errors: ['No sections found to schedule. Please ensure you have sections defined and selected in the scope.'],
+            score: 0,
+            highPriorityPlaced: 0,
+            highPriorityTotal: 0,
+            mode: config.mode,
+            diff: [],
+        };
+    }
+
+    // Check if there are any teachers available
+    if (normalizedData.normalizedTeachers.length === 0) {
+        return {
+            total: 0,
+            placed: 0,
+            entries: [],
+            errors: ['No teachers found. Please ensure you have teachers defined in the system.'],
+            score: 0,
+            highPriorityPlaced: 0,
+            highPriorityTotal: 0,
+            mode: config.mode,
+            diff: [],
+        };
+    }
+
+    // Check if there are any rooms available
+    if (availableRooms.length === 0) {
+        return {
+            total: 0,
+            placed: 0,
+            entries: [],
+            errors: ['No rooms available. Please ensure you have rooms defined and marked as available.'],
+            score: 0,
+            highPriorityPlaced: 0,
+            highPriorityTotal: 0,
+            mode: config.mode,
+            diff: [],
+        };
+    }
+
     // Candidates: subjects that need a slot for any scoped section.
     // We replicate the old behavior (one placement per subject matched to first section).
     let scopedSubjects = normalizedData.normalizedSubjects.filter(sub => {
@@ -1275,6 +1320,21 @@ export async function runGenerator(
             scopedSubjects = scopedSubjects.filter(s => s.teacher_id === target.id);
         }
         // section and room: the section/room picks already narrow the space; keep subject list as is.
+    }
+
+    // Check if there are any subjects to place
+    if (scopedSubjects.length === 0) {
+        return {
+            total: 0,
+            placed: 0,
+            entries: [],
+            errors: ['No subjects found to place. Please ensure you have subjects defined and sections selected.'],
+            score: 0,
+            highPriorityPlaced: 0,
+            highPriorityTotal: 0,
+            mode: config.mode,
+            diff: [],
+        };
     }
 
     // Expand subjects into placement tasks based on sessions_needed (split sessions).
