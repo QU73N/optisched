@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Wand2, Loader2, BookOpen, Users, MapPin, Clock } from 'lucide-react';
 import { sendToOptiBot } from '../../services/optibotService';
 import { useSchedules, useTeachers, useRooms } from '../../hooks/useSupabase';
+import DOMPurify from 'dompurify';
 
 interface ChatMessage {
     role: 'user' | 'assistant' | 'system';
@@ -93,7 +94,7 @@ const AIScheduleChat: React.FC = () => {
                             {msg.role === 'system' && <div className="ai-msg-avatar system"><Wand2 size={16} /></div>}
                             {msg.role === 'assistant' && <div className="ai-msg-avatar assistant"><Wand2 size={16} /></div>}
                             <div className="ai-msg-content">
-                                <div className="ai-msg-bubble" dangerouslySetInnerHTML={{ __html: msg.content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>').replace(/• /g, '&bull; ') }} />
+                                <div className="ai-msg-bubble" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>').replace(/• /g, '&bull; ')) }} />
                                 <span className="ai-msg-time">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                         </div>

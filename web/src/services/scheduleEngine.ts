@@ -106,8 +106,7 @@ export class ScheduleEngine {
     }
 
     generateSchedule(
-        existingSlots: ScheduleSlot[] = [],
-        _options: { maxIterations?: number; preferenceWeight?: number } = {}
+        existingSlots: ScheduleSlot[] = []
     ): ScheduleResult {
         const schedule = [...existingSlots];
         const conflicts = this.validateSchedule(schedule);
