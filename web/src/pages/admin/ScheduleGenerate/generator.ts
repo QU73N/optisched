@@ -457,12 +457,10 @@ const normalizeData = (
 };
 
 /**
- * Constraint Classifier: Classify constraints into hard, soft, and preference sets.
- * This provides structured constraint information for the generation engine.
- * TODO: Integrate into generation pipeline to use classified constraints during placement.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Classify constraints into hard, soft, and preference sets.
+ * TODO: Integrate into generation pipeline to use classified constraints in placement validation.
+ * Note: This function is now called in runGenerator but classified constraints are not yet used throughout generation.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const classifyConstraints = (
     config: GenerationConfig,
     _institutionalPolicies: Record<string, unknown>, // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
@@ -1088,6 +1086,13 @@ export async function runGenerator(
     const normalizedData = normalizeData(teachers, rooms, sections, subjects, institutionalPolicies);
     // Normalized data is available for future integration steps
     void normalizedData; // Prepared for future use
+
+    // Step 4 (Constraint Classifier): Classify constraints into hard/soft/preference sets
+    // TODO: In future integration, use classified constraints in placement validation
+    // For now, we classify but continue using existing constraint logic to avoid breaking changes
+    const classifiedConstraints = classifyConstraints(config, institutionalPolicies);
+    // Classified constraints are available for future integration steps
+    void classifiedConstraints; // Prepared for future use
 
     // Lookup maps used for diff + room scoping.
     const subjectMap = new Map(subjects.map(s => [s.id, s]));
