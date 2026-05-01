@@ -185,6 +185,32 @@ CREATE TABLE public.feature_flags (
   CONSTRAINT feature_flags_pkey PRIMARY KEY (key),
   CONSTRAINT feature_flags_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.generation_runs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  config jsonb NOT NULL,
+  scope jsonb NOT NULL,
+  seed integer NOT NULL,
+  priority_settings jsonb NOT NULL,
+  constraint_settings jsonb NOT NULL,
+  attempt_scores jsonb,
+  final_schedule jsonb,
+  repair_actions jsonb,
+  invalid_sessions jsonb,
+  failure_reason text,
+  failure_category text,
+  actionable_options jsonb,
+  total_sessions integer NOT NULL,
+  placed_sessions integer NOT NULL,
+  score numeric,
+  mode text NOT NULL CHECK (mode = ANY (ARRAY['full'::text, 'partial'::text, 'draft'::text, 'locked'::text, 'what-if'::text, 'emergency'::text, 'multi-scenario'::text])),
+  partial_target jsonb,
+  status text NOT NULL CHECK (status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text])),
+  started_at timestamp with time zone NOT NULL DEFAULT now(),
+  completed_at timestamp with time zone,
+  created_by uuid,
+  CONSTRAINT generation_runs_pkey PRIMARY KEY (id),
+  CONSTRAINT generation_runs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.institution_breaks (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   name text NOT NULL,
@@ -201,6 +227,20 @@ CREATE TABLE public.institution_breaks (
   created_by uuid,
   CONSTRAINT institution_breaks_pkey PRIMARY KEY (id),
   CONSTRAINT institution_breaks_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.institutional_policies (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  institution_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'::uuid,
+  policy_name text NOT NULL,
+  policy_value jsonb NOT NULL,
+  policy_category text NOT NULL CHECK (policy_category = ANY (ARRAY['scheduling'::text, 'breaks'::text, 'approvals'::text, 'regeneration'::text, 'overflow'::text, 'priority_override'::text])),
+  is_active boolean NOT NULL DEFAULT true,
+  version integer NOT NULL DEFAULT 1,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT institutional_policies_pkey PRIMARY KEY (id),
+  CONSTRAINT institutional_policies_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.notifications (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -290,6 +330,9 @@ CREATE TABLE public.rooms (
   owner_id uuid,
   is_public boolean DEFAULT false,
   shared_with ARRAY DEFAULT '{}'::uuid[],
+  subject_compatibility jsonb DEFAULT '{}'::jsonb,
+  equipment_available jsonb DEFAULT '{}'::jsonb,
+  movement_cost numeric DEFAULT 1.0,
   CONSTRAINT rooms_pkey PRIMARY KEY (id),
   CONSTRAINT rooms_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
 );
@@ -370,6 +413,9 @@ CREATE TABLE public.schedules (
   rejected_at timestamp with time zone,
   deleted_at timestamp with time zone,
   deleted_by uuid,
+  is_protected boolean DEFAULT false,
+  protection_level text CHECK (protection_level IS NULL OR (protection_level = ANY (ARRAY['none'::text, 'approved'::text, 'published'::text, 'admin_locked'::text]))),
+  protected_version_id uuid,
   CONSTRAINT schedules_pkey PRIMARY KEY (id),
   CONSTRAINT schedules_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
   CONSTRAINT schedules_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
@@ -379,7 +425,8 @@ CREATE TABLE public.schedules (
   CONSTRAINT schedules_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.profiles(id),
   CONSTRAINT schedules_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES public.profiles(id),
   CONSTRAINT schedules_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.profiles(id),
-  CONSTRAINT schedules_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id)
+  CONSTRAINT schedules_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_protected_version_id_fkey FOREIGN KEY (protected_version_id) REFERENCES public.schedule_versions(id)
 );
 CREATE TABLE public.sections (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -399,6 +446,8 @@ CREATE TABLE public.sections (
   owner_id uuid,
   is_public boolean DEFAULT false,
   shared_with ARRAY DEFAULT '{}'::uuid[],
+  load_category text CHECK (load_category IS NULL OR (load_category = ANY (ARRAY['light'::text, 'normal'::text, 'heavy'::text]))),
+  special_scheduling_rules jsonb DEFAULT '{}'::jsonb,
   CONSTRAINT sections_pkey PRIMARY KEY (id),
   CONSTRAINT sections_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.sections(id),
   CONSTRAINT sections_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
@@ -447,6 +496,8 @@ CREATE TABLE public.subjects (
   is_public boolean DEFAULT false,
   shared_with ARRAY DEFAULT '{}'::uuid[],
   sessions_per_week integer,
+  monthly_hour_targets numeric,
+  teacher_eligibility_pool jsonb DEFAULT '{}'::jsonb,
   CONSTRAINT subjects_pkey PRIMARY KEY (id),
   CONSTRAINT subjects_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
   CONSTRAINT subjects_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
@@ -488,6 +539,7 @@ CREATE TABLE public.teacher_preferences (
   preferred_time_end text DEFAULT '17:00'::text,
   max_classes_per_day integer DEFAULT 5,
   max_consecutive_classes integer DEFAULT 3,
+  shared_assignment boolean DEFAULT false,
   CONSTRAINT teacher_preferences_pkey PRIMARY KEY (id),
   CONSTRAINT teacher_preferences_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id)
 );
@@ -506,6 +558,7 @@ CREATE TABLE public.teachers (
   owner_id uuid,
   is_public boolean DEFAULT false,
   shared_with ARRAY DEFAULT '{}'::uuid[],
+  shared_assignment boolean DEFAULT false,
   CONSTRAINT teachers_pkey PRIMARY KEY (id),
   CONSTRAINT teachers_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id),
   CONSTRAINT teachers_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)

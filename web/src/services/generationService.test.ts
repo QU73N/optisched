@@ -20,12 +20,11 @@ describe('generationService', () => {
         { id: '2', policy_key: 'min_room_utilization', policy_value: '0.7', description: 'Minimum room utilization', is_active: true, created_at: '2024-01-01', updated_at: '2024-01-01' },
       ];
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({ data: mockPolicies, error: null }),
         }),
-      } as any);
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
 
       const result = await getInstitutionalPolicies();
       expect(result).toEqual(mockPolicies);
@@ -33,12 +32,11 @@ describe('generationService', () => {
     });
 
     it('should return empty array if no policies found', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({ data: null, error: null }),
         }),
-      } as any);
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
 
       const result = await getInstitutionalPolicies();
       expect(result).toEqual([]);
@@ -60,7 +58,6 @@ describe('generationService', () => {
     it('should fetch a specific policy value by key', async () => {
       const mockPolicy = { policy_value: '40' };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -76,7 +73,6 @@ describe('generationService', () => {
     });
 
     it('should return null if policy not found', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -92,7 +88,6 @@ describe('generationService', () => {
     });
 
     it('should throw error if query fails for other reasons', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -114,12 +109,11 @@ describe('generationService', () => {
         { id: '2', policy_key: 'min_room_utilization', policy_value: '0.7', description: 'Minimum room utilization', is_active: true, created_at: '2024-01-01', updated_at: '2024-01-01' },
       ];
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({ data: mockPolicies, error: null }),
         }),
-      } as any);
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
 
       const result = await getPoliciesAsRecord();
       expect(result).toEqual({
@@ -129,7 +123,6 @@ describe('generationService', () => {
     });
 
     it('should return empty object if no policies found', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase mock requires any type
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({ data: null, error: null }),
