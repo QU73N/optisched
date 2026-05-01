@@ -1251,6 +1251,16 @@ export async function runGenerator(
 
     // Step 3 (Domain Builder): Build domains for early pruning in placement
     // Use domain-based lookups to enable early pruning of invalid placements
+    onProgress({
+        subStage: 'loading',
+        attempt: 0,
+        totalAttempts: config.maxAttempts,
+        placed: 0,
+        total: 0,
+        message: 'Building domains for early pruning...',
+    });
+    await new Promise(r => setTimeout(r, 50));
+
     const domains = buildDomains(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, slots);
     // Create domain maps for efficient lookup
     const teacherDomainMap = new Map(domains.teacher_domains.map(d => [d.teacher_id, d]));
@@ -1266,6 +1276,17 @@ export async function runGenerator(
         message: `Loading data. ${scopedSections.length} sections, ${availableRooms.length} rooms, ${normalizedData.normalizedTeachers.length} teachers`,
     });
     await new Promise(r => setTimeout(r, 120));
+
+    // Check if there are any sections to schedule
+    onProgress({
+        subStage: 'loading',
+        attempt: 0,
+        totalAttempts: config.maxAttempts,
+        placed: 0,
+        total: 0,
+        message: 'Validating data...',
+    });
+    await new Promise(r => setTimeout(r, 50));
 
     // Check if there are any sections to schedule
     if (scopedSections.length === 0) {
@@ -1338,6 +1359,16 @@ export async function runGenerator(
 
     // Candidates: subjects that need a slot for any scoped section.
     // We replicate the old behavior (one placement per subject matched to first section).
+    onProgress({
+        subStage: 'loading',
+        attempt: 0,
+        totalAttempts: config.maxAttempts,
+        placed: 0,
+        total: 0,
+        message: 'Filtering subjects by scope...',
+    });
+    await new Promise(r => setTimeout(r, 50));
+
     let scopedSubjects = normalizedData.normalizedSubjects.filter(sub => {
         const hasSection = scopedSections.some(
             s => (sub.program === 'ALL' || s.program === sub.program) && sub.year_level === s.year_level,
@@ -1386,6 +1417,16 @@ export async function runGenerator(
     }
 
     // Calculate total tasks needed for split sessions
+    onProgress({
+        subStage: 'loading',
+        attempt: 0,
+        totalAttempts: config.maxAttempts,
+        placed: 0,
+        total: 0,
+        message: 'Calculating placement tasks...',
+    });
+    await new Promise(r => setTimeout(r, 50));
+
     let totalTasks = 0;
     for (const sub of scopedSubjects) {
         totalTasks += sessionsNeeded(sub, config.sessionMinutes);

@@ -100,7 +100,7 @@ describe('Generator Integration Tests', () => {
             );
 
             expect(progressFn).toHaveBeenCalled();
-            expect(progressFn).toHaveBeenCalledTimes(6); // Progress is called 6 times during generation
+            expect(progressFn).toHaveBeenCalledTimes(10); // Progress is called 10 times during generation (added more granular updates)
         });
 
         it('should handle empty subjects array', async () => {
