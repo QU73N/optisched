@@ -509,9 +509,8 @@ const classifyConstraints = (
 /**
  * Detect if a schedule is impossible to generate given current constraints.
  * TODO: Integrate into generation pipeline before generation attempts.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is now called in runGenerator but detection result is not yet used throughout generation.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const detectImpossibleSchedule = (
     teachers: Teacher[],
     rooms: Room[],
@@ -1126,6 +1125,13 @@ export async function runGenerator(
         : rooms.filter(r => r.is_available !== false);
     const slots = buildSlots(config);
     const days = config.days.length ? config.days : ['Monday'];
+
+    // Step 5 (Impossible Schedule Detector): Detect if schedule is impossible
+    // TODO: In future integration, return early with actionable options if impossible
+    // For now, we detect but continue with generation to avoid breaking changes
+    const impossibilityCheck = detectImpossibleSchedule(teachers, rooms, sections, subjects, days, slots, config);
+    // Impossibility check result is available for future integration steps
+    void impossibilityCheck; // Prepared for future use
 
     onProgress({
         subStage: 'loading',
