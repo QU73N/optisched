@@ -10,12 +10,14 @@ import AIScheduleChat from '../screens/admin/AIScheduleChat';
 import FacultyHub from '../screens/admin/FacultyHub';
 import AdminChatInbox from '../screens/admin/AdminChatInbox';
 import AppSettings from '../screens/shared/AppSettings';
+import GroupChats from '../screens/shared/GroupChats';
 
 export type AdminTabParamList = {
     Dashboard: undefined;
     AI: undefined;
     Faculty: undefined;
     Messages: undefined;
+    GroupChats: undefined;
     Profile: undefined;
 };
 
@@ -84,6 +86,16 @@ const AdminTabs: React.FC = () => {
                     tabBarIcon: ({ color, size }) => (
                         <MaterialIcons name="chat" size={size} color={color} />
                     ),
+                }}
+            />
+            <Tab.Screen
+                name="GroupChats"
+                component={GroupChats}
+                options={{
+                    tabBarIcon: ({ color, size }) => (
+                        <MaterialIcons name="groups" size={size} color={color} />
+                    ),
+                    tabBarLabel: 'Group Chats',
                 }}
             />
             <Tab.Screen
