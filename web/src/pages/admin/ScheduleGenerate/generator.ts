@@ -785,9 +785,8 @@ const selectBestResult = (
 
 /**
  * Calculate soft constraint score for a schedule.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is now called in runGenerator but score is not yet used throughout generation.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const calculateSoftConstraintScore = (
     placed: PlacedEntry[],
     _teachers: Teacher[], // Reserved for future use
@@ -844,9 +843,8 @@ const calculateSoftConstraintScore = (
 
 /**
  * Identify soft constraint violations in a schedule.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is now called in runGenerator but violations are not yet used throughout generation.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const identifySoftConstraintViolations = (
     placed: PlacedEntry[],
     _teachers: Teacher[], // Reserved for future use
@@ -888,9 +886,8 @@ const identifySoftConstraintViolations = (
 
 /**
  * Generate optimization suggestions for a schedule.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is now called in runGenerator but suggestions are not yet used throughout generation.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const generateOptimizationSuggestions = (
     placed: PlacedEntry[],
     violations: SoftConstraintViolation[],
@@ -1408,6 +1405,17 @@ export async function runGenerator(
     if (isPartial) {
         best = { ...best, diff: buildDiff(previousEntries, best.entries) };
     }
+
+    // Step 9 (Soft Constraint Optimizer): Calculate soft constraint scores and identify violations
+    // TODO: In future integration, apply optimizations to improve soft constraint scores
+    // For now, we calculate but don't apply optimizations to avoid breaking changes
+    const softScore = calculateSoftConstraintScore(best.entries, teachers, rooms, sections, config.soft);
+    const violations = identifySoftConstraintViolations(best.entries, teachers, rooms);
+    const suggestions = generateOptimizationSuggestions(best.entries, violations, teachers, rooms);
+    // Soft constraint optimization results are available for future integration steps
+    void softScore; // Prepared for future use
+    void violations; // Prepared for future use
+    void suggestions; // Prepared for future use
 
     onProgress({
         subStage: 'done',
