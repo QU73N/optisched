@@ -246,6 +246,9 @@ const ScheduleGenerate: React.FC = () => {
         setResult(null);
         setSavedId(null);
         setSaveError(null);
+        setOptimizedResult(null);
+        setOptimizationReport(null);
+        setOptimizationError(null);
         cancelRef.current = false;
         setGenerationStartTime(Date.now());
         // Initialize progress with config values
