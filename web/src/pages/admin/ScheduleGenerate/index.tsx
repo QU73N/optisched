@@ -1113,10 +1113,16 @@ const GenerateStage: React.FC<{
     const pct = progress.total && progress.total > 0 ? Math.round((progress.placed / progress.total) * 100) : 0;
     const currentIdx = SUBSTAGES.findIndex(s => s.key === progress.subStage);
     const [currentTime, setCurrentTime] = useState(0);
+    const speedHistoryRef = useRef<number[]>([]);
+    const [speedHistory, setSpeedHistory] = useState<number[]>([]);
 
     // Update current time every second when generating
     useEffect(() => {
-        if (!generating) return;
+        if (!generating) {
+            speedHistoryRef.current = [];
+            setSpeedHistory([]);
+            return;
+        }
         const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
         // Set initial time after a brief delay to avoid synchronous setState
         const timeout = setTimeout(() => setCurrentTime(Date.now()), 0);
@@ -1126,28 +1132,44 @@ const GenerateStage: React.FC<{
         };
     }, [generating]);
 
-    // Calculate estimated time remaining for all attempts combined
-    let estimatedTimeText = '';
-    if (generationStartTime && progress.total && progress.total > 0 && progress.totalAttempts > 0) {
+    // Calculate speed (attempts per second) and update history
+    useEffect(() => {
+        if (!generating || !generationStartTime || progress.totalAttempts <= 0) return;
+        
         const elapsed = currentTime - generationStartTime;
-        if (elapsed >= 1000) {
-            // Calculate total progress across all attempts
-            // Progress = (completed attempts + current attempt progress) / total attempts
+        if (elapsed < 1000) return;
+        
+        const completedAttempts = progress.attempt - 1;
+        const total = progress.total ?? 0;
+        const currentAttemptProgress = total > 0 ? progress.placed / total : 0;
+        const totalProgress = (completedAttempts + currentAttemptProgress) / progress.totalAttempts;
+        
+        if (totalProgress > 0) {
+            const speed = totalProgress / (elapsed / 1000); // progress per second
+            speedHistoryRef.current = [...speedHistoryRef.current, speed].slice(-10);
+            setSpeedHistory(speedHistoryRef.current);
+        }
+    }, [currentTime, progress, generating, generationStartTime]);
+
+    // Calculate estimated time remaining using average speed
+    let estimatedTimeText = '';
+    if (generationStartTime && speedHistory.length > 0) {
+        const avgSpeed = speedHistory.reduce((a, b) => a + b, 0) / speedHistory.length;
+        if (avgSpeed > 0) {
             const completedAttempts = progress.attempt - 1;
-            const currentAttemptProgress = progress.placed / progress.total;
+            const total = progress.total ?? 0;
+            const currentAttemptProgress = total > 0 ? progress.placed / total : 0;
             const totalProgress = (completedAttempts + currentAttemptProgress) / progress.totalAttempts;
+            const remainingProgress = 1 - totalProgress;
+            const remainingSeconds = remainingProgress / avgSpeed;
             
-            if (totalProgress > 0) {
-                const estimatedTotal = elapsed / totalProgress;
-                const remaining = estimatedTotal - elapsed;
-                if (remaining > 0) {
-                    if (remaining < 60000) {
-                        estimatedTimeText = `~${Math.round(remaining / 1000)}s`;
-                    } else if (remaining < 3600000) {
-                        estimatedTimeText = `~${Math.round(remaining / 60000)}m`;
-                    } else {
-                        estimatedTimeText = `~${Math.round(remaining / 3600000)}h`;
-                    }
+            if (remainingSeconds > 0) {
+                if (remainingSeconds < 60) {
+                    estimatedTimeText = `~${Math.ceil(remainingSeconds)}s`;
+                } else if (remainingSeconds < 3600) {
+                    estimatedTimeText = `~${Math.ceil(remainingSeconds / 60)}m`;
+                } else {
+                    estimatedTimeText = `~${Math.ceil(remainingSeconds / 3600)}h`;
                 }
             }
         }
@@ -1193,12 +1215,13 @@ const GenerateStage: React.FC<{
 
 const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
     const perfect = result.placed === result.total && result.errors.length === 0;
+    const scoreRounded = result.score.toFixed(2);
     return (
         <div>
             <StageHeader
                 icon={perfect ? <CheckCircle size={16} /> : <Layers size={16} />}
                 title={perfect ? 'Schedule ready' : 'Partial schedule'}
-                desc={`${result.placed} of ${result.total} sessions placed. Soft score ${result.score} out of 100.`}
+                desc={`${result.placed} of ${result.total} sessions placed. Soft score ${scoreRounded} out of 100.`}
             />
 
             {result.highPriorityTotal > 0 && (
@@ -1262,7 +1285,9 @@ const SaveStage: React.FC<{
     onSaveAndSubmit: () => void;
     onRegenerate: () => void;
     onReset: () => void;
-}> = ({ result, saving, savedId, saveError, onSave, onSaveAndSubmit, onRegenerate, onReset }) => (
+}> = ({ result, saving, savedId, saveError, onSave, onSaveAndSubmit, onRegenerate, onReset }) => {
+    const scoreRounded = result.score.toFixed(2);
+    return (
     <div>
         <StageHeader icon={<Save size={16} />} title="Save" desc="Persist this run as a draft, or send it for approval right away." />
 
@@ -1270,7 +1295,7 @@ const SaveStage: React.FC<{
             <ReviewBlock title="Summary" items={[
                 ['Placed', `${result.placed}/${result.total}`],
                 ['Unresolved', String(result.errors.length)],
-                ['Soft score', `${result.score}/100`],
+                ['Soft score', `${scoreRounded}/100`],
             ]} />
         </div>
 
@@ -1300,7 +1325,8 @@ const SaveStage: React.FC<{
             </button>
         </div>
     </div>
-);
+    );
+};
 
 // ---------------------------------------------------------------------------
 // Versions panel (Phase 4)
