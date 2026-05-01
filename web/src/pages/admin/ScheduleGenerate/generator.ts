@@ -1344,13 +1344,19 @@ export async function runGenerator(
         sessionIndex: number; // 0-based index for this subject-section pair
     }
 
+    // Calculate total tasks needed for split sessions
+    let totalTasks = 0;
+    for (const sub of scopedSubjects) {
+        totalTasks += sessionsNeeded(sub, config.sessionMinutes);
+    }
+
     onProgress({
         subStage: 'ranking',
         attempt: 0,
         totalAttempts: config.maxAttempts,
         placed: 0,
-        total: scopedSubjects.length,
-        message: `Ranking ${scopedSubjects.length} subjects`,
+        total: totalTasks,
+        message: `Ranking ${scopedSubjects.length} subjects (${totalTasks} sessions)`,
     });
     await new Promise(r => setTimeout(r, 120));
 
@@ -1387,12 +1393,6 @@ export async function runGenerator(
             return subScore >= 70 || secScore >= 70;
         }).map(s => s.id),
     );
-
-    // Calculate total tasks needed for split sessions
-    let totalTasks = 0;
-    for (const sub of scopedSubjects) {
-        totalTasks += sessionsNeeded(sub, config.sessionMinutes);
-    }
 
     // Step 6 (Generation Metadata Recorder): Initialize metadata for tracking generation
     // TODO: In future integration, save metadata to generation_runs table
