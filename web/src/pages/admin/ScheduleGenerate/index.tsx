@@ -5,7 +5,7 @@ import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
 import {
     ArrowLeft, ArrowRight, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
     Flag, GitBranch, Inbox, Layers, Lightbulb, ListChecks, Lock, MapPin, Play, Plus,
-    RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, Sliders, Sparkles, Upload,
+    RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, ShieldCheck, Sliders, Sparkles, Upload,
     Users, X, XCircle,
 } from 'lucide-react';
 import '../Dashboard.css';
@@ -807,6 +807,7 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
 
 const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>>; compact?: boolean }> = ({ config, setConfig, compact = false }) => {
     const [hardConstraintsOpen, setHardConstraintsOpen] = useState(false);
+    const [policiesOpen, setPoliciesOpen] = useState(false);
     const updateSoft = (key: keyof GenerationConfig['soft'], val: number) =>
         setConfig(c => ({ ...c, soft: { ...c.soft, [key]: val } }));
 
@@ -844,7 +845,63 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 <SoftSlider label="Room utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} />
             </div>
 
-            <div className="sg-grid-3" style={{ marginTop: 16 }}>
+            <div className="sg-subhead" style={{ marginTop: 20 }}><ShieldCheck size={12} /> Institutional policies</div>
+            <button
+                type="button"
+                className="sg-hard-constraints-btn"
+                onClick={() => setPoliciesOpen(!policiesOpen)}
+                aria-expanded={policiesOpen}
+            >
+                <span>Configure institutional policies</span>
+                {policiesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {policiesOpen && (
+                <div className="sg-hard-list-expanded" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div className="sg-grid-3">
+                        <div>
+                            <div className="sg-field-label">Overflow policy</div>
+                            <select 
+                                className="input" 
+                                value={config.overflowPolicy || 'fail'} 
+                                onChange={e => setConfig(c => ({ ...c, overflowPolicy: e.target.value as any }))}
+                            >
+                                <option value="fail">Fail on overflow</option>
+                                <option value="relax_soft">Relax soft constraints</option>
+                                <option value="expand_scope">Expand search scope</option>
+                                <option value="partial_only">Partial only</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div className="sg-field-label">Max room capacity</div>
+                            <input 
+                                type="number" 
+                                className="input" 
+                                value={config.maxCapacity || 100} 
+                                onChange={e => setConfig(c => ({ ...c, maxCapacity: Number(e.target.value) }))}
+                                min="1"
+                            />
+                        </div>
+                        <div>
+                            <div className="sg-field-label">Allow overflow %</div>
+                            <input 
+                                type="number" 
+                                className="input" 
+                                value={config.overflowPercent || 10} 
+                                onChange={e => setConfig(c => ({ ...c, overflowPercent: Number(e.target.value) }))}
+                                min="0"
+                                max="100"
+                            />
+                        </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        Overflow policy controls how the generator handles sections that exceed room capacity. 
+                        "Fail" stops generation, "Relax soft" temporarily reduces soft constraint weights, 
+                        "Expand scope" searches more aggressively, and "Partial only" applies only to partial regeneration.
+                    </div>
+                </div>
+            )}
+
+            <div className="sg-grid-3" style={{ marginTop: policiesOpen ? 20 : 16 }}>
                 <div>
                     <div className="sg-field-label">Attempts</div>
                     <select className="input" value={config.maxAttempts} onChange={e => setConfig(c => ({ ...c, maxAttempts: Number(e.target.value) }))}>
