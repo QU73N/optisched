@@ -577,27 +577,31 @@ const ScopeStage: React.FC<{
         <div>
             <StageHeader icon={<Users size={16} />} title="Scope" desc="Pick a generation mode, then choose what to generate." compact={compact} />
 
-            <div className="sg-fields">
-                <div>
-                    <div className="sg-field-label">Generation mode</div>
-                    <select 
-                        className="input" 
-                        value={config.mode} 
-                        onChange={e => setMode(e.target.value as GenerationMode)}
-                        style={{ maxWidth: 400 }}
+            <div className="sg-mode-cards">
+                {(Object.keys(MODE_LABELS) as GenerationMode[]).map(mode => (
+                    <button
+                        key={mode}
+                        type="button"
+                        className={`sg-mode-card ${config.mode === mode ? 'sg-mode-card-active' : ''}`}
+                        onClick={() => setMode(mode)}
                     >
-                        {(Object.keys(MODE_LABELS) as GenerationMode[]).map(mode => (
-                            <option key={mode} value={mode}>
-                                {MODE_LABELS[mode].label}
-                            </option>
-                        ))}
-                    </select>
-                    {!compact && (
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                            {MODE_LABELS[config.mode].desc}
+                        <div className="sg-mode-card-header">
+                            <span className="sg-mode-card-icon">
+                                {mode === 'full' && <Sparkles size={16} />}
+                                {mode === 'partial' && <GitBranch size={16} />}
+                                {mode === 'draft' && <FileClock size={16} />}
+                                {mode === 'locked' && <Lock size={16} />}
+                                {mode === 'whatif' && <Lightbulb size={16} />}
+                                {mode === 'emergency' && <RefreshCw size={16} />}
+                                {mode === 'multiscenario' && <Layers size={16} />}
+                            </span>
+                            <span className="sg-mode-card-title">{MODE_LABELS[mode].label}</span>
                         </div>
-                    )}
-                </div>
+                        {!compact && (
+                            <div className="sg-mode-card-desc">{MODE_LABELS[mode].desc}</div>
+                        )}
+                    </button>
+                ))}
             </div>
 
             {config.mode === 'full' ? (

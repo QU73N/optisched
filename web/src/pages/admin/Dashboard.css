@@ -2638,6 +2638,94 @@
 
 .sg-mode-active svg { color: var(--accent-primary); }
 
+/* Mode cards - grid-based selection for multiple modes */
+.sg-mode-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.sg-mode-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sg-mode-card:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.sg-mode-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sg-mode-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-inset);
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.sg-mode-card-title {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.sg-mode-card-desc {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.sg-mode-card-active {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary-subtle);
+    box-shadow: 0 0 0 2px var(--accent-primary-subtle);
+}
+
+.sg-mode-card-active .sg-mode-card-icon {
+    background: var(--accent-primary);
+    color: var(--text-on-accent);
+}
+
+.sg-mode-card-active .sg-mode-card-title {
+    color: var(--accent-primary);
+}
+
+/* Compact mode - hide descriptions */
+.sg-stage-card.sg-compact .sg-mode-card-desc {
+    display: none;
+}
+
+.sg-stage-card.sg-compact .sg-mode-cards {
+    gap: 8px;
+}
+
+.sg-stage-card.sg-compact .sg-mode-card {
+    padding: 10px 12px;
+}
+
 .sg-partial {
     padding: 14px 16px;
     background: var(--bg-surface);
