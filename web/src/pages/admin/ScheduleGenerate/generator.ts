@@ -1021,9 +1021,8 @@ const recommendScenario = (
 /**
  * Build domains for early pruning in placement.
  * TODO: Integrate into generation pipeline for domain builder.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is now called in runGenerator but domains are not yet used throughout generation.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
 const buildDomains = (
     teachers: Teacher[],
     rooms: Room[],
@@ -1126,6 +1125,13 @@ export async function runGenerator(
     const impossibilityCheck = detectImpossibleSchedule(teachers, rooms, sections, subjects, days, slots, config);
     // Impossibility check result is available for future integration steps
     void impossibilityCheck; // Prepared for future use
+
+    // Step 3 (Domain Builder): Build domains for early pruning in placement
+    // TODO: In future integration, use domain-based lookups instead of maps
+    // For now, we build but continue using existing lookup maps to avoid breaking changes
+    const domains = buildDomains(teachers, rooms, sections, subjects, days, slots);
+    // Domain data is available for future integration steps
+    void domains; // Prepared for future use
 
     onProgress({
         subStage: 'loading',
