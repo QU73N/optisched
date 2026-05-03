@@ -221,6 +221,10 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // === Try Groq API ===
 async function tryGroq(fullSystemPrompt: string, userMessage: string, conversationHistory: GeminiMessage[]): Promise<string | null> {
+    if (!GROQ_API_KEY || GROQ_API_KEY.includes('YOUR_GROQ_API_KEY')) {
+        console.log('[OptiBot] Groq API key not configured, skipping');
+        return null;
+    }
     try {
         const messages = [
             { role: 'system', content: fullSystemPrompt },
@@ -235,13 +239,21 @@ async function tryGroq(fullSystemPrompt: string, userMessage: string, conversati
         if (res.ok) {
             const data = await res.json();
             return data?.choices?.[0]?.message?.content || null;
+        } else {
+            console.error('[OptiBot] Groq API error:', res.status, res.statusText);
         }
-    } catch { /* fallthrough */ }
+    } catch (error) {
+        console.error('[OptiBot] Groq fetch error:', error);
+    }
     return null;
 }
 
 // === Try OpenRouter API ===
 async function tryOpenRouter(fullSystemPrompt: string, userMessage: string, conversationHistory: GeminiMessage[]): Promise<string | null> {
+    if (!OPENROUTER_API_KEY) {
+        console.log('[OptiBot] OpenRouter API key not configured, skipping');
+        return null;
+    }
     try {
         const messages = [
             { role: 'system', content: fullSystemPrompt },
@@ -261,8 +273,12 @@ async function tryOpenRouter(fullSystemPrompt: string, userMessage: string, conv
         if (res.ok) {
             const data = await res.json();
             return data?.choices?.[0]?.message?.content || null;
+        } else {
+            console.error('[OptiBot] OpenRouter API error:', res.status, res.statusText);
         }
-    } catch { /* fallthrough */ }
+    } catch (error) {
+        console.error('[OptiBot] OpenRouter fetch error:', error);
+    }
     return null;
 }
 
@@ -283,56 +299,69 @@ export async function sendToOptiBot(
         const fullSystemPrompt = SYSTEM_PROMPT + userContext + scheduleContext;
 
         // 1. Try Gemini models
-        const contents: GeminiMessage[] = [
-            { role: 'user', parts: [{ text: fullSystemPrompt + '\n\nPlease acknowledge briefly.' }] },
-            { role: 'model', parts: [{ text: `Understood. I am OptiSched AI, ready to help${userProfile?.full_name ? ` ${userProfile.full_name}` : ''}.` }] },
-            ...conversationHistory,
-            { role: 'user', parts: [{ text: userMessage }] },
-        ];
+        if (!GEMINI_API_KEY) {
+            console.log('[OptiBot] Gemini API key not configured, skipping to fallback providers');
+        } else {
+            const contents: GeminiMessage[] = [
+                { role: 'user', parts: [{ text: fullSystemPrompt + '\n\nPlease acknowledge briefly.' }] },
+                { role: 'model', parts: [{ text: `Understood. I am OptiSched AI, ready to help${userProfile?.full_name ? ` ${userProfile.full_name}` : ''}.` }] },
+                ...conversationHistory,
+                { role: 'user', parts: [{ text: userMessage }] },
+            ];
 
-        const requestBody = JSON.stringify({
-            contents,
-            generationConfig: { temperature: 0.7, topP: 0.9, topK: 40, maxOutputTokens: 4096 },
-            safetySettings: [
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-            ],
-        });
+            const requestBody = JSON.stringify({
+                contents,
+                generationConfig: { temperature: 0.7, topP: 0.9, topK: 40, maxOutputTokens: 4096 },
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+                ],
+            });
 
-        for (const model of GEMINI_MODELS) {
-            const apiUrl = `${GEMINI_BASE_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`;
-            for (let retry = 0; retry <= MAX_RETRIES; retry++) {
-                try {
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: requestBody,
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-                        if (aiResponse) return await processAIActions(aiResponse, userProfile?.role);
+            for (const model of GEMINI_MODELS) {
+                const apiUrl = `${GEMINI_BASE_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`;
+                for (let retry = 0; retry <= MAX_RETRIES; retry++) {
+                    try {
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: requestBody,
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                            if (aiResponse) return await processAIActions(aiResponse, userProfile?.role);
+                            break;
+                        } else {
+                            console.error(`[OptiBot] Gemini API error (${model}):`, response.status, response.statusText);
+                        }
+                        if (response.status === 429 && retry < MAX_RETRIES) {
+                            console.log(`[OptiBot] Rate limited on ${model}, retrying in ${RETRY_DELAY_MS}ms...`);
+                            await delay(RETRY_DELAY_MS);
+                            continue;
+                        }
+                        break;
+                    } catch (error) {
+                        console.error(`[OptiBot] Gemini fetch error (${model}):`, error);
                         break;
                     }
-                    if (response.status === 429 && retry < MAX_RETRIES) {
-                        await delay(RETRY_DELAY_MS);
-                        continue;
-                    }
-                    break;
-                } catch { break; }
+                }
             }
         }
 
         // 2. Try Groq
+        console.log('[OptiBot] Trying Groq...');
         const groqResult = await tryGroq(fullSystemPrompt, userMessage, conversationHistory);
         if (groqResult) return await processAIActions(groqResult, userProfile?.role);
 
         // 3. Try OpenRouter
+        console.log('[OptiBot] Trying OpenRouter...');
         const openRouterResult = await tryOpenRouter(fullSystemPrompt, userMessage, conversationHistory);
         if (openRouterResult) return await processAIActions(openRouterResult, userProfile?.role);
 
+        console.error('[OptiBot] All AI providers failed');
         return 'I\'m temporarily experiencing high demand across all AI services. Please wait a minute and try again.';
     } catch (error) {
         console.error('[OptiBot] Error:', error);
