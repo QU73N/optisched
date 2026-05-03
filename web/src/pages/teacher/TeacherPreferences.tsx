@@ -35,7 +35,7 @@ const TeacherPreferences: React.FC = () => {
             const [subRes, roomRes, teacherRes] = await Promise.all([
                 supabase.from('subjects').select('id, name'),
                 supabase.from('rooms').select('id, name'),
-                supabase.from('teachers').select('id').eq('profile_id', profile?.id || '').single()
+                supabase.from('teachers').select('id').eq('profile_id', profile?.id || '').maybeSingle()
             ]);
             if (subRes.data) setAllSubjects(subRes.data);
             if (roomRes.data) setAllRooms(roomRes.data);
@@ -54,7 +54,7 @@ const TeacherPreferences: React.FC = () => {
                     .from('teacher_preferences')
                     .select('*')
                     .eq('teacher_id', teacherId)
-                    .single();
+                    .maybeSingle();
 
                 if (data) {
                     setAvailability((data.availability as Record<string, boolean>) || {});

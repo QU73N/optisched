@@ -32,7 +32,7 @@ const TeacherSchedule: React.FC = () => {
 
     const fetchSchedules = async () => {
         try {
-            const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', profile!.id).single();
+            const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', profile!.id).maybeSingle();
             if (teacher) {
                 const { data } = await supabase.from('schedules')
                     .select('id, day_of_week, start_time, end_time, subject:subjects(name, code), room:rooms(name, building), section:sections(name, program)')
