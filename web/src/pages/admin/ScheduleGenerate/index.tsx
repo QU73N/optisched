@@ -466,72 +466,49 @@ const ScheduleGenerate: React.FC = () => {
     };
 
     const saveAs = async (initialState: 'draft' | 'submitted') => {
-        console.log('[SAVE AS] Starting saveAs with initialState:', initialState);
-        if (!result) {
-            console.log('[SAVE AS] No result, returning');
-            return;
-        }
+        if (!result) return;
 
         // If submitting, check for existing active schedule
         if (initialState === 'submitted') {
-            console.log('[SAVE AS] Checking for existing active schedule');
             try {
                 const summary = await scheduleVersionService.getActiveScheduleSummary();
-                console.log('[SAVE AS] Active schedule summary:', summary);
                 setCurrentScheduleSummary(summary);
 
                 if (summary && summary.exists) {
-                    console.log('[SAVE AS] Existing schedule found, showing overwrite confirmation');
                     // Show overwrite confirmation modal
                     setShowOverwriteConfirm(true);
                     return;
                 }
             } catch (error) {
-                console.error('[SAVE AS] Error checking active schedule:', error);
+                console.error('[SAVE] Error checking active schedule:', error);
                 // Continue with save even if check fails
             }
         }
 
-        console.log('[SAVE AS] Proceeding with performSave');
         // Proceed with save
         await performSave(initialState);
     };
 
     const performSave = async (initialState: 'draft' | 'submitted') => {
-        console.log('[PERFORM SAVE] Starting performSave with initialState:', initialState);
-        if (!result) {
-            console.log('[PERFORM SAVE] No result, returning');
-            return;
-        }
+        if (!result) return;
         setSaving(true); setSaveError(null);
         try {
-            console.log('[PERFORM SAVE] Config mode:', config.mode);
             if (config.mode === 'partial') {
-                console.log('[PERFORM SAVE] Partial mode, deleting existing schedules');
                 const t = config.partialTarget;
-                if (!t?.id) {
-                    console.log('[PERFORM SAVE] No partial target selected, throwing error');
-                    throw new Error('No partial regeneration target selected.');
-                }
+                if (!t?.id) throw new Error('No partial regeneration target selected.');
                 const column =
                     t.kind === 'section' ? 'section_id' :
                     t.kind === 'teacher' ? 'teacher_id' :
                     t.kind === 'room'    ? 'room_id' : 'subject_id';
-                console.log('[PERFORM SAVE] Deleting schedules where', column, '=', t.id, 'with status in draft/submitted/approved');
                 // Only replace unpublished rows in the slice so live schedules survive.
                 const { error: delErr } = await supabase
                     .from('schedules')
                     .delete()
                     .eq(column, t.id)
                     .in('status', ['draft', 'submitted', 'approved']);
-                if (delErr) {
-                    console.error('[PERFORM SAVE] Delete error:', delErr);
-                    throw delErr;
-                }
-                console.log('[PERFORM SAVE] Delete successful');
+                if (delErr) throw delErr;
             }
 
-            console.log('[PERFORM SAVE] Preparing insert for', result.entries.length, 'entries');
             // Insert new schedule entries
             const inserts = result.entries.map(e => ({
                 subject_id: e.subjectId, teacher_id: e.teacherId, room_id: e.roomId,
@@ -539,19 +516,11 @@ const ScheduleGenerate: React.FC = () => {
                 status: initialState,
                 is_active: true, // New schedules are active by default
             }));
-            console.log('[PERFORM SAVE] Insert data prepared, first entry:', inserts[0]);
-            console.log('[PERFORM SAVE] Executing supabase.from(schedules).insert() without select...');
             const { error, data } = await supabase.from('schedules').insert(inserts);
-            console.log('[PERFORM SAVE] Insert result - error:', error, 'data:', data);
-            if (error) {
-                console.error('[PERFORM SAVE] Insert error:', error);
-                throw error;
-            }
-            console.log('[PERFORM SAVE] Insert successful, data length:', data?.length);
+            if (error) throw error;
             setSavedId('ok'); // We can't get IDs without select, so just set a success flag
 
             // Query the inserted schedules to get their IDs
-            console.log('[PERFORM SAVE] Querying inserted schedules to get IDs...');
             const { data: insertedSchedules, error: queryError } = await supabase
                 .from('schedules')
                 .select('id')
@@ -559,9 +528,9 @@ const ScheduleGenerate: React.FC = () => {
                 .eq('is_active', true)
                 .order('created_at', { ascending: false })
                 .limit(result.entries.length);
-            console.log('[PERFORM SAVE] Query result - error:', queryError, 'data length:', insertedSchedules?.length);
+
             if (queryError) {
-                console.error('[PERFORM SAVE] Query error:', queryError);
+                console.error('Query error:', queryError);
                 // Continue anyway - the insert succeeded
             } else {
                 // Log audit for each created schedule
@@ -575,20 +544,16 @@ const ScheduleGenerate: React.FC = () => {
 
                 // Scan for conflicts and save to conflicts table
                 if (insertedSchedules && insertedSchedules.length > 0) {
-                    console.log('[PERFORM SAVE] Fetching full schedule data for conflict detection...');
                     const { data: savedScheduleData } = await supabase
                         .from('schedules')
                         .select('*, subject:subjects(*), teacher:teachers(*, profile_id:profiles(*)), room:rooms(*), section:sections(*)')
                         .in('id', insertedSchedules.map((d: { id: string }) => d.id));
 
                     if (savedScheduleData) {
-                        console.log('[PERFORM SAVE] Running conflict detection on', savedScheduleData.length, 'schedules...');
                         const conflicts = detectConflicts(savedScheduleData);
-                        console.log('[PERFORM SAVE] Detected', conflicts.length, 'conflicts');
 
                         // Save conflicts to database
                         if (conflicts.length > 0) {
-                            console.log('[PERFORM SAVE] Saving conflicts to database...');
                             const conflictInserts = conflicts.map((c: { type: string; severity: string; title: string; description: string; scheduleAId: string | null; scheduleBId: string | null }) => ({
                                 type: c.type,
                                 severity: c.severity,
@@ -600,10 +565,7 @@ const ScheduleGenerate: React.FC = () => {
                             }));
                             const { error: conflictError } = await supabase.from('conflicts').insert(conflictInserts);
                             if (conflictError) {
-                                console.error('[PERFORM SAVE] Conflict insert error:', conflictError);
-                                // Continue anyway
-                            } else {
-                                console.log('[PERFORM SAVE] Conflicts saved successfully');
+                                console.error('Failed to save conflicts:', conflictError);
                             }
                         }
                     }
