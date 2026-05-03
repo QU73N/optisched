@@ -791,88 +791,84 @@ const ConflictsAlerts: React.FC = () => {
 
     return (
         <div className="dashboard fade-in">
-            {/* Version Selector Modal */}
+            {/* Version Selector - Inline Card */}
             {showVersionSelector && (
-                <div 
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="version-selector-title"
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                    }}
-                >
-                    <div className="card" style={{ padding: 24, maxWidth: 500, width: '90%' }}>
-                        <h3 id="version-selector-title" style={{ color: 'var(--text-primary)', margin: '0 0 12px', fontSize: 18 }}>
+                <div className="card" style={{ padding: 24, maxWidth: 800, margin: '0 auto 24px auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h3 style={{ color: 'var(--text-primary)', margin: 0, fontSize: 18 }}>
                             Select Schedule Version to Scan
                         </h3>
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.5 }}>
-                            Choose which schedule version you want to check for conflicts. The scan will only examine schedules in the selected status.
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <button
-                                className="btn btn-primary"
-                                onClick={() => {
-                                    setSelectedVersion('published');
-                                    setShowVersionSelector(false);
-                                    setScanResult(null);
-                                    setHasScanResults(false);
-                                    fetchDbConflicts();
-                                }}
-                                style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
-                            >
-                                <div style={{ flex: 1, textAlign: 'left' }}>
-                                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Published Schedules</div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                        Scan only published schedules (active schedule)
-                                    </div>
+                        <button
+                            onClick={() => setShowVersionSelector(false)}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-secondary)',
+                                cursor: 'pointer',
+                                fontSize: 20,
+                            }}
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.5 }}>
+                        Choose which schedule version you want to check for conflicts. The scan will only examine schedules in the selected status.
+                    </p>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                        <button
+                            className={selectedVersion === 'published' ? 'btn btn-primary' : 'btn btn-secondary'}
+                            onClick={() => {
+                                setSelectedVersion('published');
+                                setShowVersionSelector(false);
+                                setScanResult(null);
+                                setHasScanResults(false);
+                                fetchDbConflicts();
+                            }}
+                            style={{ flex: 1, minWidth: 200, justifyContent: 'flex-start', padding: '12px 16px' }}
+                        >
+                            <div style={{ flex: 1, textAlign: 'left' }}>
+                                <div style={{ fontWeight: 600, marginBottom: 4 }}>Published Schedules</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                    Scan only published schedules (active schedule)
                                 </div>
-                            </button>
-                            <button
-                                className="btn btn-secondary"
-                                onClick={() => {
-                                    setSelectedVersion('draft');
-                                    setShowVersionSelector(false);
-                                    setScanResult(null);
-                                    setHasScanResults(false);
-                                    fetchDbConflicts();
-                                }}
-                                style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
-                            >
-                                <div style={{ flex: 1, textAlign: 'left' }}>
-                                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Draft Schedules</div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                        Scan only draft schedules (work in progress)
-                                    </div>
+                            </div>
+                        </button>
+                        <button
+                            className={selectedVersion === 'draft' ? 'btn btn-primary' : 'btn btn-secondary'}
+                            onClick={() => {
+                                setSelectedVersion('draft');
+                                setShowVersionSelector(false);
+                                setScanResult(null);
+                                setHasScanResults(false);
+                                fetchDbConflicts();
+                            }}
+                            style={{ flex: 1, minWidth: 200, justifyContent: 'flex-start', padding: '12px 16px' }}
+                        >
+                            <div style={{ flex: 1, textAlign: 'left' }}>
+                                <div style={{ fontWeight: 600, marginBottom: 4 }}>Draft Schedules</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                    Scan only draft schedules (work in progress)
                                 </div>
-                            </button>
-                            <button
-                                className="btn btn-secondary"
-                                onClick={() => {
-                                    setSelectedVersion('all');
-                                    setShowVersionSelector(false);
-                                    setScanResult(null);
-                                    setHasScanResults(false);
-                                    fetchDbConflicts();
-                                }}
-                                style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
-                            >
-                                <div style={{ flex: 1, textAlign: 'left' }}>
-                                    <div style={{ fontWeight: 600, marginBottom: 4 }}>All Schedules</div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                        Scan both published and draft schedules
-                                    </div>
+                            </div>
+                        </button>
+                        <button
+                            className={selectedVersion === 'all' ? 'btn btn-primary' : 'btn btn-secondary'}
+                            onClick={() => {
+                                setSelectedVersion('all');
+                                setShowVersionSelector(false);
+                                setScanResult(null);
+                                setHasScanResults(false);
+                                fetchDbConflicts();
+                            }}
+                            style={{ flex: 1, minWidth: 200, justifyContent: 'flex-start', padding: '12px 16px' }}
+                        >
+                            <div style={{ flex: 1, textAlign: 'left' }}>
+                                <div style={{ fontWeight: 600, marginBottom: 4 }}>All Schedules</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                    Scan both published and draft schedules
                                 </div>
-                            </button>
-                        </div>
+                            </div>
+                        </button>
                     </div>
                 </div>
             )}
@@ -1083,144 +1079,122 @@ const ConflictsAlerts: React.FC = () => {
                 </div>
             )}
 
-            {/* Confirmation Dialog */}
+            {/* Confirmation Dialog - Inline Card */}
             {showConfirmDialog && (
-                <div 
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="confirm-dialog-title"
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                    }}
-                >
-                    <div className="card" style={{ padding: 24, maxWidth: 500, width: '90%' }}>
-                        <h3 id="confirm-dialog-title" style={{ color: 'var(--text-primary)', margin: '0 0 12px', fontSize: 18 }}>
+                <div className="card" style={{ padding: 24, maxWidth: 800, margin: '0 auto 24px auto', border: '2px solid var(--accent-warning)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h3 style={{ color: 'var(--text-primary)', margin: 0, fontSize: 18 }}>
                             Confirm Auto-Fix
                         </h3>
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
-                            This will automatically apply fixes to {confirmDialogViolationCount} conflict(s). 
-                            The system will make decisions about which fixes to apply based on severity and impact.
-                            <br /><br />
-                            <strong>Warning:</strong> This will modify your schedule data. Consider creating a backup first.
-                        </p>
-                        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                            <button
-                                className="btn btn-secondary"
-                                onClick={() => setShowConfirmDialog(false)}
-                                aria-label="Cancel auto-fix operation"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn btn-primary"
-                                onClick={() => confirmAction?.()}
-                                aria-label="Confirm and apply automatic fixes"
-                            >
-                                Confirm and Fix
-                            </button>
-                        </div>
+                        <button
+                            onClick={() => setShowConfirmDialog(false)}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-secondary)',
+                                cursor: 'pointer',
+                                fontSize: 20,
+                            }}
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+                        This will automatically apply fixes to {confirmDialogViolationCount} conflict(s). 
+                        The system will make decisions about which fixes to apply based on severity and impact.
+                        <br /><br />
+                        <strong>Warning:</strong> This will modify your schedule data. Consider creating a backup first.
+                    </p>
+                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => setShowConfirmDialog(false)}
+                            aria-label="Cancel auto-fix operation"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => confirmAction?.()}
+                            aria-label="Confirm and apply automatic fixes"
+                        >
+                            Confirm and Fix
+                        </button>
                     </div>
                 </div>
             )}
 
-            {/* Soft Score Breakdown Modal */}
+            {/* Soft Score Breakdown - Inline Card */}
             {showSoftScoreModal && scanResult?.softScore && (
-                <div 
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="soft-score-modal-title"
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                    }}
-                >
-                    <div className="card" style={{ padding: 24, maxWidth: 600, width: '90%', maxHeight: '80vh', overflow: 'auto' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <h3 id="soft-score-modal-title" style={{ color: 'var(--text-primary)', margin: 0, fontSize: 18 }}>
-                                Soft Score Breakdown
-                            </h3>
-                            <button
-                                onClick={() => setShowSoftScoreModal(false)}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: 'var(--text-secondary)',
-                                    cursor: 'pointer',
-                                    fontSize: 20,
-                                }}
-                                aria-label="Close soft score breakdown modal"
-                            >
-                                ×
-                            </button>
+                <div className="card" style={{ padding: 24, maxWidth: 800, margin: '0 auto 24px auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h3 style={{ color: 'var(--text-primary)', margin: 0, fontSize: 18 }}>
+                            Soft Score Breakdown
+                        </h3>
+                        <button
+                            onClick={() => setShowSoftScoreModal(false)}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-secondary)',
+                                cursor: 'pointer',
+                                fontSize: 20,
+                            }}
+                            aria-label="Close soft score breakdown"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+                            Total Score: {scanResult.softScore.totalScore}
                         </div>
-                        <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
-                                Total Score: {scanResult.softScore.totalScore}
-                            </div>
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                                Lower is better. This score represents overall schedule quality based on soft constraints.
-                            </div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                            Lower is better. This score represents overall schedule quality based on soft constraints.
                         </div>
-                        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
-                            <h4 style={{ color: 'var(--text-primary)', margin: '0 0 12px', fontSize: 14 }}>
-                                Score Components
-                            </h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Balanced Load</span>
-                                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.balancedLoad.score} / {scanResult.softScore.breakdown.balancedLoad.max}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Compact Schedule</span>
-                                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.compactSchedule.score} / {scanResult.softScore.breakdown.compactSchedule.max}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Minimize Room Switch</span>
-                                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.minimizeRoomSwitch.score} / {scanResult.softScore.breakdown.minimizeRoomSwitch.max}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Teacher Preferred Time</span>
-                                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.teacherPreferredTime.score} / {scanResult.softScore.breakdown.teacherPreferredTime.max}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Daily Load Balance</span>
-                                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.dailyLoadBalance.score} / {scanResult.softScore.breakdown.dailyLoadBalance.max}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Workload Fairness</span>
-                                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.workloadFairness.score} / {scanResult.softScore.breakdown.workloadFairness.max}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Subject Spacing</span>
-                                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.subjectSpacing.score} / {scanResult.softScore.breakdown.subjectSpacing.max}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Room Utilization</span>
-                                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.roomUtilization.score} / {scanResult.softScore.breakdown.roomUtilization.max}</span>
-                                </div>
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
+                        <h4 style={{ color: 'var(--text-primary)', margin: '0 0 12px', fontSize: 14 }}>
+                            Score Components
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Balanced Load</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.balancedLoad.score} / {scanResult.softScore.breakdown.balancedLoad.max}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Compact Schedule</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.compactSchedule.score} / {scanResult.softScore.breakdown.compactSchedule.max}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Minimize Room Switch</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.minimizeRoomSwitch.score} / {scanResult.softScore.breakdown.minimizeRoomSwitch.max}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Teacher Preferred Time</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.teacherPreferredTime.score} / {scanResult.softScore.breakdown.teacherPreferredTime.max}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Daily Load Balance</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.dailyLoadBalance.score} / {scanResult.softScore.breakdown.dailyLoadBalance.max}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Workload Fairness</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.workloadFairness.score} / {scanResult.softScore.breakdown.workloadFairness.max}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Subject Spacing</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.subjectSpacing.score} / {scanResult.softScore.breakdown.subjectSpacing.max}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Room Utilization</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.roomUtilization.score} / {scanResult.softScore.breakdown.roomUtilization.max}</span>
                             </div>
                         </div>
-                        <div style={{ marginTop: 16, padding: 12, background: 'rgba(73, 136, 196, 0.1)', borderRadius: 8 }}>
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                <strong>Tip:</strong> Use the fixing engine to reduce this score by resolving conflicts and optimizing schedule preferences.
-                            </div>
+                    </div>
+                    <div style={{ marginTop: 16, padding: 12, background: 'rgba(73, 136, 196, 0.1)', borderRadius: 8 }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                            <strong>Tip:</strong> Use the fixing engine to reduce this score by resolving conflicts and optimizing schedule preferences.
                         </div>
                     </div>
                 </div>
