@@ -452,27 +452,40 @@ const ScheduleGenerate: React.FC = () => {
     const saveAs = async (initialState: 'draft' | 'submitted') => {
         if (!result) return;
         
+        console.log('[SAVE] Starting save as', initialState);
+        
         // If submitting, check for existing active schedule
         if (initialState === 'submitted') {
-            const summary = await scheduleVersionService.getActiveScheduleSummary();
-            setCurrentScheduleSummary(summary);
-            
-            if (summary && summary.exists) {
-                // Show overwrite confirmation modal
-                setShowOverwriteConfirm(true);
-                return;
+            try {
+                console.log('[SAVE] Checking for existing active schedule...');
+                const summary = await scheduleVersionService.getActiveScheduleSummary();
+                console.log('[SAVE] Active schedule summary:', summary);
+                setCurrentScheduleSummary(summary);
+                
+                if (summary && summary.exists) {
+                    // Show overwrite confirmation modal
+                    console.log('[SAVE] Existing schedule found, showing overwrite confirm');
+                    setShowOverwriteConfirm(true);
+                    return;
+                }
+            } catch (error) {
+                console.error('[SAVE] Error checking active schedule:', error);
+                // Continue with save even if check fails
             }
         }
         
         // Proceed with save
+        console.log('[SAVE] Proceeding with save...');
         await performSave(initialState);
     };
 
     const performSave = async (initialState: 'draft' | 'submitted') => {
         if (!result) return;
         setSaving(true); setSaveError(null);
+        console.log('[SAVE] performSave starting with state:', initialState);
         try {
             if (config.mode === 'partial') {
+                console.log('[SAVE] Partial mode, deleting existing...');
                 const t = config.partialTarget;
                 if (!t?.id) throw new Error('No partial regeneration target selected.');
                 const column =
@@ -485,26 +498,40 @@ const ScheduleGenerate: React.FC = () => {
                     .delete()
                     .eq(column, t.id)
                     .in('status', ['draft', 'submitted', 'approved']);
-                if (delErr) throw delErr;
+                if (delErr) {
+                    console.error('[SAVE] Delete error:', delErr);
+                    throw delErr;
+                }
+                console.log('[SAVE] Partial delete successful');
             } else if (config.clearExisting) {
+                console.log('[SAVE] Clear existing mode, deleting schedules...');
                 // Delete existing schedules for the scope
                 const scope = config.sectionIds;
                 const q = supabase.from('schedules').delete();
                 const { error: delErr } = scope.length
                     ? await q.in('section_id', scope)
                     : await q.neq('id', '00000000-0000-0000-0000-000000000000');
-                if (delErr) throw delErr;
+                if (delErr) {
+                    console.error('[SAVE] Delete error:', delErr);
+                    throw delErr;
+                }
+                console.log('[SAVE] Clear existing delete successful');
                 
                 // Also delete non-published generation_runs for the same scope
                 // This prevents accumulation of old generation runs
+                console.log('[SAVE] Deleting old generation runs...');
                 const { error: genDelErr } = await supabase
                     .from('generation_runs')
                     .delete()
                     .in('status', ['running', 'failed'])
                     .neq('id', '00000000-0000-0000-0000-000000000000');
-                if (genDelErr) throw genDelErr;
+                if (genDelErr) {
+                    console.error('[SAVE] Generation runs delete error:', genDelErr);
+                    // Don't throw - this is not critical
+                }
             }
             
+            console.log('[SAVE] Inserting', result.entries.length, 'schedule entries...');
             // Insert new schedule entries
             const inserts = result.entries.map(e => ({
                 subject_id: e.subjectId, teacher_id: e.teacherId, room_id: e.roomId,
@@ -512,7 +539,11 @@ const ScheduleGenerate: React.FC = () => {
                 status: initialState,
             }));
             const { error, data } = await supabase.from('schedules').insert(inserts).select('id');
-            if (error) throw error;
+            if (error) {
+                console.error('[SAVE] Insert error:', error);
+                throw error;
+            }
+            console.log('[SAVE] Insert successful, data:', data);
             setSavedId(data && data[0] ? data[0].id : 'ok');
             
             // Log audit for each created schedule
