@@ -13,7 +13,7 @@ The current version control system has fundamental architectural mismatches with
 - [x] Fix state hash computation
 - [x] Fix previous version ID linking
 - [x] Add batch-level versioning
-- [ ] Update all queries
+- [x] Fix restoreVersion function
 - [ ] Testing and validation
 
 ---

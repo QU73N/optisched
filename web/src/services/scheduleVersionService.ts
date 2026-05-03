@@ -699,7 +699,8 @@ class ScheduleVersionService {
     /**
      * Restore a schedule version
      * 
-     * CRITICAL: This method restores ALL schedules in the version set, not just one.
+     * CRITICAL: This method now works with batch-level versioning.
+     * Restores all schedules from a batch version snapshot.
      * Uses compensating transaction pattern for safety.
      */
     async restoreVersion(
@@ -717,8 +718,9 @@ class ScheduleVersionService {
         scheduleLogger.system.workflowStarted('Version restore');
 
         // Track state for rollback
-        let deletedScheduleIds: string[] = [];
+        let previousBatchId: string | null = null;
         const insertedScheduleIds: string[] = [];
+        let createdBatchId: string | null = null;
         let createdVersionId: string | null = null;
 
         try {
@@ -733,81 +735,79 @@ class ScheduleVersionService {
                 throw new Error('Version not found');
             }
 
-            // Get the version set containing this version
-            const { data: versionSetItem } = await this.supabase
-                .from('schedule_version_set_items')
-                .select('version_set_id')
-                .eq('schedule_version_id', versionId)
+            // Verify the version has a batch_id (batch-level versioning)
+            if (!versionData.batch_id) {
+                throw new Error('Version is not associated with a batch. This version was created before batch-level versioning was implemented.');
+            }
+
+            // Get the batch snapshot
+            const snapshot = versionData.snapshot as Schedule[];
+            if (!snapshot || snapshot.length === 0) {
+                throw new Error('Version has no schedule data');
+            }
+
+            // Get current active batch
+            const { data: currentActiveBatch } = await this.supabase
+                .from('schedule_batches')
+                .select('id')
+                .eq('is_active', true)
                 .maybeSingle();
 
-            if (!versionSetItem) {
-                throw new Error('Version not in a version set');
+            if (currentActiveBatch) {
+                previousBatchId = currentActiveBatch.id;
             }
-
-            // Get all versions in the version set
-            const { data: allVersionItems } = await this.supabase
-                .from('schedule_version_set_items')
-                .select('schedule_version_id')
-                .eq('version_set_id', versionSetItem.version_set_id);
-
-            if (!allVersionItems || allVersionItems.length === 0) {
-                throw new Error('Version set is empty');
-            }
-
-            // Get all version data for the set
-            const versionIds = allVersionItems.map(v => v.schedule_version_id);
-            const { data: allVersions } = await this.supabase
-                .from('schedule_versions')
-                .select('*')
-                .in('id', versionIds);
-
-            if (!allVersions || allVersions.length === 0) {
-                throw new Error('No version data found');
-            }
-
-            // Get current active versions
-            const { data: currentActiveVersions } = await this.supabase
-                .from('schedule_versions')
-                .select('*')
-                .eq('is_active', true);
-
-            const previousActiveVersionIds = currentActiveVersions ? currentActiveVersions.map(v => v.id) : [];
 
             // Verify the version is not already active
             if (versionData.is_active) {
                 return {
                     success: false,
-                    message: 'This version is already active',
+                    message: 'Target version is already active. No changes made.',
                     restored_version_id: versionId,
-                    previous_active_version_id: previousActiveVersionIds[0] || null,
+                    previous_active_version_id: null,
                 };
             }
 
-            // CRITICAL: No-OP detection - check if restoring to same state
-            const currentHash = scheduleValidation.computeStateHash(
-                currentActiveVersions ? currentActiveVersions.map(v => v.snapshot as Schedule) : []
-            );
-            const targetHash = scheduleValidation.computeStateHash(
-                allVersions.map(v => v.snapshot as Schedule)
-            );
+            // No-OP detection: check if target state is identical to current
+            if (previousBatchId) {
+                const { data: currentSchedules } = await this.supabase
+                    .from('schedules')
+                    .select('*')
+                    .eq('batch_id', previousBatchId)
+                    .eq('is_active', true);
 
-            if (currentHash === targetHash && !options.force) {
-                scheduleLogger.log({
-                    tab: 'system',
-                    level: 'warn',
-                    category: 'persistence',
-                    message: 'No-op detected: Target version state is identical to current',
-                    data: { hash: currentHash },
+                if (currentSchedules && currentSchedules.length > 0) {
+                    const currentHash = scheduleValidation.computeStateHash(currentSchedules);
+                    const targetHash = versionData.state_hash;
+
+                    if (currentHash === targetHash) {
+                        return {
+                            success: false,
+                            message: 'Target version state is identical to current. No changes made.',
+                            restored_version_id: versionId,
+                            previous_active_version_id: null,
+                        };
+                    }
+                }
+            }
+
+            // Compensating transaction: Step 1 - Create new batch for restoration
+            const { data: newBatch, error: batchError } = await this.supabase
+                .rpc('create_schedule_batch', {
+                    p_name: `Restored Batch ${new Date().toISOString()}`,
+                    p_description: options.reason || `Restored from version ${versionData.version_number}`,
+                    p_academic_year: snapshot[0].academic_year || '2025-2026',
+                    p_semester: snapshot[0].semester || '1st Semester',
+                    p_created_by: this.currentUserId,
                 });
-                return {
-                    success: true,
-                    message: 'Target version state is identical to current. No changes made.',
-                    restored_version_id: versionId,
-                    previous_active_version_id: previousActiveVersionIds[0] || null,
-                };
+
+            if (batchError) {
+                throw new Error(`Failed to create batch: ${batchError.message}`);
             }
 
-            // Compensating transaction: Step 1 - Deactivate current published schedules
+            createdBatchId = newBatch;
+            console.log(`[VERSION SERVICE] Created restore batch ${createdBatchId}`);
+
+            // Step 2 - Deactivate current active schedules
             const { error: deactivateError } = await this.supabase
                 .from('schedules')
                 .update({ is_active: false })
@@ -818,49 +818,46 @@ class ScheduleVersionService {
                 throw new Error(`Failed to deactivate current schedules: ${deactivateError.message}`);
             }
 
-            deletedScheduleIds = currentActiveVersions ? currentActiveVersions.map(v => v.schedule_id) : [];
-            console.log(`[VERSION SERVICE] Deleted ${deletedScheduleIds.length} current schedules`);
-
-            // Step 2 - Restore all schedules from version snapshots
+            // Step 3 - Restore all schedules from version snapshot
             const restoredSchedules: Schedule[] = [];
-            for (const version of allVersions) {
-                const snapshot = version.snapshot as Schedule;
+            for (const snapshotItem of snapshot) {
                 const { data: insertedSchedule, error: insertError } = await this.supabase
                     .from('schedules')
                     .insert({
-                        subject_id: snapshot.subject_id,
-                        teacher_id: snapshot.teacher_id,
-                        room_id: snapshot.room_id,
-                        section_id: snapshot.section_id,
-                        day_of_week: snapshot.day_of_week,
-                        start_time: snapshot.start_time,
-                        end_time: snapshot.end_time,
+                        subject_id: snapshotItem.subject_id,
+                        teacher_id: snapshotItem.teacher_id,
+                        room_id: snapshotItem.room_id,
+                        section_id: snapshotItem.section_id,
+                        day_of_week: snapshotItem.day_of_week,
+                        start_time: snapshotItem.start_time,
+                        end_time: snapshotItem.end_time,
                         status: 'published',
-                        is_active: true, // Restored schedules are active
-                        semester: snapshot.semester || '',
-                        academic_year: snapshot.academic_year || '',
+                        is_active: true,
+                        batch_id: createdBatchId, // Link to new restore batch
+                        semester: snapshotItem.semester || '',
+                        academic_year: snapshotItem.academic_year || '',
                     })
                     .select('id')
                     .maybeSingle();
 
                 if (insertError) {
-                    // ROLLBACK: We cannot restore the deleted schedules without their data
-                    throw new Error(`Failed to restore schedule: ${insertError.message}. CRITICAL: Current schedules were deleted and cannot be restored automatically.`);
+                    // ROLLBACK: We cannot restore the deactivated schedules without their data
+                    throw new Error(`Failed to restore schedule: ${insertError.message}. CRITICAL: Current schedules were deactivated and cannot be restored automatically.`);
                 }
 
                 if (insertedSchedule) {
                     insertedScheduleIds.push(insertedSchedule.id);
-                    restoredSchedules.push({ ...snapshot, id: insertedSchedule.id });
+                    restoredSchedules.push(snapshotItem);
                 }
             }
 
-            console.log(`[VERSION SERVICE] Restored ${insertedScheduleIds.length} schedules from version set`);
+            console.log(`[VERSION SERVICE] Restored ${insertedScheduleIds.length} schedules into batch ${createdBatchId}`);
 
-            // Step 3 - Create a new version for the restore operation
+            // Step 4 - Create version for the restore operation
             const newStateHash = scheduleValidation.computeStateHash(restoredSchedules);
             const { data: newVersion, error: newVersionError } = await this.supabase
-                .rpc('create_schedule_version', {
-                    p_schedule_id: versionData.schedule_id,
+                .rpc('create_batch_version', {
+                    p_batch_id: createdBatchId,
                     p_change_type: 'restore',
                     p_change_summary: `Restored from version ${versionData.version_number}`,
                     p_change_reason: options.reason || 'Version restore',
@@ -872,55 +869,37 @@ class ScheduleVersionService {
                 });
 
             if (newVersionError) {
-                // ROLLBACK: Delete restored schedules
+                // ROLLBACK: Clean up
                 await this.supabase.from('schedules').delete().in('id', insertedScheduleIds);
-                throw new Error(`Failed to create restore version: ${newVersionError.message}. Restored schedules have been rolled back.`);
+                await this.supabase.from('schedule_batches').delete().eq('id', createdBatchId);
+                if (previousBatchId) {
+                    await this.supabase
+                        .from('schedules')
+                        .update({ is_active: true })
+                        .eq('batch_id', previousBatchId);
+                }
+                throw new Error(`Failed to create version: ${newVersionError.message}. Partial changes have been rolled back.`);
             }
 
             createdVersionId = newVersion;
 
-            // Step 4 - Deactivate all previous active versions
-            for (const prevId of previousActiveVersionIds) {
-                await this.supabase.from('schedule_versions').update({ is_active: false }).eq('id', prevId);
+            // Step 5 - Activate the new restore batch
+            await this.supabase
+                .from('schedule_batches')
+                .update({ is_active: true })
+                .eq('id', createdBatchId);
+
+            // Deactivate previous batch
+            if (previousBatchId) {
+                await this.supabase
+                    .from('schedule_batches')
+                    .update({ is_active: false })
+                    .eq('id', previousBatchId);
             }
 
-            // Step 5 - Activate the new restore version
-            await this.supabase.rpc('activate_schedule_version', {
-                p_version_id: createdVersionId,
-            });
-
-            // CRITICAL: Verify single active version
-            const { data: activeVersions } = await this.supabase
-                .from('schedule_versions')
-                .select('id')
-                .eq('is_active', true);
-
-            if (activeVersions && activeVersions.length > 1) {
-                scheduleLogger.system.error('system', 'persistence', 'CRITICAL: Multiple active versions detected after restore', { count: activeVersions.length });
-                // Deactivate all but the most recent
-                const versionsToDeactivate = activeVersions.slice(0, -1);
-                for (const vId of versionsToDeactivate) {
-                    await this.supabase.from('schedule_versions').update({ is_active: false }).eq('id', vId);
-                }
-            }
-
-            // Step 6 - Update canonical state manager
-            const { data: allSchedules } = await this.supabase
-                .from('schedules')
-                .select('*')
-                .in('status', ['published', 'draft']);
-
-            if (allSchedules) {
-                await scheduleStateManager.updateState(
-                    allSchedules,
-                    'conflicts',
-                    {
-                        conflictCount: versionData.conflict_count,
-                        softScore: versionData.soft_score,
-                        changeDescription: `Restored version ${versionData.version_number}`,
-                    }
-                );
-            }
+            // Step 6 - Activate the version
+            await this.supabase
+                .rpc('activate_batch_version', { p_version_id: createdVersionId });
 
             // CRITICAL: Verify state hash after restore
             const { data: verifiedSchedules } = await this.supabase
@@ -948,9 +927,9 @@ class ScheduleVersionService {
 
             return {
                 success: true,
-                message: `Successfully restored version ${versionData.version_number}. Restored ${restoredSchedules.length} schedules.`,
-                restored_version_id: createdVersionId,
-                previous_active_version_id: previousActiveVersionIds[0] || null,
+                message: `Successfully restored version ${versionData.version_number} with ${restoredSchedules.length} sessions`,
+                restored_version_id: versionId,
+                previous_active_version_id: null, // Previous version is not tracked at batch level
             };
 
         } catch (error) {
