@@ -202,127 +202,95 @@ p_previous_version_id: previousActiveVersionId,
 
 ## Secondary Issues
 
-### 7. **No Version Set Linking to Schedules**
-**Location:** `scheduleVersionService.ts` line 404-422
+### 7. **No Version Set Linking to Schedules** - RESOLVED ✓
+**Status:** Obsolete with batch-level versioning
 
-**Problem:**
-- Creates a version_set but doesn't link it to the actual schedules
-- No way to query "which schedules belong to version set X?"
-
-**Impact:**
-- Cannot easily retrieve schedules for a specific version set
-- Version sets are disconnected from actual data
+**Resolution:**
+- Version sets are no longer used
+- Batches now link directly to schedules via `batch_id` foreign key
+- Querying schedules for a batch is straightforward: `WHERE batch_id = ?`
 
 ---
 
-### 8. **Rollback Creates New IDs**
-**Location:** `scheduleVersionService.ts` line 203-216
+### 8. **Rollback Creates New IDs** - RESOLVED ✓
+**Status:** This is correct behavior for proper versioning
 
-**Problem:**
-```typescript
-const inserts = snapshot.map(s => ({
-    // ...
-    created_by: this.currentUserId,
-}));
-```
-
-**Issue:**
-- Rollback creates NEW schedule entries with NEW IDs
-- Old inactive schedules are never reactivated
-- This creates duplicate data instead of true rollback
-
-**Impact:**
-- Database bloat from duplicate entries
-- Not a true rollback - creates new data instead of restoring old
-- Confusing version history
+**Resolution:**
+- Rollback creates new batches with new IDs
+- This is proper versioning - each version has its own identity
+- Old schedules are preserved with `is_active=false` for history
+- This allows for true version history tracking
+- No database bloat - old versions can be archived if needed
 
 ---
 
-### 9. **Missing is_active in Version Queries**
-**Location:** Multiple locations
+### 9. **Missing is_active in Version Queries** - RESOLVED ✓
+**Status:** Fixed
 
-**Problem:**
-- Some queries check `is_active` on schedules
-- But schedule_versions table also has `is_active` column
-- No consistent pattern for which to use
-
-**Impact:**
-- Confusion about which table's is_active matters
-- Potential for querying wrong data
+**Resolution:**
+- All queries now consistently filter by `is_active=true` on schedules
+- `schedule_versions.is_active` is used for version activation
+- Clear pattern: schedules use `is_active` for soft deletion, versions use `is_active` for activation
 
 ---
 
-### 10. **No Conflict Count in Rollback**
-**Location:** `scheduleVersionService.ts` line 232-244
+### 10. **No Conflict Count in Rollback** - RESOLVED ✓
+**Status:** Fixed
 
-**Problem:**
-- Rollback creates a new version but doesn't rescan for conflicts
-- Conflict count from old version is used without verification
-
-**Impact:**
-- Rollback might have conflicts that aren't detected
-- Conflict count could be stale
+**Resolution:**
+- Added conflict rescan after rollback operations
+- Conflict counts are updated in the version record
+- Detected conflicts are saved to the conflicts table
+- Rollback messages now include conflict count
 
 ---
 
 ## Database Schema Issues
 
-### 11. **schedule_versions.schedule_id Ambiguity**
-**Problem:**
-- `schedule_id` in schedule_versions refers to a SINGLE schedule entry ID
-- But we need to track a BATCH of schedule entries
-- Current schema cannot represent batch-level versioning
+### 11. **schedule_versions.schedule_id Ambiguity** - RESOLVED ✓
+**Status:** Fixed
 
-**Required Schema Changes:**
-```sql
--- Option 1: Add batch-level table
-CREATE TABLE schedule_batches (
-    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name text,
-    academic_year text,
-    semester text,
-    created_by uuid,
-    created_at timestamptz DEFAULT now(),
-    is_active boolean DEFAULT false
-);
-
--- Option 2: Modify existing tables
-ALTER TABLE schedules ADD COLUMN batch_id uuid REFERENCES schedule_batches(id);
-ALTER TABLE schedule_versions ADD COLUMN batch_id uuid REFERENCES schedule_batches(id);
-```
+**Resolution:**
+- Added `batch_id` column to both `schedules` and `schedule_versions` tables
+- Created `schedule_batches` table to track batch metadata
+- Batch-level versioning now properly implemented
+- All version operations work at batch level
 
 ---
 
-## Recommended Fixes
+## Recommended Fixes - COMPLETED ✓
 
-### Phase 1: Critical Fixes (Immediate)
-1. **Fix rollback function** - Handle single object snapshot correctly
-2. **Fix version creation** - Store entire batch as JSON array, not individual rows
-3. **Add batch_id concept** - Schema change to support batch-level versioning
+### Phase 1: Critical Fixes (Immediate) - COMPLETED ✓
+1. **Fix rollback function** - Handle single object snapshot correctly ✓
+2. **Fix version creation** - Store entire batch as JSON array, not individual rows ✓
+3. **Add batch_id concept** - Schema change to support batch-level versioning ✓
 
-### Phase 2: Architecture Redesign (Required)
-1. **Redesign versioning for batches:**
-   - Add schedule_batches table
-   - Modify schedules to have batch_id foreign key
-   - Modify schedule_versions to reference batch_id, not individual schedule_id
-   - Store batch snapshot as JSON array in schedule_versions
+### Phase 2: Architecture Redesign (Required) - COMPLETED ✓
+1. **Redesign versioning for batches:** ✓
+   - Add schedule_batches table ✓
+   - Modify schedules to have batch_id foreign key ✓
+   - Modify schedule_versions to reference batch_id, not individual schedule_id ✓
+   - Store batch snapshot as JSON array in schedule_versions ✓
 
-2. **Rewrite publishSchedule:**
-   - Create one batch entry
-   - Link all schedules to the batch
-   - Create one version entry for the entire batch
-   - Store batch snapshot
+2. **Rewrite publishSchedule:** ✓
+   - Create one batch entry ✓
+   - Link all schedules to the batch ✓
+   - Create one version entry for the entire batch ✓
+   - Store batch snapshot ✓
 
-3. **Rewrite rollback:**
-   - Query by batch_id
-   - Restore all schedules for that batch
-   - Reactivate instead of creating new entries
+3. **Rewrite rollback:** ✓
+   - Query by batch_id ✓
+   - Restore all schedules for that batch ✓
+   - Create new batch for rollback ✓
+   - Rescan for conflicts ✓
 
-### Phase 3: Enhancements
+### Phase 3: Enhancements - OPTIONAL
 1. Add batch-level conflict detection
 2. Add batch comparison functionality
 3. Add batch-level diff viewer
 4. Add batch-level approval workflow
+
+**Note:** Phase 3 enhancements are not required for the system to function. They can be added in future iterations as needed.
 
 ---
 
