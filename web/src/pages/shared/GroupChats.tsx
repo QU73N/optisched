@@ -60,7 +60,7 @@ const GroupChats: React.FC = () => {
                             .eq('group_chat_id', chat.id)
                             .order('created_at', { ascending: false })
                             .limit(1)
-                            .single()
+                            .maybeSingle()
                     ]);
 
                     return {
