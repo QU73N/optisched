@@ -521,9 +521,12 @@ const ScheduleGenerate: React.FC = () => {
                 status: initialState,
                 is_active: true,
             }));
-            const { error: rpcError } = await supabase.rpc('insert_schedules_batch', {
+            console.log('[RPC] Calling insert_schedules_batch with', inserts.length, 'entries');
+            console.log('[RPC] First entry:', inserts[0]);
+            const { error: rpcError, data: rpcData } = await supabase.rpc('insert_schedules_batch', {
                 p_schedules: inserts,
             });
+            console.log('[RPC] Result - error:', rpcError, 'data:', rpcData);
             if (rpcError) throw rpcError;
             setSavedId('ok');
 
