@@ -469,6 +469,8 @@ const ScheduleGenerate: React.FC = () => {
     const saveAs = async (initialState: 'draft' | 'submitted') => {
         if (!result) return;
 
+        console.log('[SAVE AS] Called with initialState:', initialState);
+
         // If submitting, check for existing active schedule
         if (initialState === 'submitted') {
             try {
@@ -477,6 +479,7 @@ const ScheduleGenerate: React.FC = () => {
 
                 if (summary && summary.exists) {
                     // Show overwrite confirmation modal
+                    console.log('[SAVE AS] Showing overwrite confirmation modal');
                     setShowOverwriteConfirm(true);
                     return;
                 }
@@ -487,6 +490,7 @@ const ScheduleGenerate: React.FC = () => {
         }
 
         // Proceed with save
+        console.log('[SAVE AS] Proceeding with performSave, initialState:', initialState);
         await performSave(initialState);
     };
 
@@ -524,6 +528,9 @@ const ScheduleGenerate: React.FC = () => {
                 status: initialState,
                 is_active: true,
             }));
+            console.log('[PERFORM SAVE] Inserting schedules with status:', initialState);
+            console.log('[PERFORM SAVE] First insert status:', inserts[0]?.status);
+            console.log('[PERFORM SAVE] Total inserts:', inserts.length);
             console.log('[PERFORM SAVE] Attempting direct HTTP insert');
             const { error: insertError, status: insertStatus } = await directInsert({
               table: 'schedules',
