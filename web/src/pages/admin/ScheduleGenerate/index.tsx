@@ -671,7 +671,7 @@ const ScheduleGenerate: React.FC = () => {
                 />
             )}
 
-            <Stepper stage={stage} onJump={jumpTo} canJump={!generating} />
+            <Stepper stage={stage} onJump={jumpTo} canJump={!generating} maxStageReached={maxStageReached} />
 
             {dataLoading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
@@ -875,16 +875,17 @@ const toMinutes = (t: string) => {
 // Stepper
 // ---------------------------------------------------------------------------
 
-const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJump: boolean }> = ({ stage, onJump, canJump }) => {
+const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJump: boolean; maxStageReached: StageKey }> = ({ stage, onJump, canJump, maxStageReached }) => {
     const idx = STAGES.findIndex(s => s.key === stage);
+    const maxIdx = STAGES.findIndex(s => s.key === maxStageReached);
     const onKey = (e: React.KeyboardEvent, i: number) => {
         if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
         e.preventDefault();
         let next = i;
         if (e.key === 'ArrowLeft')  next = Math.max(0, i - 1);
-        if (e.key === 'ArrowRight') next = Math.min(idx, i + 1);
+        if (e.key === 'ArrowRight') next = Math.min(maxIdx, i + 1);
         if (e.key === 'Home')       next = 0;
-        if (e.key === 'End')        next = idx;
+        if (e.key === 'End')        next = maxIdx;
         const el = document.querySelector<HTMLButtonElement>(`[data-sg-step="${STAGES[next].key}"]`);
         el?.focus();
     };
@@ -901,7 +902,7 @@ const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJum
                             className="sg-step-btn"
                             onClick={() => onJump(s.key)}
                             onKeyDown={e => onKey(e, i)}
-                            disabled={!canJump || i > idx}
+                            disabled={!canJump || i > maxIdx}
                             aria-current={i === idx ? 'step' : undefined}
                             aria-selected={i === idx}
                             aria-label={`${i + 1} of ${STAGES.length}: ${s.label}. ${s.hint}.`}
