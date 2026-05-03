@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { RefreshCw, AlertTriangle, CheckCircle, AlertOctagon, AlertCircle, Info, Zap, Wrench, Search, Clock } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { RefreshCw, AlertTriangle, CheckCircle, AlertOctagon, AlertCircle, Info, Zap, Wrench, Search, Clock, ArrowLeft } from 'lucide-react';
 import { type HardConstraintViolation, type ScanResult, scanAllConstraints } from './ConflictsAlerts/conflictScanner';
 import { type FixOption, generateFixOptions, applyFix, applyAutonomousFixes, type FixMode } from './ConflictsAlerts/fixingEngine';
 import { createConflictAlert, createConflictResolutionNotification } from '../../services/notificationService';
@@ -38,6 +39,8 @@ interface ConflictRow {
 const ConflictsAlerts: React.FC = () => {
     const { showToast } = useToast();
     const { profile } = useAuth();
+    const { versionId } = useParams<{ versionId: string }>();
+    const navigate = useNavigate();
     const [dbConflicts, setDbConflicts] = useState<ConflictRow[]>([]);
     const [detectedConflicts, setDetectedConflicts] = useState<DetectedConflict[]>([]);
     const [loading, setLoading] = useState(true);
@@ -47,9 +50,9 @@ const ConflictsAlerts: React.FC = () => {
     const [sortBy, setSortBy] = useState<string>('severity');
     const [expandedConflicts, setExpandedConflicts] = useState<Set<string>>(new Set());
     
-    // Version selection state
+    // Version selection state - only used if no versionId is provided
     const [selectedVersion, setSelectedVersion] = useState<'published' | 'draft' | 'all'>('all');
-    const [showVersionSelector, setShowVersionSelector] = useState(true);
+    const [showVersionSelector, setShowVersionSelector] = useState(!versionId); // Auto-hide if versionId is provided
     
     // New state for comprehensive scanning and fixing
     const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -67,19 +70,33 @@ const ConflictsAlerts: React.FC = () => {
 
     // Fetch from conflicts table and populate detected conflicts
     const fetchDbConflicts = useCallback(async () => {
-        // Build status filter based on selected version
-        const statusFilter = selectedVersion === 'all' 
-            ? ['published', 'draft'] 
-            : [selectedVersion];
+        // If versionId is provided, fetch schedules for that specific version
+        let scheduleIds: Set<string> = new Set();
         
-        // First, fetch schedule IDs for the selected version
-        const { data: schedules } = await supabase
-            .from('schedules')
-            .select('id')
-            .in('status', statusFilter);
+        if (versionId) {
+            // Fetch schedule snapshots for this version
+            const { data: snapshots } = await supabase
+                .from('schedule_version_snapshots')
+                .select('schedule_id')
+                .eq('version_id', versionId);
+            
+            scheduleIds = new Set((snapshots || []).map((s: { schedule_id: string }) => s.schedule_id));
+        } else {
+            // Build status filter based on selected version (legacy behavior)
+            const statusFilter = selectedVersion === 'all' 
+                ? ['published', 'draft'] 
+                : [selectedVersion];
+            
+            // First, fetch schedule IDs for the selected version
+            const { data: schedules } = await supabase
+                .from('schedules')
+                .select('id')
+                .in('status', statusFilter);
+            
+            scheduleIds = new Set((schedules || []).map((s: { id: string }) => s.id));
+        }
         
-        const scheduleIds = new Set((schedules || []).map((s: { id: string }) => s.id));
-        console.log('Schedule IDs for version', selectedVersion, ':', scheduleIds.size);
+        console.log('Schedule IDs for scan:', scheduleIds.size);
         
         // Then fetch conflicts that involve schedules from the selected version
         let query = supabase.from('conflicts').select('*');
@@ -99,7 +116,7 @@ const ConflictsAlerts: React.FC = () => {
             .order('created_at', { ascending: false });
         setDbConflicts(data || []);
         
-        console.log('Fetched conflicts from DB:', data?.length || 0, 'for version:', selectedVersion);
+        console.log('Fetched conflicts from DB:', data?.length || 0, 'for version:', versionId || selectedVersion);
         
         // Only populate detected conflicts from database if we don't have recent scan results
         // This ensures scan results take priority over database
@@ -120,7 +137,7 @@ const ConflictsAlerts: React.FC = () => {
         } else {
             console.log('Skipping DB fetch - using scan results');
         }
-    }, [hasScanResults, selectedVersion]);
+    }, [selectedVersion, versionId, hasScanResults]);
 
     // Load last scan result from database
     const fetchLastScanResult = useCallback(async () => {
@@ -875,6 +892,15 @@ const ConflictsAlerts: React.FC = () => {
 
             <div className="dashboard-header" style={{ margin: '12px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
+                    {versionId && (
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => navigate('/admin/conflicts')}
+                            style={{ marginBottom: 8, fontSize: 13, padding: '6px 12px' }}
+                        >
+                            <ArrowLeft size={14} /> Back to Versions
+                        </button>
+                    )}
                     <h1 className="dashboard-title"><AlertTriangle size={20} /> Conflicts & Alerts</h1>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
                         <p className="dashboard-subtitle" style={{ margin: 0 }}>
