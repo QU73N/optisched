@@ -538,9 +538,18 @@ const ScheduleGenerate: React.FC = () => {
                 section_id: e.sectionId, day_of_week: e.day, start_time: e.start, end_time: e.end,
                 status: initialState,
             }));
+            console.log('[SAVE] Sample insert data:', inserts[0]);
+            console.log('[SAVE] Calling supabase insert...');
             const { error, data } = await supabase.from('schedules').insert(inserts).select('id');
+            console.log('[SAVE] Insert response:', { error, data });
             if (error) {
-                console.error('[SAVE] Insert error:', error);
+                console.error('[SAVE] Insert error details:', {
+                    message: error.message,
+                    code: error.code,
+                    details: error.details,
+                    hint: error.hint,
+                    fullError: error
+                });
                 throw error;
             }
             console.log('[SAVE] Insert successful, data:', data);
