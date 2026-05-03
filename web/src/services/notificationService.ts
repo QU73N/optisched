@@ -136,7 +136,7 @@ export async function createConflictAlert(
         .from('profiles')
         .select('role')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
     if (profile?.role !== 'admin') return;
 
@@ -172,7 +172,7 @@ export async function createAnnouncement(
         .from('profiles')
         .select('role')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
     if (profile?.role !== 'admin') throw new Error('Only admins can create announcements');
 
@@ -223,7 +223,7 @@ export async function createConflictResolutionNotification(
         .from('profiles')
         .select('role')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
     if (profile?.role !== 'admin') return;
 
