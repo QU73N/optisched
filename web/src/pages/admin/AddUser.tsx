@@ -82,10 +82,6 @@ const getDatabaseDepartmentName = (displayName: string): string => {
     return DEPARTMENT_MAPPING[displayName as keyof typeof DEPARTMENT_MAPPING]?.db_name || displayName;
 };
 
-const getDepartmentPrograms = (displayName: string): string[] => {
-    return DEPARTMENT_MAPPING[displayName as keyof typeof DEPARTMENT_MAPPING]?.programs || [];
-};
-
 const AddUser: React.FC = () => {
     const navigate = useNavigate();
     const { role: currentRole } = useAuth();
@@ -349,7 +345,7 @@ const AddUser: React.FC = () => {
             
             if (authError) throw authError;
             
-            userId = authData.user?.id;
+            userId = authData.user?.id || null;
             if (!userId) throw new Error('Failed to create user account.');
             
             // Retry mechanism for profile update with exponential backoff
@@ -412,12 +408,12 @@ const AddUser: React.FC = () => {
                 throw new Error('Failed to update profile after multiple retries');
             }
             
-            // Verify profile was updated
+            // Verify profile was created
             const { data: verifyProfile } = await supabase
                 .from('profiles')
                 .select('id, full_name, role, email')
                 .eq('id', userId)
-                .single();
+                .maybeSingle();
             
             if (!verifyProfile) {
                 throw new Error('Profile creation verification failed');
@@ -475,7 +471,7 @@ const AddUser: React.FC = () => {
                     .from('teacher_preferences')
                     .select('*')
                     .eq('teacher_id', userId)
-                    .single();
+                    .maybeSingle();
                 
                 if (!verifyPrefs) {
                     throw new Error('Teacher preferences creation verification failed');
@@ -515,7 +511,7 @@ const AddUser: React.FC = () => {
                     .from('students')
                     .select('*')
                     .eq('profile_id', userId)
-                    .single();
+                .maybeSingle();
                 
                 if (!verifyStudent) {
                     throw new Error('Student record creation verification failed');

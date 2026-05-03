@@ -36,8 +36,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 .from('profiles')
                 .select('*')
                 .eq('id', userId)
-                .single();
+                .maybeSingle();
             if (error) throw error;
+            
+            if (!data) {
+                console.warn('Profile not found for user:', userId);
+                setProfile(null);
+                setRole(null);
+                setRoles([]);
+                setIsLoading(false);
+                return;
+            }
+            
             setProfile(data as Profile);
 
             const primaryRole = (data.role as UserRole) || 'student';
