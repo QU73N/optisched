@@ -14,10 +14,11 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import type { Schedule } from '../types/database';
-import { scheduleStateManager } from './scheduleStateManager';
 import { scheduleValidation } from './scheduleValidation';
+import { scheduleStateManager } from './scheduleStateManager';
 import { scheduleLogger } from './scheduleLogger';
+import { detectConflicts } from './conflictDetector';
+import type { Schedule } from '../types/database';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -304,8 +305,41 @@ class ScheduleVersionService {
             await this.supabase
                 .rpc('activate_batch_version', { p_version_id: rollbackVersion });
 
+            // Rescan for conflicts after rollback
+            const { data: rollbackSchedules } = await this.supabase
+                .from('schedules')
+                .select('*')
+                .eq('batch_id', newBatch)
+                .eq('is_active', true);
+
+            let conflictCount = 0;
+            if (rollbackSchedules && rollbackSchedules.length > 0) {
+                const conflicts = detectConflicts(rollbackSchedules);
+                conflictCount = conflicts.length;
+
+                // Update the version with the actual conflict count
+                await this.supabase
+                    .from('schedule_versions')
+                    .update({ conflict_count: conflictCount })
+                    .eq('id', rollbackVersion);
+
+                // Save conflicts to database
+                if (conflicts.length > 0) {
+                    await this.supabase.from('conflicts').insert(
+                        conflicts.map(c => ({
+                            schedule_a_id: c.scheduleAId,
+                            schedule_b_id: c.scheduleBId,
+                            type: c.type,
+                            severity: c.severity,
+                            description: c.description,
+                            is_resolved: false,
+                        }))
+                    );
+                }
+            }
+
             scheduleLogger.system.workflowCompleted('Schedule rollback', Date.now(), true);
-            return { success: true, message: `Successfully rolled back to version ${version.version_number}` };
+            return { success: true, message: `Successfully rolled back to version ${version.version_number} with ${conflictCount} conflicts` };
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Unknown error';
             scheduleLogger.system.error('system', 'persistence', 'Rollback failed', error);
@@ -900,6 +934,39 @@ class ScheduleVersionService {
             // Step 6 - Activate the version
             await this.supabase
                 .rpc('activate_batch_version', { p_version_id: createdVersionId });
+
+            // Rescan for conflicts after restore
+            const { data: restoredSchedulesWithDetails } = await this.supabase
+                .from('schedules')
+                .select('*, subject:subjects(*), teacher:teachers(*), room:rooms(*), section:sections(*)')
+                .eq('batch_id', createdBatchId)
+                .eq('is_active', true);
+
+            let conflictCount = 0;
+            if (restoredSchedulesWithDetails && restoredSchedulesWithDetails.length > 0) {
+                const conflicts = detectConflicts(restoredSchedulesWithDetails);
+                conflictCount = conflicts.length;
+
+                // Update the version with the actual conflict count
+                await this.supabase
+                    .from('schedule_versions')
+                    .update({ conflict_count: conflictCount })
+                    .eq('id', createdVersionId);
+
+                // Save conflicts to database
+                if (conflicts.length > 0) {
+                    await this.supabase.from('conflicts').insert(
+                        conflicts.map(c => ({
+                            schedule_a_id: c.scheduleAId,
+                            schedule_b_id: c.scheduleBId,
+                            type: c.type,
+                            severity: c.severity,
+                            description: c.description,
+                            is_resolved: false,
+                        }))
+                    );
+                }
+            }
 
             // CRITICAL: Verify state hash after restore
             const { data: verifiedSchedules } = await this.supabase

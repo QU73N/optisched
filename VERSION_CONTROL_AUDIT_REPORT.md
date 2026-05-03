@@ -14,6 +14,7 @@ The current version control system has fundamental architectural mismatches with
 - [x] Fix previous version ID linking
 - [x] Add batch-level versioning
 - [x] Fix restoreVersion function
+- [x] Add conflict rescan after rollback
 - [x] Testing and validation
 
 ## Summary
@@ -25,6 +26,8 @@ All critical issues have been fixed:
 5. State hash computation fixed (computed at batch level)
 6. Previous version ID linking fixed (links to batch versions)
 7. All queries updated to filter by is_active=true
+8. Conflict rescan added after rollback operations
+9. Conflict counts updated in database after rollback
 
 The version control system is now fully functional with batch-level versioning support.
 
