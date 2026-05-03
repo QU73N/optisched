@@ -3,6 +3,38 @@
 
 import { supabase } from '../lib/supabase';
 
+// === Type Definitions ===
+interface UserProfile {
+    id: string;
+    email: string;
+    full_name: string;
+    role: 'student' | 'teacher' | 'admin';
+    program?: string;
+    section?: string;
+    year_level?: number;
+}
+
+interface Subject {
+    id: string;
+    name: string;
+    code: string;
+    units?: number;
+}
+
+interface Section {
+    id: string;
+    name: string;
+    year_level?: number;
+    program?: string;
+}
+
+interface Announcement {
+    id: string;
+    title: string;
+    content: string;
+    priority?: string;
+}
+
 // === API Keys (read from .env — never commit keys to source) ===
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
@@ -176,9 +208,9 @@ async function getScheduleContext(): Promise<string> {
         }
 
         if (usersRes.data && usersRes.data.length > 0) {
-            const students = usersRes.data.filter((u: any) => u.role === 'student');
-            const teacherUsers = usersRes.data.filter((u: any) => u.role === 'teacher');
-            const admins = usersRes.data.filter((u: any) => u.role === 'admin');
+            const students = usersRes.data.filter((u: UserProfile) => u.role === 'student');
+            const teacherUsers = usersRes.data.filter((u: UserProfile) => u.role === 'teacher');
+            const admins = usersRes.data.filter((u: UserProfile) => u.role === 'admin');
 
             context += `\n### REGISTERED USERS (${usersRes.data.length} total):\n`;
             if (admins.length > 0) {
@@ -197,17 +229,17 @@ async function getScheduleContext(): Promise<string> {
 
         if (subjectsRes.data && subjectsRes.data.length > 0) {
             context += `\n### SUBJECTS (${subjectsRes.data.length}):\n`;
-            for (const s of subjectsRes.data as any[]) context += `- ${s.name} (${s.code})${s.units ? ' | ' + s.units + ' units' : ''}\n`;
+            for (const s of subjectsRes.data as Subject[]) context += `- ${s.name} (${s.code})${s.units ? ' | ' + s.units + ' units' : ''}\n`;
         }
 
         if (sectionsRes.data && sectionsRes.data.length > 0) {
             context += `\n### SECTIONS (${sectionsRes.data.length}):\n`;
-            for (const s of sectionsRes.data as any[]) context += `- ${s.name}${s.year_level ? ' | Year ' + s.year_level : ''}${s.program ? ' | ' + s.program : ''}\n`;
+            for (const s of sectionsRes.data as Section[]) context += `- ${s.name}${s.year_level ? ' | Year ' + s.year_level : ''}${s.program ? ' | ' + s.program : ''}\n`;
         }
 
         if (announcementsRes.data && announcementsRes.data.length > 0) {
             context += `\n### RECENT ANNOUNCEMENTS (${announcementsRes.data.length}):\n`;
-            for (const a of announcementsRes.data as any[]) context += `- [${a.priority || 'normal'}] ${a.title} - ${(a.content || '').substring(0, 80)}\n`;
+            for (const a of announcementsRes.data as Announcement[]) context += `- [${a.priority || 'normal'}] ${a.title} - ${(a.content || '').substring(0, 80)}\n`;
         }
 
         return context;
@@ -420,37 +452,41 @@ async function processAIActions(response: string, userRole?: string): Promise<st
     return processedResponse;
 }
 
-async function executeAction(action: string, params: Record<string, any>): Promise<{ success: boolean; message: string }> {
+interface ActionParams {
+    [key: string]: unknown;
+}
+
+async function executeAction(action: string, params: ActionParams): Promise<{ success: boolean; message: string }> {
     const dbClient = supabase;
     try {
         switch (action) {
             case 'create_user': {
                 let { email, password, full_name, role, section, program, year_level } = params;
-                if (!full_name) return { success: false, message: 'Missing required field: full_name.' };
+                if (!full_name || typeof full_name !== 'string') return { success: false, message: 'Missing required field: full_name.' };
                 if (!role) role = 'student';
 
-                if (!email || email.includes('example') || email === 'AUTO') {
+                if (!email || typeof email !== 'string' || email.includes('example') || email === 'AUTO') {
                     const nameParts = full_name.trim().split(' ');
                     const surname = nameParts[nameParts.length - 1]?.toLowerCase() || 'user';
                     const digits = randomDigits(6);
                     email = `${surname}.${digits}@optisched.sti.edu`;
                 }
 
-                let assignedPassword = password;
+                const assignedPassword = password && typeof password === 'string' ? password : undefined;
                 if (!assignedPassword || assignedPassword === 'AUTO' || assignedPassword.includes('example')) {
-                    assignedPassword = randomPassword(8);
+                    password = randomPassword(8);
                 }
 
                 // NOTE: auth.admin.createUser requires service role - move to Edge Function
                 // Using client-side signUp for now (requires RLS policies)
                 const { data: authData, error: authError } = await supabase.auth.signUp({
-                    email, password: assignedPassword,
+                    email: email as string, password: (password || assignedPassword) as string,
                     options: { data: { role, full_name } },
                 });
                 if (authError) return { success: false, message: `Could not create auth account: ${authError.message}` };
                 if (!authData.user) return { success: false, message: 'Auth user creation failed.' };
 
-                const profileData: any = { id: authData.user.id, email, full_name, role };
+                const profileData: Record<string, unknown> = { id: authData.user.id, email, full_name, role };
                 if (section) profileData.section = section;
                 if (program) profileData.program = program;
                 if (year_level) profileData.year_level = typeof year_level === 'string' ? parseInt(year_level) : year_level;
@@ -622,30 +658,33 @@ async function executeAction(action: string, params: Record<string, any>): Promi
             case 'update_profile': {
                 const { user_email, updates } = params;
                 if (!updates || !user_email) return { success: false, message: 'Missing user_email or updates.' };
-                const { data: found } = await dbClient.from('profiles').select('id').eq('email', user_email).single();
+                const { data: found } = await dbClient.from('profiles').select('id').eq('email', user_email as string).single();
                 if (!found) return { success: false, message: `No user found with email "${user_email}".` };
 
                 // If email is being changed, update Supabase Auth first
-                if (updates.email && updates.email !== user_email) {
+                const updatesRecord = updates as Record<string, unknown>;
+                const newEmail = updatesRecord.email && typeof updatesRecord.email === 'string' ? updatesRecord.email : undefined;
+                if (newEmail && newEmail !== user_email) {
                     // Validate email format
-                    if (!updates.email.includes('@') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updates.email)) {
-                        return { success: false, message: `Invalid email format: "${updates.email}". Email must contain "@" (e.g. user@domain.com).` };
+                    if (!newEmail.includes('@') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+                        return { success: false, message: `Invalid email format: "${newEmail}". Email must contain "@" (e.g. user@domain.com).` };
                     }
                     // NOTE: auth.admin.updateUserById requires service role - move to Edge Function
                     // Email changes require service role, skip for now
                     return { success: false, message: 'Email changes require server-side implementation (Edge Function).' };
                 }
 
-                const { error } = await dbClient.from('profiles').update(updates).eq('id', found.id);
+                const { error } = await dbClient.from('profiles').update(updatesRecord).eq('id', found.id);
                 if (error) return { success: false, message: error.message };
-                return { success: true, message: `Profile updated for ${user_email}.${updates.email ? ` Email changed to ${updates.email} — user can now log in with the new email.` : ''}` };
+                return { success: true, message: `Profile updated for ${user_email}.${newEmail ? ` Email changed to ${newEmail} — user can now log in with the new email.` : ''}` };
             }
 
             default:
                 return { success: false, message: `Unknown action: ${action}` };
         }
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error('[OptiBot] executeAction error:', err);
-        return { success: false, message: err.message || 'An unexpected error occurred.' };
+        const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
+        return { success: false, message: errorMessage };
     }
 }
