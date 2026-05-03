@@ -518,16 +518,15 @@ const ScheduleGenerate: React.FC = () => {
                 day_of_week: e.day,
                 start_time: e.start,
                 end_time: e.end,
+                semester: '1st Semester',
+                academic_year: '2025-2026',
                 status: initialState,
                 is_active: true,
             }));
-            console.log('[INSERT] Inserting', inserts.length, 'schedules');
-            console.log('[INSERT] First entry:', inserts[0]);
             // Use upsert to avoid trigger issues
             const { error: insertError } = await supabase
                 .from('schedules')
                 .upsert(inserts, { onConflict: 'id' });
-            console.log('[INSERT] Result - error:', insertError);
             if (insertError) throw insertError;
             setSavedId('ok');
 
@@ -602,7 +601,7 @@ const ScheduleGenerate: React.FC = () => {
                         changeDescription: `Generated schedule with ${result.placed} sessions`,
                     }
                 );
-                scheduleLogger.generate.schedulePersisted(version.version, data && data[0] ? data[0].id : 'ok');
+                scheduleLogger.generate.schedulePersisted(version.version, savedId || 'ok');
                 scheduleLogger.generate.stateUpdated(version.version, version.hash);
                 scheduleLogger.generate.scheduleCreated(version.version, version.hash, `Saved as ${initialState}`);
             }
