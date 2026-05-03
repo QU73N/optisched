@@ -160,66 +160,6 @@ class ScheduleVersionService {
     }
 
     /**
-     * Create a version for a draft or submitted schedule
-     * This is called when saving as draft or submitting for approval
-     */
-    async createScheduleVersion(
-        scheduleId: string,
-        options: {
-            changeType: 'draft' | 'submitted' | 'approved' | 'published';
-            changeSummary: string;
-            changeReason?: string;
-            softScore?: number;
-            conflictCount?: number;
-        }
-    ): Promise<string | null> {
-        if (!this.supabase || !this.currentUserId) {
-            console.warn('[VERSION SERVICE] Not initialized, skipping version creation');
-            return null;
-        }
-
-        try {
-            // Calculate state hash
-            const { data: scheduleData } = await this.supabase
-                .from('schedules')
-                .select('*')
-                .eq('schedule_id', scheduleId);
-
-            if (!scheduleData || scheduleData.length === 0) {
-                console.warn('[VERSION SERVICE] No schedule data found for version creation');
-                return null;
-            }
-
-            const stateHash = scheduleValidation.computeStateHash(scheduleData);
-
-            // Call the database function to create the version
-            const { data, error } = await this.supabase
-                .rpc('create_schedule_version', {
-                    p_schedule_id: scheduleId,
-                    p_change_type: options.changeType,
-                    p_change_summary: options.changeSummary,
-                    p_change_reason: options.changeReason || null,
-                    p_state_hash: stateHash,
-                    p_soft_score: options.softScore || null,
-                    p_conflict_count: options.conflictCount || null,
-                    p_changed_by: this.currentUserId,
-                    p_previous_version_id: null,
-                });
-
-            if (error) {
-                console.error('[VERSION SERVICE] Failed to create version:', error);
-                return null;
-            }
-
-            console.log('[VERSION SERVICE] Version created:', data);
-            return data as string;
-        } catch (error) {
-            console.error('[VERSION SERVICE] Error creating schedule version:', error);
-            return null;
-        }
-    }
-
-    /**
      * Publish a new schedule with overwrite protection
      * 
      * CRITICAL: This method uses a compensating transaction pattern.

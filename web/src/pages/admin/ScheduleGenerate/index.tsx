@@ -24,6 +24,7 @@ import { scheduleStateManager } from '../../../services/scheduleStateManager';
 import { scheduleLogger } from '../../../services/scheduleLogger';
 import { scheduleVersionService } from '../../../services/scheduleVersionService';
 import { scheduleAudit } from '../../../services/auditService';
+import { detectConflicts } from '../../../services/conflictDetector';
 import { PublishOverwriteConfirm } from '../../../components/PublishOverwriteConfirm';
 
 // ---------------------------------------------------------------------------
@@ -532,20 +533,8 @@ const ScheduleGenerate: React.FC = () => {
                 });
             }
             
-            // Create schedule version for version control
+            // Scan for conflicts and save to conflicts table
             if (data && data.length > 0) {
-                // Use the first schedule ID as the schedule_id for versioning
-                // (all schedules in this batch share the same generation context)
-                const scheduleId = data[0].id;
-                await scheduleVersionService.createScheduleVersion(scheduleId, {
-                    changeType: initialState,
-                    changeSummary: `Generated schedule with ${result.placed} sessions`,
-                    changeReason: initialState === 'submitted' ? 'Submitted for approval' : 'Saved as draft',
-                    softScore: result.score,
-                    conflictCount: 0, // Will be updated by conflict scan
-                });
-                
-                // Scan for conflicts and save to conflicts table
                 try {
                     const { data: savedScheduleData } = await supabase
                         .from('schedules')
@@ -553,8 +542,6 @@ const ScheduleGenerate: React.FC = () => {
                         .in('id', (data || []).map((d: { id: string }) => d.id));
                     
                     if (savedScheduleData) {
-                        // Import detectConflicts
-                        const { detectConflicts } = await import('../../services/conflictDetector');
                         const conflicts = detectConflicts(savedScheduleData);
                         
                         // Save conflicts to database
