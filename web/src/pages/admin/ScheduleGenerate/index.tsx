@@ -228,7 +228,9 @@ const ScheduleGenerate: React.FC = () => {
 
     // Auto-switch to results stage when generator reports completion
     useEffect(() => {
+        console.log('[AUTO-SWITCH] generating:', generating, 'progress.subStage:', progress.subStage, 'result:', !!result);
         if (generating && progress.subStage === 'done' && result) {
+            console.log('[AUTO-SWITCH] Switching to results and setting maxStageReached');
             setStage('results');
             setMaxStageReached('results');
         }
@@ -311,11 +313,41 @@ const ScheduleGenerate: React.FC = () => {
         if (prev && !generating) setStage(prev.key);
     };
     const jumpTo = (key: StageKey) => {
-        if (generating) return;
+        console.log('[JUMP TO] Attempting to jump to:', key);
+        console.log('[JUMP TO] Current stage:', stage);
+        console.log('[JUMP TO] maxStageReached:', maxStageReached);
+        console.log('[JUMP TO] generating:', generating);
+        if (generating) {
+            console.log('[JUMP TO] Blocked - generating is true');
+            return;
+        }
         const targetIdx = STAGES.findIndex(s => s.key === key);
         const maxIdx = STAGES.findIndex(s => s.key === maxStageReached);
+        const currentIdx = STAGES.findIndex(s => s.key === stage);
+        console.log('[JUMP TO] targetIdx:', targetIdx, 'maxIdx:', maxIdx, 'currentIdx:', currentIdx);
+
+        // Ensure maxStageReached never decreases - if current stage is higher, update it
+        if (currentIdx > maxIdx) {
+            console.log('[JUMP TO] WARNING: currentIdx > maxIdx, updating maxStageReached to:', stage);
+            setMaxStageReached(stage);
+            // Recalculate maxIdx after update
+            const newMaxIdx = STAGES.findIndex(s => s.key === stage);
+            if (targetIdx <= newMaxIdx) {
+                console.log('[JUMP TO] Jump allowed after maxStageReached update, setting stage to:', key);
+                setStage(key);
+            } else {
+                console.log('[JUMP TO] Jump blocked even after update');
+            }
+            return;
+        }
+
         // Allow jumping to any phase up to the maximum phase reached
-        if (targetIdx <= maxIdx) setStage(key);
+        if (targetIdx <= maxIdx) {
+            console.log('[JUMP TO] Jump allowed, setting stage to:', key);
+            setStage(key);
+        } else {
+            console.log('[JUMP TO] Jump blocked - targetIdx > maxIdx');
+        }
     };
 
     const startGeneration = async () => {
@@ -759,10 +791,12 @@ const ScheduleGenerate: React.FC = () => {
                                 }
                             }}
                             onDiscard={() => {
+                                console.log('[DISCARD OPTIMIZATION] Setting stage to results and maxStageReached to results');
                                 setOptimizedResult(null);
                                 setOptimizationReport(null);
                                 setOptimizationError(null);
                                 setStage('results');
+                                setMaxStageReached('results');
                             }}
                         />
                     )}
