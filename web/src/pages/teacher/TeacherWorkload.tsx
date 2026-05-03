@@ -45,7 +45,8 @@ const TeacherWorkload: React.FC = () => {
                         .from('schedules')
                         .select('id, day_of_week, start_time, end_time, subject:subjects(name, code), section:sections(name)')
                         .eq('teacher_id', t.id)
-                        .eq('status', 'published');
+                        .eq('status', 'published')
+                        .eq('is_active', true);
                     setSchedules(((s || []) as unknown) as ScheduleRow[]);
                 }
             } catch (err) {

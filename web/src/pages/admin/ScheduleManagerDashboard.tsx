@@ -75,6 +75,7 @@ const ScheduleManagerDashboard: React.FC = () => {
                     .select('id', { count: 'exact', head: true })
                     .eq('created_by', profile.id)
                     .eq('status', 'published')
+                    .eq('is_active', true)
                     .gte('approved_at', since);
                 setMyApproved7d(approvedCount || 0);
 
@@ -148,7 +149,7 @@ const ScheduleManagerDashboard: React.FC = () => {
 
                 // 8. room load (top 8)
                 const [schedulesFull, roomsFull] = await Promise.all([
-                    supabase.from('schedules').select('room_id').eq('status', 'published'),
+                    supabase.from('schedules').select('room_id').eq('status', 'published').eq('is_active', true),
                     supabase.from('rooms').select('id, name'),
                 ]);
                 const roomMap: Record<string, number> = {};

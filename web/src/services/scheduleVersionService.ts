@@ -107,6 +107,7 @@ class ScheduleVersionService {
             .from('schedules')
             .select('id')
             .eq('status', 'published')
+            .eq('is_active', true)
             .limit(1);
 
         return (data && data.length > 0) || false;
@@ -130,6 +131,7 @@ class ScheduleVersionService {
             .from('schedules')
             .select('*')
             .eq('status', 'published')
+            .eq('is_active', true)
             .order('updated_at', { ascending: false })
             .limit(1);
 
@@ -157,6 +159,97 @@ class ScheduleVersionService {
             sessionCount: schedules.length,
             score: version.soft_score || 0,
         };
+    }
+
+    /**
+     * Rollback to a previous schedule version
+     * Reactivates the schedules from a previous version and deactivates the current active schedules
+     */
+    async rollbackToVersion(versionId: string): Promise<{ success: boolean; message: string }> {
+        if (!this.supabase || !this.currentUserId) {
+            throw new Error('Version service not initialized');
+        }
+
+        try {
+            // Get the version details
+            const { data: version, error: versionError } = await this.supabase
+                .from('schedule_versions')
+                .select('*')
+                .eq('id', versionId)
+                .single();
+
+            if (versionError || !version) {
+                return { success: false, message: 'Version not found' };
+            }
+
+            // Get the snapshot data from the version
+            const snapshot = version.snapshot as Schedule[];
+            if (!snapshot || snapshot.length === 0) {
+                return { success: false, message: 'Version has no schedule data' };
+            }
+
+            // Deactivate currently active published schedules
+            const { error: deactivateError } = await this.supabase
+                .from('schedules')
+                .update({ is_active: false })
+                .eq('status', 'published')
+                .eq('is_active', true);
+
+            if (deactivateError) {
+                return { success: false, message: `Failed to deactivate current schedules: ${deactivateError.message}` };
+            }
+
+            // Insert the rollback schedules
+            const inserts = snapshot.map(s => ({
+                subject_id: s.subject_id,
+                teacher_id: s.teacher_id,
+                room_id: s.room_id,
+                section_id: s.section_id,
+                day_of_week: s.day_of_week,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                status: 'published',
+                is_active: true,
+                semester: s.semester || '1st Semester',
+                academic_year: s.academic_year || '2025-2026',
+                created_by: this.currentUserId,
+            }));
+
+            const { error: insertError } = await this.supabase
+                .from('schedules')
+                .insert(inserts);
+
+            if (insertError) {
+                // Rollback failed, try to reactivate current schedules
+                await this.supabase
+                    .from('schedules')
+                    .update({ is_active: true })
+                    .eq('status', 'published')
+                    .eq('is_active', false);
+                return { success: false, message: `Failed to insert rollback schedules: ${insertError.message}` };
+            }
+
+            // Create a new version for the rollback operation
+            await this.supabase
+                .rpc('create_schedule_version', {
+                    p_schedule_id: snapshot[0].id,
+                    p_change_type: 'restore',
+                    p_change_summary: 'Rollback to previous version',
+                    p_change_reason: `Rolled back to version ${version.version_number}`,
+                    p_state_hash: version.state_hash,
+                    p_soft_score: version.soft_score,
+                    p_conflict_count: version.conflict_count,
+                    p_changed_by: this.currentUserId,
+                    p_previous_version_id: versionId,
+                });
+
+            scheduleLogger.system.workflowCompleted('Schedule rollback', Date.now(), true);
+            return { success: true, message: `Successfully rolled back to version ${version.version_number}` };
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            scheduleLogger.system.error('system', 'persistence', 'Rollback failed', error);
+            return { success: false, message: `Rollback failed: ${msg}` };
+        }
     }
 
     /**
@@ -208,7 +301,8 @@ class ScheduleVersionService {
                 const { data: currentSchedules } = await this.supabase
                     .from('schedules')
                     .select('*')
-                    .eq('status', 'published');
+                    .eq('status', 'published')
+                    .eq('is_active', true);
                 
                 if (currentSchedules && currentSchedules.length > 0) {
                     const currentHash = scheduleValidation.computeStateHash(currentSchedules);
@@ -240,6 +334,7 @@ class ScheduleVersionService {
                     .from('schedules')
                     .select('id')
                     .eq('status', 'published')
+                    .eq('is_active', true)
                     .limit(1);
 
                 if (currentSchedules && currentSchedules.length > 0) {
@@ -257,14 +352,16 @@ class ScheduleVersionService {
             // Compute state hash for the new schedules
             const stateHash = scheduleValidation.computeStateHash(schedules);
 
-            // Compensating transaction: Step 1 - Delete existing published schedules
+            // Compensating transaction: Step 1 - Deactivate existing published schedules
+            // Instead of deleting, we mark them as inactive to preserve history
             if (hasActive) {
-                const { error: deleteError } = await this.supabase
+                const { error: deactivateError } = await this.supabase
                     .from('schedules')
-                    .delete()
-                    .eq('status', 'published');
+                    .update({ is_active: false })
+                    .eq('status', 'published')
+                    .eq('is_active', true);
 
-                if (deleteError) throw deleteError;
+                if (deactivateError) throw deactivateError;
             }
 
             // Step 2 - Insert new schedules
@@ -277,6 +374,7 @@ class ScheduleVersionService {
                 start_time: s.start_time,
                 end_time: s.end_time,
                 status: 'published',
+                is_active: true, // New schedules are active by default
                 semester: options.semester,
                 academic_year: options.academic_year,
             }));
@@ -287,12 +385,15 @@ class ScheduleVersionService {
                 .select('id');
 
             if (insertError) {
-                // ROLLBACK: Attempt to restore deleted schedules
+                // ROLLBACK: Reactivate the previously deactivated schedules
                 if (deletedScheduleIds.length > 0) {
                     scheduleLogger.system.error('generate', 'persistence', 'Insert failed, attempting rollback', insertError);
-                    // Note: We cannot restore the exact data without having stored it first
-                    // This is a limitation of the compensating transaction pattern
-                    throw new Error(`Insert failed: ${insertError.message}. CRITICAL: Previous schedules were deleted and cannot be restored automatically.`);
+                    // Reactivate the schedules we just deactivated
+                    await this.supabase
+                        .from('schedules')
+                        .update({ is_active: true })
+                        .in('id', deletedScheduleIds);
+                    throw new Error(`Insert failed: ${insertError.message}. Previous schedules have been reactivated.`);
                 }
                 throw insertError;
             }
@@ -406,7 +507,8 @@ class ScheduleVersionService {
             const { data: verifiedSchedules } = await this.supabase
                 .from('schedules')
                 .select('*')
-                .eq('status', 'published');
+                .eq('status', 'published')
+                .eq('is_active', true);
 
             if (!verifiedSchedules || verifiedSchedules.length !== schedules.length) {
                 throw new Error('Persistence verification failed: Schedule count mismatch');

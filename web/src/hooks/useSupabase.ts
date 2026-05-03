@@ -588,7 +588,7 @@ export function useAdminDashboardStats() {
                 supabase.from('teachers').select('id', { count: 'exact' }),
                 supabase.from('rooms').select('id', { count: 'exact' }),
                 supabase.from('sections').select('id', { count: 'exact' }),
-                supabase.from('schedules').select('*').eq('status', 'published'),
+                supabase.from('schedules').select('*').eq('status', 'published').eq('is_active', true),
                 supabase.from('conflicts').select('id, is_resolved'),
             ]);
 

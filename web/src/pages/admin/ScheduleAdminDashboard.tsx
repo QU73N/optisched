@@ -62,7 +62,8 @@ const ScheduleAdminDashboard: React.FC = () => {
                 const { count: pubCount } = await supabase
                     .from('schedules')
                     .select('id', { count: 'exact', head: true })
-                    .eq('status', 'published');
+                    .eq('status', 'published')
+                    .eq('is_active', true);
                 setPublishedCount(pubCount || 0);
 
                 // 3. open conflicts on submitted/published schedules
@@ -124,7 +125,7 @@ const ScheduleAdminDashboard: React.FC = () => {
 
                 // 7. room load (top 8)
                 const [schedulesFull, roomsFull] = await Promise.all([
-                    supabase.from('schedules').select('room_id').eq('status', 'published'),
+                    supabase.from('schedules').select('room_id').eq('status', 'published').eq('is_active', true),
                     supabase.from('rooms').select('id, name'),
                 ]);
                 const roomMap: Record<string, number> = {};

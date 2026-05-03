@@ -17,10 +17,6 @@ const StudentDashboard: React.FC = () => {
     const dayIndex = new Date().getDay();
     const isOffDay = dayIndex === 0;
     const scheduleDayName = isOffDay ? 'Monday' : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
-    
-    // Debug: Log the current day being filtered
-    console.log('[StudentDashboard] Current day index:', dayIndex, 'Filtering by day:', scheduleDayName);
-    
     const { schedules: allSchedules, loading } = useSchedules({ dayOfWeek: scheduleDayName, status: 'published' });
     const { announcements: allAnnouncements } = useAnnouncements();
     const { events: upcomingEvents } = useCustomEvents(undefined, true);
@@ -33,7 +29,8 @@ const StudentDashboard: React.FC = () => {
             const { data } = await supabase
                 .from('schedules')
                 .select('id, day_of_week, start_time, end_time, status, subject:subjects(name), section:sections(name)')
-                .eq('status', 'published');
+                .eq('status', 'published')
+                .eq('is_active', true);
             const mine = (data || []).filter((s: any) => (s.section?.name || '').toLowerCase() === (profile.section || '').toLowerCase());
             setWeekSectionSchedules(mine);
         })();
@@ -42,12 +39,10 @@ const StudentDashboard: React.FC = () => {
     // Filter schedules for student's section
     const schedules = useMemo(() => {
         if (!profile?.section) return allSchedules;
-        const filtered = allSchedules.filter((s: any) => {
+        return allSchedules.filter((s: any) => {
             const secName = s.section?.name || '';
             return secName.toLowerCase() === (profile.section ?? '').toLowerCase();
         });
-        console.log('[StudentDashboard] Schedules after day filter:', allSchedules.length, 'After section filter:', filtered.length, 'Section:', profile.section);
-        return filtered;
     }, [allSchedules, profile?.section]);
 
     // Filter announcements for student's section

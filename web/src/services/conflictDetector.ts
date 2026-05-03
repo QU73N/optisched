@@ -115,7 +115,8 @@ export const subscribeToConflicts = (
                 const { data } = await supabase
                     .from('schedules')
                     .select('*, subject:subjects(*), teacher:teachers(*, profile_id:profiles(*)), room:rooms(*), section:sections(*)')
-                    .eq('status', 'published');
+                    .eq('status', 'published')
+                    .eq('is_active', true);
 
                 if (data) {
                     const conflicts = detectConflicts(data);

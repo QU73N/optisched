@@ -499,6 +499,7 @@ const ScheduleGenerate: React.FC = () => {
                 subject_id: e.subjectId, teacher_id: e.teacherId, room_id: e.roomId,
                 section_id: e.sectionId, day_of_week: e.day, start_time: e.start, end_time: e.end,
                 status: initialState,
+                is_active: true, // New schedules are active by default
             }));
             const { error, data } = await supabase.from('schedules').insert(inserts).select('id');
             if (error) throw error;
@@ -550,7 +551,8 @@ const ScheduleGenerate: React.FC = () => {
             const { data: savedSchedules } = await supabase
                 .from('schedules')
                 .select('*')
-                .in('status', ['published', 'draft']);
+                .in('status', ['published', 'draft'])
+                .eq('is_active', true);
             
             if (savedSchedules) {
                 const version = await scheduleStateManager.updateState(
