@@ -532,6 +532,51 @@ const ScheduleGenerate: React.FC = () => {
                 });
             }
             
+            // Create schedule version for version control
+            if (data && data.length > 0) {
+                // Use the first schedule ID as the schedule_id for versioning
+                // (all schedules in this batch share the same generation context)
+                const scheduleId = data[0].id;
+                await scheduleVersionService.createScheduleVersion(scheduleId, {
+                    changeType: initialState,
+                    changeSummary: `Generated schedule with ${result.placed} sessions`,
+                    changeReason: initialState === 'submitted' ? 'Submitted for approval' : 'Saved as draft',
+                    softScore: result.score,
+                    conflictCount: 0, // Will be updated by conflict scan
+                });
+                
+                // Scan for conflicts and save to conflicts table
+                try {
+                    const { data: savedScheduleData } = await supabase
+                        .from('schedules')
+                        .select('*, subject:subjects(*), teacher:teachers(*, profile_id:profiles(*)), room:rooms(*), section:sections(*)')
+                        .in('id', (data || []).map((d: { id: string }) => d.id));
+                    
+                    if (savedScheduleData) {
+                        // Import detectConflicts
+                        const { detectConflicts } = await import('../../services/conflictDetector');
+                        const conflicts = detectConflicts(savedScheduleData);
+                        
+                        // Save conflicts to database
+                        if (conflicts.length > 0) {
+                            const conflictInserts = conflicts.map((c: { type: string; severity: string; title: string; description: string; scheduleAId: string | null; scheduleBId: string | null }) => ({
+                                type: c.type,
+                                severity: c.severity,
+                                title: c.title,
+                                description: c.description,
+                                schedule_a_id: c.scheduleAId,
+                                schedule_b_id: c.scheduleBId,
+                                resolved: false,
+                            }));
+                            await supabase.from('conflicts').insert(conflictInserts);
+                        }
+                    }
+                } catch (conflictError) {
+                    console.error('[SAVE] Conflict scan failed (non-critical):', conflictError);
+                    // Don't fail the save if conflict scanning fails
+                }
+            }
+            
             await refreshExisting();
 
             // Update canonical state manager with the saved schedules
