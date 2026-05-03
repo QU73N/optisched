@@ -35,6 +35,7 @@ const ScheduleGenerate: React.FC = () => {
     const { preferences, updatePreferences } = useUserPreferences();
     const canApprove = hasAnyRole(roles, [...POWER_ADMIN_ROLES, 'schedule_admin']);
     const [stage, setStage] = useState<StageKey>('scope');
+    const [maxStageReached, setMaxStageReached] = useState<StageKey>('scope');
     const [config, setConfig] = useState<GenerationConfig>(DEFAULT_CONFIG);
 
     const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -228,6 +229,7 @@ const ScheduleGenerate: React.FC = () => {
     useEffect(() => {
         if (generating && progress.subStage === 'done' && result) {
             setStage('results');
+            setMaxStageReached('results');
         }
     }, [generating, progress.subStage, result]);
 
@@ -293,7 +295,15 @@ const ScheduleGenerate: React.FC = () => {
 
     const goNext = () => {
         const next = STAGES[stageIndex + 1];
-        if (next && canAdvance(stage)) setStage(next.key);
+        if (next && canAdvance(stage)) {
+            setStage(next.key);
+            // Update max stage reached
+            const nextIdx = STAGES.findIndex(s => s.key === next.key);
+            const maxIdx = STAGES.findIndex(s => s.key === maxStageReached);
+            if (nextIdx > maxIdx) {
+                setMaxStageReached(next.key);
+            }
+        }
     };
     const goBack = () => {
         const prev = STAGES[stageIndex - 1];
@@ -302,7 +312,9 @@ const ScheduleGenerate: React.FC = () => {
     const jumpTo = (key: StageKey) => {
         if (generating) return;
         const targetIdx = STAGES.findIndex(s => s.key === key);
-        if (targetIdx <= stageIndex) setStage(key);
+        const maxIdx = STAGES.findIndex(s => s.key === maxStageReached);
+        // Allow jumping to any phase up to the maximum phase reached
+        if (targetIdx <= maxIdx) setStage(key);
     };
 
     const startGeneration = async () => {
@@ -614,6 +626,7 @@ const ScheduleGenerate: React.FC = () => {
         setOptimizationError(null);
         setOptimizing(false);
         setStage('scope');
+        setMaxStageReached('scope');
     };
 
     return (
