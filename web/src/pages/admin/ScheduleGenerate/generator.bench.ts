@@ -31,7 +31,6 @@ const smallConfig: GenerationConfig = {
     dayEnd: '17:00',
     breaks: [],
     maxAttempts: 5,
-    clearExisting: true,
     sectionIds: [],
     partialTarget: null,
     priorities: {

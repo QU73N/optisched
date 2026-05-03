@@ -33,7 +33,6 @@ const mockConfig: GenerationConfig = {
     dayEnd: '17:00',
     breaks: [],
     maxAttempts: 10,
-    clearExisting: true,
     sectionIds: [],
     partialTarget: null,
     priorities: {

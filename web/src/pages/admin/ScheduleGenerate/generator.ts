@@ -2291,9 +2291,7 @@ export async function runGenerator(
         : [];
     const lockedExisting = isPartial
         ? existing.filter(e => !targetMatches(e, target))
-        : (config.clearExisting
-            ? []
-            : existing.filter(e => scopedSectionIds.size === 0 || scopedSectionIds.has(e.section_id)));
+        : existing.filter(e => scopedSectionIds.size === 0 || scopedSectionIds.has(e.section_id));
 
     const baseBusy: Busy[] = lockedExisting.map(e => ({
         teacherId: e.teacher_id,

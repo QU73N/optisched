@@ -187,7 +187,6 @@ export interface GenerationConfig {
     partialTarget: PartialTarget | null;
     // Scope
     sectionIds: string[];          // empty => all
-    clearExisting: boolean;
     // Structure
     days: string[];                // subset of Mon..Sat
     dayStart: string;              // HH:MM
@@ -335,7 +334,6 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     mode: 'full',
     partialTarget: null,
     sectionIds: [],
-    clearExisting: false,
     days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
     dayStart: '07:00',
     dayEnd: '17:30',

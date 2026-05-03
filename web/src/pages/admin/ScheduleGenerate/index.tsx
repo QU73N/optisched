@@ -492,26 +492,6 @@ const ScheduleGenerate: React.FC = () => {
                     .eq(column, t.id)
                     .in('status', ['draft', 'submitted', 'approved']);
                 if (delErr) throw delErr;
-            } else if (config.clearExisting) {
-                // Delete existing schedules for the scope
-                const scope = config.sectionIds;
-                const q = supabase.from('schedules').delete();
-                const { error: delErr } = scope.length
-                    ? await q.in('section_id', scope)
-                    : await q.neq('id', '00000000-0000-0000-0000-000000000000');
-                if (delErr) throw delErr;
-                
-                // Also delete non-published generation_runs for the same scope
-                // This prevents accumulation of old generation runs
-                const { error: genDelErr } = await supabase
-                    .from('generation_runs')
-                    .delete()
-                    .in('status', ['running', 'failed'])
-                    .neq('id', '00000000-0000-0000-0000-000000000000');
-                if (genDelErr) {
-                    // Don't throw - this is not critical
-                    console.error('[SAVE] Failed to delete old generation runs:', genDelErr);
-                }
             }
             
             // Insert new schedule entries
@@ -1147,10 +1127,6 @@ const ScopeStage: React.FC<{
                     <div className="sg-row">
                         <button className={`sg-chip ${allSelected ? 'sg-chip-active' : ''}`} onClick={() => setConfig(c => ({ ...c, sectionIds: [] }))}>All sections</button>
                         <button className={`sg-chip ${!allSelected ? 'sg-chip-active' : ''}`} onClick={() => { if (allSelected && sections[0]) setConfig(c => ({ ...c, sectionIds: [sections[0].id] })); }}>Custom selection</button>
-                        <label className="sg-inline-check" style={{ marginLeft: 'auto' }}>
-                            <input type="checkbox" checked={config.clearExisting} onChange={e => setConfig(c => ({ ...c, clearExisting: e.target.checked }))} />
-                            Clear existing schedules in scope before saving
-                        </label>
                     </div>
 
                     {!allSelected && (
@@ -1473,7 +1449,6 @@ const ReviewStage: React.FC<{
                         : [
                             ['Mode', 'Full generation'],
                             ['Sections', config.sectionIds.length ? `${config.sectionIds.length} selected` : `All (${counts.sections})`],
-                            ['Clear existing', config.clearExisting ? 'Yes' : 'No'],
                             ['Existing entries', String(counts.existing)],
                         ]
                     }
