@@ -35,10 +35,10 @@ export async function directInsert(
       throw new Error('No active session');
     }
 
-    const { SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env;
+    const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env;
     
     // Build URL
-    let url = `${SUPABASE_URL}/rest/v1/${options.table}`;
+    let url = `${VITE_SUPABASE_URL}/rest/v1/${options.table}`;
     const params = new URLSearchParams();
     
     if (options.onConflict) {
@@ -100,10 +100,10 @@ export async function directUpdate(
       throw new Error('No active session');
     }
 
-    const { SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env;
+    const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env;
     
     // Build URL with filters
-    let url = `${SUPABASE_URL}/rest/v1/${table}`;
+    let url = `${VITE_SUPABASE_URL}/rest/v1/${table}`;
     const params = new URLSearchParams();
     
     Object.entries(filters).forEach(([key, value]) => {
@@ -151,9 +151,9 @@ export async function directDelete(
       throw new Error('No active session');
     }
 
-    const { SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env;
+    const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env;
     
-    let url = `${SUPABASE_URL}/rest/v1/${table}`;
+    let url = `${VITE_SUPABASE_URL}/rest/v1/${table}`;
     const params = new URLSearchParams();
     
     Object.entries(filters).forEach(([key, value]) => {

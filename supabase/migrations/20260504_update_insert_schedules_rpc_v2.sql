@@ -41,7 +41,7 @@ BEGIN
         (elem->>'status')::text,
         COALESCE((elem->>'is_active')::boolean, true)
     FROM jsonb_array_elements(p_schedules) AS elem
-    RETURNING id;
+    RETURNING public.schedules.id;
     
     GET DIAGNOSTICS v_count = ROW_COUNT;
     
