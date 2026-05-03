@@ -15,6 +15,7 @@ const FloatingOptiBot: React.FC = () => {
     ]);
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
+    const [isOnline, setIsOnline] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const historyRef = useRef<GeminiMessage[]>([]);
 
@@ -22,6 +23,63 @@ const FloatingOptiBot: React.FC = () => {
     const [showWelcomeBubble, setShowWelcomeBubble] = useState(false);
     const [isWelcomeTyping, setIsWelcomeTyping] = useState(false);
     const [showWelcomeMessage, setShowWelcomeMessage] = useState(false);
+
+    // Check OptiBot status on mount
+    useEffect(() => {
+        const checkOptiBotStatus = async () => {
+            const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+            const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
+            const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
+
+            // Check if at least one API key is configured
+            const hasValidKey = GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_') ||
+                               GROQ_API_KEY && !GROQ_API_KEY.includes('YOUR_') ||
+                               OPENROUTER_API_KEY && !OPENROUTER_API_KEY.includes('YOUR_');
+
+            if (!hasValidKey) {
+                setIsOnline(false);
+                return;
+            }
+
+            // Test connectivity with a simple request to the first available provider
+            try {
+                if (GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_')) {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: 'ping' }] }],
+                            generationConfig: { maxOutputTokens: 1 }
+                        }),
+                    });
+                    setIsOnline(response.ok);
+                    return;
+                }
+            } catch {
+                // Fall through to check other providers
+            }
+
+            // If Gemini failed, try a simple check on OpenRouter
+            if (OPENROUTER_API_KEY && !OPENROUTER_API_KEY.includes('YOUR_')) {
+                try {
+                    const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+                        headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}` },
+                    });
+                    setIsOnline(response.ok);
+                    return;
+                } catch {
+                    setIsOnline(false);
+                }
+            } else {
+                setIsOnline(false);
+            }
+        };
+
+        checkOptiBotStatus();
+        // Recheck every 30 seconds
+        const interval = setInterval(checkOptiBotStatus, 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     // Check for first login of the day
     useEffect(() => {
@@ -124,7 +182,9 @@ const FloatingOptiBot: React.FC = () => {
                         </div>
                         <div className="optibot-panel-header-info">
                             <h3>OptiBot AI</h3>
-                            <span>● Online - Powered by Gemini</span>
+                            <span className={isOnline ? 'status-online' : 'status-offline'}>
+                                ● {isOnline ? 'Online' : 'Offline'}
+                            </span>
                         </div>
                     </div>
 

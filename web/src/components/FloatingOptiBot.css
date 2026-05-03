@@ -122,8 +122,15 @@
 
 .optibot-panel-header-info span {
     font-size: 11px;
-    color: var(--accent-success);
     font-weight: 500;
+}
+
+.optibot-panel-header-info .status-online {
+    color: var(--accent-success);
+}
+
+.optibot-panel-header-info .status-offline {
+    color: var(--text-muted);
 }
 
 /* ========== MESSAGES ========== */

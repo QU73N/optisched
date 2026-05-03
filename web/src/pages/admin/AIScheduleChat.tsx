@@ -16,11 +16,69 @@ const AIScheduleChat: React.FC = () => {
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isOnline, setIsOnline] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const { schedules } = useSchedules({ status: 'published' });
     const { teachers } = useTeachers();
     const { rooms } = useRooms();
+
+    // Check OptiBot status on mount
+    useEffect(() => {
+        const checkOptiBotStatus = async () => {
+            const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+            const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
+            const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
+
+            // Check if at least one API key is configured
+            const hasValidKey = GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_') ||
+                               GROQ_API_KEY && !GROQ_API_KEY.includes('YOUR_') ||
+                               OPENROUTER_API_KEY && !OPENROUTER_API_KEY.includes('YOUR_');
+
+            if (!hasValidKey) {
+                setIsOnline(false);
+                return;
+            }
+
+            // Test connectivity with a simple request to the first available provider
+            try {
+                if (GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_')) {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: 'ping' }] }],
+                            generationConfig: { maxOutputTokens: 1 }
+                        }),
+                    });
+                    setIsOnline(response.ok);
+                    return;
+                }
+            } catch {
+                // Fall through to check other providers
+            }
+
+            // If Gemini failed, try a simple check on OpenRouter
+            if (OPENROUTER_API_KEY && !OPENROUTER_API_KEY.includes('YOUR_')) {
+                try {
+                    const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+                        headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}` },
+                    });
+                    setIsOnline(response.ok);
+                    return;
+                } catch {
+                    setIsOnline(false);
+                }
+            } else {
+                setIsOnline(false);
+            }
+        };
+
+        checkOptiBotStatus();
+        // Recheck every 30 seconds
+        const interval = setInterval(checkOptiBotStatus, 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -76,7 +134,9 @@ const AIScheduleChat: React.FC = () => {
                         <div className="ai-avatar"><Wand2 size={20} /></div>
                         <div>
                             <h3>AI Schedule Assistant</h3>
-                            <span className="text-muted">Powered by OptiBot</span>
+                            <span className="text-muted">
+                                <span className={`status-dot ${isOnline ? 'online' : 'offline'}`}>●</span> {isOnline ? 'Online' : 'Offline'}
+                            </span>
                         </div>
                     </div>
                     <div className="data-badges">
@@ -162,6 +222,9 @@ const AIScheduleChat: React.FC = () => {
                 .ai-input-form button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
                 .text-muted { color: var(--text-muted); font-size: 0.8rem; }
+                .status-dot { display: inline-block; margin-right: 4px; }
+                .status-dot.online { color: #22c55e; }
+                .status-dot.offline { color: var(--text-muted); }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .spin { animation: spin 1s linear infinite; }
             `}</style>
