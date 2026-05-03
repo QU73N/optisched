@@ -196,7 +196,7 @@ const AddUser: React.FC = () => {
                 .from('profiles')
                 .select('id')
                 .eq('email', formData.email)
-                .single();
+                .maybeSingle();
             if (emailCheck) {
                 setError('This email is already registered.');
                 return false;
@@ -209,7 +209,7 @@ const AddUser: React.FC = () => {
                 .from('profiles')
                 .select('id')
                 .eq('id_number', formData.idNumber)
-                .single();
+                .maybeSingle();
             if (idCheck) {
                 setError('This ID number is already in use.');
                 return false;
@@ -484,16 +484,21 @@ const AddUser: React.FC = () => {
             
             // Create student record if role is student
             if (formData.role === 'student') {
-                // Find the section ID based on section name AND program
-                const { data: sectionData } = await supabase
+                // Find the section ID based on section name AND program (if provided)
+                let sectionQuery = supabase
                     .from('sections')
                     .select('id')
-                    .eq('name', formData.section)
-                    .eq('program', formData.program || null)
-                    .single();
+                    .eq('name', formData.section);
+                
+                // Only filter by program if it's provided
+                if (formData.program) {
+                    sectionQuery = sectionQuery.eq('program', formData.program);
+                }
+                
+                const { data: sectionData } = await sectionQuery.maybeSingle();
                 
                 if (!sectionData) {
-                    throw new Error('Section not found for the selected program');
+                    throw new Error(`Section not found: ${formData.section}${formData.program ? ` for program ${formData.program}` : ''}`);
                 }
                 
                 const { error: studentError } = await supabase.from('students').insert({
