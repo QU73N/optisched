@@ -35,7 +35,7 @@ export async function loadUserPreferences(userId: string): Promise<Omit<UserPref
             .from('user_preferences')
             .select('*')
             .eq('user_id', userId)
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
 

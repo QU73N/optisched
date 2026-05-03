@@ -9,7 +9,7 @@ async function getSchoolTimezone(): Promise<string> {
             .from('system_rules')
             .select('value')
             .eq('key', 'school_timezone')
-            .single();
+            .maybeSingle();
         if (data && typeof data.value === 'string') {
             cachedSchoolTz = data.value;
             return data.value;

@@ -388,8 +388,8 @@ export function useTeacherPreferences(teacherId?: string) {
                 .from('teacher_preferences')
                 .select('*')
                 .eq('teacher_id', teacherId)
-                .single();
-            if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
+                .maybeSingle();
+            if (fetchError) throw fetchError;
             setPreferences(data);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Unknown error');
@@ -468,8 +468,9 @@ export function useAnnouncements() {
     const createAnnouncement = async (title: string, content: string, authorId: string, authorName: string, priority: string = 'normal', targetSection?: string) => {
         const insertData: any = { title, content, author_id: authorId, author_name: authorName, priority };
         if (targetSection) insertData.target_section = targetSection;
-        const { data, error } = await supabase.from('announcements').insert(insertData).select().single();
+        const { data, error } = await supabase.from('announcements').insert(insertData).select().maybeSingle();
         if (error) throw error;
+        if (!data) throw new Error('Failed to create announcement');
         await fetchAnnouncements();
         return data;
     };
