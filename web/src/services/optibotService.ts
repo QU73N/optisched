@@ -461,7 +461,8 @@ async function executeAction(action: string, params: ActionParams): Promise<{ su
     try {
         switch (action) {
             case 'create_user': {
-                let { email, password, full_name, role, section, program, year_level } = params;
+                let { email, password, role } = params;
+                const { full_name, section, program, year_level } = params;
                 if (!full_name || typeof full_name !== 'string') return { success: false, message: 'Missing required field: full_name.' };
                 if (!role) role = 'student';
 
@@ -570,7 +571,7 @@ async function executeAction(action: string, params: ActionParams): Promise<{ su
                     }
                 }
 
-                const scheduleData: any = { subject_id, day_of_week, start_time, end_time, status: 'published' };
+                const scheduleData: Record<string, unknown> = { subject_id, day_of_week, start_time, end_time, status: 'published' };
                 if (teacher_id) scheduleData.teacher_id = teacher_id;
                 if (room_id) scheduleData.room_id = room_id;
                 if (section_id) scheduleData.section_id = section_id;
