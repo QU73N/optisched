@@ -1755,6 +1755,13 @@
     color: var(--accent-primary);
 }
 
+.sg-step-visited .sg-step-btn { color: var(--text-primary); }
+
+.sg-step-visited .sg-step-num {
+    background: var(--accent-primary-subtle);
+    color: var(--accent-primary);
+}
+
 .sg-step-upcoming .sg-step-btn { opacity: 0.7; }
 
 .sg-stage-card {

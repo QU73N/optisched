@@ -914,7 +914,8 @@ const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJum
     return (
         <ol className="sg-stepper" role="tablist" aria-label="Generation stages">
             {STAGES.map((s, i) => {
-                const state = i < idx ? 'done' : i === idx ? 'current' : 'upcoming';
+                // Use maxIdx to determine if a stage has been visited (not grayed out)
+                const state = i < idx ? 'done' : i === idx ? 'current' : i <= maxIdx ? 'visited' : 'upcoming';
                 return (
                     <li key={s.key} className={`sg-step sg-step-${state}`}>
                         <button
@@ -930,7 +931,7 @@ const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJum
                             aria-label={`${i + 1} of ${STAGES.length}: ${s.label}. ${s.hint}.`}
                             tabIndex={i === idx ? 0 : -1}
                         >
-                            <span className="sg-step-num" aria-hidden="true">{i < idx ? <CheckCircle size={14} /> : i + 1}</span>
+                            <span className="sg-step-num" aria-hidden="true">{i < idx ? <CheckCircle size={14} /> : i <= maxIdx ? <CheckCircle size={14} /> : i + 1}</span>
                             <span className="sg-step-label">{s.label}</span>
                         </button>
                     </li>
