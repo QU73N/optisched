@@ -45,10 +45,6 @@ export async function directInsert(
       params.append('on_conflict', options.onConflict);
     }
     
-    if (options.returning) {
-      params.append('returning', options.returning);
-    }
-    
     if (params.toString()) {
       url += `?${params.toString()}`;
     }
