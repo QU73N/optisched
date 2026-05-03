@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, MoreVertical, Scissors, Merge, X } from 'lucide-react';
+import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, MoreVertical, Scissors, Merge, X, Maximize, Minimize } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { scheduleVersionService } from '../../services/scheduleVersionService';
 import { ADMIN_ROLES } from '../../types/database';
@@ -608,6 +608,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
     const [splitModal, setSplitModal] = useState(false);
     const [splitCount, setSplitCount] = useState(2);
     const [showVersionHistory, setShowVersionHistory] = useState(false);
+    const [isFullScreen, setIsFullScreen] = useState(false);
 
     const events = schedules.map(s => {
         const dayIdx = dayOrder.indexOf(s.day_of_week);
@@ -762,7 +763,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
     }, [showMenu]);
 
     return (
-        <div>
+        <div style={isFullScreen ? { position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--bg-primary)', padding: 24, overflow: 'auto' } : {}}>
             <button type="button" className="sm-back" onClick={onBack}>
                 <ArrowLeft size={14} /> Back
             </button>
@@ -782,8 +783,17 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                         entity.sub && <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>{entity.sub}</div>
                     )}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {schedules.length} {schedules.length === 1 ? 'session' : 'sessions'} this week
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+                    <span>{schedules.length} {schedules.length === 1 ? 'session' : 'sessions'} this week</span>
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setIsFullScreen(!isFullScreen)}
+                        style={{ padding: '6px 12px', fontSize: 12 }}
+                        title={isFullScreen ? 'Exit full screen' : 'Full screen'}
+                    >
+                        {isFullScreen ? <Minimize size={14} /> : <Maximize size={14} />}
+                    </button>
                 </div>
             </div>
 
@@ -831,39 +841,53 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                         )}
 
                         {/* Events overlaid with explicit grid placement */}
-                        {events.map(ev => (
-                            <div
-                                key={ev.s.id}
-                                className="sm-cal-cell"
-                                style={{
-                                    gridColumn: ev.dayIdx + 2,
-                                    gridRow: `${ev.start + 2} / span ${ev.span}`,
-                                }}
-                            >
+                        {events.map(ev => {
+                            // Dynamic font sizing based on span (duration)
+                            const getFontSize = () => {
+                                if (ev.span <= 1) return '10px';
+                                if (ev.span <= 2) return '11px';
+                                return '12px';
+                            };
+                            
+                            return (
                                 <div
-                                    className={`sm-cal-event ${colorForKey(ev.s.subject?.code || ev.s.id)} ${canEdit ? 'sm-cal-event-draggable' : ''}`}
-                                    title={`${ev.s.subject?.name || ''} · ${formatTime(ev.s.start_time)}–${formatTime(ev.s.end_time)}`}
-                                    draggable={canEdit}
-                                    onDragStart={(e) => handleDragStart(e, ev)}
-                                    onContextMenu={(e) => handleContextMenu(e, ev)}
+                                    key={ev.s.id}
+                                    className="sm-cal-cell"
+                                    style={{
+                                        gridColumn: ev.dayIdx + 2,
+                                        gridRow: `${ev.start + 2} / span ${ev.span}`,
+                                    }}
                                 >
-                                    <div className="sm-cal-event-title">
-                                        {ev.s.subject?.code || ev.s.subject?.name || 'Session'}
-                                    </div>
-                                    <div className="sm-cal-event-sub">
-                                        {ev.s.room?.name || ev.s.teacher?.profile?.full_name || ev.s.section?.name || ''}
-                                    </div>
-                                    <div className="sm-cal-event-time">
-                                        {formatTime(ev.s.start_time)}–{formatTime(ev.s.end_time)}
-                                    </div>
-                                    {canEdit && (
-                                        <div className="sm-cal-event-edit-hint">
-                                            <MoreVertical size={12} />
+                                    <div
+                                        className={`sm-cal-event ${colorForKey(ev.s.subject?.code || ev.s.id)} ${canEdit ? 'sm-cal-event-draggable' : ''}`}
+                                        title={`${ev.s.subject?.name || ''} · ${formatTime(ev.s.start_time)}–${formatTime(ev.s.end_time)}`}
+                                        draggable={canEdit}
+                                        onDragStart={(e) => handleDragStart(e, ev)}
+                                        onContextMenu={(e) => handleContextMenu(e, ev)}
+                                        style={{ fontSize: getFontSize() }}
+                                    >
+                                        <div className="sm-cal-event-title" style={{ fontSize: getFontSize(), fontWeight: ev.span <= 1 ? 600 : 500 }}>
+                                            {ev.s.subject?.code || ev.s.subject?.name || 'Session'}
                                         </div>
-                                    )}
+                                        {ev.span > 1 && (
+                                            <>
+                                                <div className="sm-cal-event-sub" style={{ fontSize: getFontSize() }}>
+                                                    {ev.s.room?.name || ev.s.teacher?.profile?.full_name || ev.s.section?.name || ''}
+                                                </div>
+                                                <div className="sm-cal-event-time" style={{ fontSize: getFontSize() }}>
+                                                    {formatTime(ev.s.start_time)}–{formatTime(ev.s.end_time)}
+                                                </div>
+                                            </>
+                                        )}
+                                        {canEdit && (
+                                            <div className="sm-cal-event-edit-hint">
+                                                <MoreVertical size={12} />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         {/* Context Menu */}
                         {showMenu && menuPosition && selectedEvent && (
