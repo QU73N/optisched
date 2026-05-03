@@ -66,6 +66,26 @@ const TIME_SLOTS = [
     '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
 ];
 
+// Department-Course Mapping Connector
+// Maps display department names to actual database department names
+// and their associated subject programs
+const DEPARTMENT_MAPPING = {
+    'Computer Science': { db_name: 'Mathematics', programs: ['Mathematics', 'Statistics'] },
+    'Information Technology': { db_name: 'Information Technology', programs: ['Information Technology'] },
+    'Hospitality Management': { db_name: 'Physical Education', programs: ['Physical Education'] },
+    'Business Administration': { db_name: 'Business', programs: ['Business'] },
+    'Engineering': { db_name: 'Science', programs: ['Science', 'Chemistry', 'Physics'] },
+    'Arts and Sciences': { db_name: 'Research', programs: ['Research'] },
+};
+
+const getDatabaseDepartmentName = (displayName: string): string => {
+    return DEPARTMENT_MAPPING[displayName as keyof typeof DEPARTMENT_MAPPING]?.db_name || displayName;
+};
+
+const getDepartmentPrograms = (displayName: string): string[] => {
+    return DEPARTMENT_MAPPING[displayName as keyof typeof DEPARTMENT_MAPPING]?.programs || [];
+};
+
 const AddUser: React.FC = () => {
     const navigate = useNavigate();
     const { role: currentRole } = useAuth();
@@ -122,16 +142,12 @@ const AddUser: React.FC = () => {
     const fetchDatabaseData = async () => {
         setLoading(true);
         try {
-            // Use hardcoded department list (department is stored as text field, not a separate table)
-            const hardcodedDepartments = [
-                { id: 'cs', name: 'Computer Science' },
-                { id: 'it', name: 'Information Technology' },
-                { id: 'hm', name: 'Hospitality Management' },
-                { id: 'ba', name: 'Business Administration' },
-                { id: 'eng', name: 'Engineering' },
-                { id: 'arts', name: 'Arts and Sciences' },
-            ];
-            setDepartments(hardcodedDepartments);
+            // Use department mapping connector
+            const departmentList = Object.keys(DEPARTMENT_MAPPING).map((name, index) => ({
+                id: `dept_${index}`,
+                name
+            }));
+            setDepartments(departmentList);
             
             // Fetch subjects
             const { data: subjectData } = await supabase
@@ -221,6 +237,24 @@ const AddUser: React.FC = () => {
             setError('Password must be at least 8 characters.');
             return false;
         }
+
+        // Enhanced password validation
+        if (!/[A-Z]/.test(formData.password)) {
+            setError('Password must contain at least one uppercase letter.');
+            return false;
+        }
+        if (!/[a-z]/.test(formData.password)) {
+            setError('Password must contain at least one lowercase letter.');
+            return false;
+        }
+        if (!/[0-9]/.test(formData.password)) {
+            setError('Password must contain at least one number.');
+            return false;
+        }
+        if (!/[^A-Za-z0-9]/.test(formData.password)) {
+            setError('Password must contain at least one special character.');
+            return false;
+        }
         
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match.');
@@ -293,6 +327,7 @@ const AddUser: React.FC = () => {
     const handleCreateUser = async () => {
         setSaving(true);
         setError(null);
+        let userId: string | null = null;
         
         try {
             let email = formData.email.trim();
@@ -314,13 +349,10 @@ const AddUser: React.FC = () => {
             
             if (authError) throw authError;
             
-            const userId = authData.user?.id;
+            userId = authData.user?.id;
             if (!userId) throw new Error('Failed to create user account.');
             
-            // Wait for profile creation trigger
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Update profile with role-specific data
+            // Retry mechanism for profile update with exponential backoff
             const profileUpdate: ProfileUpdate = {
                 id: userId,
                 full_name: formData.fullName,
@@ -340,68 +372,148 @@ const AddUser: React.FC = () => {
             
             // Teacher-specific fields
             if (formData.role === 'teacher') {
-                profileUpdate.department = formData.department;
-                // employment_type is stored in teachers table, not profiles
+                profileUpdate.department = getDatabaseDepartmentName(formData.department);
             }
             
             // Schedule Manager-specific fields
             if (formData.role === 'schedule_manager') {
-                profileUpdate.department = formData.department;
+                profileUpdate.department = getDatabaseDepartmentName(formData.department);
                 profileUpdate.access_permissions = formData.accessPermissions;
             }
             
-            const { error: profileError } = await supabase
-                .from('profiles')
-                .update(profileUpdate)
-                .eq('id', userId);
+            // Retry profile update with exponential backoff
+            let retries = 0;
+            const maxRetries = 5;
+            let profileUpdateSuccess = false;
             
-            if (profileError) throw profileError;
+            while (retries < maxRetries && !profileUpdateSuccess) {
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .update(profileUpdate)
+                    .eq('id', userId);
+                
+                if (!profileError) {
+                    profileUpdateSuccess = true;
+                    break;
+                }
+                
+                if (profileError.code === 'PGRST116' || profileError.code === '42P01') {
+                    // Profile not found yet, retry with backoff
+                    retries++;
+                    const delay = 200 * Math.pow(2, retries);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                } else {
+                    // Other error, throw immediately
+                    throw profileError;
+                }
+            }
+            
+            if (!profileUpdateSuccess) {
+                throw new Error('Failed to update profile after multiple retries');
+            }
+            
+            // Verify profile was updated
+            const { data: verifyProfile } = await supabase
+                .from('profiles')
+                .select('id, full_name, role, email')
+                .eq('id', userId)
+                .single();
+            
+            if (!verifyProfile) {
+                throw new Error('Profile creation verification failed');
+            }
             
             // Create teacher record if role is teacher
             if (formData.role === 'teacher') {
+                const dbDepartment = getDatabaseDepartmentName(formData.department);
                 const { error: teacherError } = await supabase.from('teachers').insert({
                     profile_id: userId,
-                    department: formData.department,
+                    department: dbDepartment,
                     employment_type: formData.employmentStatus,
                     is_public: true,
                 });
                 
                 if (teacherError) throw teacherError;
                 
-                // Add teacher preferences for availability
+                // Add teacher preferences with complete data
                 const { error: prefError } = await supabase.from('teacher_preferences').insert({
                     teacher_id: userId,
                     preferred_days: formData.availability.map(a => a.day),
+                    preferred_subjects: formData.selectedSubjects,
                     preferred_time_start: formData.availability[0]?.start_time || '08:00',
-                    preferred_time_end: formData.availability[0]?.end_time || '17:00',
+                    preferred_time_end: formData.availability[formData.availability.length - 1]?.end_time || '17:00',
+                    availability: {
+                        slots: formData.availability.map(a => ({
+                            day: a.day,
+                            start_time: a.start_time,
+                            end_time: a.end_time
+                        }))
+                    },
+                    max_classes_per_day: formData.employmentStatus === 'full-time' ? 5 : 3,
+                    max_consecutive_classes: formData.employmentStatus === 'full-time' ? 3 : 2,
                 });
                 
-                if (prefError) console.error('Error creating teacher preferences:', prefError);
+                if (prefError) throw prefError;
                 
-                // Link subjects to teacher by updating subjects table
+                // Link subjects to teacher using junction table
                 if (formData.selectedSubjects.length > 0) {
-                    for (const subjectId of formData.selectedSubjects) {
-                        await supabase.from('subjects').update({ teacher_id: userId }).eq('id', subjectId);
-                    }
+                    const subjectTeacherLinks = formData.selectedSubjects.map(subjectId => ({
+                        subject_id: subjectId,
+                        teacher_id: userId,
+                        created_by: userId
+                    }));
+                    
+                    const { error: linkError } = await supabase
+                        .from('subject_teachers')
+                        .insert(subjectTeacherLinks);
+                    
+                    if (linkError) throw linkError;
+                }
+                
+                // Verify teacher preferences were created
+                const { data: verifyPrefs } = await supabase
+                    .from('teacher_preferences')
+                    .select('*')
+                    .eq('teacher_id', userId)
+                    .single();
+                
+                if (!verifyPrefs) {
+                    throw new Error('Teacher preferences creation verification failed');
                 }
             }
             
             // Create student record if role is student
             if (formData.role === 'student') {
-                // Find the section ID based on section name
+                // Find the section ID based on section name AND program
                 const { data: sectionData } = await supabase
                     .from('sections')
                     .select('id')
                     .eq('name', formData.section)
+                    .eq('program', formData.program || null)
                     .single();
                 
-                if (sectionData) {
-                    await supabase.from('students').insert({
-                        profile_id: userId,
-                        section_id: sectionData.id,
-                        student_number: formData.idNumber || null,
-                        is_active: true,
-                    });
+                if (!sectionData) {
+                    throw new Error('Section not found for the selected program');
+                }
+                
+                const { error: studentError } = await supabase.from('students').insert({
+                    profile_id: userId,
+                    section_id: sectionData.id,
+                    student_number: formData.idNumber || null,
+                    is_active: true,
+                });
+                
+                if (studentError) throw studentError;
+                
+                // Verify student record was created
+                const { data: verifyStudent } = await supabase
+                    .from('students')
+                    .select('*')
+                    .eq('profile_id', userId)
+                    .single();
+                
+                if (!verifyStudent) {
+                    throw new Error('Student record creation verification failed');
                 }
             }
             
@@ -412,6 +524,17 @@ const AddUser: React.FC = () => {
             
         } catch (err) {
             console.error('Create user error:', err);
+            
+            // Rollback: Delete auth user if creation failed midway
+            if (userId) {
+                try {
+                    await supabase.auth.admin.deleteUser(userId);
+                    console.log('Rolled back auth user due to error');
+                } catch (rollbackError) {
+                    console.error('Failed to rollback auth user:', rollbackError);
+                }
+            }
+            
             setError(err instanceof Error ? err.message : 'Failed to create user.');
         } finally {
             setSaving(false);
@@ -436,12 +559,49 @@ const AddUser: React.FC = () => {
     };
     
     const updateAvailabilitySlot = (index: number, field: keyof AvailabilitySlot, value: string) => {
-        setFormData(prev => ({
-            ...prev,
-            availability: prev.availability.map((slot, i) => 
-                i === index ? { ...slot, [field]: value } : slot
-            )
-        }));
+        setFormData(prev => {
+            const newAvailability = prev.availability.map((slot, i) => {
+                if (i === index) {
+                    const updated = { ...slot, [field]: value };
+                    
+                    // Validate time slots
+                    if (updated.start_time && updated.end_time) {
+                        const start = parseInt(updated.start_time.replace(':', ''));
+                        const end = parseInt(updated.end_time.replace(':', ''));
+                        
+                        if (start >= end) {
+                            setError('Start time must be before end time.');
+                            return slot; // Don't update if invalid
+                        }
+                    }
+                    
+                    // Check for overlapping slots
+                    const otherSlots = prev.availability.filter((_, idx) => idx !== index);
+                    const hasOverlap = otherSlots.some(other => {
+                        if (other.day !== updated.day) return false;
+                        if (!updated.start_time || !updated.end_time || !other.start_time || !other.end_time) return false;
+                        
+                        const newStart = parseInt(updated.start_time.replace(':', ''));
+                        const newEnd = parseInt(updated.end_time.replace(':', ''));
+                        const existingStart = parseInt(other.start_time.replace(':', ''));
+                        const existingEnd = parseInt(other.end_time.replace(':', ''));
+                        
+                        return (newStart < existingEnd && newEnd > existingStart);
+                    });
+                    
+                    if (hasOverlap) {
+                        setError('Time slots cannot overlap.');
+                        return slot; // Don't update if overlapping
+                    }
+                    
+                    setError(null); // Clear error if valid
+                    return updated;
+                }
+                return slot;
+            });
+            
+            return { ...prev, availability: newAvailability };
+        });
     };
     
     const toggleSubject = (subjectId: string) => {
@@ -472,15 +632,17 @@ const AddUser: React.FC = () => {
     return (
         <div className="dashboard fade-in">
             <div className="dashboard-header">
-                <button 
-                    className="btn btn-ghost btn-icon" 
-                    onClick={() => navigate('/admin/users')}
-                >
-                    <ArrowLeft size={20} />
-                </button>
-                <div>
-                    <h1 className="dashboard-title"><UserPlus size={20} /> Add New User</h1>
-                    <p className="dashboard-subtitle">Create a new user account with role-specific information</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button 
+                        className="btn btn-ghost btn-icon" 
+                        onClick={() => navigate('/admin/users')}
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div>
+                        <h1 className="dashboard-title"><UserPlus size={20} /> Add New User</h1>
+                        <p className="dashboard-subtitle">Create a new user account with role-specific information</p>
+                    </div>
                 </div>
             </div>
             
