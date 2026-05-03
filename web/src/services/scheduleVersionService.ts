@@ -771,14 +771,15 @@ class ScheduleVersionService {
                 };
             }
 
-            // Compensating transaction: Step 1 - Delete current published schedules
-            const { error: deleteError } = await this.supabase
+            // Compensating transaction: Step 1 - Deactivate current published schedules
+            const { error: deactivateError } = await this.supabase
                 .from('schedules')
-                .delete()
-                .eq('status', 'published');
+                .update({ is_active: false })
+                .eq('status', 'published')
+                .eq('is_active', true);
 
-            if (deleteError) {
-                throw new Error(`Failed to delete current schedules: ${deleteError.message}`);
+            if (deactivateError) {
+                throw new Error(`Failed to deactivate current schedules: ${deactivateError.message}`);
             }
 
             deletedScheduleIds = currentActiveVersions ? currentActiveVersions.map(v => v.schedule_id) : [];
@@ -799,6 +800,7 @@ class ScheduleVersionService {
                         start_time: snapshot.start_time,
                         end_time: snapshot.end_time,
                         status: 'published',
+                        is_active: true, // Restored schedules are active
                         semester: snapshot.semester || '',
                         academic_year: snapshot.academic_year || '',
                     })
@@ -888,7 +890,8 @@ class ScheduleVersionService {
             const { data: verifiedSchedules } = await this.supabase
                 .from('schedules')
                 .select('*')
-                .eq('status', 'published');
+                .eq('status', 'published')
+                .eq('is_active', true);
 
             if (!verifiedSchedules || verifiedSchedules.length !== restoredSchedules.length) {
                 throw new Error('Restore verification failed: Schedule count mismatch');
