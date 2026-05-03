@@ -509,7 +509,7 @@ const ScheduleGenerate: React.FC = () => {
                 if (delErr) throw delErr;
             }
 
-            // Insert new schedule entries using RPC to bypass client query builder issues
+            // Insert new schedule entries
             const inserts = result.entries.map(e => ({
                 subject_id: e.subjectId,
                 teacher_id: e.teacherId,
@@ -521,13 +521,14 @@ const ScheduleGenerate: React.FC = () => {
                 status: initialState,
                 is_active: true,
             }));
-            console.log('[RPC] Calling insert_schedules_batch with', inserts.length, 'entries');
-            console.log('[RPC] First entry:', inserts[0]);
-            const { error: rpcError, data: rpcData } = await supabase.rpc('insert_schedules_batch', {
-                p_schedules: inserts,
-            });
-            console.log('[RPC] Result - error:', rpcError, 'data:', rpcData);
-            if (rpcError) throw rpcError;
+            console.log('[INSERT] Inserting', inserts.length, 'schedules');
+            console.log('[INSERT] First entry:', inserts[0]);
+            // Use upsert to avoid trigger issues
+            const { error: insertError } = await supabase
+                .from('schedules')
+                .upsert(inserts, { onConflict: 'id' });
+            console.log('[INSERT] Result - error:', insertError);
+            if (insertError) throw insertError;
             setSavedId('ok');
 
             // Query the inserted schedules to get their IDs
