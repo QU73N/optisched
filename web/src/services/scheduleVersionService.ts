@@ -163,7 +163,7 @@ class ScheduleVersionService {
 
     /**
      * Rollback to a previous schedule version
-     * Reactivates the schedules from a previous version and deactivates the current active schedules
+     * Reactivates the schedules from a previous batch version and deactivates the current active schedules
      */
     async rollbackToVersion(versionId: string): Promise<{ success: boolean; message: string }> {
         if (!this.supabase || !this.currentUserId) {
@@ -182,10 +182,16 @@ class ScheduleVersionService {
                 return { success: false, message: 'Version not found' };
             }
 
-            // Get the snapshot data from the version
+            // Get the batch snapshot data from the version
             const snapshot = version.snapshot as Schedule[];
             if (!snapshot || snapshot.length === 0) {
                 return { success: false, message: 'Version has no schedule data' };
+            }
+
+            // Get the batch_id from the version
+            const batchId = version.batch_id;
+            if (!batchId) {
+                return { success: false, message: 'Version is not associated with a batch' };
             }
 
             // Deactivate currently active published schedules
@@ -199,7 +205,27 @@ class ScheduleVersionService {
                 return { success: false, message: `Failed to deactivate current schedules: ${deactivateError.message}` };
             }
 
-            // Insert the rollback schedules
+            // Create a new batch for the rollback
+            const { data: newBatch, error: newBatchError } = await this.supabase
+                .rpc('create_schedule_batch', {
+                    p_name: `Rollback Batch ${new Date().toISOString()}`,
+                    p_description: `Rollback to version ${version.version_number}`,
+                    p_academic_year: snapshot[0].academic_year || '2025-2026',
+                    p_semester: snapshot[0].semester || '1st Semester',
+                    p_created_by: this.currentUserId,
+                });
+
+            if (newBatchError) {
+                // Rollback failed, try to reactivate current schedules
+                await this.supabase
+                    .from('schedules')
+                    .update({ is_active: true })
+                    .eq('status', 'published')
+                    .eq('is_active', false);
+                return { success: false, message: `Failed to create rollback batch: ${newBatchError.message}` };
+            }
+
+            // Insert the rollback schedules with new batch_id
             const inserts = snapshot.map(s => ({
                 subject_id: s.subject_id,
                 teacher_id: s.teacher_id,
@@ -210,6 +236,7 @@ class ScheduleVersionService {
                 end_time: s.end_time,
                 status: 'published',
                 is_active: true,
+                batch_id: newBatch, // Link to new rollback batch
                 semester: s.semester || '1st Semester',
                 academic_year: s.academic_year || '2025-2026',
                 created_by: this.currentUserId,
@@ -220,19 +247,20 @@ class ScheduleVersionService {
                 .insert(inserts);
 
             if (insertError) {
-                // Rollback failed, try to reactivate current schedules
+                // Rollback failed, try to reactivate current schedules and delete new batch
                 await this.supabase
                     .from('schedules')
                     .update({ is_active: true })
                     .eq('status', 'published')
                     .eq('is_active', false);
+                await this.supabase.from('schedule_batches').delete().eq('id', newBatch);
                 return { success: false, message: `Failed to insert rollback schedules: ${insertError.message}` };
             }
 
             // Create a new version for the rollback operation
-            await this.supabase
-                .rpc('create_schedule_version', {
-                    p_schedule_id: snapshot[0].id,
+            const { data: rollbackVersion, error: rollbackVersionError } = await this.supabase
+                .rpc('create_batch_version', {
+                    p_batch_id: newBatch,
                     p_change_type: 'restore',
                     p_change_summary: 'Rollback to previous version',
                     p_change_reason: `Rolled back to version ${version.version_number}`,
@@ -242,6 +270,39 @@ class ScheduleVersionService {
                     p_changed_by: this.currentUserId,
                     p_previous_version_id: versionId,
                 });
+
+            if (rollbackVersionError) {
+                // Rollback failed, clean up
+                await this.supabase
+                    .from('schedules')
+                    .delete()
+                    .eq('batch_id', newBatch);
+                await this.supabase.from('schedule_batches').delete().eq('id', newBatch);
+                await this.supabase
+                    .from('schedules')
+                    .update({ is_active: true })
+                    .eq('status', 'published')
+                    .eq('is_active', false);
+                return { success: false, message: `Failed to create rollback version: ${rollbackVersionError.message}` };
+            }
+
+            // Activate the new rollback batch
+            await this.supabase
+                .from('schedule_batches')
+                .update({ is_active: true })
+                .eq('id', newBatch);
+
+            // Deactivate the previous batch
+            if (batchId) {
+                await this.supabase
+                    .from('schedule_batches')
+                    .update({ is_active: false })
+                    .eq('id', batchId);
+            }
+
+            // Activate the rollback version
+            await this.supabase
+                .rpc('activate_batch_version', { p_version_id: rollbackVersion });
 
             scheduleLogger.system.workflowCompleted('Schedule rollback', Date.now(), true);
             return { success: true, message: `Successfully rolled back to version ${version.version_number}` };
@@ -255,8 +316,8 @@ class ScheduleVersionService {
     /**
      * Publish a new schedule with overwrite protection
      * 
-     * CRITICAL: This method uses a compensating transaction pattern.
-     * If any step fails, we attempt to rollback partial changes.
+     * CRITICAL: This method now uses batch-level versioning.
+     * All schedule entries in the batch share the same batch_id and are versioned together.
      */
     async publishSchedule(
         schedules: Schedule[],
@@ -277,10 +338,10 @@ class ScheduleVersionService {
         scheduleLogger.system.workflowStarted('Schedule publish');
 
         // Track state for rollback
-        let deletedScheduleIds: string[] = [];
+        let previousBatchId: string | null = null;
         let insertedScheduleIds: string[] = [];
-        let createdVersionSetId: string | null = null;
-        const createdVersionIds: string[] = [];
+        let createdBatchId: string | null = null;
+        let createdVersionId: string | null = null;
 
         try {
             // Check for existing active schedule
@@ -327,24 +388,27 @@ class ScheduleVersionService {
                 }
             }
 
-            // Capture current active schedule for versioning if exists
+            // Capture current active batch for versioning if exists
             let previousActiveVersionId: string | null = null;
             if (hasActive) {
                 const { data: currentSchedules } = await this.supabase
                     .from('schedules')
-                    .select('id')
+                    .select('id, batch_id')
                     .eq('status', 'published')
                     .eq('is_active', true)
                     .limit(1);
 
                 if (currentSchedules && currentSchedules.length > 0) {
-                    deletedScheduleIds = currentSchedules.map(s => s.id);
+                    previousBatchId = currentSchedules[0].batch_id;
                     
-                    const { data: activeVersion } = await this.supabase
-                        .rpc('get_active_schedule_version', { p_schedule_id: currentSchedules[0].id });
-                    
-                    if (activeVersion && activeVersion.length > 0) {
-                        previousActiveVersionId = activeVersion[0].id;
+                    // Get the active version for this batch
+                    if (previousBatchId) {
+                        const { data: activeVersion } = await this.supabase
+                            .rpc('get_active_batch_version', { p_batch_id: previousBatchId });
+                        
+                        if (activeVersion && activeVersion.length > 0) {
+                            previousActiveVersionId = activeVersion[0].id;
+                        }
                     }
                 }
             }
@@ -352,8 +416,24 @@ class ScheduleVersionService {
             // Compute state hash for the new schedules
             const stateHash = scheduleValidation.computeStateHash(schedules);
 
-            // Compensating transaction: Step 1 - Deactivate existing published schedules
-            // Instead of deleting, we mark them as inactive to preserve history
+            // Compensating transaction: Step 1 - Create new batch
+            const { data: newBatch, error: batchError } = await this.supabase
+                .rpc('create_schedule_batch', {
+                    p_name: `Schedule Batch ${new Date().toISOString()}`,
+                    p_description: options.changeReason || 'Published new schedule',
+                    p_academic_year: options.academic_year,
+                    p_semester: options.semester,
+                    p_created_by: this.currentUserId,
+                });
+
+            if (batchError) {
+                throw new Error(`Failed to create batch: ${batchError.message}`);
+            }
+
+            createdBatchId = newBatch;
+            console.log(`[VERSION SERVICE] Created batch ${createdBatchId}`);
+
+            // Step 2 - Deactivate existing published schedules (soft delete)
             if (hasActive) {
                 const { error: deactivateError } = await this.supabase
                     .from('schedules')
@@ -364,7 +444,7 @@ class ScheduleVersionService {
                 if (deactivateError) throw deactivateError;
             }
 
-            // Step 2 - Insert new schedules
+            // Step 3 - Insert new schedules with batch_id
             const inserts = schedules.map(s => ({
                 subject_id: s.subject_id,
                 teacher_id: s.teacher_id,
@@ -374,7 +454,8 @@ class ScheduleVersionService {
                 start_time: s.start_time,
                 end_time: s.end_time,
                 status: 'published',
-                is_active: true, // New schedules are active by default
+                is_active: true,
+                batch_id: createdBatchId, // Link to batch
                 semester: options.semester,
                 academic_year: options.academic_year,
             }));
@@ -386,122 +467,70 @@ class ScheduleVersionService {
 
             if (insertError) {
                 // ROLLBACK: Reactivate the previously deactivated schedules
-                if (deletedScheduleIds.length > 0) {
+                if (hasActive) {
                     scheduleLogger.system.error('generate', 'persistence', 'Insert failed, attempting rollback', insertError);
-                    // Reactivate the schedules we just deactivated
                     await this.supabase
                         .from('schedules')
                         .update({ is_active: true })
-                        .in('id', deletedScheduleIds);
+                        .eq('status', 'published')
+                        .eq('is_active', false);
                     throw new Error(`Insert failed: ${insertError.message}. Previous schedules have been reactivated.`);
                 }
                 throw insertError;
             }
 
             insertedScheduleIds = (insertedSchedules || []).map(s => s.id);
+            console.log(`[VERSION SERVICE] Inserted ${insertedScheduleIds.length} schedules into batch ${createdBatchId}`);
 
-            // Step 3 - Create version set for this publish operation
-            const { data: versionSet, error: versionSetError } = await this.supabase
-                .rpc('create_schedule_version_set', {
-                    p_name: `Schedule Publish ${new Date().toISOString()}`,
-                    p_description: options.changeReason || 'Published new schedule',
-                    p_academic_year: options.academic_year,
-                    p_semester: options.semester,
-                    p_is_published: true,
-                    p_created_by: this.currentUserId,
+            // Step 4 - Create batch-level version
+            const { data: version, error: versionError } = await this.supabase
+                .rpc('create_batch_version', {
+                    p_batch_id: createdBatchId,
+                    p_change_type: hasActive ? 'overwrite' : 'publish',
+                    p_change_summary: `${schedules.length} sessions published`,
+                    p_change_reason: options.changeReason || 'Schedule publish',
+                    p_state_hash: stateHash,
+                    p_soft_score: options.score || 0,
+                    p_conflict_count: options.conflictCount || 0,
+                    p_changed_by: this.currentUserId,
+                    p_previous_version_id: previousActiveVersionId,
                 });
 
-            if (versionSetError) {
-                // ROLLBACK: Delete inserted schedules
-                scheduleLogger.system.error('generate', 'persistence', 'Version set creation failed, rolling back schedules', versionSetError);
+            if (versionError) {
+                // ROLLBACK: Clean up
+                scheduleLogger.system.error('generate', 'persistence', 'Version creation failed, rolling back', versionError);
                 await this.supabase.from('schedules').delete().in('id', insertedScheduleIds);
-                throw new Error(`Version set creation failed: ${versionSetError.message}. Inserted schedules have been rolled back.`);
-            }
-
-            createdVersionSetId = versionSet;
-            console.log(`[VERSION SERVICE] Created version set ${createdVersionSetId}`);
-
-            // Step 4 - Create versions for each schedule
-            for (const schedule of insertedSchedules || []) {
-                const { data: version, error: versionError } = await this.supabase
-                    .rpc('create_schedule_version', {
-                        p_schedule_id: schedule.id,
-                        p_change_type: hasActive ? 'overwrite' : 'publish',
-                        p_change_summary: `${schedules.length} sessions published`,
-                        p_change_reason: options.changeReason || 'Schedule publish',
-                        p_state_hash: stateHash,
-                        p_soft_score: options.score || 0,
-                        p_conflict_count: options.conflictCount || 0,
-                        p_changed_by: this.currentUserId,
-                        p_previous_version_id: previousActiveVersionId,
-                    });
-
-                if (versionError) {
-                    // ROLLBACK: Clean up
-                    scheduleLogger.system.error('generate', 'persistence', 'Version creation failed, rolling back', versionError);
-                    await this.supabase.from('schedule_versions').delete().in('id', createdVersionIds);
-                    await this.supabase.from('schedule_version_sets').delete().eq('id', createdVersionSetId);
-                    await this.supabase.from('schedules').delete().in('id', insertedScheduleIds);
-                    throw new Error(`Version creation failed: ${versionError.message}. Partial changes have been rolled back.`);
+                await this.supabase.from('schedule_batches').delete().eq('id', createdBatchId);
+                if (hasActive) {
+                    await this.supabase
+                        .from('schedules')
+                        .update({ is_active: true })
+                        .eq('status', 'published')
+                        .eq('is_active', false);
                 }
-
-                if (version) {
-                    createdVersionIds.push(version);
-                    
-                    // Add version to set
-                    const { error: addToSetError } = await this.supabase.rpc('add_version_to_set', {
-                        p_version_set_id: createdVersionSetId,
-                        p_schedule_version_id: version,
-                    });
-
-                    if (addToSetError) {
-                        scheduleLogger.system.error('generate', 'persistence', 'Failed to add version to set', addToSetError);
-                        // Continue anyway - this is not critical
-                    }
-
-                    // Activate this version
-                    await this.supabase.rpc('activate_schedule_version', {
-                        p_version_id: version,
-                    });
-                }
+                throw new Error(`Version creation failed: ${versionError.message}. Partial changes have been rolled back.`);
             }
 
-            console.log(`[VERSION SERVICE] Created ${createdVersionIds.length} schedule versions`);
+            createdVersionId = version;
+            console.log(`[VERSION SERVICE] Created batch version ${createdVersionId}`);
 
-            // CRITICAL: Verify single active version
-            const { data: activeVersions } = await this.supabase
-                .from('schedule_versions')
-                .select('id')
-                .eq('is_active', true);
+            // Step 5 - Activate the batch
+            await this.supabase
+                .from('schedule_batches')
+                .update({ is_active: true })
+                .eq('id', createdBatchId);
 
-            if (activeVersions && activeVersions.length > 1) {
-                scheduleLogger.system.error('generate', 'persistence', 'CRITICAL: Multiple active versions detected', { count: activeVersions.length });
-                // Deactivate all but the most recent
-                const versionsToDeactivate = activeVersions.slice(0, -1);
-                for (const vId of versionsToDeactivate) {
-                    await this.supabase.from('schedule_versions').update({ is_active: false }).eq('id', vId);
-                }
+            // Deactivate previous batch
+            if (previousBatchId) {
+                await this.supabase
+                    .from('schedule_batches')
+                    .update({ is_active: false })
+                    .eq('id', previousBatchId);
             }
 
-            // Step 5 - Update canonical state manager
-            const { data: finalSchedules } = await this.supabase
-                .from('schedules')
-                .select('*')
-                .in('status', ['published', 'draft']);
-
-            if (finalSchedules) {
-                await scheduleStateManager.updateState(
-                    finalSchedules,
-                    'generate',
-                    {
-                        conflictCount: options.conflictCount || 0,
-                        softScore: options.score || 0,
-                        changeDescription: hasActive ? 'Overwrote published schedule' : 'Published new schedule',
-                    }
-                );
-
-                scheduleLogger.system.stateSynced('version_service', finalSchedules.length);
-            }
+            // Step 6 - Activate the version
+            await this.supabase
+                .rpc('activate_batch_version', { p_version_id: createdVersionId });
 
             // CRITICAL: Verify state hash after persistence
             const { data: verifiedSchedules } = await this.supabase
@@ -520,26 +549,33 @@ class ScheduleVersionService {
                     expected: stateHash,
                     actual: verifiedHash,
                 });
-                throw new Error('Persistence verification failed: State hash mismatch - data may have been modified by database triggers');
+                throw new Error('Persistence verification failed: State hash mismatch');
             }
 
-            // Note: Event publishing is handled automatically by scheduleStateManager.updateState above
-
-            scheduleLogger.system.workflowCompleted('Schedule publish', Date.now() - startTime, true);
-            if (createdVersionSetId) {
-                scheduleLogger.generate.schedulePersisted(0, createdVersionSetId);
+            // Update canonical state manager
+            if (verifiedSchedules) {
+                const version = await scheduleStateManager.updateState(
+                    verifiedSchedules,
+                    'manual',
+                    {
+                        conflictCount: options.conflictCount || 0,
+                        softScore: options.score || 0,
+                        changeDescription: `Published schedule with ${verifiedSchedules.length} sessions`,
+                    }
+                );
+                console.log(`[VERSION SERVICE] State manager updated: ${version}`);
             }
+
+            scheduleLogger.system.workflowCompleted('Schedule publish', Date.now(), true);
+            scheduleLogger.system.stateSynced('version_service', verifiedSchedules.length);
 
             return {
                 success: true,
-                message: hasActive 
-                    ? `Successfully overwrote previous schedule. Created ${createdVersionIds.length} versions.`
-                    : `Successfully published schedule. Created ${createdVersionIds.length} versions.`,
-                version_set_id: createdVersionSetId,
-                version_count: createdVersionIds.length,
-                active_version_id: createdVersionIds[0] || null,
+                message: `Successfully published ${schedules.length} sessions`,
+                version_set_id: createdBatchId,
+                version_count: 1,
+                active_version_id: createdVersionId,
             };
-
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             scheduleLogger.system.error('generate', 'persistence', 'Schedule publish failed', error);
