@@ -2523,6 +2523,25 @@ export async function runGenerator(
 
                         // Hard: respect teacher's explicit per-slot availability map.
                         if (!teacherAvailable(currentTeacher, day, slot.start)) continue;
+                        
+                        // EXPLICIT CHECK: Verify teacher is not already booked at this time
+                        const teacherAlreadyBooked = entries.some(e => 
+                            e.teacherId === currentTeacher.id && 
+                            e.day === day && 
+                            toMin(e.start) < eMin && 
+                            toMin(e.end) > sMin
+                        );
+                        if (teacherAlreadyBooked) continue;
+                        
+                        // EXPLICIT CHECK: Verify section is not already booked at this time
+                        const sectionAlreadyBooked = entries.some(e => 
+                            e.sectionId === section.id && 
+                            e.day === day && 
+                            toMin(e.start) < eMin && 
+                            toMin(e.end) > sMin
+                        );
+                        if (sectionAlreadyBooked) continue;
+                        
                         if (!isFree(busy, 'teacher', currentTeacher.id, day, sMin, eMin)) continue;
                         if (!isFree(busy, 'section', section.id, day, sMin, eMin)) continue;
                         // Hard: check max_hours constraint
@@ -2577,6 +2596,15 @@ export async function runGenerator(
                         scoredRooms.sort((a, b) => b.score - a.score);
 
                         for (const { room } of scoredRooms) {
+                            // EXPLICIT CHECK: Verify room is not already booked at this time
+                            const roomAlreadyBooked = entries.some(e => 
+                                e.roomId === room.id && 
+                                e.day === day && 
+                                toMin(e.start) < eMin && 
+                                toMin(e.end) > sMin
+                            );
+                            if (roomAlreadyBooked) continue;
+                            
                             if (!isFree(busy, 'room', room.id, day, sMin, eMin)) continue;
 
                             // Hard: check room compatibility with subject (lab type matching)
