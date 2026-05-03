@@ -533,7 +533,7 @@ const ScheduleGenerate: React.FC = () => {
                 status: initialState,
                 is_active: true, // New schedules are active by default
             }));
-            const { error, data } = await supabase.from('schedules').insert(inserts).select('id');
+            const { error, data } = await supabase.from('schedules').insert(inserts).select();
             if (error) throw error;
             setSavedId(data && data[0] ? data[0].id : 'ok');
             
