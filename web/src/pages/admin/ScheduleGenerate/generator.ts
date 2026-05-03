@@ -2040,7 +2040,13 @@ export async function runGenerator(
     // If impossible, return early with actionable error messages
     const impossibilityCheck = detectImpossibleSchedule(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, slots, config);
     if (!impossibilityCheck.is_possible) {
-        const totalTasks = normalizedData.normalizedSubjects.reduce((sum, s) => sum + sessionsNeeded(s, config.sessionMinutes), 0);
+        // Calculate total tasks accounting for all matching sections
+        const totalTasks = normalizedData.normalizedSubjects.reduce((sum, s) => {
+            const matchSections = scopedSections.filter(
+                sec => (s.program === 'ALL' || s.program === sec.program) && s.year_level === sec.year_level,
+            );
+            return sum + sessionsNeeded(s, config.sessionMinutes) * matchSections.length;
+        }, 0);
         // Calculate high priority count for early return
         const subjectP = config.priorities.subjects;
         const sectionP = config.priorities.sections;
@@ -2252,7 +2258,12 @@ export async function runGenerator(
 
     let totalTasks = 0;
     for (const sub of scopedSubjects) {
-        totalTasks += sessionsNeeded(sub, config.sessionMinutes);
+        const matchSections = scopedSections.filter(
+            s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
+        );
+        const sessionsPerSubject = sessionsNeeded(sub, config.sessionMinutes);
+        // Multiply by number of matching sections
+        totalTasks += sessionsPerSubject * matchSections.length;
     }
 
     onProgress({
@@ -2348,12 +2359,15 @@ export async function runGenerator(
             const matchSections = scopedSections.filter(
                 s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
             );
-            const section = matchSections[0] || scopedSections[0];
-            if (!section) continue;
+            // If no matching sections, skip this subject
+            if (matchSections.length === 0) continue;
 
             const needed = sessionsNeeded(sub, config.sessionMinutes);
-            for (let i = 0; i < needed; i++) {
-                rankedTasks.push({ subject: sub, section, sessionIndex: i });
+            // Create tasks for ALL matching sections, not just the first one
+            for (const section of matchSections) {
+                for (let i = 0; i < needed; i++) {
+                    rankedTasks.push({ subject: sub, section, sessionIndex: i });
+                }
             }
         }
 
@@ -2693,15 +2707,19 @@ export async function runGenerator(
             const matchSections = scopedSections.filter(
                 s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
             );
-            const section = matchSections[0] || scopedSections[0];
-            if (!section) continue;
+            // If no matching sections, skip this subject
+            if (matchSections.length === 0) continue;
 
-            // Count how many sessions of this subject-section pair are placed
-            const placedCount = best.entries.filter(e => e.subjectId === sub.id && e.sectionId === section.id).length;
             const neededCount = sessionsNeeded(sub, config.sessionMinutes);
             
-            for (let i = placedCount; i < neededCount; i++) {
-                unplacedTasks.push({ subject: sub, section, sessionIndex: i });
+            // Check placement for ALL matching sections
+            for (const section of matchSections) {
+                // Count how many sessions of this subject-section pair are placed
+                const placedCount = best.entries.filter(e => e.subjectId === sub.id && e.sectionId === section.id).length;
+                
+                for (let i = placedCount; i < neededCount; i++) {
+                    unplacedTasks.push({ subject: sub, section, sessionIndex: i });
+                }
             }
         }
 
