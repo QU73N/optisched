@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
+import { directInsert } from '../../../lib/supabaseDirect';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useUserPreferences } from '../../../contexts/UserPreferencesContext';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
@@ -523,26 +524,53 @@ const ScheduleGenerate: React.FC = () => {
                 status: initialState,
                 is_active: true,
             }));
-            // Use upsert to avoid trigger issues
-            const { error: insertError } = await supabase
-                .from('schedules')
-                .upsert(inserts, { onConflict: 'id' });
-            if (insertError) throw insertError;
-            setSavedId('ok');
+            console.log('[PERFORM SAVE] Attempting direct HTTP insert');
+            const { error: insertError, status: insertStatus } = await directInsert({
+              table: 'schedules',
+              data: inserts,
+              onConflict: 'id',
+              returning: 'minimal',
+            });
+
+            if (insertError) {
+              console.error('[PERFORM SAVE] Direct HTTP insert failed:', insertError);
+              console.error('[PERFORM SAVE] Status:', insertStatus);
+              
+              // FALLBACK 1: Try RPC
+              console.log('[PERFORM SAVE] Attempting RPC fallback');
+              const { error: rpcError } = await supabase.rpc('insert_schedules_batch_v2', {
+                p_schedules: inserts,
+              });
+              
+              if (rpcError) {
+                console.error('[PERFORM SAVE] RPC fallback also failed:', rpcError);
+                throw new Error(`Save failed - Direct HTTP: ${insertError.message}, RPC: ${rpcError.message}`);
+              }
+              
+              console.log('[PERFORM SAVE] RPC fallback succeeded');
+              setSavedId('ok');
+            } else {
+              console.log('[PERFORM SAVE] Direct HTTP insert succeeded, status:', insertStatus);
+              setSavedId('ok');
+            }
 
             // Query the inserted schedules to get their IDs
+            // Since we can't get IDs from the insert, query by the most recent records
             const { data: insertedSchedules, error: queryError } = await supabase
                 .from('schedules')
                 .select('id')
                 .eq('status', initialState)
                 .eq('is_active', true)
+                .eq('semester', '1st Semester')
+                .eq('academic_year', '2025-2026')
                 .order('created_at', { ascending: false })
                 .limit(result.entries.length);
 
             if (queryError) {
-                console.error('Query error:', queryError);
+                console.error('[PERFORM SAVE] Query error:', queryError);
                 // Continue anyway - the insert succeeded
             } else {
+                console.log('[PERFORM SAVE] Queried', insertedSchedules?.length, 'inserted schedules');
                 // Log audit for each created schedule
                 for (const schedule of insertedSchedules || []) {
                     await scheduleAudit.created(schedule.id, {
@@ -573,9 +601,23 @@ const ScheduleGenerate: React.FC = () => {
                                 schedule_b_id: c.scheduleBId,
                                 is_resolved: false,
                             }));
-                            const { error: conflictError } = await supabase.from('conflicts').insert(conflictInserts);
+                            
+                            // Use direct HTTP for conflict insert as well
+                            const { error: conflictError } = await directInsert({
+                                table: 'conflicts',
+                                data: conflictInserts,
+                            });
+                            
                             if (conflictError) {
-                                console.error('Failed to save conflicts:', conflictError);
+                                console.error('[PERFORM SAVE] Conflict insert error:', conflictError);
+                                // Try fallback to Supabase client for conflicts
+                                const { error: fallbackConflictError } = await supabase
+                                    .from('conflicts')
+                                    .insert(conflictInserts);
+                                
+                                if (fallbackConflictError) {
+                                    console.error('[PERFORM SAVE] Fallback conflict insert also failed:', fallbackConflictError);
+                                }
                             }
                         }
                     }
@@ -611,7 +653,20 @@ const ScheduleGenerate: React.FC = () => {
             await notifyStudentsOfScheduleChanges(affectedSectionIds, initialState, false);
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Unknown error';
-            setSaveError(msg);
+            console.error('[PERFORM SAVE] Save failed with error:', err);
+            console.error('[PERFORM SAVE] Error message:', msg);
+            console.error('[PERFORM SAVE] Error stack:', err instanceof Error ? err.stack : 'No stack');
+            
+            // Check if it's a network error
+            if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+                setSaveError('Network error. Please check your connection and try again.');
+            } else if (msg.includes('404')) {
+                setSaveError('Server configuration error. Please contact support.');
+            } else if (msg.includes('401') || msg.includes('403')) {
+                setSaveError('Authentication error. Please log in again.');
+            } else {
+                setSaveError(`Save failed: ${msg}`);
+            }
         } finally {
             setSaving(false);
         }
