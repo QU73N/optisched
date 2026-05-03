@@ -184,7 +184,7 @@ const GroupChats: React.FC = () => {
         return (
             <div className="dashboard">
                 <div className="dash-loading-center">
-                    <div className="spin" style={{ fontSize: 24 }}>⟳</div>
+                    <div className="spin text-3xl">⟳</div>
                     <div style={{ marginTop: 8 }}>Loading...</div>
                 </div>
             </div>
@@ -209,7 +209,7 @@ const GroupChats: React.FC = () => {
                             <input
                                 type="text"
                                 placeholder="Search chats..."
-                                style={{ border: 'none', background: 'transparent', outline: 'none', flex: 1, fontSize: 13 }}
+                                className="text-base" style={{ border: 'none', background: 'transparent', outline: 'none', flex: 1 }}
                             />
                         </div>
                     </div>
@@ -252,15 +252,13 @@ const GroupChats: React.FC = () => {
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                            <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            <div className="font-semibold text-base" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {chat.name}
                                             </div>
                                             {chat.unread_count > 0 && (
-                                                <div style={{
+                                                <div className="text-xs font-semibold" style={{
                                                     background: 'var(--accent-error)',
                                                     color: 'white',
-                                                    fontSize: 11,
-                                                    fontWeight: 600,
                                                     padding: '2px 6px',
                                                     borderRadius: 10,
                                                     minWidth: 20,
@@ -270,7 +268,7 @@ const GroupChats: React.FC = () => {
                                                 </div>
                                             )}
                                         </div>
-                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        <div className="text-xs" style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {chat.last_message || 'No messages yet'}
                                         </div>
                                     </div>
@@ -306,8 +304,8 @@ const GroupChats: React.FC = () => {
                                     {getChatIcon(selectedChat.type)}
                                 </div>
                                 <div>
-                                    <div style={{ fontWeight: 600, fontSize: 14 }}>{selectedChat.name}</div>
-                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{selectedChat.type.replace('_', ' ')}</div>
+                                    <div className="font-semibold text-md">{selectedChat.name}</div>
+                                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{selectedChat.type.replace('_', ' ')}</div>
                                 </div>
                             </div>
 
@@ -337,7 +335,6 @@ const GroupChats: React.FC = () => {
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     color: 'white',
-                                                    fontSize: 12,
                                                     fontWeight: 600,
                                                 }}>
                                                     {(msg.sender as Profile)?.full_name?.charAt(0) || '?'}
@@ -345,7 +342,7 @@ const GroupChats: React.FC = () => {
                                             )}
                                             <div style={{ maxWidth: '70%' }}>
                                                 {msg.sender_id !== profile?.id && (
-                                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
+                                                    <div className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: 2 }}>
                                                         {(msg.sender as Profile)?.full_name || 'Unknown'}
                                                     </div>
                                                 )}
@@ -358,7 +355,7 @@ const GroupChats: React.FC = () => {
                                                 }}>
                                                     {msg.message}
                                                 </div>
-                                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                                                <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
                                                     {formatTime(msg.created_at)}
                                                 </div>
                                             </div>
@@ -383,7 +380,7 @@ const GroupChats: React.FC = () => {
                                     onClick={sendMessage}
                                     disabled={sending || !newMessage.trim()}
                                 >
-                                    {sending ? <div className="spin" style={{ fontSize: 14 }}>⟳</div> : <Send size={14} />}
+                                    {sending ? <div className="spin text-sm">⟳</div> : <Send size={14} />}
                                 </button>
                             </div>
                         </>

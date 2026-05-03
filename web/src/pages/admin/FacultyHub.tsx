@@ -47,7 +47,7 @@ const FacultyHub: React.FC = () => {
     return (
         <div className="fhub">
             {/* Header */}
-            <div className="fhub-header">
+            <div className="page-header">
                 <div>
                     <h1>Faculty Hub</h1>
                     <p>Manage and monitor faculty workloads and assignments</p>
@@ -201,8 +201,6 @@ const FacultyHub: React.FC = () => {
 
             <style>{`
                 .fhub { display: flex; flex-direction: column; gap: 1.5rem; }
-                .fhub-header h1 { font-size: 1.5rem; font-weight: 700; }
-                .fhub-header p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px; }
 
                 .fhub-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
                 .fhub-stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 14px; transition: all 0.2s; }

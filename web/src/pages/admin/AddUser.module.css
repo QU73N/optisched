@@ -1,0 +1,314 @@
+/* AddUser Component Styles */
+
+/* Container */
+.addUserContainer {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-12);
+}
+
+/* Card */
+.addUserCard {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* Section Headers */
+.sectionHeader {
+  margin-bottom: var(--space-8);
+}
+
+.sectionHeader h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sectionHeader h3 svg {
+  color: var(--accent-primary);
+}
+
+.sectionDivider {
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-8);
+  border-bottom: 1px solid var(--border-default);
+}
+
+/* Form Grids */
+.formGridTwo {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.formGridAuto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Form Labels */
+.formLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.formLabelRequired::after {
+  content: ' *';
+  color: var(--accent-error);
+}
+
+/* Form Help Text */
+.formHelpText {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+/* Role Cards */
+.roleCard {
+  padding: var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.roleCard:hover {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-subtle);
+}
+
+.roleCard.selected {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-subtle);
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.roleCardTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.roleCardDescription {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Checkbox Group */
+.checkboxGroup {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+/* Summary Section */
+.summarySection {
+  margin-bottom: var(--space-5);
+}
+
+.summarySection h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.summaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summaryLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.summaryValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Availability Grid */
+.availabilityGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+}
+
+.dayColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dayHeader {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-2);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.timeSlot {
+  padding: var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.timeSlot:hover {
+  border-color: var(--accent-primary);
+}
+
+.timeSlot.selected {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  border-color: var(--accent-primary);
+}
+
+/* Subject Chips */
+.subjectChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.subjectChip {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.subjectChip:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.subjectChip.selected {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  border-color: var(--accent-primary);
+}
+
+/* Action Buttons */
+.actionButtons {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+/* Progress Steps */
+.progressSteps {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.progressStep {
+  flex: 1;
+  height: 4px;
+  background: var(--border-default);
+  border-radius: 2px;
+  transition: all var(--transition-fast);
+}
+
+.progressStep.active {
+  background: var(--accent-primary);
+}
+
+.progressStep.completed {
+  background: var(--accent-success);
+}
+
+/* Error Message */
+.errorMessage {
+  padding: var(--space-3);
+  background: var(--accent-error-subtle);
+  border: 1px solid var(--accent-error);
+  border-radius: var(--radius-md);
+  color: var(--accent-error);
+  font-size: 13px;
+  margin-bottom: var(--space-4);
+}
+
+/* Success Message */
+.successMessage {
+  padding: var(--space-3);
+  background: var(--accent-success-subtle);
+  border: 1px solid var(--accent-success);
+  border-radius: var(--radius-md);
+  color: var(--accent-success);
+  font-size: 13px;
+  margin-bottom: var(--space-4);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .addUserContainer {
+    padding: var(--space-6);
+  }
+
+  .formGridTwo {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .availabilityGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .availabilityGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .formGridAuto {
+    grid-template-columns: 1fr;
+  }
+}

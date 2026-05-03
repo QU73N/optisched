@@ -93,6 +93,23 @@
   --font-academic: 'Crimson Pro', Georgia, 'Times New Roman', serif;
   --font-accessible: 'Atkinson Hyperlegible', var(--font-sans);
 
+  /* Typography Sizes */
+  --text-size-xs: 11px;
+  --text-size-sm: 12px;
+  --text-size-base: 13px;
+  --text-size-md: 14px;
+  --text-size-lg: 15px;
+  --text-size-xl: 16px;
+  --text-size-2xl: 18px;
+  --text-size-3xl: 24px;
+  --text-size-4xl: 28px;
+
+  /* Font Weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
   /* Transitions */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
@@ -265,6 +282,23 @@ a:hover {
   background-clip: text;
 }
 
+/* Text Sizes */
+.text-xs { font-size: var(--text-size-xs); }
+.text-sm { font-size: var(--text-size-sm); }
+.text-base { font-size: var(--text-size-base); }
+.text-md { font-size: var(--text-size-md); }
+.text-lg { font-size: var(--text-size-lg); }
+.text-xl { font-size: var(--text-size-xl); }
+.text-2xl { font-size: var(--text-size-2xl); }
+.text-3xl { font-size: var(--text-size-3xl); }
+.text-4xl { font-size: var(--text-size-4xl); }
+
+/* Font Weights */
+.font-normal { font-weight: var(--font-weight-normal); }
+.font-medium { font-weight: var(--font-weight-medium); }
+.font-semibold { font-weight: var(--font-weight-semibold); }
+.font-bold { font-weight: var(--font-weight-bold); }
+
 /* ========== UTILITY CLASSES ========== */
 .glass {
   background: var(--bg-surface);
@@ -316,6 +350,7 @@ a:hover {
 }
 
 @keyframes spin {
+  from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
@@ -328,6 +363,21 @@ a:hover {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* User animation preferences - Brand System Requirement: Animations OFF by default */
+/* Landing page animations */
+[data-landing-animations="false"] .fade-in,
+[data-landing-animations="false"] .slide-up,
+[data-landing-animations="false"] .zoom-in {
+  animation: none !important;
+}
+
+/* Dashboard animations */
+[data-dashboard-animations="false"] .fade-in,
+[data-dashboard-animations="false"] .slide-up,
+[data-dashboard-animations="false"] .dash-stagger {
+  animation: none !important;
 }
 
 /* Import print stylesheet */
@@ -531,6 +581,27 @@ a:hover {
   opacity: 0.45;
   cursor: not-allowed;
   transform: none;
+}
+
+/* Button Size Variants */
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.btn-xs {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.btn-icon {
+  padding: 6px;
+  gap: 0;
+}
+
+.btn-block {
+  width: 100%;
+  justify-content: center;
 }
 
 /* ========== INPUTS ========== */
@@ -1034,4 +1105,49 @@ tr:last-child td {
   }
 
   .badge { font-size: 10px; padding: 2px 7px; }
+}
+
+/* ========== COMPACT MODE ========== */
+/* Apply compact styling when data-compact-mode="true" is set on html element */
+/* Exclude landing page by targeting only dashboard and admin pages */
+html[data-compact-mode="true"] body:not(.landing-page) {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+html[data-compact-mode="true"] body:not(.landing-page) .card,
+html[data-compact-mode="true"] body:not(.landing-page) .card-elevated {
+  padding: 12px;
+}
+
+html[data-compact-mode="true"] body:not(.landing-page) .stat-card {
+  padding: 10px;
+}
+
+html[data-compact-mode="true"] body:not(.landing-page) .dashboard-header {
+  padding-bottom: 16px;
+}
+
+html[data-compact-mode="true"] body:not(.landing-page) .dashboard-title {
+  font-size: 18px;
+}
+
+html[data-compact-mode="true"] body:not(.landing-page) .dashboard-subtitle {
+  font-size: 12px;
+}
+
+html[data-compact-mode="true"] body:not(.landing-page) .btn {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+html[data-compact-mode="true"] body:not(.landing-page) .stats-grid {
+  gap: 12px;
+}
+
+html[data-compact-mode="true"] body:not(.landing-page) h1,
+html[data-compact-mode="true"] body:not(.landing-page) h2,
+html[data-compact-mode="true"] body:not(.landing-page) h3 {
+  margin-bottom: 8px;
 }

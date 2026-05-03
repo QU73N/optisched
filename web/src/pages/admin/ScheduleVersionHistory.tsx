@@ -1,18 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, History, GitCompare, RotateCcw, Clock, User, FileText, Trash2, CheckCircle, XCircle, AlertTriangle, X } from 'lucide-react';
-import { 
-    getScheduleVersions, 
-    compareScheduleVersions, 
-    rollbackScheduleVersion, 
-    createScheduleCheckpoint,
-    deleteScheduleVersion,
-    formatChangeType,
-    formatComparisonChangeType,
-    formatFieldName
-} from '../../services/versionService';
-import type { ScheduleVersion, VersionComparison } from '../../types/database';
+import { scheduleVersionService, type ScheduleVersion } from '../../services/scheduleVersionService';
+import { supabase } from '../../lib/supabase';
 import '../admin/Dashboard.css';
+
+interface VersionComparisonItem {
+    field: string;
+    old_value: string | null;
+    new_value: string | null;
+    change_type: string;
+}
 
 interface ScheduleVersionHistoryProps {
     scheduleId: string;
@@ -21,13 +19,20 @@ interface ScheduleVersionHistoryProps {
 }
 
 const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({ scheduleId, scheduleName, onBack }) => {
-    const { role, roles } = useAuth();
+    const { role, roles, user } = useAuth();
     const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
     const canManage = allRoles.some(r => ['schedule_manager', 'schedule_admin', 'system_admin', 'power_admin'].includes(r));
+
+    // Initialize scheduleVersionService
+    useEffect(() => {
+        if (user && supabase) {
+            scheduleVersionService.initialize(supabase, user.id);
+        }
+    }, [user]);
     
     const [versions, setVersions] = useState<ScheduleVersion[]>([]);
     const [selectedVersions, setSelectedVersions] = useState<{ v1: ScheduleVersion | null; v2: ScheduleVersion | null }>({ v1: null, v2: null });
-    const [comparisons, setComparisons] = useState<VersionComparison[]>([]);
+    const [comparisons, setComparisons] = useState<VersionComparisonItem[]>([]);
     const [showCompare, setShowCompare] = useState(false);
     const [showRollbackConfirm, setShowRollbackConfirm] = useState(false);
     const [rollbackVersion, setRollbackVersion] = useState<ScheduleVersion | null>(null);
@@ -44,7 +49,7 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({ schedul
         try {
             setLoading(true);
             setError(null);
-            const data = await getScheduleVersions(scheduleId);
+            const data = await scheduleVersionService.getVersionHistory(scheduleId);
             setVersions(data);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to load version history');
@@ -63,9 +68,21 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({ schedul
         try {
             setActionLoading(true);
             setError(null);
-            const result = await compareScheduleVersions(selectedVersions.v1.id, selectedVersions.v2.id);
-            setComparisons(result);
-            setShowCompare(true);
+            const comparison = await scheduleVersionService.compareVersions(selectedVersions.v1.id, selectedVersions.v2.id);
+            if (comparison && comparison.differences) {
+                // Convert differences to array format expected by UI
+                const comparisonArray = Object.entries(comparison.differences).map(([field, diff]) => ({
+                    field,
+                    old_value: (diff as { before: unknown }).before?.toString() || null,
+                    new_value: (diff as { after: unknown }).after?.toString() || null,
+                    change_type: (diff as { changed: boolean }).changed ? 'modified' : 'unchanged',
+                })) as VersionComparisonItem[];
+                setComparisons(comparisonArray);
+                setShowCompare(true);
+            } else {
+                setComparisons([]);
+                setShowCompare(true);
+            }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to compare versions');
         } finally {
@@ -79,12 +96,19 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({ schedul
         try {
             setActionLoading(true);
             setError(null);
-            await rollbackScheduleVersion(rollbackVersion.id, rollbackReason);
-            setSuccess(`Successfully rolled back to version ${rollbackVersion.version_number}`);
-            setShowRollbackConfirm(false);
-            setRollbackVersion(null);
-            setRollbackReason('');
-            loadVersions();
+            const result = await scheduleVersionService.restoreVersion(rollbackVersion.id, {
+                reason: rollbackReason,
+                force: true,
+            });
+            if (result.success) {
+                setSuccess(`Successfully rolled back to version ${rollbackVersion.version_number}`);
+                setShowRollbackConfirm(false);
+                setRollbackVersion(null);
+                setRollbackReason('');
+                loadVersions();
+            } else {
+                setError(result.message || 'Failed to rollback version');
+            }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to rollback version');
         } finally {
@@ -98,12 +122,9 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({ schedul
         try {
             setActionLoading(true);
             setError(null);
-            await createScheduleCheckpoint(scheduleId, checkpointSummary, checkpointReason);
-            setSuccess('Checkpoint created successfully');
-            setShowCheckpoint(false);
-            setCheckpointSummary('');
-            setCheckpointReason('');
-            loadVersions();
+            // Checkpoints are not directly supported in the new service
+            // For now, disable this feature or show a message
+            setError('Checkpoint feature not yet implemented in the new versioning system');
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to create checkpoint');
         } finally {
@@ -117,9 +138,13 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({ schedul
         try {
             setActionLoading(true);
             setError(null);
-            await deleteScheduleVersion(version.id);
-            setSuccess('Version deleted successfully');
-            loadVersions();
+            const result = await scheduleVersionService.deleteVersion(version.id);
+            if (result.success) {
+                setSuccess('Version deleted successfully');
+                loadVersions();
+            } else {
+                setError(result.message || 'Failed to delete version');
+            }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to delete version');
         } finally {
@@ -153,9 +178,59 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({ schedul
                 return <AlertTriangle size={16} className="text-amber-500" />;
             case 'checkpoint':
                 return <FileText size={16} className="text-purple-500" />;
+            case 'publish':
+                return <CheckCircle size={16} className="text-emerald-500" />;
+            case 'overwrite':
+                return <AlertTriangle size={16} className="text-orange-500" />;
+            case 'restore':
+                return <RotateCcw size={16} className="text-indigo-500" />;
             default:
                 return null;
         }
+    };
+
+    const formatChangeType = (changeType: string) => {
+        switch (changeType) {
+            case 'created':
+                return 'Created';
+            case 'updated':
+                return 'Updated';
+            case 'deleted':
+                return 'Deleted';
+            case 'status_change':
+                return 'Status Change';
+            case 'checkpoint':
+                return 'Checkpoint';
+            case 'publish':
+                return 'Published';
+            case 'overwrite':
+                return 'Overwritten';
+            case 'restore':
+                return 'Restored';
+            default:
+                return changeType;
+        }
+    };
+
+    const formatComparisonChangeType = (changeType: string) => {
+        switch (changeType) {
+            case 'added':
+                return 'Added';
+            case 'removed':
+                return 'Removed';
+            case 'modified':
+                return 'Modified';
+            case 'unchanged':
+                return 'Unchanged';
+            default:
+                return changeType;
+        }
+    };
+
+    const formatFieldName = (field: string) => {
+        return field
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (char) => char.toUpperCase());
     };
 
     const getComparisonChangeTypeIcon = (changeType: string) => {
@@ -183,11 +258,9 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({ schedul
                     >
                         <ArrowLeft size={20} />
                     </button>
-                    <div>
-                        <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>Version History</h1>
-                        <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0 0', fontSize: 14 }}>
-                            {scheduleName}
-                        </p>
+                    <div className="page-header">
+                        <h1>Version History</h1>
+                        <p>{scheduleName}</p>
                     </div>
                 </div>
                 {canManage && (

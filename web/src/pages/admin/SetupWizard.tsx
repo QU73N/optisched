@@ -118,7 +118,7 @@ const SetupWizard: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Setup Wizard</h1>
+                    <h1 className="dashboard-title"><Zap size={20} /> Setup Wizard</h1>
                     <p className="dashboard-subtitle">Step {step + 1} of {STEPS.length}</p>
                 </div>
             </div>

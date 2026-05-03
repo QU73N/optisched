@@ -49,6 +49,14 @@ const smallConfig: GenerationConfig = {
         subjectSpacing: 50,
         roomUtilization: 50,
     },
+    overflowPolicy: 'relax_soft',
+    enableForwardChecking: false,
+    enableOptimization: false,
+    optimizationTimeLimit: 30,
+    optimizationMaxIterations: 100,
+    optimizationProfile: 'balanced',
+    optimizationMode: 'safe',
+    optimizationSeed: 42,
 };
 
 // Benchmark data - medium dataset

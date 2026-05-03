@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useUserPreferences } from '../../../contexts/UserPreferencesContext';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
 import {
-    ArrowLeft, ArrowRight, Check, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
+    AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
     Flag, GitBranch, Inbox, Layers, Lightbulb, ListChecks, Lock, Loader2, MapPin, Play, Plus,
     RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, ShieldCheck, Sliders, Sparkles, Upload,
-    Users, X, XCircle,
+    Users, X, XCircle, Zap,
 } from 'lucide-react';
 import '../Dashboard.css';
 import {
@@ -18,18 +19,23 @@ import {
     type Subject, type Teacher, type VersionSummary, type WorkflowState,
 } from './types';
 import { runGenerator, optimizeSchedule } from './generator';
-import { getPoliciesAsRecord, notifyStudentsOfScheduleChanges } from '../../../services/generationService';
+import { getRulesAsRecord, notifyStudentsOfScheduleChanges } from '../../../services/generationService';
+import { scheduleStateManager } from '../../../services/scheduleStateManager';
+import { scheduleLogger } from '../../../services/scheduleLogger';
+import { scheduleVersionService } from '../../../services/scheduleVersionService';
+import { scheduleAudit } from '../../../services/auditService';
+import { PublishOverwriteConfirm } from '../../../components/PublishOverwriteConfirm';
 
 // ---------------------------------------------------------------------------
 // Root component
 // ---------------------------------------------------------------------------
 
 const ScheduleGenerate: React.FC = () => {
-    const { roles } = useAuth();
+    const { roles, user } = useAuth();
+    const { preferences, updatePreferences } = useUserPreferences();
     const canApprove = hasAnyRole(roles, [...POWER_ADMIN_ROLES, 'schedule_admin']);
     const [stage, setStage] = useState<StageKey>('scope');
     const [config, setConfig] = useState<GenerationConfig>(DEFAULT_CONFIG);
-    const [compactMode, setCompactMode] = useState(false);
 
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -59,10 +65,48 @@ const ScheduleGenerate: React.FC = () => {
     const [optimizedResult, setOptimizedResult] = useState<GenerationResult | null>(null);
     const [optimizationError, setOptimizationError] = useState<string | null>(null);
 
+    // Version control state
+    const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
+    const [currentScheduleSummary, setCurrentScheduleSummary] = useState<{
+        exists: boolean;
+        version?: string;
+        timestamp?: string;
+        sessionCount?: number;
+        score?: number;
+    } | null>(null);
+
+    const refreshExisting = async () => {
+        // Query generation_runs table to count actual schedules (not individual sessions)
+        const { data } = await supabase
+            .from('generation_runs')
+            .select('id, status, completed_at');
+        
+        // Map generation_runs status to workflow states
+        // generation_runs status: 'running', 'completed', 'failed'
+        // workflow states: 'draft', 'submitted', 'approved', 'published'
+        // For now, treat all completed runs as 'draft' since the workflow state is stored separately
+        const mappedData = (data || []).map(run => ({
+            id: run.id,
+            status: run.status === 'completed' ? 'draft' : run.status,
+            created_at: run.completed_at,
+        }));
+        
+        setExisting(mappedData as unknown as ExistingSchedule[]);
+    };
+
     useEffect(() => {
         const load = async () => {
             setDataLoading(true);
             try {
+                // Initialize state manager, logger, and version service
+                scheduleStateManager.initialize(supabase);
+                scheduleLogger.system.workflowStarted('Generate tab initialization');
+                
+                // Initialize version service if user is available
+                if (user?.id) {
+                    scheduleVersionService.initialize(supabase, user.id);
+                }
+                
                 const [sub, t, r, sec, sch, prefs, prof] = await Promise.all([
                     supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id, sessions_per_week, weight, priority_note'),
                     supabase.from('teachers').select('id, max_hours, weight, priority_note, profile_id'),
@@ -151,6 +195,20 @@ const ScheduleGenerate: React.FC = () => {
             }
         };
         load();
+        
+        // Subscribe to state changes from Conflicts tab
+        const unsubscribe = scheduleStateManager.subscribe((event) => {
+            if (event.source === 'conflicts' && event.type === 'schedule_updated') {
+                console.log('[GENERATE] State updated by Conflicts tab, refreshing existing schedules');
+                scheduleLogger.system.cacheInvalidated('conflicts');
+                // Refresh existing schedules when Conflicts tab applies fixes
+                refreshExisting();
+            }
+        });
+        
+        return () => {
+            unsubscribe(); // Unsubscribe from state manager
+        };
     }, []);
 
     const blockers = useMemo(() => {
@@ -166,6 +224,13 @@ const ScheduleGenerate: React.FC = () => {
         return issues;
     }, [subjects, teachers, rooms, sections, config]);
 
+    // Auto-switch to results stage when generator reports completion
+    useEffect(() => {
+        if (generating && progress.subStage === 'done' && result) {
+            setStage('results');
+        }
+    }, [generating, progress.subStage, result]);
+
     const stageIndex = STAGES.findIndex(s => s.key === stage);
 
     const versionSummary: VersionSummary[] = useMemo(() => {
@@ -176,28 +241,13 @@ const ScheduleGenerate: React.FC = () => {
                 if (!r.created_at) return acc;
                 return !acc || r.created_at > acc ? r.created_at : acc;
             }, null);
-            return { state, count: rows.length, latest, label: WORKFLOW_META[state].label, desc: WORKFLOW_META[state].desc };
+            // For published state, count schedule_versions instead of schedules
+            const count = state === 'published' 
+                ? (rows.length > 0 ? 1 : 0) // Each published schedule represents one version
+                : rows.length;
+            return { state, count, latest, label: WORKFLOW_META[state].label, desc: WORKFLOW_META[state].desc };
         });
     }, [existing]);
-
-    const refreshExisting = async () => {
-        // Query generation_runs table to count actual schedules (not individual sessions)
-        const { data } = await supabase
-            .from('generation_runs')
-            .select('id, status, completed_at');
-        
-        // Map generation_runs status to workflow states
-        // generation_runs status: 'running', 'completed', 'failed'
-        // workflow states: 'draft', 'submitted', 'approved', 'published'
-        // For now, treat all completed runs as 'draft' since the workflow state is stored separately
-        const mappedData = (data || []).map(run => ({
-            id: run.id,
-            status: run.status === 'completed' ? 'draft' : run.status,
-            created_at: run.completed_at,
-        }));
-        
-        setExisting(mappedData as unknown as ExistingSchedule[]);
-    };
 
     const transitionAll = async (from: WorkflowState, to: WorkflowState) => {
         // Collect the row ids in this status so the update never reaches unrelated
@@ -210,6 +260,20 @@ const ScheduleGenerate: React.FC = () => {
         try {
             const { error } = await supabase.from('schedules').update({ status: to }).in('id', ids);
             if (error) throw error;
+            
+            // Log audit for each schedule status change
+            for (const id of ids) {
+                if (to === 'submitted') {
+                    await scheduleAudit.submitted(id, { submitted_by: user?.id });
+                } else if (to === 'published') {
+                    await scheduleAudit.published(id, { published_by: user?.id });
+                } else if (to === 'approved') {
+                    await scheduleAudit.approved(id, { approved_by: user?.id });
+                } else if (to === 'rejected' as any) {
+                    await scheduleAudit.rejected(id, { rejected_by: user?.id });
+                }
+            }
+            
             await refreshExisting();
             setWorkflowNote(`${ids.length} ${WORKFLOW_META[from].label.toLowerCase()} ${ids.length === 1 ? 'entry' : 'entries'} moved to ${WORKFLOW_META[to].label}.`);
         } catch (err) {
@@ -264,9 +328,9 @@ const ScheduleGenerate: React.FC = () => {
             // Fetch institutional policies (optional, generation proceeds with defaults if fetch fails)
             let institutionalPolicies: Record<string, unknown> = {};
             try {
-                institutionalPolicies = await getPoliciesAsRecord();
+                institutionalPolicies = await getRulesAsRecord();
             } catch (error) {
-                console.warn('Failed to fetch institutional policies, using defaults:', error);
+                console.warn('Failed to fetch system rules, using defaults:', error);
                 // Generation continues with empty policies (defaults)
             }
 
@@ -375,6 +439,25 @@ const ScheduleGenerate: React.FC = () => {
 
     const saveAs = async (initialState: 'draft' | 'submitted') => {
         if (!result) return;
+        
+        // If submitting, check for existing active schedule
+        if (initialState === 'submitted') {
+            const summary = await scheduleVersionService.getActiveScheduleSummary();
+            setCurrentScheduleSummary(summary);
+            
+            if (summary && summary.exists) {
+                // Show overwrite confirmation modal
+                setShowOverwriteConfirm(true);
+                return;
+            }
+        }
+        
+        // Proceed with save
+        await performSave(initialState);
+    };
+
+    const performSave = async (initialState: 'draft' | 'submitted') => {
+        if (!result) return;
         setSaving(true); setSaveError(null);
         try {
             if (config.mode === 'partial') {
@@ -419,7 +502,38 @@ const ScheduleGenerate: React.FC = () => {
             const { error, data } = await supabase.from('schedules').insert(inserts).select('id');
             if (error) throw error;
             setSavedId(data && data[0] ? data[0].id : 'ok');
+            
+            // Log audit for each created schedule
+            for (const scheduleId of (data || []).map((d: { id: string }) => d.id)) {
+                await scheduleAudit.created(scheduleId, { 
+                    section: result.entries[0]?.sectionId,
+                    teacher: result.entries[0]?.teacherId,
+                    subject: result.entries[0]?.subjectId,
+                });
+            }
+            
             await refreshExisting();
+
+            // Update canonical state manager with the saved schedules
+            const { data: savedSchedules } = await supabase
+                .from('schedules')
+                .select('*')
+                .in('status', ['published', 'draft']);
+            
+            if (savedSchedules) {
+                const version = await scheduleStateManager.updateState(
+                    savedSchedules,
+                    'generate',
+                    {
+                        conflictCount: 0, // Will be updated by Conflicts tab scan
+                        softScore: result.score,
+                        changeDescription: `Generated schedule with ${result.placed} sessions`,
+                    }
+                );
+                scheduleLogger.generate.schedulePersisted(version.version, data && data[0] ? data[0].id : 'ok');
+                scheduleLogger.generate.stateUpdated(version.version, version.hash);
+                scheduleLogger.generate.scheduleCreated(version.version, version.hash, `Saved as ${initialState}`);
+            }
 
             // Notify students of schedule changes
             const affectedSectionIds = Array.from(new Set(result.entries.map(e => e.sectionId)));
@@ -430,6 +544,63 @@ const ScheduleGenerate: React.FC = () => {
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleOverwriteConfirm = async () => {
+        if (!result) return;
+        
+        setShowOverwriteConfirm(false);
+        
+        // Use version service to publish with overwrite
+        const schedules = result.entries.map(e => ({
+            id: crypto.randomUUID(),
+            subject_id: e.subjectId,
+            teacher_id: e.teacherId,
+            room_id: e.roomId,
+            section_id: e.sectionId,
+            day_of_week: e.day as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday',
+            start_time: e.start,
+            end_time: e.end,
+            status: 'published' as const,
+            semester: '1st Semester',
+            academic_year: '2025-2026',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            created_by: user?.id || null,
+            submitted_at: null,
+            approved_by: null,
+            approved_at: null,
+            rejected_by: null,
+            rejected_at: null,
+            rejection_reason: null,
+            deleted_at: null,
+            deleted_by: null,
+            is_locked: false,
+            locked_by: null,
+            locked_at: null,
+            lock_reason: null,
+        }));
+
+        const publishResult = await scheduleVersionService.publishSchedule(schedules, {
+            academic_year: '2025-2026',
+            semester: '1st Semester',
+            score: result.score,
+            conflictCount: 0,
+            changeReason: 'Published from Generate tab',
+            force: true,
+        });
+
+        if (publishResult.success) {
+            setSavedId('published');
+            await refreshExisting();
+        } else {
+            setSaveError(publishResult.message);
+        }
+    };
+
+    const handleOverwriteCancel = () => {
+        setShowOverwriteConfirm(false);
+        setCurrentScheduleSummary(null);
     };
     const saveDraft = () => saveAs('draft');
     const saveAndSubmit = () => saveAs('submitted');
@@ -449,7 +620,7 @@ const ScheduleGenerate: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Generate</h1>
+                    <h1 className="dashboard-title"><Sparkles size={20} /> Generate</h1>
                     <p className="dashboard-subtitle">
                         Build a conflict-free weekly schedule. {STAGES[stageIndex].hint}.
                     </p>
@@ -457,10 +628,10 @@ const ScheduleGenerate: React.FC = () => {
                 <div className="dash-header-actions">
                     <button
                         className="btn btn-secondary"
-                        onClick={() => setCompactMode(!compactMode)}
-                        title={compactMode ? 'Show detailed view' : 'Show compact view'}
+                        onClick={() => updatePreferences({ compact_mode: !preferences.compact_mode })}
+                        title={preferences.compact_mode ? 'Show detailed view' : 'Show compact view'}
                     >
-                        <Layers size={14} /> {compactMode ? 'Detailed' : 'Compact'}
+                        <Layers size={14} /> {preferences.compact_mode ? 'Detailed' : 'Compact'}
                     </button>
                     <button
                         className="btn btn-secondary"
@@ -492,7 +663,7 @@ const ScheduleGenerate: React.FC = () => {
             {dataLoading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><div className="spinner" /></div>
             ) : (
-                <div className={`sg-stage-card ${compactMode ? 'sg-compact' : ''}`}>
+                <div className={`sg-stage-card ${preferences.compact_mode ? 'sg-compact' : ''}`}>
                     {stage === 'scope' && (
                         <ScopeStage
                             config={config}
@@ -501,17 +672,17 @@ const ScheduleGenerate: React.FC = () => {
                             teachers={teachers}
                             rooms={rooms}
                             subjects={subjects}
-                            compact={compactMode}
+                            compact={preferences.compact_mode}
                         />
                     )}
                     {stage === 'structure' && (
-                        <StructureStage config={config} setConfig={setConfig} compact={compactMode} />
+                        <StructureStage config={config} setConfig={setConfig} compact={preferences.compact_mode} />
                     )}
                     {stage === 'constraints' && (
-                        <ConstraintsStage config={config} setConfig={setConfig} compact={compactMode} />
+                        <ConstraintsStage config={config} setConfig={setConfig} compact={preferences.compact_mode} />
                     )}
                     {stage === 'priorities' && (
-                        <PrioritiesStage config={config} setConfig={setConfig} sections={sections} subjects={subjects} compact={compactMode} />
+                        <PrioritiesStage config={config} setConfig={setConfig} sections={sections} subjects={subjects} compact={preferences.compact_mode} />
                     )}
                     {stage === 'review' && (
                         <ReviewStage
@@ -531,7 +702,11 @@ const ScheduleGenerate: React.FC = () => {
                         />
                     )}
                     {stage === 'results' && result && (
-                        <ResultsStage result={result} />
+                        <ResultsStage
+                            result={result}
+                            onOptimize={() => setStage('optimize')}
+                            onSave={() => setStage('save')}
+                        />
                     )}
                     {stage === 'optimize' && result && (
                         <OptimizeStage
@@ -548,19 +723,90 @@ const ScheduleGenerate: React.FC = () => {
                                     setOptimizationReport(null);
                                 }
                             }}
+                            onDiscard={() => {
+                                setOptimizedResult(null);
+                                setOptimizationReport(null);
+                                setOptimizationError(null);
+                                setStage('results');
+                            }}
                         />
                     )}
                     {stage === 'save' && result && (
-                        <SaveStage
-                            result={result}
-                            saving={saving}
-                            savedId={savedId}
-                            saveError={saveError}
-                            onSave={saveDraft}
-                            onSaveAndSubmit={saveAndSubmit}
-                            onRegenerate={() => { setStage('generate'); setTimeout(startGeneration, 50); }}
-                            onReset={resetAll}
-                        />
+                        <>
+                            {/* Publish Status Card */}
+                            {currentScheduleSummary && currentScheduleSummary.exists && (
+                                <div style={{
+                                    marginBottom: 24,
+                                    padding: 20,
+                                    backgroundColor: 'var(--surface-soft)',
+                                    border: '1px solid var(--border-light)',
+                                    borderRadius: 'var(--radius-md)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 16
+                                }}>
+                                    <div style={{
+                                        width: 48,
+                                        height: 48,
+                                        borderRadius: 'var(--radius-md)',
+                                        backgroundColor: 'var(--accent-warning-10, rgba(211, 139, 32, 0.1))',
+                                        border: '2px solid var(--accent-warning)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <AlertTriangle size={24} style={{ color: 'var(--accent-warning)' }} />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                                            Active Schedule Published
+                                        </div>
+                                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                                            {currentScheduleSummary.version && `Version ${currentScheduleSummary.version} • `}
+                                            {currentScheduleSummary.timestamp && new Date(currentScheduleSummary.timestamp).toLocaleDateString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })}
+                                        </div>
+                                        {currentScheduleSummary.sessionCount !== undefined && currentScheduleSummary.score !== undefined && (
+                                            <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+                                                <span style={{ color: 'var(--text-muted)' }}>
+                                                    <strong style={{ color: 'var(--text-primary)' }}>{currentScheduleSummary.sessionCount}</strong> sessions
+                                                </span>
+                                                <span style={{ color: 'var(--text-muted)' }}>
+                                                    Score: <strong style={{ color: 'var(--text-primary)' }}>{currentScheduleSummary.score.toFixed(0)}</strong>
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div style={{
+                                        padding: '8px 16px',
+                                        backgroundColor: 'var(--accent-warning)',
+                                        borderRadius: 'var(--radius-sm)',
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        color: 'white',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Overwrite Required
+                                    </div>
+                                </div>
+                            )}
+                            <SaveStage
+                                result={result}
+                                saving={saving}
+                                savedId={savedId}
+                                saveError={saveError}
+                                onSave={saveDraft}
+                                onSaveAndSubmit={saveAndSubmit}
+                                onRegenerate={() => { setStage('generate'); setTimeout(startGeneration, 50); }}
+                                onReset={resetAll}
+                            />
+                        </>
                     )}
                 </div>
             )}
@@ -588,6 +834,20 @@ const ScheduleGenerate: React.FC = () => {
                         </button>
                     )}
                 </div>
+            )}
+            
+            {/* Overwrite Confirmation Modal */}
+            {showOverwriteConfirm && currentScheduleSummary && result && (
+                <PublishOverwriteConfirm
+                    isOpen={showOverwriteConfirm}
+                    currentSchedule={currentScheduleSummary}
+                    newSchedule={{
+                        sessionCount: result.placed,
+                        score: result.score,
+                    }}
+                    onConfirm={handleOverwriteConfirm}
+                    onCancel={handleOverwriteCancel}
+                />
             )}
         </div>
     );
@@ -1252,17 +1512,18 @@ const GenerateStage: React.FC<{
     onCancel: () => void;
     onRun: () => void;
 }> = ({ progress, generating, generationStartTime, onCancel, onRun }) => {
-    const pct = progress.total && progress.total > 0 ? Math.round((progress.placed / progress.total) * 100) : 0;
+    const pct = progress.totalAttempts && progress.totalAttempts > 0 ? Math.round((progress.attempt / progress.totalAttempts) * 100) : 0;
     const currentIdx = SUBSTAGES.findIndex(s => s.key === progress.subStage);
     const [currentTime, setCurrentTime] = useState(0);
-    const speedHistoryRef = useRef<number[]>([]);
-    const [speedHistory, setSpeedHistory] = useState<number[]>([]);
+    const attemptSpeedHistoryRef = useRef<number[]>([]);
+    const [attemptSpeedHistory, setAttemptSpeedHistory] = useState<number[]>([]);
 
     // Update current time every second when generating
     useEffect(() => {
         if (!generating) {
-            speedHistoryRef.current = [];
-            setSpeedHistory([]);
+            attemptSpeedHistoryRef.current = [];
+            // Use setTimeout to avoid synchronous setState
+            setTimeout(() => setAttemptSpeedHistory([]), 0);
             return;
         }
         const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -1277,34 +1538,26 @@ const GenerateStage: React.FC<{
     // Calculate speed (attempts per second) and update history
     useEffect(() => {
         if (!generating || !generationStartTime || progress.totalAttempts <= 0) return;
-        
+
         const elapsed = currentTime - generationStartTime;
         if (elapsed < 1000) return;
-        
-        const completedAttempts = progress.attempt - 1;
-        const total = progress.total ?? 0;
-        const currentAttemptProgress = total > 0 ? progress.placed / total : 0;
-        const totalProgress = (completedAttempts + currentAttemptProgress) / progress.totalAttempts;
-        
-        if (totalProgress > 0) {
-            const speed = totalProgress / (elapsed / 1000); // progress per second
-            speedHistoryRef.current = [...speedHistoryRef.current, speed].slice(-10);
-            setSpeedHistory(speedHistoryRef.current);
+
+        const completedAttempts = progress.attempt;
+        if (completedAttempts > 0) {
+            const attemptsPerSecond = completedAttempts / (elapsed / 1000);
+            attemptSpeedHistoryRef.current = [...attemptSpeedHistoryRef.current, attemptsPerSecond].slice(-10);
+            setAttemptSpeedHistory(attemptSpeedHistoryRef.current);
         }
     }, [currentTime, progress, generating, generationStartTime]);
 
-    // Calculate estimated time remaining using average speed
+    // Calculate estimated time remaining using average attempt speed
     let estimatedTimeText = '';
-    if (generationStartTime && speedHistory.length > 0) {
-        const avgSpeed = speedHistory.reduce((a, b) => a + b, 0) / speedHistory.length;
-        if (avgSpeed > 0) {
-            const completedAttempts = progress.attempt - 1;
-            const total = progress.total ?? 0;
-            const currentAttemptProgress = total > 0 ? progress.placed / total : 0;
-            const totalProgress = (completedAttempts + currentAttemptProgress) / progress.totalAttempts;
-            const remainingProgress = 1 - totalProgress;
-            const remainingSeconds = remainingProgress / avgSpeed;
-            
+    if (generationStartTime && attemptSpeedHistory.length > 0) {
+        const avgAttemptsPerSecond = attemptSpeedHistory.reduce((a, b) => a + b, 0) / attemptSpeedHistory.length;
+        if (avgAttemptsPerSecond > 0) {
+            const remainingAttempts = progress.totalAttempts - progress.attempt;
+            const remainingSeconds = remainingAttempts / avgAttemptsPerSecond;
+
             if (remainingSeconds > 0) {
                 if (remainingSeconds < 60) {
                     estimatedTimeText = `~${Math.ceil(remainingSeconds)}s`;
@@ -1343,6 +1596,8 @@ const GenerateStage: React.FC<{
             <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 {generating ? (
                     <button className="btn btn-secondary" onClick={onCancel}><X size={14} /> Cancel</button>
+                ) : progress.subStage === 'done' ? (
+                    <button className="btn btn-secondary" disabled><Check size={14} /> Results ready</button>
                 ) : (
                     <button className="btn btn-primary" onClick={onRun}><RefreshCw size={14} /> Run again</button>
                 )}
@@ -1355,15 +1610,17 @@ const GenerateStage: React.FC<{
 // Stage 6 — Results
 // ---------------------------------------------------------------------------
 
-const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
+const ResultsStage: React.FC<{ result: GenerationResult; onOptimize: () => void; onSave: () => void }> = ({ result, onOptimize, onSave }) => {
     const perfect = result.placed === result.total && result.errors.length === 0;
     const scoreRounded = result.score.toFixed(2);
+    const unplacedCount = result.total - result.placed;
+
     return (
         <div>
             <StageHeader
                 icon={perfect ? <CheckCircle size={16} /> : <Layers size={16} />}
                 title={perfect ? 'Schedule ready' : 'Partial schedule'}
-                desc={`${result.placed} of ${result.total} sessions placed. Soft score ${scoreRounded} out of 100.`}
+                desc={`${result.placed} of ${result.total} sessions placed. Soft score ${scoreRounded} out of 100.${!perfect && unplacedCount > 0 ? ` ${unplacedCount} session${unplacedCount === 1 ? '' : 's'} could not be placed.` : ''}`}
             />
 
             {result.highPriorityTotal > 0 && (
@@ -1379,6 +1636,15 @@ const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
             <div className="sg-progress-bar" style={{ marginBottom: 16 }}>
                 <div className="sg-progress-fill" style={{ width: `${(result.placed / Math.max(result.total, 1)) * 100}%`, background: perfect ? 'var(--accent-success, #2F8F5B)' : 'var(--accent-warning, #D38B20)' }} />
             </div>
+
+            {!perfect && unplacedCount > 0 && (
+                <div className="sg-banner sg-banner-error" style={{ marginBottom: 16 }}>
+                    <AlertTriangle size={14} />
+                    <span>
+                        <strong>{unplacedCount} session{unplacedCount === 1 ? '' : 's'} could not be placed</strong> due to scheduling conflicts or resource constraints. Check the details below for specific issues.
+                    </span>
+                </div>
+            )}
 
             {result.errors.length > 0 && (
                 <details className="sg-errors" open>
@@ -1410,6 +1676,16 @@ const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
                     </table>
                 </div>
             )}
+
+            {/* Action buttons for optimize or save */}
+            <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={onOptimize} disabled={result.entries.length === 0}>
+                    <Zap size={14} /> Optimize Schedule
+                </button>
+                <button className="btn btn-primary" onClick={onSave} disabled={result.entries.length === 0}>
+                    <Save size={14} /> Save Schedule
+                </button>
+            </div>
         </div>
     );
 };
@@ -1426,7 +1702,8 @@ const OptimizeStage: React.FC<{
     optimizationError: string | null;
     onOptimize: () => void;
     onUseOptimized: () => void;
-}> = ({ result, optimizing, optimizationReport, optimizedResult, optimizationError, onOptimize, onUseOptimized }) => {
+    onDiscard: () => void;
+}> = ({ result, optimizing, optimizationReport, optimizedResult, optimizationError, onOptimize, onUseOptimized, onDiscard }) => {
     return (
         <div>
             <StageHeader
@@ -1529,7 +1806,7 @@ const OptimizeStage: React.FC<{
 
                     <button 
                         className="btn btn-secondary" 
-                        onClick={() => window.location.reload()}
+                        onClick={onDiscard}
                         style={{ width: '100%' }}
                     >
                         <X size={16} style={{ marginRight: 8 }} />

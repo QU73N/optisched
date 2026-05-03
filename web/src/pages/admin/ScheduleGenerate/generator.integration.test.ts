@@ -53,6 +53,12 @@ const mockConfig: GenerationConfig = {
     },
     overflowPolicy: 'relax_soft',
     enableForwardChecking: false,
+    enableOptimization: false,
+    optimizationTimeLimit: 30,
+    optimizationMaxIterations: 100,
+    optimizationProfile: 'balanced',
+    optimizationMode: 'safe',
+    optimizationSeed: 42,
 };
 
 describe('Generator Integration Tests', () => {

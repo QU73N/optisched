@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ADMIN_ROLES } from '../../types/database';
-import { Check, X, Clock, FileText, User, Calendar } from 'lucide-react';
+import { Check, X, Clock, FileText, User, Calendar, CheckCircle } from 'lucide-react';
 import '../admin/Dashboard.css';
 import {
     getApprovalRequests,
@@ -130,7 +130,7 @@ const ApprovalManagement: React.FC = () => {
             <div className="dashboard fade-in">
                 <div className="dashboard-header">
                     <div>
-                        <h1 className="dashboard-title">Approval Workflow</h1>
+                        <h1 className="dashboard-title"><CheckCircle size={20} /> Approval Workflow</h1>
                         <p className="dashboard-subtitle">Manage approval requests for schedule changes</p>
                     </div>
                 </div>
@@ -147,7 +147,7 @@ const ApprovalManagement: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Approval Workflow</h1>
+                    <h1 className="dashboard-title"><CheckCircle size={20} /> Approval Workflow</h1>
                     <p className="dashboard-subtitle">Manage approval requests for schedule changes</p>
                 </div>
             </div>

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, RotateCcw, Layers, Clock, CheckCircle, Trash2, Plus, Eye } from 'lucide-react';
+import { History, Save, Trash2, Layers, Clock, Eye, RotateCcw, CheckCircle } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 interface VersionSnapshot {
@@ -100,7 +100,7 @@ const VersionManager: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Version Manager</h1>
+                    <h1 className="dashboard-title"><History size={20} /> Version Manager</h1>
                     <p className="dashboard-subtitle">{versions.length} saved snapshots · {schedules.length} current entries</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => setShowSaveModal(true)} disabled={loading}>

@@ -188,7 +188,7 @@ const ScheduleManagerDashboard: React.FC = () => {
     return (
         <div className="dashboard">
             <div className="dashboard-header">
-                <h1 className="dashboard-title">Schedule Manager</h1>
+                <h1 className="dashboard-title"><Sparkles size={20} /> Schedule Manager</h1>
                 <p className="dashboard-subtitle">
                     Welcome, {profile?.full_name?.split(' ')[0] || 'Manager'}. Build, generate, and submit schedules.
                 </p>

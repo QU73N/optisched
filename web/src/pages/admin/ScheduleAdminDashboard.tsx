@@ -185,7 +185,7 @@ const ScheduleAdminDashboard: React.FC = () => {
     return (
         <div className="dashboard">
             <div className="dashboard-header">
-                <h1 className="dashboard-title">Schedule Admin</h1>
+                <h1 className="dashboard-title"><CheckCircle size={20} /> Schedule Admin</h1>
                 <p className="dashboard-subtitle">
                     Welcome, {profile?.full_name?.split(' ')[0] || 'Admin'}. Review and approve schedule submissions.
                 </p>

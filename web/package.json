@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/set-build-info.js && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "deploy:dev": "powershell -ExecutionPolicy Bypass -File ./deploy-dev.ps1",
+    "deploy:staging": "powershell -ExecutionPolicy Bypass -File ./deploy-staging.ps1",
+    "deploy:prod": "powershell -ExecutionPolicy Bypass -File ./deploy-prod.ps1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
@@ -20,7 +23,8 @@
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
     "recharts": "^3.8.1",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

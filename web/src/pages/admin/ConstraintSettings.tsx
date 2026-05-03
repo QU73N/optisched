@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Clock, Save, RotateCcw } from 'lucide-react';
+import { Settings, Clock, Save, RotateCcw, AlertTriangle } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 interface ConstraintConfig {
@@ -53,7 +53,7 @@ const ConstraintSettings: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Constraint Settings</h1>
+                    <h1 className="dashboard-title"><AlertTriangle size={20} /> Constraint Settings</h1>
                     <p className="dashboard-subtitle">Configure scheduling rules and constraints</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>

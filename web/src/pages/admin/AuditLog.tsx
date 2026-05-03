@@ -113,7 +113,7 @@ const AuditLog: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Audit & History</h1>
+                    <h1 className="dashboard-title"><History size={20} /> Audit & History</h1>
                     <p className="dashboard-subtitle">{entries.length} tracked changes</p>
                 </div>
             </div>

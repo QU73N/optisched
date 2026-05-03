@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasAnyRole } from '../../types/database';
-import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit, Folder } from 'lucide-react';
+import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit, Folder, Database } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 type Tab = 'rooms' | 'subjects' | 'sections';
@@ -220,7 +220,7 @@ const DataManagement: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Data Management</h1>
+                    <h1 className="dashboard-title"><Database size={20} /> Data Management</h1>
                     <p className="dashboard-subtitle">
                         {canEdit ? 'Manage rooms, subjects, and sections' : 'View rooms, subjects, and sections'}
                     </p>

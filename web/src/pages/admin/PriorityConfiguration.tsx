@@ -130,7 +130,7 @@ const PriorityConfiguration: React.FC = () => {
             <div className="dashboard fade-in">
                 <div className="dashboard-header">
                     <div>
-                        <h1 className="dashboard-title">Priority Configuration</h1>
+                        <h1 className="dashboard-title"><Sliders size={20} /> Priority Configuration</h1>
                         <p className="dashboard-subtitle">Configure global priority settings for schedule generation</p>
                     </div>
                 </div>
@@ -145,7 +145,7 @@ const PriorityConfiguration: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Priority Configuration</h1>
+                    <h1 className="dashboard-title"><Sliders size={20} /> Priority Configuration</h1>
                     <p className="dashboard-subtitle">Configure global priority settings for schedule generation</p>
                 </div>
                 {canEdit && (

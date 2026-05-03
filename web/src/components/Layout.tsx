@@ -14,7 +14,7 @@ import LoadByDay from './LoadByDay';
 
 import {
     LogOut, Moon, Sun, Bell, HelpCircle, PanelLeft, Settings,
-    Sparkles, CalendarDays, Users, Database
+    Sparkles, CalendarDays, Users, Database, Menu
 } from 'lucide-react';
 import FloatingOptiBot from './FloatingOptiBot';
 import './Layout.css';
@@ -26,6 +26,7 @@ const Layout: React.FC = () => {
     const [theme, setTheme] = useState(() => localStorage.getItem('optisched-theme') || 'light');
     const [siderailOpen, setSiderailOpen] = useState(true);
     const [roleSelectorOpen, setRoleSelectorOpen] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     useEffect(() => {
         const handleStorageChange = () => {
@@ -140,8 +141,10 @@ const Layout: React.FC = () => {
 
     return (
         <div className={`layout ${siderailOpen ? 'siderail-open-layout' : ''}`}>
-            <a href="#main-content" className="skip-link">Skip to content</a>
-            <aside className="sidebar">
+            <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+                <button className="mobile-close-btn" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
+                    <Menu size={18} />
+                </button>
                 <Sidebar />
 
                 <div className="sidebar-footer">
@@ -169,8 +172,13 @@ const Layout: React.FC = () => {
                 </div>
             </aside>
 
+            <div className={`sidebar-overlay ${mobileMenuOpen ? 'mobile-open' : ''}`} onClick={() => setMobileMenuOpen(false)} aria-hidden="true" />
+
             <header className="topbar">
                 <div className="topbar-left">
+                    <button className="topbar-btn mobile-menu-btn" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle mobile menu">
+                        <Menu size={18} />
+                    </button>
                     <div className="sidebar-logo">
                         <img src={theme === 'light' ? '/logo.png' : '/logo-white.png'} alt="OptiSched" />
                     </div>
@@ -199,7 +207,7 @@ const Layout: React.FC = () => {
             </header>
 
             <div className="main-wrapper">
-                <main id="main-content" className="main-content">
+                <main className="main-content">
                     <Outlet />
                 </main>
             </div>

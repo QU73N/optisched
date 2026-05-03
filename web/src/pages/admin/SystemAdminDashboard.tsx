@@ -120,7 +120,7 @@ const SystemAdminDashboard: React.FC = () => {
     return (
         <div className="dashboard">
             <div className="dashboard-header">
-                <h1 className="dashboard-title">System Admin</h1>
+                <h1 className="dashboard-title"><Shield size={20} /> System Admin</h1>
                 <p className="dashboard-subtitle">
                     Welcome, {profile?.full_name?.split(' ')[0] || 'Admin'}. Manage access, users, and system rules.
                 </p>

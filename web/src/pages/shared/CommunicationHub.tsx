@@ -242,11 +242,12 @@ const CommunicationHub: React.FC = () => {
                     <div style={{ display: 'flex', padding: '8px 12px', gap: 4, borderBottom: '1px solid var(--border-default)', flexShrink: 0 }}>
                         <button
                             onClick={() => setSidebarTab('conversations')}
+                            className="font-semibold text-sm"
                             style={{
                                 flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
                                 background: sidebarTab === 'conversations' ? 'var(--accent-primary)' : 'var(--bg-secondary)',
                                 color: sidebarTab === 'conversations' ? '#fff' : 'var(--text-secondary)',
-                                fontWeight: 600, fontSize: 12, transition: 'all 150ms ease',
+                                transition: 'all 150ms ease',
                             }}
                         >
                             <MessageSquare size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
@@ -254,11 +255,12 @@ const CommunicationHub: React.FC = () => {
                         </button>
                         <button
                             onClick={() => setSidebarTab('teachers')}
+                            className="font-semibold text-sm"
                             style={{
                                 flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
                                 background: sidebarTab === 'teachers' ? 'var(--accent-primary)' : 'var(--bg-secondary)',
                                 color: sidebarTab === 'teachers' ? '#fff' : 'var(--text-secondary)',
-                                fontWeight: 600, fontSize: 12, transition: 'all 150ms ease',
+                                transition: 'all 150ms ease',
                             }}
                         >
                             <Users size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
@@ -267,11 +269,12 @@ const CommunicationHub: React.FC = () => {
                         {isAdmin && (
                             <button
                                 onClick={() => setSidebarTab('resets')}
+                                className="font-semibold text-sm"
                                 style={{
                                     flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
                                     background: sidebarTab === 'resets' ? '#f59e0b' : 'var(--bg-secondary)',
                                     color: sidebarTab === 'resets' ? '#fff' : 'var(--text-secondary)',
-                                    fontWeight: 600, fontSize: 12, transition: 'all 150ms ease',
+                                    transition: 'all 150ms ease',
                                 }}
                             >
                                 <KeyRound size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
@@ -284,8 +287,8 @@ const CommunicationHub: React.FC = () => {
                     <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
                         <div style={{ position: 'relative' }}>
                             <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                            <input className="input" placeholder={sidebarTab === 'conversations' ? "Search conversations..." : (isAdmin ? "Search teachers..." : "Search admins...")} value={search} onChange={e => setSearch(e.target.value)}
-                                style={{ paddingLeft: 36, fontSize: 13, padding: '8px 12px 8px 36px' }} />
+                            <input className="input text-base" placeholder={sidebarTab === 'conversations' ? "Search conversations..." : (isAdmin ? "Search teachers..." : "Search admins...")} value={search} onChange={e => setSearch(e.target.value)}
+                                style={{ paddingLeft: 36, padding: '8px 12px 8px 36px' }} />
                         </div>
                     </div>
 
@@ -298,8 +301,8 @@ const CommunicationHub: React.FC = () => {
                             filteredThreads.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                                     <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                                    <p style={{ fontSize: 13 }}>No conversations yet</p>
-                                    <p style={{ fontSize: 11, marginTop: 4 }}>Go to "{isAdmin ? 'All Teachers' : 'Admins'}" to start a chat</p>
+                                    <p className="text-base">No conversations yet</p>
+                                    <p className="text-xs" style={{ marginTop: 4 }}>Go to "{isAdmin ? 'All Teachers' : 'Admins'}" to start a chat</p>
                                 </div>
                             ) : filteredThreads.map(t => (
                                 <div key={t.senderId}
@@ -317,7 +320,7 @@ const CommunicationHub: React.FC = () => {
                                         width: 40, height: 40, borderRadius: '50%',
                                         background: 'rgba(99,102,241,0.15)', color: '#818cf8',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontWeight: 700, fontSize: 15, flexShrink: 0, overflow: 'hidden'
+                                        fontWeight: 700, flexShrink: 0, overflow: 'hidden'
                                     }}>
                                         {t.avatarUrl ? (
                                             <img src={t.avatarUrl} alt={t.senderName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -327,18 +330,18 @@ const CommunicationHub: React.FC = () => {
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t.senderName}</span>
-                                            <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>
+                                            <span className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>{t.senderName}</span>
+                                            <span className="text-xs" style={{ color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>
                                                 {new Date(t.lastTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                            <span className="text-sm" style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                                                 {t.lastMessage}
                                             </span>
                                             {t.unread > 0 && (
                                                 <span style={{
-                                                    background: 'var(--accent-primary)', color: '#fff', fontSize: 10, fontWeight: 700,
+                                                    background: 'var(--accent-primary)', color: '#fff', fontWeight: 700,
                                                     width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8,
                                                 }}>{t.unread}</span>
                                             )}
@@ -351,7 +354,7 @@ const CommunicationHub: React.FC = () => {
                             filteredTeachers.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                                     <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                                    <p style={{ fontSize: 13 }}>{isAdmin ? 'No teachers found' : 'No admins found'}</p>
+                                    <p className="text-base">{isAdmin ? 'No teachers found' : 'No admins found'}</p>
                                 </div>
                             ) : filteredTeachers.map(teacher => {
                                 const existingThread = threads.find(t => t.senderId === teacher.id);
@@ -373,7 +376,7 @@ const CommunicationHub: React.FC = () => {
                                             background: isAdminRole ? 'rgba(239,68,68,0.15)' : 'rgba(99,102,241,0.15)',
                                             color: isAdminRole ? '#ef4444' : '#818cf8',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontWeight: 700, fontSize: 15, flexShrink: 0, overflow: 'hidden'
+                                            fontWeight: 700, flexShrink: 0, overflow: 'hidden'
                                         }}>
                                             {teacher.avatar_url ? (
                                                 <img src={teacher.avatar_url} alt={teacher.full_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -383,15 +386,15 @@ const CommunicationHub: React.FC = () => {
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{teacher.full_name}</span>
+                                                <span className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>{teacher.full_name}</span>
                                                 {isAdminRole && (
-                                                    <span style={{
-                                                        fontSize: 9, fontWeight: 700, background: 'rgba(239,68,68,0.15)', color: '#ef4444',
+                                                    <span className="text-xs font-bold" style={{
+                                                        background: 'rgba(239,68,68,0.15)', color: '#ef4444',
                                                         padding: '2px 6px', borderRadius: 4, letterSpacing: 0.5,
                                                     }}>ADMIN</span>
                                                 )}
                                             </div>
-                                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                                                 {existingThread ? `Last: ${existingThread.lastMessage.slice(0, 30)}...` : 'No messages yet - tap to start'}
                                             </span>
                                         </div>
@@ -408,19 +411,19 @@ const CommunicationHub: React.FC = () => {
                     <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                         {/* Chat Header */}
                         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                            <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => setSelectedThread(null)}>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setSelectedThread(null)}>
                                 <ArrowLeft size={18} />
                             </button>
-                            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13, overflow: 'hidden' }}>
+                            <div className="font-bold text-base" style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', overflow: 'hidden' }}>
                                 {(() => {
                                     const thr = threads.find(t => t.senderId === selectedThread);
                                     const teacher = allTeachers.find(t => t.id === selectedThread);
                                     const avatar = thr?.avatarUrl || teacher?.avatar_url;
-                                    if (avatar) return <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+                                    if (avatar) return <img src={avatar} alt={`Avatar for ${resolvedThreadName}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
                                     return resolvedThreadName.charAt(0).toUpperCase();
                                 })()}
                             </div>
-                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{resolvedThreadName}</span>
+                            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{resolvedThreadName}</span>
                         </div>
 
                         {/* Messages */}
@@ -428,8 +431,8 @@ const CommunicationHub: React.FC = () => {
                             {threadMsgs.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                                     <MessageSquare size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                                    <p style={{ fontSize: 14 }}>No messages yet</p>
-                                    <p style={{ fontSize: 12, marginTop: 4 }}>Start the conversation by sending a message below</p>
+                                    <p className="text-md">No messages yet</p>
+                                    <p className="text-sm" style={{ marginTop: 4 }}>Start the conversation by sending a message below</p>
                                 </div>
                             ) : threadMsgs.map(m => {
                                 const isMine = m.sender_id === profile?.id;
@@ -437,17 +440,17 @@ const CommunicationHub: React.FC = () => {
                                     <div key={m.id} style={{
                                         maxWidth: '70%', alignSelf: isMine ? 'flex-end' : 'flex-start',
                                     }}>
-                                        <div style={{
-                                            padding: '10px 14px', borderRadius: 12, fontSize: 13, lineHeight: 1.5,
+                                        <div className="text-base" style={{
+                                            padding: '10px 14px', borderRadius: 12, lineHeight: 1.5,
                                             background: isMine ? 'var(--accent-primary)' : 'var(--bg-secondary)',
                                             color: isMine ? '#fff' : 'var(--text-primary)',
                                             borderBottomRightRadius: isMine ? 4 : 12,
                                             borderBottomLeftRadius: isMine ? 12 : 4,
                                         }}>
-                                            {!isMine && <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>{m.sender_name}</div>}
+                                            {!isMine && <div className="text-xs font-semibold" style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{m.sender_name}</div>}
                                             {m.message}
                                         </div>
-                                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, textAlign: isMine ? 'right' : 'left' }}>
+                                        <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 3, textAlign: isMine ? 'right' : 'left' }}>
                                             {new Date(m.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                                         </div>
                                     </div>
@@ -462,7 +465,7 @@ const CommunicationHub: React.FC = () => {
                                 value={newMessage} onChange={e => setNewMessage(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
                                 style={{ flex: 1 }} />
-                            <button className="btn btn-primary" style={{ padding: '8px 16px' }} onClick={handleSend} disabled={!newMessage.trim() || sending}>
+                            <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={!newMessage.trim() || sending}>
                                 <Send size={16} />
                             </button>
                         </div>
@@ -471,8 +474,8 @@ const CommunicationHub: React.FC = () => {
                     <div className="card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                             <Users size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-                            <p style={{ fontSize: 16, fontWeight: 600 }}>Select a conversation</p>
-                            <p style={{ fontSize: 13, marginTop: 4 }}>Choose from existing chats or browse "{isAdmin ? 'All Teachers' : 'Admins'}" to start a new conversation</p>
+                            <p className="text-2xl font-semibold">Select a conversation</p>
+                            <p className="text-base" style={{ marginTop: 4 }}>Choose from existing chats or browse "{isAdmin ? 'All Teachers' : 'Admins'}" to start a new conversation</p>
                         </div>
                     </div>
                 )}

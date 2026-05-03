@@ -281,7 +281,7 @@ export interface InstitutionBreak {
 export interface Notification {
     id: string;
     user_id: string;
-    type: 'schedule_change' | 'sharing_request' | 'approval' | 'system' | 'reminder';
+    type: 'schedule_change' | 'sharing_request' | 'approval' | 'system' | 'reminder' | 'conflict_alert' | 'announcement';
     title: string;
     message: string;
     data: Record<string, unknown>;

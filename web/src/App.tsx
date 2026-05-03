@@ -2,11 +2,13 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { UserPreferencesProvider } from './contexts/UserPreferencesContext';
+import { ToastProvider } from './contexts/ToastContext';
 import Layout from './components/Layout';
 import LandingPage from './pages/LandingPage';
 import PricingPage from './pages/PricingPage';
 const AdminDashboardDispatcher = lazy(() => import('./pages/admin/AdminDashboardDispatcher'));
 const AdminManageUsers = lazy(() => import('./pages/admin/AdminManageUsers'));
+const AddUser = lazy(() => import('./pages/admin/AddUser'));
 const ScheduleManagement = lazy(() => import('./pages/admin/ScheduleManagement'));
 const DataManagement = lazy(() => import('./pages/admin/DataManagement'));
 const PriorityConfiguration = lazy(() => import('./pages/admin/PriorityConfiguration'));
@@ -16,7 +18,7 @@ const ScheduleLocking = lazy(() => import('./pages/admin/ScheduleLocking'));
 const ConflictsAlerts = lazy(() => import('./pages/admin/ConflictsAlerts'));
 const ConstraintSettings = lazy(() => import('./pages/admin/ConstraintSettings'));
 const Analytics = lazy(() => import('./pages/admin/Analytics'));
-const ScheduleViews = lazy(() => import('./pages/admin/ScheduleViews'));
+const ScheduleVersions = lazy(() => import('./pages/admin/ScheduleVersions'));
 const CommunicationHub = lazy(() => import('./pages/shared/CommunicationHub'));
 const GroupChats = lazy(() => import('./pages/shared/GroupChats'));
 const AuditLogLegacy = lazy(() => import('./pages/admin/AuditLog'));
@@ -120,7 +122,8 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <UserPreferencesProvider>
-          <Routes>
+          <ToastProvider>
+            <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginGuard />} />
           <Route path="/pricing" element={<PricingPage />} />
@@ -134,7 +137,9 @@ function App() {
             <Route path="live-feed" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><UserActivityPage /></Suspense>} />
             <Route path="broadcasts" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AnnouncementsPage /></Suspense>} />
             <Route path="users" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminManageUsers /></Suspense>} />
+            <Route path="users/add" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AddUser /></Suspense>} />
             <Route path="schedules" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleManagement /></Suspense>} />
+            <Route path="schedules/versions" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleVersions /></Suspense>} />
             <Route path="data" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
             <Route path="priority" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><PriorityConfiguration /></Suspense>} />
             <Route path="sharing" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><SharingManagement /></Suspense>} />
@@ -143,7 +148,6 @@ function App() {
             <Route path="conflicts" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ConflictsAlerts /></Suspense>} />
             <Route path="constraints" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ConstraintSettings /></Suspense>} />
             <Route path="analytics" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><Analytics /></Suspense>} />
-            <Route path="views" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleViews /></Suspense>} />
             <Route path="messages" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><CommunicationHub /></Suspense>} />
             <Route path="group-chats" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><GroupChats /></Suspense>} />
             <Route path="audit" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AuditLogPage /></Suspense>} />
@@ -213,6 +217,7 @@ function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+          </ToastProvider>
         </UserPreferencesProvider>
       </AuthProvider>
     </BrowserRouter>

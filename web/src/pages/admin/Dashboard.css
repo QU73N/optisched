@@ -15,20 +15,21 @@
    . Honor prefers-reduced-motion.
    ============================================================ */
 
-/* ---------- Local scale tokens ---------- */
+/* ---------- Local scale tokens (using global tokens where possible) ---------- */
 .dashboard {
-    --d-space-1: 4px;
-    --d-space-2: 8px;
-    --d-space-3: 12px;
-    --d-space-4: 16px;
-    --d-space-5: 20px;
-    --d-space-6: 24px;
-    --d-space-7: 32px;
-    --d-space-8: 40px;
+    /* Use global spacing scale from index.css */
+    --d-space-1: var(--space-1);
+    --d-space-2: var(--space-2);
+    --d-space-3: var(--space-3);
+    --d-space-4: var(--space-4);
+    --d-space-5: var(--space-5);
+    --d-space-6: var(--space-6);
+    --d-space-7: var(--space-7);
+    --d-space-8: var(--space-8);
 
-    --d-radius-sm: 8px;
-    --d-radius-md: 10px;
-    --d-radius-lg: 14px;
+    --d-radius-sm: var(--radius-sm);
+    --d-radius-md: var(--radius-md);
+    --d-radius-lg: var(--radius-lg);
 
     --d-text-xs: 11px;
     --d-text-sm: 12px;
@@ -38,8 +39,8 @@
     --d-text-xl: 22px;
     --d-text-2xl: 30px;
 
-    --d-grid-gap: 16px;
-    --d-card-padding: 20px;
+    --d-grid-gap: var(--space-4);
+    --d-card-padding: var(--space-5);
 
     --d-success: var(--accent-success);
     --d-warning: var(--accent-warning);
@@ -71,7 +72,7 @@
     justify-content: space-between;
     align-items: center;
     gap: 16px;
-    margin-bottom: 24px;
+    margin-bottom: var(--space-8);
 }
 
 .dashboard-title {
@@ -265,13 +266,57 @@
 .stat-delta svg { flex-shrink: 0; }
 
 /* ============================================================
-   Layout: grids + columns
+   Layout: grids + columns - STRICT GRID SYSTEM
    ============================================================ */
+
+/* Main dashboard container */
+.admin-dash-main {
+    display: grid;
+    gap: var(--d-grid-gap);
+    margin-bottom: 24px;
+}
+
+/* TOP SECTION: 2-row × 4-column grid */
+.dash-top-section {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr) minmax(280px, 1fr);
+    grid-template-rows: repeat(2, auto);
+    gap: var(--d-grid-gap);
+    margin-bottom: var(--d-grid-gap);
+}
+
+/* KPI cards grid (columns 1-3, rows 1-2) */
+.dash-kpi-grid {
+    grid-column: 1 / 4;
+    grid-row: 1 / 3;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, auto);
+    gap: var(--d-grid-gap);
+}
+
+/* Right panel (column 4, spans both rows) */
+.dash-right-panel {
+    grid-column: 4 / 5;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* BOTTOM SECTION: 2-row × 3-column grid */
+.dash-bottom-section {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, auto);
+    gap: var(--d-grid-gap);
+}
+
+/* Legacy grid classes (for backward compatibility) */
 .dashboard-grid,
 .dash-row-2,
 .dash-row-2-overview,
 .dash-row-3,
-.admin-dash-main,
 .admin-dash-row-2,
 .admin-dash-row-3 {
     display: grid;
@@ -279,7 +324,6 @@
     margin-bottom: 24px;
 }
 
-.admin-dash-main { grid-template-columns: minmax(0, 7fr) minmax(280px, 3fr); align-items: start; }
 .admin-dash-row-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .admin-dash-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .dash-row-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -1457,8 +1501,10 @@
 }
 
 .sm-entity-sub {
+    font-family: var(--font-sans);
     font-size: 12px;
     color: var(--text-muted);
+    font-weight: 500;
 }
 
 .sm-entity-meta {
@@ -1466,8 +1512,10 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    font-family: var(--font-sans);
     font-size: 11px;
     color: var(--text-secondary);
+    font-weight: 600;
 }
 
 .sm-entity-meta-dot {

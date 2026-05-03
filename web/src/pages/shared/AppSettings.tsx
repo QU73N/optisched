@@ -4,7 +4,7 @@ import { useUserPreferences } from '../../contexts/UserPreferencesContext';
 import { supabase } from '../../lib/supabase';
 import {
     Settings, User, Shield, Moon, Sun, Bell, LogOut,
-    Lock, Mail, Eye, EyeOff, Save, CheckCircle, Loader2
+    Lock, Mail, Eye, EyeOff, Save, CheckCircle, Loader2, Layers
 } from 'lucide-react';
 
 const AppSettings: React.FC = () => {
@@ -97,15 +97,15 @@ const AppSettings: React.FC = () => {
                             </div>
                             <div className="s-form-group">
                                 <label>Full Name</label>
-                                <input value={fullName} onChange={e => setFullName(e.target.value)} />
+                                <input className="input" value={fullName} onChange={e => setFullName(e.target.value)} />
                             </div>
                             <div className="s-form-group">
                                 <label>Email</label>
-                                <input value={session?.user?.email || ''} disabled />
+                                <input className="input" value={session?.user?.email || ''} disabled />
                             </div>
                             <div className="s-form-group">
                                 <label>Role</label>
-                                <input value={profile?.role || ''} disabled />
+                                <input className="input" value={profile?.role || ''} disabled />
                             </div>
                             <button className={`s-save-btn ${saved ? 'saved' : ''}`} onClick={handleSaveProfile} disabled={saving}>
                                 {saving ? <><Loader2 size={16} className="spin" /> Saving...</> : saved ? <><CheckCircle size={16} /> Saved!</> : <><Save size={16} /> Save Changes</>}
@@ -154,13 +154,13 @@ const AppSettings: React.FC = () => {
                             <div className="s-form-group">
                                 <label>New Password</label>
                                 <div className="password-input-wrap">
-                                    <input type={showPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Enter new password" />
+                                    <input className="input" type={showPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Enter new password" />
                                     <button className="eye-btn" onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
                                 </div>
                             </div>
                             <div className="s-form-group">
                                 <label>Confirm New Password</label>
-                                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm new password" />
+                                <input className="input" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm new password" />
                             </div>
                             <button className="s-save-btn" onClick={handleChangePassword} disabled={changingPassword || !newPassword || !confirmPassword}>
                                 {changingPassword ? <><Loader2 size={16} className="spin" /> Updating...</> : <><Lock size={16} /> Update Password</>}
@@ -228,6 +228,20 @@ const AppSettings: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+                            <div style={{ marginTop: 24 }}>
+                                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Compact Mode</h3>
+                                <div className="toggle-list">
+                                    <div className="toggle-item">
+                                        <div className="toggle-info">
+                                            <Layers size={20} color="#8b5cf6" />
+                                            <div><strong>Compact View</strong><p>Show compact layout across the site</p></div>
+                                        </div>
+                                        <button className={`toggle-switch ${preferences.compact_mode ? 'on' : ''}`} onClick={() => updatePreferences({ compact_mode: !preferences.compact_mode })}>
+                                            <div className="toggle-thumb" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -281,6 +295,11 @@ const AppSettings: React.FC = () => {
                 .toggle-switch.on { background: var(--accent-primary); border-color: var(--accent-primary); }
                 .toggle-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 200ms var(--ease-out); box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
                 .toggle-switch.on .toggle-thumb { transform: translateX(20px); }
+
+                /* Light mode: make toggle thumb visible when off */
+                [data-theme="light"] .toggle-switch:not(.on) .toggle-thumb {
+                    background: #94a3b8;
+                }
 
                 .theme-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
                 .theme-card { padding: 18px; border-radius: var(--radius-lg); border: 2px solid var(--border-default); background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; transition: all 150ms ease; font-family: var(--font-sans); }

@@ -40,8 +40,11 @@ yarn-error.*
 # local env files
 .env*.local
 .env
+.env.build
 mobile/.env
 web/.env
+web/.env.local
+web/.env.build
 
 # typescript
 *.tsbuildinfo

@@ -156,7 +156,7 @@ const BreakTimes: React.FC = () => {
             <div className="dashboard fade-in">
                 <div className="dashboard-header">
                     <div>
-                        <h1 className="dashboard-title">Break Times Configuration</h1>
+                        <h1 className="dashboard-title"><Clock size={20} /> Break Times Configuration</h1>
                         <p className="dashboard-subtitle">Configure institution-wide break times</p>
                     </div>
                 </div>
@@ -171,7 +171,7 @@ const BreakTimes: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Break Times Configuration</h1>
+                    <h1 className="dashboard-title"><Clock size={20} /> Break Times Configuration</h1>
                     <p className="dashboard-subtitle">Configure institution-wide break times (lunch, recess, etc.)</p>
                 </div>
                 {canEdit && (

@@ -6,6 +6,7 @@ export interface UserPreferences {
     time_format: '12h' | '24h';
     landing_animations: boolean;
     dashboard_animations: boolean;
+    compact_mode: boolean;
     email_notifications: boolean;
     schedule_notifications: boolean;
     announcement_notifications: boolean;
@@ -15,9 +16,10 @@ export interface UserPreferences {
 
 const DEFAULT_PREFERENCES: Omit<UserPreferences, 'user_id' | 'updated_at' | 'created_at'> = {
     theme: 'light',
-    time_format: '24h',
-    landing_animations: true,
+    time_format: '12h',
+    landing_animations: false,
     dashboard_animations: false,
+    compact_mode: false,
     email_notifications: true,
     schedule_notifications: true,
     announcement_notifications: true,
@@ -43,6 +45,7 @@ export async function loadUserPreferences(userId: string): Promise<Omit<UserPref
                 time_format: data.time_format || DEFAULT_PREFERENCES.time_format,
                 landing_animations: data.landing_animations ?? DEFAULT_PREFERENCES.landing_animations,
                 dashboard_animations: data.dashboard_animations ?? DEFAULT_PREFERENCES.dashboard_animations,
+                compact_mode: data.compact_mode ?? DEFAULT_PREFERENCES.compact_mode,
                 email_notifications: data.email_notifications ?? DEFAULT_PREFERENCES.email_notifications,
                 schedule_notifications: data.schedule_notifications ?? DEFAULT_PREFERENCES.schedule_notifications,
                 announcement_notifications: data.announcement_notifications ?? DEFAULT_PREFERENCES.announcement_notifications,
@@ -58,6 +61,7 @@ export async function loadUserPreferences(userId: string): Promise<Omit<UserPref
         time_format: (localStorage.getItem('optisched-time-format') as '12h' | '24h') || DEFAULT_PREFERENCES.time_format,
         landing_animations: localStorage.getItem('optisched-landing-animations') !== 'false',
         dashboard_animations: localStorage.getItem('optisched-dashboard-animations') === 'true',
+        compact_mode: localStorage.getItem('optisched-compact-mode') === 'true',
         email_notifications: localStorage.getItem('optisched-email-notifs') !== 'false',
         schedule_notifications: localStorage.getItem('optisched-schedule-notifs') !== 'false',
         announcement_notifications: localStorage.getItem('optisched-announcement-notifs') !== 'false',
@@ -102,6 +106,10 @@ export function applyPreferencesToDOM(preferences: Omit<UserPreferences, 'user_i
     document.documentElement.setAttribute('data-dashboard-animations', String(preferences.dashboard_animations));
     localStorage.setItem('optisched-landing-animations', String(preferences.landing_animations));
     localStorage.setItem('optisched-dashboard-animations', String(preferences.dashboard_animations));
+
+    // Compact mode
+    document.documentElement.setAttribute('data-compact-mode', String(preferences.compact_mode));
+    localStorage.setItem('optisched-compact-mode', String(preferences.compact_mode));
 
     // Notifications
     localStorage.setItem('optisched-email-notifs', String(preferences.email_notifications));

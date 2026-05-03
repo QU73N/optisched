@@ -124,10 +124,10 @@ const TeacherPreferences: React.FC = () => {
 
     return (
         <div className="prefs-page">
-            <div className="page-header">
+            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <div>
                     <h1>Teaching Preferences</h1>
-                    <p className="subtitle">Set your schedule availability and preferences</p>
+                    <p>Set your schedule availability and preferences</p>
                 </div>
                 <button className={`save-btn ${saved ? 'saved' : ''}`} onClick={handleSave} disabled={saving}>
                     {saving ? <><Loader2 size={16} className="spin" /> Saving...</> : saved ? <><CheckCircle size={16} /> Saved!</> : <><Save size={16} /> Save Preferences</>}
@@ -257,8 +257,6 @@ const TeacherPreferences: React.FC = () => {
 
             <style>{`
                 .prefs-page { display: flex; flex-direction: column; gap: 1.5rem; }
-                .page-header { display: flex; justify-content: space-between; align-items: flex-end; }
-                .subtitle { color: var(--text-secondary); margin-top: 0.25rem; }
 
                 .save-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 10px; background: var(--brand-primary); color: white; border: none; cursor: pointer; font-weight: 500; transition: all 0.2s; }
                 .save-btn:hover { opacity: 0.9; }

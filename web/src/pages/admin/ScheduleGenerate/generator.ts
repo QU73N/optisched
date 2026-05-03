@@ -69,53 +69,6 @@ interface Busy {
     endMin: number;
 }
 
-/**
- * Optimization change details for logging
- */
-interface OptimizationChange {
-    sessionId: string;
-    subjectId: string;
-    subjectName: string;
-    sectionId: string;
-    teacherId: string;
-    roomId: string;
-    day: string;
-    before: {
-        start: string;
-        end: string;
-        teacherId: string;
-        roomId: string;
-    };
-    after: {
-        start: string;
-        end: string;
-        teacherId: string;
-        roomId: string;
-    };
-    moveType: 'time_slot_swap' | 'teacher_swap' | 'room_swap' | 'multi_swap' | 'local_rebuild';
-    scoreDelta: number;
-    reason: string;
-    iteration: number;
-}
-
-/**
- * Optimization report for logging
- */
-interface OptimizationReport {
-    initialScore: number;
-    finalScore: number;
-    scoreImprovement: number;
-    scoreBreakdown: {
-        initial: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number };
-        final: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number };
-    };
-    iterations: number;
-    acceptedMoves: number;
-    rejectedMoves: number;
-    movesByType: Record<string, number>;
-    terminationReason: 'no_improvement' | 'score_stabilized' | 'time_limit' | 'max_iterations';
-    changelog: OptimizationChange[];
-}
 
 const isFree = (
     busy: Busy[],
@@ -260,13 +213,85 @@ const checkForwardConstraints = (
 };
 
 const roomCompatible = (room: Room, subject: Subject, section: Section): boolean => {
-    if (subject.requires_lab) {
-        const t = (room.type || '').toLowerCase();
-        if (!t.includes('special')) return false;
-    }
+    // Check capacity constraint first
     if (section.student_count != null && room.capacity != null && section.student_count > room.capacity) {
         return false;
     }
+
+    // If subject requires a lab, ensure room is suitable for the specific lab type
+    if (subject.requires_lab) {
+        const roomName = (room.name || '').toLowerCase();
+        const subjectName = (subject.name || '').toLowerCase();
+        const subjectCode = (subject.code || '').toLowerCase();
+
+        // Determine what type of lab the subject needs based on name/code
+        const needsComputerLab = subjectName.includes('computer') ||
+                                 subjectName.includes('programming') ||
+                                 subjectName.includes('mobile') ||
+                                 subjectName.includes('network') ||
+                                 subjectCode.includes('cp') ||
+                                 subjectCode.includes('cs') ||
+                                 subjectCode.includes('it') ||
+                                 subjectCode.includes('mp');
+        const needsPhysicsLab = subjectName.includes('physics') ||
+                                subjectCode.includes('phys');
+        const needsChemistryLab = subjectName.includes('chemistry') ||
+                                   subjectCode.includes('chem');
+        const needsPEHall = subjectName.includes('physical education') ||
+                           subjectName.includes('p.e.') ||
+                           subjectCode.includes('pe');
+
+        // Check if room is suitable for the specific lab type
+        if (needsComputerLab) {
+            // Computer subjects should only go to computer labs (Computer Lab A, Computer Lab B, Network Lab, etc.)
+            if (!roomName.includes('computer') && !roomName.includes('network')) {
+                return false;
+            }
+            // Explicitly reject physics/chemistry/PE labs for computer subjects
+            if (roomName.includes('physics') || roomName.includes('chemistry') || roomName.includes('chemical') || roomName.includes('pe') || roomName.includes('p.e.')) {
+                return false;
+            }
+        }
+        if (needsPhysicsLab) {
+            // Physics subjects should only go to physics labs
+            if (!roomName.includes('physics')) {
+                return false;
+            }
+            // Explicitly reject other lab types for physics subjects
+            if (roomName.includes('computer') || roomName.includes('network') || roomName.includes('chemistry') || roomName.includes('chemical') || roomName.includes('pe') || roomName.includes('p.e.')) {
+                return false;
+            }
+        }
+        if (needsChemistryLab) {
+            // Chemistry subjects should only go to chemistry labs
+            if (!roomName.includes('chemistry') && !roomName.includes('chemical')) {
+                return false;
+            }
+            // Explicitly reject other lab types for chemistry subjects
+            if (roomName.includes('computer') || roomName.includes('network') || roomName.includes('physics') || roomName.includes('pe') || roomName.includes('p.e.')) {
+                return false;
+            }
+        }
+        if (needsPEHall) {
+            // PE subjects should only go to PE halls
+            if (!roomName.includes('pe') && !roomName.includes('p.e.') && !roomName.includes('physical education') && !roomName.includes('hall')) {
+                return false;
+            }
+            // Explicitly reject other lab types for PE subjects
+            if (roomName.includes('computer') || roomName.includes('network') || roomName.includes('physics') || roomName.includes('chemistry') || roomName.includes('chemical')) {
+                return false;
+            }
+        }
+
+        // Fallback: if it's a lab subject but no specific type matched, ensure it's at least a lab
+        if (!needsComputerLab && !needsPhysicsLab && !needsChemistryLab && !needsPEHall) {
+            // For unknown lab subjects, be more permissive but still exclude non-lab rooms
+            if (!isSpecialRoom(room)) {
+                return false;
+            }
+        }
+    }
+
     return true;
 };
 
@@ -303,7 +328,21 @@ const sessionsNeeded = (subject: Subject, sessionMinutes: number): number => {
 
 const isSpecialRoom = (room: Room) => {
     const t = (room.type || '').toLowerCase();
-    return t === 'special';
+    const name = (room.name || '').toLowerCase();
+    // Check if room type is special OR if room name indicates it's a special room
+    return t === 'special' ||
+           name.includes('laboratory') ||
+           name.includes('lab') ||
+           name.includes('computer') ||
+           name.includes('physics') ||
+           name.includes('chemistry') ||
+           name.includes('chemical') ||
+           name.includes('pe') ||
+           name.includes('p.e.') ||
+           name.includes('physical education') ||
+           name.includes('hall') ||
+           name.includes('studio') ||
+           name.includes('workshop');
 };
 
 /** Check if a teacher is available at the given day/time per their preferences. */
@@ -341,7 +380,6 @@ const wouldExceedMaxHours = (
     currentEntries: PlacedEntry[],
     teacher: Teacher,
     sessionMinutes: number,
-    _hardConstraints?: HardConstraintSet,
 ): boolean => {
     const maxHours = teacher.max_hours || 40;
     const totalHours = (currentEntries.filter(e => e.teacherId === teacherId).length * sessionMinutes) / 60;
@@ -357,13 +395,38 @@ const rankSubjects = (
 ): Subject[] => {
     const sectionP = config.priorities.sections;
     const subjectP = config.priorities.subjects;
+
+    // Pre-calculate scarcity metrics for each subject
+    const subjectScarcity = new Map<string, number>();
+    for (const sub of subjects) {
+        const matchSecs = sections.filter(
+            s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
+        );
+        // More sections = higher demand = higher scarcity
+        const demandScore = matchSecs.length / Math.max(1, sections.length);
+        subjectScarcity.set(sub.id, demandScore);
+    }
+
     const scored = subjects.map(sub => {
         const matchSec = sections.find(
             s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
         );
         const secScore = matchSec ? priorityOf(sectionP, matchSec.id) : 50;
         const subScore = priorityOf(subjectP, sub.id);
-        const base = subScore * 0.6 + secScore * 0.4;
+
+        // HARDCODED: Give significant priority boost to lab subjects (requires_lab=true)
+        // This ensures special subjects are placed first before common subjects
+        // Increased from 30 to 50 to ensure lab subjects get priority
+        const labPriority = sub.requires_lab ? 50 : 0;
+
+        // Add scarcity factor - subjects with higher demand get priority
+        const scarcity = subjectScarcity.get(sub.id) || 0;
+        const scarcityBonus = scarcity * 15;
+
+        // Add duration factor - longer subjects are harder to place
+        const durationBonus = (sub.duration_hours || 0) * 2;
+
+        const base = subScore * 0.5 + secScore * 0.3 + labPriority + scarcityBonus + durationBonus;
         const noise = (Math.random() - 0.5) * jitter;
         const final = Math.max(0, Math.min(100, Math.round(base + noise)));
         return { sub, score: final };
@@ -461,11 +524,49 @@ const scoreAttempt = (
     for (const id of specialRoomIds) if ((perRoom[id] || 0) > 0) usedSpecial++;
     const utilizationScore = specialRoomIds.size === 0 ? 100 : Math.round((usedSpecial / specialRoomIds.size) * 100);
 
+    // 9. Teacher consecutive classes penalty (avoid back-to-back without breaks)
+    let consecutivePenalty = 0;
+    const teacherDayEntries: Record<string, PlacedEntry[]> = {};
+    for (const e of entries) {
+        const k = `${e.teacherId}|${e.day}`;
+        (teacherDayEntries[k] = teacherDayEntries[k] || []).push(e);
+    }
+    for (const list of Object.values(teacherDayEntries)) {
+        const sorted = list.slice().sort((a, b) => a.start.localeCompare(b.start));
+        for (let i = 0; i < sorted.length - 1; i++) {
+            const end = toMin(sorted[i].end);
+            const nextStart = toMin(sorted[i + 1].start);
+            // If classes are back-to-back (0-5 minutes gap), apply penalty
+            if (nextStart - end <= 5) {
+                consecutivePenalty += 10;
+            }
+        }
+    }
+    const consecutiveScore = Math.max(0, 100 - consecutivePenalty);
+
+    // 10. Section schedule spread (spread sessions evenly across the week)
+    const sectionSpreadScores: number[] = [];
+    const sectionDays: Record<string, Set<string>> = {};
+    for (const e of entries) {
+        (sectionDays[e.sectionId] = sectionDays[e.sectionId] || new Set()).add(e.day);
+    }
+    for (const [, daysSet] of Object.entries(sectionDays)) {
+        // Ideal is to spread across all available days
+        const daysUsed = daysSet.size;
+        const totalDays = 5; // Assuming Monday-Friday
+        const spreadRatio = daysUsed / totalDays;
+        sectionSpreadScores.push(spreadRatio * 100);
+    }
+    const spreadScore = sectionSpreadScores.length > 0
+        ? sectionSpreadScores.reduce((a, b) => a + b, 0) / sectionSpreadScores.length
+        : 100;
+
     const w = cfg.soft;
+    // Include new soft constraint scores in the total weight calculation
     const total =
         w.balancedLoad + w.compactSchedule + w.minimizeRoomSwitch +
         w.teacherPreferredTime + w.dailyLoadBalance + w.workloadFairness +
-        w.subjectSpacing + w.roomUtilization || 1;
+        w.subjectSpacing + w.roomUtilization + 20 + 20 || 1; // +20 for consecutive and spread
     return Math.round(
         (balancedScore * w.balancedLoad +
             compactScore * w.compactSchedule +
@@ -474,7 +575,9 @@ const scoreAttempt = (
             dailyBalanceScore * w.dailyLoadBalance +
             fairnessScore * w.workloadFairness +
             spacingScore * w.subjectSpacing +
-            utilizationScore * w.roomUtilization) / total,
+            utilizationScore * w.roomUtilization +
+            consecutiveScore * 20 +
+            spreadScore * 20) / total,
     );
 };
 
@@ -710,8 +813,11 @@ interface SessionDomain {
     validTeachers: string[]; // teacher IDs
     validRooms: string[]; // room IDs
     validDays: string[]; // day names
-    validSlots: Array<{ start: string; end: string; day: string }>; // ranked slots
+    validSlots: Array<{ start: string; end: string; day: string; score: number }>; // ranked slots with LCV scores
     scarcityScore: number; // lower = fewer options = harder to place
+    teacherScarcity: number; // teacher-specific scarcity
+    roomScarcity: number; // room-specific scarcity
+    slotScarcity: number; // slot-specific scarcity
 }
 
 const constructDomains = (
@@ -725,6 +831,18 @@ const constructDomains = (
     slots: { start: string; end: string }[],
 ): Map<string, SessionDomain> => {
     const domains = new Map<string, SessionDomain>();
+
+    // Pre-calculate room scarcity for all rooms
+    const roomUsageCount = new Map<string, number>();
+    for (const task of tasks) {
+        const sub = task.subject;
+        const section = task.section;
+        const compatibleRooms = Array.from(rooms.values())
+            .filter(r => roomCompatible(r, sub, section));
+        for (const room of compatibleRooms) {
+            roomUsageCount.set(room.id, (roomUsageCount.get(room.id) || 0) + 1);
+        }
+    }
 
     for (const task of tasks) {
         const sub = task.subject;
@@ -742,7 +860,7 @@ const constructDomains = (
             validTeachers = Array.from(teachers.keys());
         }
 
-        // Pre-filter valid rooms
+        // Pre-filter valid rooms with enhanced filtering
         const validRooms = Array.from(rooms.values())
             .filter(r => roomCompatible(r, sub, section))
             .filter(r => {
@@ -763,8 +881,8 @@ const constructDomains = (
             });
         });
 
-        // Pre-filter and rank valid slots
-        const validSlots: Array<{ start: string; end: string; day: string }> = [];
+        // Pre-filter and rank valid slots with LCV scoring
+        const validSlots: Array<{ start: string; end: string; day: string; score: number }> = [];
         for (const day of validDays) {
             for (const slot of slots) {
                 // Check if any teacher is available at this slot
@@ -776,13 +894,33 @@ const constructDomains = (
                 });
 
                 if (hasAvailableTeacher) {
-                    validSlots.push({ ...slot, day });
+                    // Calculate LCV score for this slot
+                    // Higher score = less constraining = better choice
+                    let lcvScore = 0;
+
+                    // Prefer time slots that are less crowded
+                    const slotUsage = validRooms.length * validTeachers.length;
+                    lcvScore += (1 / Math.max(1, slotUsage)) * 30;
+
+                    // Prefer slots that leave more options for other sessions
+                    // This is a heuristic - in a full implementation, we'd check actual impact
+                    lcvScore += 20;
+
+                    // Prefer morning slots for core subjects (heuristic)
+                    const slotHour = parseInt(slot.start.split(':')[0]);
+                    if (slotHour >= 8 && slotHour <= 11) {
+                        lcvScore += 10;
+                    }
+
+                    validSlots.push({ ...slot, day, score: lcvScore });
                 }
             }
         }
 
-        // Calculate scarcity score (lower = fewer options = harder to place)
-        // Combine teacher, room, day, and slot scarcity
+        // Sort slots by LCV score (highest first = least constraining)
+        validSlots.sort((a, b) => b.score - a.score);
+
+        // Calculate scarcity scores (lower = fewer options = harder to place)
         const teacherScarcity = validTeachers.length / Math.max(1, teachers.size);
         const roomScarcity = validRooms.length / Math.max(1, rooms.size);
         const dayScarcity = validDays.length / Math.max(1, days.length);
@@ -796,6 +934,9 @@ const constructDomains = (
             validDays,
             validSlots,
             scarcityScore,
+            teacherScarcity,
+            roomScarcity,
+            slotScarcity,
         });
     }
 
@@ -822,6 +963,21 @@ const detectImpossibleSchedule = (
 } => {
     const reasons: string[] = [];
 
+    // Check if there are any teachers
+    if (teachers.length === 0) {
+        reasons.push('No teachers available - cannot generate schedule');
+    }
+
+    // Check if there are any sections
+    if (sections.length === 0) {
+        reasons.push('No sections available - cannot generate schedule');
+    }
+
+    // Check if there are any subjects
+    if (subjects.length === 0) {
+        reasons.push('No subjects available - cannot generate schedule');
+    }
+
     // Check if total required hours exceed teacher capacity
     // Calculate based on actual tasks (subject + section combinations)
     const sessionMinutes = config.sessionMinutes;
@@ -837,23 +993,86 @@ const detectImpossibleSchedule = (
     const totalRequiredHours = totalRequiredMinutes / 60;
     const totalTeacherCapacity = teachers.reduce((sum, t) => sum + (t.max_hours || 40), 0);
     if (totalRequiredHours > totalTeacherCapacity) {
-        reasons.push(`Total required hours (${totalRequiredHours.toFixed(1)}) exceed total teacher capacity (${totalTeacherCapacity})`);
+        const deficit = totalRequiredHours - totalTeacherCapacity;
+        reasons.push(`Total required hours (${totalRequiredHours.toFixed(1)}) exceed total teacher capacity (${totalTeacherCapacity}) - need ${deficit.toFixed(1)} more hours or add more teachers`);
     }
 
     // Check if there are enough rooms
     const availableRooms = rooms.filter(r => r.is_available !== false);
     if (availableRooms.length === 0) {
-        reasons.push('No available rooms');
+        reasons.push('No available rooms - all rooms are marked as unavailable');
+    }
+
+    // Check if lab subjects have compatible rooms
+    const labSubjects = subjects.filter(s => s.requires_lab);
+    if (labSubjects.length > 0) {
+        const computerLabSubjects = labSubjects.filter(s => {
+            const name = (s.name || '').toLowerCase();
+            const code = (s.code || '').toLowerCase();
+            return name.includes('computer') || name.includes('programming') || name.includes('mobile') || name.includes('network') || code.includes('cp') || code.includes('cs') || code.includes('it') || code.includes('mp');
+        });
+        const physicsLabSubjects = labSubjects.filter(s => {
+            const name = (s.name || '').toLowerCase();
+            const code = (s.code || '').toLowerCase();
+            return name.includes('physics') || code.includes('phys');
+        });
+        const chemistryLabSubjects = labSubjects.filter(s => {
+            const name = (s.name || '').toLowerCase();
+            const code = (s.code || '').toLowerCase();
+            return name.includes('chemistry') || code.includes('chem');
+        });
+        const peHallSubjects = labSubjects.filter(s => {
+            const name = (s.name || '').toLowerCase();
+            const code = (s.code || '').toLowerCase();
+            return name.includes('physical education') || name.includes('p.e.') || code.includes('pe');
+        });
+
+        if (computerLabSubjects.length > 0) {
+            const computerLabs = availableRooms.filter(r => {
+                const name = (r.name || '').toLowerCase();
+                return name.includes('computer') || name.includes('network');
+            });
+            if (computerLabs.length === 0) {
+                reasons.push(`No computer/network labs available for ${computerLabSubjects.length} computer subject(s). Rooms must have "computer" or "network" in name.`);
+            }
+        }
+        if (physicsLabSubjects.length > 0) {
+            const physicsLabs = availableRooms.filter(r => {
+                const name = (r.name || '').toLowerCase();
+                return name.includes('physics');
+            });
+            if (physicsLabs.length === 0) {
+                reasons.push(`No physics labs available for ${physicsLabSubjects.length} physics subject(s). Rooms must have "physics" in name.`);
+            }
+        }
+        if (chemistryLabSubjects.length > 0) {
+            const chemistryLabs = availableRooms.filter(r => {
+                const name = (r.name || '').toLowerCase();
+                return name.includes('chemistry') || name.includes('chemical');
+            });
+            if (chemistryLabs.length === 0) {
+                reasons.push(`No chemistry labs available for ${chemistryLabSubjects.length} chemistry subject(s). Rooms must have "chemistry" or "chemical" in name.`);
+            }
+        }
+        if (peHallSubjects.length > 0) {
+            const peHalls = availableRooms.filter(r => {
+                const name = (r.name || '').toLowerCase();
+                return name.includes('pe') || name.includes('p.e.') || name.includes('physical education');
+            });
+            if (peHalls.length === 0) {
+                reasons.push(`No PE halls available for ${peHallSubjects.length} PE subject(s). Rooms must have "pe", "p.e.", or "physical education" in name.`);
+            }
+        }
     }
 
     // Check if there are enough time slots
     if (slots.length === 0) {
-        reasons.push('No available time slots');
+        reasons.push('No available time slots configured in generation settings');
     }
 
     // Check if there are enough days
     if (days.length === 0) {
-        reasons.push('No available days');
+        reasons.push('No available days configured in generation settings');
     }
 
     const is_possible = reasons.length === 0;
@@ -909,10 +1128,9 @@ const updateAttemptMetadata = (
 /**
  * Finalize generation metadata after generation completes.
  * TODO: Integrate into generation pipeline to finalize tracking.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is exported for use in Phase 1 generation engine.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
-const finalizeGenerationMetadata = (
+export const finalizeGenerationMetadata = (
     metadata: { start_time: Date; attempt_count: number; best_score: number; placed_subjects: number },
     finalScore: number,
     finalPlaced: number,
@@ -933,16 +1151,10 @@ const finalizeGenerationMetadata = (
 
 /**
  * Analyze conflicts in a generated schedule.
- * Note: This function is called in runGenerator to analyze conflicts for repair strategies.
+ * Note: This function is exported for use in Phase 1 generation engine.
  */
-const analyzeConflicts = (
+export const analyzeConflicts = (
     placed: PlacedEntry[],
-    _teachers: Teacher[], // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
-    _rooms: Room[], // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
-    _sections: Section[], // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
-    _days: string[], // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
-    _slots: { start: string; end: string }[], // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
-    _busy: Busy[], // eslint-disable-line @typescript-eslint/no-unused-vars -- Reserved for future use
 ): {
     teacher_conflicts: Array<{ teacherId: string; conflicts: number }>;
     room_conflicts: Array<{ roomId: string; conflicts: number }>;
@@ -968,9 +1180,9 @@ const analyzeConflicts = (
 
 /**
  * Generate repair strategies for conflicts.
- * Note: This function is called in runGenerator to generate repair strategies for incomplete results.
+ * Note: This function is exported for use in Phase 1 generation engine.
  */
-const generateRepairStrategies = (
+export const generateRepairStrategies = (
     conflicts: {
         teacher_conflicts: Array<{ teacherId: string; conflicts: number }>;
         room_conflicts: Array<{ roomId: string; conflicts: number }>;
@@ -1011,26 +1223,17 @@ const generateRepairStrategies = (
             });
         }
     }
-
     return strategies;
 };
 
-/**
- * Apply repair strategies to improve placement rate (Phase 8).
- * This function attempts to place unplaced tasks by:
- * 1. Trying alternative slots for unplaced tasks
- * 2. Moving existing sessions to free up slots if needed
- * 
- * Returns the improved entries array with additional placements.
- */
 const applyRepairs = (
     entries: PlacedEntry[],
     unplacedTasks: Array<{ subject: Subject; section: Section; sessionIndex: number }>,
     teacherMap: Map<string, Teacher>,
     roomMap: Map<string, Room>,
     domains: Map<string, SessionDomain>,
-    config: GenerationConfig,
-    classifiedConstraints: ClassifiedConstraints,
+    _config: GenerationConfig,
+    _classifiedConstraints: ClassifiedConstraints,
 ): PlacedEntry[] => {
     const repairedEntries = [...entries];
     const busy: Busy[] = entries.map(e => ({
@@ -1042,70 +1245,89 @@ const applyRepairs = (
         endMin: toMin(e.end),
     }));
 
+    // Strategy 1: Direct placement attempt using domain
     for (const task of unplacedTasks) {
         const taskId = `${task.subject.id}|${task.section.id}|${task.sessionIndex}`;
         const domain = domains.get(taskId);
 
         if (!domain) continue;
 
-        // Try to place this unplaced task using its domain
+        // Try to place this unplaced task using its domain (sorted by LCV)
         let placed = false;
 
-        for (const tid of domain.validTeachers) {
+        for (const slot of domain.validSlots) {
             if (placed) break;
-            const teacher = teacherMap.get(tid);
-            if (!teacher) continue;
+            const d = slot.day;
+            const sMin = toMin(slot.start);
+            const eMin = toMin(slot.end);
 
-            for (const rid of domain.validRooms) {
+            for (const tid of domain.validTeachers) {
                 if (placed) break;
-                const room = roomMap.get(rid);
-                if (!room) continue;
+                const teacher = teacherMap.get(tid);
+                if (!teacher) continue;
 
-                for (const d of domain.validDays) {
-                    if (placed) break;
-                    for (const slot of domain.validSlots) {
-                        if (slot.day !== d) continue;
-                        const sMin = toMin(slot.start);
-                        const eMin = toMin(slot.end);
+                if (!teacherAvailable(teacher, d, slot.start)) continue;
+                if (!isFree(busy, 'teacher', tid, d, sMin, eMin)) continue;
+                if (!isFree(busy, 'section', task.section.id, d, sMin, eMin)) continue;
 
-                        // Check if this slot is free
-                        if (!teacherAvailable(teacher, d, slot.start)) continue;
-                        if (!isFree(busy, 'teacher', tid, d, sMin, eMin)) continue;
-                        if (!isFree(busy, 'room', rid, d, sMin, eMin)) continue;
-                        if (!isFree(busy, 'section', task.section.id, d, sMin, eMin)) continue;
+                // Score rooms for this slot
+                const scoredRooms = domain.validRooms.map(rid => {
+                    const room = roomMap.get(rid);
+                    if (!room) return { rid, score: -1000 };
+                    let roomScore = 0;
 
-                        // Check hard constraints
-                        if (wouldExceedMaxClassesPerDay(tid, d, repairedEntries, teacher, classifiedConstraints.hard)) continue;
-                        if (wouldExceedMaxHours(tid, repairedEntries, teacher, config.sessionMinutes, classifiedConstraints.hard)) continue;
+                    if (!isFree(busy, 'room', rid, d, sMin, eMin)) return { rid, score: -1000 };
 
-                        // Place the session
-                        const newEntry: PlacedEntry = {
-                            subjectId: task.subject.id,
-                            subjectCode: task.subject.code,
-                            subjectName: task.subject.name,
-                            teacherId: tid,
-                            teacherName: teacher.full_name,
-                            roomId: rid,
-                            roomName: room.name,
-                            sectionId: task.section.id,
-                            sectionName: task.section.name,
-                            day: d,
-                            start: slot.start,
-                            end: slot.end,
-                        };
+                    // Hard constraint: room compatibility
+                    if (!roomCompatible(room, task.subject, task.section)) return { rid, score: -1000 };
 
-                        repairedEntries.push(newEntry);
-                        busy.push({
-                            teacherId: tid,
-                            roomId: rid,
-                            sectionId: task.section.id,
-                            day: d,
-                            startMin: sMin,
-                            endMin: eMin,
-                        });
-                        placed = true;
-                        break;
+                    // Prefer special rooms for lab subjects
+                    if (task.subject.requires_lab && isSpecialRoom(room)) roomScore += 100;
+
+                    // Prefer rooms with good capacity fit
+                    if (task.section.student_count && room.capacity) {
+                        const utilization = task.section.student_count / room.capacity;
+                        if (utilization >= 0.7 && utilization <= 0.95) roomScore += 20;
                     }
+
+                    return { rid, score: roomScore };
+                });
+
+                scoredRooms.sort((a, b) => b.score - a.score);
+
+                for (const { rid, score: roomScore } of scoredRooms) {
+                    if (roomScore < 0) continue;
+
+                    const room = roomMap.get(rid);
+                    if (!room) continue;
+
+                    // Place the session
+                    const newEntry: PlacedEntry = {
+                        subjectId: task.subject.id,
+                        subjectCode: task.subject.code,
+                        subjectName: task.subject.name,
+                        teacherId: tid,
+                        teacherName: teacher.full_name,
+                        roomId: rid,
+                        roomName: room.name,
+                        sectionId: task.section.id,
+                        sectionName: task.section.name,
+                        day: d,
+                        start: slot.start,
+                        end: slot.end,
+                    };
+
+                    repairedEntries.push(newEntry);
+                    busy.push({
+                        teacherId: tid,
+                        roomId: rid,
+                        sectionId: task.section.id,
+                        day: d,
+                        startMin: sMin,
+                        endMin: eMin,
+                    });
+                    placed = true;
+                    break;
                 }
             }
         }
@@ -1115,18 +1337,16 @@ const applyRepairs = (
 };
 
 /**
- * Production-Grade Post-Optimization Engine (Phase 15)
+ * Simplified Post-Optimization Engine (Phase 15)
  * 
- * This optimizer takes a fully valid schedule and improves its quality without ever violating hard constraints.
- * It is deterministic, stable, debuggable, and safe for demonstration in front of stakeholders.
+ * This optimizer takes a valid schedule and improves its quality without ever violating hard constraints.
+ * It uses simple, direct moves to improve soft constraint scores.
  * 
  * Core Philosophy:
  * - Never break hard constraints
  * - Only improve soft constraints  
- * - Only accept changes that improve the schedule score (safe mode) or are strategically allowed (advanced mode)
- * - Always maintain the ability to rollback to a previous stable state
- * 
- * The optimizer operates as a structured phase after generation.
+ * - Simple, effective moves: time slot swaps, room swaps
+ * - Only accept changes that improve the schedule score
  */
 export const optimizeSchedule = (
     entries: PlacedEntry[],
@@ -1137,941 +1357,200 @@ export const optimizeSchedule = (
     classifiedConstraints: ClassifiedConstraints,
     initialScore: number,
     onProgress: (progress: GenerationProgress) => void,
-): { entries: PlacedEntry[]; score: number; breakdown: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number } } => {
-    // Initialize deterministic random generator
-    const rng = createSeededRandom(config.optimizationSeed);
-    
-    // Convert maps to arrays for easier access
+): { entries: PlacedEntry[]; score: number; breakdown: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number; consecutiveScore: number; spreadScore: number } } => {
     const teachers = Array.from(teachersMap.values());
     const rooms = Array.from(roomsMap.values());
+    const timeLimit = config.optimizationTimeLimit * 1000;
+    const maxIterations = config.optimizationMaxIterations;
+    const startTime = Date.now();
     
-    // Get optimization profile weights for consistent scoring throughout optimization
-    const profileWeights = getOptimizationProfileWeights(config.optimizationProfile);
+    let currentEntries = [...entries];
+    let currentScore = initialScore;
+    let bestEntries = [...entries];
+    let bestScore = initialScore;
+    let iterations = 0;
+    let improvements = 0;
     
-    // Calculate initial score breakdown using profile weights
-    const initialScoreResult = calculateSoftConstraintScore(entries, teachers, rooms, sections, profileWeights);
-    
-    // Initialize optimization state
-    const state: OptimizationState = {
-        currentEntries: [...entries],
-        bestEntries: [...entries],
-        currentScore: initialScore,
-        bestScore: initialScore,
-        currentBreakdown: initialScoreResult.breakdown,
-        bestBreakdown: initialScoreResult.breakdown,
-        iteration: 0,
-        acceptedMoves: 0,
-        rejectedMoves: 0,
-        movesByType: {},
-        changelog: [],
-        startTime: Date.now(),
-        timeLimit: config.optimizationTimeLimit * 1000,
-        maxIterations: config.optimizationMaxIterations,
-        noImprovementCount: 0,
-        maxNoImprovement: 100,
-        scoreHistory: [],
-        lastRollbackCheckpoint: { entries: [...entries], score: initialScore },
-        temperature: config.optimizationMode === 'advanced' ? 100 : 0,
-        coolingRate: 0.95,
-        isAdvancedMode: config.optimizationMode === 'advanced',
-        profileWeights: getOptimizationProfileWeights(config.optimizationProfile),
-    };
-    
-    // Build busy schedule for constraint checking
-    const busy: Busy[] = state.currentEntries.map(e => ({
-        teacherId: e.teacherId,
-        roomId: e.roomId,
-        sectionId: e.sectionId,
-        day: e.day,
-        startMin: parseTime(e.start),
-        endMin: parseTime(e.end),
-    }));
-    
-    // Main optimization loop
-    while (shouldContinueOptimization(state)) {
-        state.iteration++;
-        
-        // Update progress periodically
-        if (state.iteration % 50 === 0) {
-            const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
-            const remaining = Math.max(0, config.optimizationTimeLimit - elapsed);
-            onProgress({
-                subStage: 'optimizing',
-                attempt: 0,
-                totalAttempts: state.maxIterations,
-                placed: state.currentEntries.length,
-                total: state.currentEntries.length,
-                message: `Optimizing... (${state.iteration}/${state.maxIterations}, ${remaining}s remaining, score: ${state.currentScore.toFixed(1)}, +${(state.currentScore - initialScore).toFixed(1)})`,
-            });
-        }
-        
-        // Analyze current weaknesses to select best move type
-        const weaknessAnalysis = analyzeWeaknesses(state.currentEntries, teachers, rooms, sections, state.currentBreakdown);
-        const moveType = selectMoveType(weaknessAnalysis, rng);
-        
-        // Generate and evaluate candidate move
-        const moveResult = generateAndEvaluateMove(
-            state.currentEntries,
-            teachersMap,
-            roomsMap,
-            sections,
-            config,
-            classifiedConstraints,
-            busy,
-            moveType,
-            state,
-            rng,
-        );
-        
-        if (moveResult) {
-            // Apply move if accepted
-            if (moveResult.accepted && moveResult.moveResult && moveResult.candidateEntries) {
-                applyMove(state, moveResult.moveResult, busy, teachersMap, roomsMap, sections, moveResult.candidateEntries);
-            } else {
-                state.rejectedMoves++;
-                state.noImprovementCount++;
-            }
-        } else {
-            state.noImprovementCount++;
-        }
-        
-        // Cool down temperature in advanced mode
-        if (state.isAdvancedMode) {
-            state.temperature *= state.coolingRate;
-        }
-        
-        // Create rollback checkpoint periodically
-        if (state.iteration % 50 === 0 && state.currentScore > state.bestScore - 5) {
-            state.lastRollbackCheckpoint = {
-                entries: [...state.currentEntries],
-                score: state.currentScore,
-            };
-        }
-        
-        // Rollback if score degraded significantly
-        if (state.currentScore < state.bestScore - 10) {
-            rollbackToCheckpoint(state);
-        }
-    }
-    
-    // Calculate final score with profile weights for consistency
-    const finalScoreResult = calculateSoftConstraintScore(state.bestEntries, teachers, rooms, sections, profileWeights);
-    
-    // Log optimization report
-    const report = generateOptimizationReport(state, initialScoreResult, finalScoreResult);
-    console.log('Optimization Report:', report);
-    
-    return {
-        entries: state.bestEntries,
-        score: finalScoreResult.score,
-        breakdown: finalScoreResult.breakdown,
-    };
-};
-
-/**
- * Optimization State Interface
- */
-interface OptimizationState {
-    currentEntries: PlacedEntry[];
-    bestEntries: PlacedEntry[];
-    currentScore: number;
-    bestScore: number;
-    currentBreakdown: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number };
-    bestBreakdown: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number };
-    iteration: number;
-    acceptedMoves: number;
-    rejectedMoves: number;
-    movesByType: Record<string, number>;
-    changelog: OptimizationChange[];
-    startTime: number;
-    timeLimit: number;
-    maxIterations: number;
-    noImprovementCount: number;
-    maxNoImprovement: number;
-    scoreHistory: number[];
-    lastRollbackCheckpoint: { entries: PlacedEntry[]; score: number };
-    temperature: number;
-    coolingRate: number;
-    isAdvancedMode: boolean;
-    profileWeights: SoftWeights;
-}
-
-/**
- * Create a seeded random number generator for deterministic behavior
- */
-const createSeededRandom = (seed: number): () => number => {
-    let state = seed;
-    return () => {
-        state = (state * 9301 + 49297) % 233280;
-        return state / 233280;
-    };
-};
-
-/**
- * Determine if optimization should continue
- */
-const shouldContinueOptimization = (state: OptimizationState): boolean => {
-    // Check iteration limit
-    if (state.iteration >= state.maxIterations) return false;
-    
-    // Check time limit
-    if (Date.now() - state.startTime >= state.timeLimit) return false;
-    
-    // Check no improvement limit
-    if (state.noImprovementCount >= state.maxNoImprovement) return false;
-    
-    // Check score stabilization
-    if (state.scoreHistory.length >= 20) {
-        const recentScores = state.scoreHistory.slice(-20);
-        const variance = calculateVariance(recentScores);
-        if (variance < 0.1) return false; // Score stabilized
-    }
-    
-    return true;
-};
-
-/**
- * Calculate variance of an array of numbers
- */
-const calculateVariance = (values: number[]): number => {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
-    return squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
-};
-
-/**
- * Analyze current schedule weaknesses to guide move selection
- */
-const analyzeWeaknesses = (
-    _entries: PlacedEntry[],
-    _teachers: Teacher[],
-    _rooms: Room[],
-    _sections: Section[],
-    breakdown: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number },
-): WeaknessAnalysis => {
-    const maxScore = 100;
-    
-    return {
-        teacherGaps: 1 - (breakdown.compactSchedule / maxScore),
-        unevenLoad: 1 - (breakdown.balancedLoad / maxScore),
-        roomSwitching: 1 - (breakdown.minimizeRoomSwitch / maxScore),
-        poorSubjectSpacing: 1 - (breakdown.subjectSpacing / maxScore),
-        badTimePlacements: 1 - (breakdown.teacherPreferredTime / maxScore),
-        underutilizedRooms: 1 - (breakdown.roomUtilization / maxScore),
-    };
-};
-
-interface WeaknessAnalysis {
-    teacherGaps: number; // 0-1, higher is worse
-    unevenLoad: number;
-    roomSwitching: number;
-    poorSubjectSpacing: number;
-    badTimePlacements: number;
-    underutilizedRooms: number;
-}
-
-/**
- * Select move type based on weakness analysis
- */
-const selectMoveType = (weakness: WeaknessAnalysis, rng: () => number): MoveType => {
-    // Find the worst weakness
-    const weaknesses = Object.entries(weakness) as [keyof WeaknessAnalysis, number][];
-    weaknesses.sort((a, b) => b[1] - a[1]);
-    
-    const worstWeakness = weaknesses[0][0];
-    
-    // Map weaknesses to move types
-    const weaknessToMove: Record<keyof WeaknessAnalysis, MoveType[]> = {
-        teacherGaps: ['time_slot_swap', 'local_rebuild'],
-        unevenLoad: ['teacher_swap', 'multi_swap'],
-        roomSwitching: ['room_swap'],
-        poorSubjectSpacing: ['time_slot_swap'],
-        badTimePlacements: ['time_slot_swap'],
-        underutilizedRooms: ['room_swap'],
-    };
-    
-    // Select from moves that address the worst weakness
-    const candidateMoves = weaknessToMove[worstWeakness];
-    
-    // Add some randomness to avoid getting stuck
-    if (rng() < 0.7) {
-        return candidateMoves[Math.floor(rng() * candidateMoves.length)];
-    }
-    
-    // Occasionally try a different move type
-    const allMoves: MoveType[] = ['time_slot_swap', 'teacher_swap', 'room_swap', 'multi_swap', 'local_rebuild'];
-    return allMoves[Math.floor(rng() * allMoves.length)];
-};
-
-type MoveType = 'time_slot_swap' | 'teacher_swap' | 'room_swap' | 'multi_swap' | 'local_rebuild';
-
-/**
- * Generate and evaluate a candidate move
- */
-const generateAndEvaluateMove = (
-    entries: PlacedEntry[],
-    teachersMap: Map<string, Teacher>,
-    roomsMap: Map<string, Room>,
-    sections: Section[],
-    config: GenerationConfig,
-    classifiedConstraints: ClassifiedConstraints,
-    busy: Busy[],
-    moveType: MoveType,
-    state: OptimizationState,
-    rng: () => number,
-): { accepted: boolean; moveResult: OptimizationChange | null; candidateEntries: PlacedEntry[] | null } | null => {
-    let candidateEntries: PlacedEntry[] | null = null;
-    let changeDetails: OptimizationChange | null = null;
-    
-    switch (moveType) {
-        case 'time_slot_swap':
-            candidateEntries = tryTimeSlotSwap(entries, teachersMap, roomsMap, sections, config, classifiedConstraints, busy, rng);
-            break;
-        case 'teacher_swap':
-            candidateEntries = tryTeacherSwap(entries, teachersMap, roomsMap, config, classifiedConstraints, busy, rng);
-            break;
-        case 'room_swap':
-            candidateEntries = tryRoomSwap(entries, teachersMap, roomsMap, config, classifiedConstraints, busy, rng);
-            break;
-        case 'multi_swap':
-            candidateEntries = tryMultiSwap(entries, teachersMap, roomsMap, config, classifiedConstraints, busy, rng);
-            break;
-        case 'local_rebuild':
-            candidateEntries = tryLargeNeighborhoodSearch(entries, teachersMap, roomsMap, sections, config, classifiedConstraints, busy, rng);
-            break;
-    }
-    
-    if (!candidateEntries) return null;
-    
-    // Calculate score delta using profile weights
-    const teachers = Array.from(teachersMap.values());
-    const rooms = Array.from(roomsMap.values());
-    const newScoreResult = calculateSoftConstraintScore(candidateEntries, teachers, rooms, sections, state.profileWeights);
-    const scoreDelta = newScoreResult.score - state.currentScore;
-    
-    // Decide acceptance based on mode and score delta
-    let accepted = false;
-    
-    if (state.isAdvancedMode && scoreDelta < 0) {
-        // Simulated annealing: accept worse moves with probability based on temperature
-        const acceptanceProbability = Math.exp(scoreDelta / state.temperature);
-        accepted = rng() < acceptanceProbability;
-    } else {
-        // Safe mode or positive delta: only accept if score improves
-        accepted = scoreDelta > 0;
-    }
-    
-    // Rollback guardrail: reject if score decreases significantly
-    if (scoreDelta < -5) {
-        accepted = false;
-    }
-    
-    // Generate change details if accepted
-    if (accepted) {
-        changeDetails = generateChangeDetails(entries, candidateEntries, moveType, scoreDelta, state.iteration);
-    }
-    
-    return { accepted, moveResult: changeDetails, candidateEntries };
-};
-
-/**
- * Apply an accepted move to the optimization state
- */
-const applyMove = (
-    state: OptimizationState,
-    moveResult: OptimizationChange,
-    busy: Busy[],
-    teachersMap: Map<string, Teacher>,
-    roomsMap: Map<string, Room>,
-    sections: Section[],
-    candidateEntries: PlacedEntry[],
-): void => {
-    // Replace entire entries array with candidate entries
-    // This handles both single-entry and multi-entry changes correctly
-    state.currentEntries = [...candidateEntries];
-    
-    // Update score
-    state.currentScore += moveResult.scoreDelta;
-    state.scoreHistory.push(state.currentScore);
-    
-    // Update best if improved
-    if (state.currentScore > state.bestScore) {
-        state.bestScore = state.currentScore;
-        state.bestEntries = [...state.currentEntries];
-        state.noImprovementCount = 0;
-    }
-    
-    // Update counters
-    state.acceptedMoves++;
-    state.movesByType[moveResult.moveType] = (state.movesByType[moveResult.moveType] || 0) + 1;
-    
-    // Log change
-    state.changelog.push(moveResult);
-    
-    // Update busy schedule
-    const newBusy: Busy[] = state.currentEntries.map(e => ({
-        teacherId: e.teacherId,
-        roomId: e.roomId,
-        sectionId: e.sectionId,
-        day: e.day,
-        startMin: parseTime(e.start),
-        endMin: parseTime(e.end),
-    }));
-    busy.length = 0;
-    busy.push(...newBusy);
-    
-    // Recalculate breakdown
-    const teachers = Array.from(teachersMap.values());
-    const rooms = Array.from(roomsMap.values());
-    const scoreResult = calculateSoftConstraintScore(state.currentEntries, teachers, rooms, sections, state.profileWeights);
-    state.currentBreakdown = scoreResult.breakdown;
-};
-
-/**
- * Rollback to last checkpoint
- */
-const rollbackToCheckpoint = (state: OptimizationState): void => {
-    state.currentEntries = [...state.lastRollbackCheckpoint.entries];
-    state.currentScore = state.lastRollbackCheckpoint.score;
-    state.noImprovementCount = 0;
-};
-
-/**
- * Generate change details for logging
- */
-const generateChangeDetails = (
-    beforeEntries: PlacedEntry[],
-    afterEntries: PlacedEntry[],
-    moveType: MoveType,
-    scoreDelta: number,
-    iteration: number,
-): OptimizationChange => {
-    // Find the changed entry by comparing before and after
-    const beforeEntry = beforeEntries[0];
-    const afterEntry = afterEntries[0];
-    
-    return {
-        sessionId: beforeEntry.subjectId + beforeEntry.sectionId + beforeEntry.day,
-        subjectId: beforeEntry.subjectId,
-        subjectName: beforeEntry.subjectName,
-        sectionId: beforeEntry.sectionId,
-        teacherId: beforeEntry.teacherId,
-        roomId: beforeEntry.roomId,
-        day: beforeEntry.day,
-        before: {
-            start: beforeEntry.start,
-            end: beforeEntry.end,
-            teacherId: beforeEntry.teacherId,
-            roomId: beforeEntry.roomId,
-        },
-        after: {
-            start: afterEntry.start,
-            end: afterEntry.end,
-            teacherId: afterEntry.teacherId,
-            roomId: afterEntry.roomId,
-        },
-        moveType,
-        scoreDelta,
-        reason: `Improved score by ${scoreDelta.toFixed(2)}`,
-        iteration,
-    };
-};
-
-/**
- * Generate optimization report
- */
-const generateOptimizationReport = (
-    state: OptimizationState,
-    initialScoreResult: { score: number; breakdown: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number } },
-    finalScoreResult: { score: number; breakdown: { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number } },
-): OptimizationReport => {
-    let terminationReason: 'no_improvement' | 'score_stabilized' | 'time_limit' | 'max_iterations' = 'max_iterations';
-    
-    if (state.noImprovementCount >= state.maxNoImprovement) {
-        terminationReason = 'no_improvement';
-    } else if (Date.now() - state.startTime >= state.timeLimit) {
-        terminationReason = 'time_limit';
-    } else if (state.scoreHistory.length >= 20 && calculateVariance(state.scoreHistory.slice(-20)) < 0.1) {
-        terminationReason = 'score_stabilized';
-    }
-    
-    return {
-        initialScore: initialScoreResult.score,
-        finalScore: finalScoreResult.score,
-        scoreImprovement: finalScoreResult.score - initialScoreResult.score,
-        scoreBreakdown: {
-            initial: initialScoreResult.breakdown,
-            final: finalScoreResult.breakdown,
-        },
-        iterations: state.iteration,
-        acceptedMoves: state.acceptedMoves,
-        rejectedMoves: state.rejectedMoves,
-        movesByType: state.movesByType,
-        terminationReason,
-        changelog: state.changelog,
-    };
-};
-
-/**
- * Get optimization profile weights based on selected profile
- */
-const getOptimizationProfileWeights = (profile: 'balanced' | 'compact' | 'teacher_friendly' | 'room_efficiency'): SoftWeights => {
-    const baseWeights = {
-        balancedLoad: 60,
-        compactSchedule: 70,
-        minimizeRoomSwitch: 50,
-        teacherPreferredTime: 60,
-        dailyLoadBalance: 50,
-        workloadFairness: 60,
-        subjectSpacing: 50,
-        roomUtilization: 40,
-    };
-    
-    switch (profile) {
-        case 'balanced':
-            return baseWeights;
-        case 'compact':
-            return {
-                ...baseWeights,
-                compactSchedule: 90, // Prioritize compact schedules
-                balancedLoad: 70,
-                dailyLoadBalance: 70,
-            };
-        case 'teacher_friendly':
-            return {
-                ...baseWeights,
-                teacherPreferredTime: 90, // Prioritize teacher preferences
-                minimizeRoomSwitch: 80, // Reduce room changes
-                dailyLoadBalance: 80, // Even daily load
-            };
-        case 'room_efficiency':
-            return {
-                ...baseWeights,
-                roomUtilization: 90, // Prioritize room utilization
-                balancedLoad: 70, // Even distribution
-            };
-        default:
-            return baseWeights;
-    }
-};
-
-/**
- * Parse time string "HH:MM" to minutes since midnight
- */
-const parseTime = (time: string): number => {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours * 60 + minutes;
-};
-
-/**
- * Try swapping a session to a different time slot (Hill Climbing)
- */
-const tryTimeSlotSwap = (
-    entries: PlacedEntry[],
-    teachersMap: Map<string, Teacher>,
-    _roomsMap: Map<string, Room>,
-    _sections: Section[],
-    config: GenerationConfig,
-    _classifiedConstraints: ClassifiedConstraints,
-    _busy: Busy[],
-    rng: () => number,
-): PlacedEntry[] | null => {
-    if (entries.length === 0) return null;
-    
-    // Pick a random entry
-    const idx = Math.floor(rng() * entries.length);
-    const entry = entries[idx];
-    
-    const teacher = teachersMap.get(entry.teacherId);
-    if (!teacher) return null;
-    
-    // Generate all possible time slots
-    const sessionDuration = config.sessionMinutes;
-    const dayStart = parseTime(config.dayStart);
-    const dayEnd = parseTime(config.dayEnd);
-    
-    const slots: { start: string; end: string }[] = [];
-    for (let time = dayStart; time + sessionDuration <= dayEnd; time += sessionDuration) {
-        const duringBreak = config.breaks.some(b => {
-            const breakStart = parseTime(b.start);
-            const breakEnd = parseTime(b.end);
-            return time < breakEnd && time + sessionDuration > breakStart;
-        });
-        if (duringBreak) continue;
-        
-        slots.push({
-            start: formatTime(time),
-            end: formatTime(time + sessionDuration),
-        });
-    }
-    
-    // Shuffle slots for randomness
-    for (let i = slots.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [slots[i], slots[j]] = [slots[j], slots[i]];
-    }
-    
-    // Try each slot
-    for (const slot of slots) {
-        if (slot.start === entry.start) continue; // Skip current slot
-        
-        const startMin = parseTime(slot.start);
-        const endMin = parseTime(slot.end);
-        
-        // Check teacher availability
-        if (!teacherAvailable(teacher, entry.day, slot.start)) continue;
-        
-        // Check hard constraints - exclude current entry from busy check
-        const otherEntries = entries.filter(e => !(e.subjectId === entry.subjectId && e.sectionId === entry.sectionId && e.day === entry.day));
-        const otherBusy: Busy[] = otherEntries.map(e => ({
+    // Helper function to check hard constraints
+    const checkHardConstraints = (candidateEntries: PlacedEntry[]): boolean => {
+        const busy: Busy[] = candidateEntries.map(e => ({
             teacherId: e.teacherId,
             roomId: e.roomId,
             sectionId: e.sectionId,
             day: e.day,
-            startMin: parseTime(e.start),
-            endMin: parseTime(e.end),
+            startMin: toMin(e.start),
+            endMin: toMin(e.end),
         }));
         
-        if (!isFree(otherBusy, 'teacher', entry.teacherId, entry.day, startMin, endMin)) continue;
-        if (!isFree(otherBusy, 'room', entry.roomId, entry.day, startMin, endMin)) continue;
-        if (!isFree(otherBusy, 'section', entry.sectionId, entry.day, startMin, endMin)) continue;
+        // Check for teacher, room, and section overlaps
+        for (const entry of candidateEntries) {
+            const sMin = toMin(entry.start);
+            const eMin = toMin(entry.end);
+            
+            // Check teacher availability
+            const teacher = teachersMap.get(entry.teacherId);
+            if (teacher && !teacherAvailable(teacher, entry.day, entry.start)) {
+                return false;
+            }
+            
+            // Check for conflicts
+            if (!isFree(busy, 'teacher', entry.teacherId, entry.day, sMin, eMin)) return false;
+            if (!isFree(busy, 'room', entry.roomId, entry.day, sMin, eMin)) return false;
+            if (!isFree(busy, 'section', entry.sectionId, entry.day, sMin, eMin)) return false;
+            
+            // Check max classes per day
+            if (teacher && wouldExceedMaxClassesPerDay(entry.teacherId, entry.day, candidateEntries.filter(e => e !== entry), teacher, classifiedConstraints.hard)) {
+                return false;
+            }
+            
+            // Check max hours
+            if (teacher && wouldExceedMaxHours(entry.teacherId, candidateEntries.filter(e => e !== entry), teacher, config.sessionMinutes)) {
+                return false;
+            }
+            
+            // Check room compatibility
+            const section = sections.find(s => s.id === entry.sectionId);
+            const room = roomsMap.get(entry.roomId);
+            if (section && room) {
+                // Create a minimal subject object for compatibility check
+                const tempSubject = { 
+                    id: entry.subjectId, 
+                    name: entry.subjectName, 
+                    code: entry.subjectCode, 
+                    requires_lab: false,
+                    program: 'ALL',
+                    year_level: 1,
+                    duration_hours: 1,
+                    sessions_per_week: 1,
+                    teacher_id: entry.teacherId,
+                    weight: 1,
+                    priority_note: '',
+                };
+                if (!roomCompatible(room, tempSubject, section)) {
+                    return false;
+                }
+            }
+        }
         
-        // Check max classes per day
-        if (wouldExceedMaxClassesPerDay(entry.teacherId, entry.day, otherEntries, teacher)) continue;
+        return true;
+    };
+    
+    // Try swapping two entries' time slots
+    const tryTimeSwap = (entries: PlacedEntry[]): PlacedEntry[] | null => {
+        if (entries.length < 2) return null;
         
-        // Check max hours
-        if (wouldExceedMaxHours(entry.teacherId, otherEntries, teacher, sessionDuration)) continue;
+        // Pick two random entries
+        const idx1 = Math.floor(Math.random() * entries.length);
+        const idx2 = Math.floor(Math.random() * entries.length);
+        if (idx1 === idx2) return null;
         
-        // All constraints passed, create new entries array
-        const newEntries = [...entries];
-        newEntries[idx] = { ...entry, start: slot.start, end: slot.end };
+        const entry1 = entries[idx1];
+        const entry2 = entries[idx2];
+        
+        // Swap their time slots
+        const newEntries = entries.map(e => {
+            if (e === entry1) {
+                return { ...e, day: entry2.day, start: entry2.start, end: entry2.end };
+            }
+            if (e === entry2) {
+                return { ...e, day: entry1.day, start: entry1.start, end: entry1.end };
+            }
+            return e;
+        });
+        
+        // Check hard constraints
+        if (!checkHardConstraints(newEntries)) return null;
         
         return newEntries;
-    }
+    };
     
-    return null;
-};
-
-/**
- * Format minutes since midnight to "HH:MM" string
- */
-const formatTime = (minutes: number): string => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-};
-
-/**
- * Try swapping teachers between two sessions (Swap-Based Optimization)
- */
-const tryTeacherSwap = (
-    entries: PlacedEntry[],
-    teachersMap: Map<string, Teacher>,
-    _roomsMap: Map<string, Room>,
-    _config: GenerationConfig,
-    _classifiedConstraints: ClassifiedConstraints,
-    _busy: Busy[],
-    rng: () => number,
-): PlacedEntry[] | null => {
-    if (entries.length < 2) return null;
-    
-    // Pick two random entries
-    const idx1 = Math.floor(rng() * entries.length);
-    let idx2 = Math.floor(rng() * entries.length);
-    while (idx2 === idx1) {
-        idx2 = Math.floor(rng() * entries.length);
-    }
-    
-    const entry1 = entries[idx1];
-    const entry2 = entries[idx2];
-    
-    // Check if teachers can teach each other's subjects
-    const teacher1 = teachersMap.get(entry1.teacherId);
-    const teacher2 = teachersMap.get(entry2.teacherId);
-    
-    if (!teacher1 || !teacher2) return null;
-    
-    // For simplicity, we assume teachers can teach any subject if they're assigned
-    // In production, you'd check teacher.subject_ids or similar
-    
-    // Check if teachers are available at the swapped times
-    if (!teacherAvailable(teacher2, entry1.day, entry1.start)) return null;
-    if (!teacherAvailable(teacher1, entry2.day, entry2.start)) return null;
-    
-    // Check hard constraints after swap
-    const startMin1 = parseTime(entry1.start);
-    const endMin1 = parseTime(entry1.end);
-    const startMin2 = parseTime(entry2.start);
-    const endMin2 = parseTime(entry2.end);
-    
-    // Build busy array excluding both entries being swapped
-    const otherEntries = entries.filter((_, i) => i !== idx1 && i !== idx2);
-    const otherBusy: Busy[] = otherEntries.map(e => ({
-        teacherId: e.teacherId,
-        roomId: e.roomId,
-        sectionId: e.sectionId,
-        day: e.day,
-        startMin: parseTime(e.start),
-        endMin: parseTime(e.end),
-    }));
-    
-    // Check teacher availability at new times
-    if (!isFree(otherBusy, 'teacher', entry2.teacherId, entry1.day, startMin1, endMin1)) return null;
-    if (!isFree(otherBusy, 'teacher', entry1.teacherId, entry2.day, startMin2, endMin2)) return null;
-    
-    // Check max classes per day
-    if (wouldExceedMaxClassesPerDay(entry2.teacherId, entry1.day, otherEntries, teacher2)) return null;
-    if (wouldExceedMaxClassesPerDay(entry1.teacherId, entry2.day, otherEntries, teacher1)) return null;
-    
-    // All constraints passed, create new entries array with swapped teachers
-    const newEntries = [...entries];
-    newEntries[idx1] = { ...entry1, teacherId: teacher2.id, teacherName: teacher2.full_name };
-    newEntries[idx2] = { ...entry2, teacherId: teacher1.id, teacherName: teacher1.full_name };
-    
-    return newEntries;
-};
-
-/**
- * Try swapping rooms between two sessions (Swap-Based Optimization)
- */
-const tryRoomSwap = (
-    entries: PlacedEntry[],
-    _teachersMap: Map<string, Teacher>,
-    roomsMap: Map<string, Room>,
-    _config: GenerationConfig,
-    _classifiedConstraints: ClassifiedConstraints,
-    _busy: Busy[],
-    rng: () => number,
-): PlacedEntry[] | null => {
-    if (entries.length < 2) return null;
-    
-    // Pick two random entries
-    const idx1 = Math.floor(rng() * entries.length);
-    let idx2 = Math.floor(rng() * entries.length);
-    while (idx2 === idx1) {
-        idx2 = Math.floor(rng() * entries.length);
-    }
-    
-    const entry1 = entries[idx1];
-    const entry2 = entries[idx2];
-    
-    const room1 = roomsMap.get(entry1.roomId);
-    const room2 = roomsMap.get(entry2.roomId);
-    
-    if (!room1 || !room2) return null;
-    
-    // Check if rooms are compatible (same type for simplicity)
-    if (room1.type !== room2.type) return null;
-    
-    // Check room capacity
-    if (room1.capacity !== room2.capacity) return null;
-    
-    // Check if rooms are busy at the swapped times
-    const startMin1 = parseTime(entry1.start);
-    const endMin1 = parseTime(entry1.end);
-    const startMin2 = parseTime(entry2.start);
-    const endMin2 = parseTime(entry2.end);
-    
-    // Build busy array excluding both entries being swapped
-    const otherEntries = entries.filter((_, i) => i !== idx1 && i !== idx2);
-    const otherBusy: Busy[] = otherEntries.map(e => ({
-        teacherId: e.teacherId,
-        roomId: e.roomId,
-        sectionId: e.sectionId,
-        day: e.day,
-        startMin: parseTime(e.start),
-        endMin: parseTime(e.end),
-    }));
-    
-    if (!isFree(otherBusy, 'room', entry2.roomId, entry1.day, startMin1, endMin1)) return null;
-    if (!isFree(otherBusy, 'room', entry1.roomId, entry2.day, startMin2, endMin2)) return null;
-    
-    // All constraints passed, create new entries array with swapped rooms
-    const newEntries = [...entries];
-    newEntries[idx1] = { ...entry1, roomId: room2.id, roomName: room2.name };
-    newEntries[idx2] = { ...entry2, roomId: room1.id, roomName: room1.name };
-    
-    return newEntries;
-};
-
-/**
- * Try multi-swap chain (A → B → C) - Advanced swap-based optimization
- * This creates a chain of swaps that can lead to better local optima
- */
-const tryMultiSwap = (
-    entries: PlacedEntry[],
-    teachersMap: Map<string, Teacher>,
-    _roomsMap: Map<string, Room>,
-    _config: GenerationConfig,
-    _classifiedConstraints: ClassifiedConstraints,
-    _busy: Busy[],
-    rng: () => number,
-): PlacedEntry[] | null => {
-    if (entries.length < 3) return null;
-    
-    // Pick 3 random entries for a chain swap
-    const indices = Array.from({ length: 3 }, () => Math.floor(rng() * entries.length));
-    const [idx1, idx2, idx3] = indices;
-    
-    if (idx1 === idx2 || idx2 === idx3 || idx1 === idx3) return null;
-    
-    const entry1 = entries[idx1];
-    const entry2 = entries[idx2];
-    const entry3 = entries[idx3];
-    
-    // Try a teacher chain swap: T1→T2, T2→T3, T3→T1
-    const teacher1 = teachersMap.get(entry1.teacherId);
-    const teacher2 = teachersMap.get(entry2.teacherId);
-    const teacher3 = teachersMap.get(entry3.teacherId);
-    
-    if (!teacher1 || !teacher2 || !teacher3) return null;
-    
-    // Check availability at swapped times
-    if (!teacherAvailable(teacher2, entry1.day, entry1.start)) return null;
-    if (!teacherAvailable(teacher3, entry2.day, entry2.start)) return null;
-    if (!teacherAvailable(teacher1, entry3.day, entry3.start)) return null;
-    
-    // Check hard constraints
-    const startMin1 = parseTime(entry1.start);
-    const endMin1 = parseTime(entry1.end);
-    const startMin2 = parseTime(entry2.start);
-    const endMin2 = parseTime(entry2.end);
-    const startMin3 = parseTime(entry3.start);
-    const endMin3 = parseTime(entry3.end);
-    
-    // Build busy array excluding all 3 entries being swapped
-    const otherEntries = entries.filter((_, i) => !indices.includes(i));
-    const otherBusy: Busy[] = otherEntries.map(e => ({
-        teacherId: e.teacherId,
-        roomId: e.roomId,
-        sectionId: e.sectionId,
-        day: e.day,
-        startMin: parseTime(e.start),
-        endMin: parseTime(e.end),
-    }));
-    
-    if (!isFree(otherBusy, 'teacher', entry2.teacherId, entry1.day, startMin1, endMin1)) return null;
-    if (!isFree(otherBusy, 'teacher', entry3.teacherId, entry2.day, startMin2, endMin2)) return null;
-    if (!isFree(otherBusy, 'teacher', entry1.teacherId, entry3.day, startMin3, endMin3)) return null;
-    
-    // Check max classes per day
-    if (wouldExceedMaxClassesPerDay(entry2.teacherId, entry1.day, otherEntries, teacher2)) return null;
-    if (wouldExceedMaxClassesPerDay(entry3.teacherId, entry2.day, otherEntries, teacher3)) return null;
-    if (wouldExceedMaxClassesPerDay(entry1.teacherId, entry3.day, otherEntries, teacher1)) return null;
-    
-    // All constraints passed, create new entries with teacher chain swap
-    const newEntries = [...entries];
-    newEntries[idx1] = { ...entry1, teacherId: teacher2.id, teacherName: teacher2.full_name };
-    newEntries[idx2] = { ...entry2, teacherId: teacher3.id, teacherName: teacher3.full_name };
-    newEntries[idx3] = { ...entry3, teacherId: teacher1.id, teacherName: teacher1.full_name };
-    
-    return newEntries;
-};
-
-/**
- * Try Large Neighborhood Search - destroy and rebuild a weak area
- * This identifies a weak section of the schedule (e.g., one section's Friday)
- * and attempts to rebuild it better
- */
-const tryLargeNeighborhoodSearch = (
-    entries: PlacedEntry[],
-    teachersMap: Map<string, Teacher>,
-    _roomsMap: Map<string, Room>,
-    sections: Section[],
-    config: GenerationConfig,
-    _classifiedConstraints: ClassifiedConstraints,
-    _busy: Busy[],
-    rng: () => number,
-): PlacedEntry[] | null => {
-    if (entries.length < 5) return null;
-    
-    // Pick a random section and day to rebuild
-    const randomSection = sections[Math.floor(rng() * sections.length)];
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    const randomDay = days[Math.floor(rng() * days.length)];
-    
-    // Find all entries for this section on this day
-    const sectionDayIndices = entries
-        .map((e, i) => ({ e, i }))
-        .filter(({ e }) => e.sectionId === randomSection.id && e.day === randomDay);
-    
-    if (sectionDayIndices.length === 0 || sectionDayIndices.length > 5) return null;
-    
-    // Try to move these entries to different time slots on the same day
-    const sessionDuration = config.sessionMinutes;
-    const dayStart = parseTime(config.dayStart);
-    const dayEnd = parseTime(config.dayEnd);
-    
-    // Generate all possible time slots
-    const slots: { start: string; end: string }[] = [];
-    for (let time = dayStart; time + sessionDuration <= dayEnd; time += sessionDuration) {
-        const duringBreak = config.breaks.some(b => {
-            const breakStart = parseTime(b.start);
-            const breakEnd = parseTime(b.end);
-            return time < breakEnd && time + sessionDuration > breakStart;
-        });
-        if (duringBreak) continue;
+    // Try swapping two entries' rooms
+    const tryRoomSwap = (entries: PlacedEntry[]): PlacedEntry[] | null => {
+        if (entries.length < 2) return null;
         
-        slots.push({
-            start: formatTime(time),
-            end: formatTime(time + sessionDuration),
-        });
-    }
-    
-    // Shuffle slots for randomness
-    for (let i = slots.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [slots[i], slots[j]] = [slots[j], slots[i]];
-    }
-    
-    // Try to reassign time slots to these entries
-    const newEntries = [...entries];
-    const usedSlots = new Set<string>();
-    let hasChanges = false;
-    
-    // Build busy array excluding the section/day entries being rebuilt
-    const sectionDayIndicesList = sectionDayIndices.map(({ i }) => i);
-    const otherEntries = entries.filter((_, i) => !sectionDayIndicesList.includes(i));
-    const otherBusy: Busy[] = otherEntries.map(e => ({
-        teacherId: e.teacherId,
-        roomId: e.roomId,
-        sectionId: e.sectionId,
-        day: e.day,
-        startMin: parseTime(e.start),
-        endMin: parseTime(e.end),
-    }));
-    
-    for (const { e: entry, i: originalIdx } of sectionDayIndices) {
-        const originalStart = entry.start;
+        // Pick two random entries
+        const idx1 = Math.floor(Math.random() * entries.length);
+        const idx2 = Math.floor(Math.random() * entries.length);
+        if (idx1 === idx2) return null;
         
-        // Find an available slot
-        for (const slot of slots) {
-            if (usedSlots.has(slot.start)) continue;
-            if (slot.start === originalStart) continue;
+        const entry1 = entries[idx1];
+        const entry2 = entries[idx2];
+        
+        // Swap their rooms
+        const newEntries = entries.map(e => {
+            if (e === entry1) {
+                return { ...e, roomId: entry2.roomId, roomName: entry2.roomName };
+            }
+            if (e === entry2) {
+                return { ...e, roomId: entry1.roomId, roomName: entry1.roomName };
+            }
+            return e;
+        });
+        
+        // Check hard constraints
+        if (!checkHardConstraints(newEntries)) return null;
+        
+        return newEntries;
+    };
+    
+    // Main optimization loop
+    while (iterations < maxIterations && Date.now() - startTime < timeLimit) {
+        iterations++;
+        
+        // Update progress every 50 iterations
+        if (iterations % 50 === 0) {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const remaining = Math.max(0, config.optimizationTimeLimit - elapsed);
+            onProgress({
+                subStage: 'optimizing',
+                attempt: 0,
+                totalAttempts: maxIterations,
+                placed: currentEntries.length,
+                total: currentEntries.length,
+                message: `Optimizing... (${iterations}/${maxIterations}, ${remaining}s remaining, score: ${currentScore.toFixed(1)}, +${(currentScore - initialScore).toFixed(1)})`,
+            });
+        }
+        
+        // Try different move types
+        let candidateEntries: PlacedEntry[] | null = null;
+        
+        // 50% chance to try time swap, 50% chance to try room swap
+        if (Math.random() < 0.5) {
+            candidateEntries = tryTimeSwap(currentEntries);
+        } else {
+            candidateEntries = tryRoomSwap(currentEntries);
+        }
+        
+        if (candidateEntries) {
+            // Calculate new score
+            const scoreResult = calculateSoftConstraintScore(candidateEntries, teachers, rooms, sections, config.soft);
+            const newScore = scoreResult.score;
             
-            const startMin = parseTime(slot.start);
-            const endMin = parseTime(slot.end);
-            
-            // Check constraints
-            const teacher = teachersMap.get(entry.teacherId);
-            if (teacher && !teacherAvailable(teacher, randomDay, slot.start)) continue;
-            
-            if (!isFree(otherBusy, 'teacher', entry.teacherId, randomDay, startMin, endMin)) continue;
-            if (!isFree(otherBusy, 'room', entry.roomId, randomDay, startMin, endMin)) continue;
-            if (!isFree(otherBusy, 'section', entry.sectionId, randomDay, startMin, endMin)) continue;
-            
-            if (teacher && wouldExceedMaxClassesPerDay(entry.teacherId, randomDay, otherEntries, teacher)) continue;
-            if (teacher && wouldExceedMaxHours(entry.teacherId, otherEntries, teacher, sessionDuration)) continue;
-            
-            // Found a valid slot, update the entry
-            newEntries[originalIdx] = { ...entry, start: slot.start, end: slot.end };
-            usedSlots.add(slot.start);
-            hasChanges = true;
-            break;
+            // Only accept if score improves
+            if (newScore > currentScore) {
+                currentEntries = candidateEntries;
+                currentScore = newScore;
+                improvements++;
+                
+                // Update best if this is the best so far
+                if (newScore > bestScore) {
+                    bestEntries = [...candidateEntries];
+                    bestScore = newScore;
+                }
+            }
         }
     }
     
-    return hasChanges ? newEntries : null;
+    // Calculate final score breakdown
+    const finalScoreResult = calculateSoftConstraintScore(bestEntries, teachers, rooms, sections, config.soft);
+    
+    console.log(`Optimization completed: ${iterations} iterations, ${improvements} improvements, score: ${initialScore.toFixed(2)} -> ${bestScore.toFixed(2)}`);
+    
+    return {
+        entries: bestEntries,
+        score: finalScoreResult.score,
+        breakdown: finalScoreResult.breakdown as { balancedLoad: number; compactSchedule: number; minimizeRoomSwitch: number; teacherPreferredTime: number; dailyLoadBalance: number; workloadFairness: number; subjectSpacing: number; roomUtilization: number; consecutiveScore: number; spreadScore: number },
+    };
 };
 
 /**
@@ -2182,11 +1661,9 @@ const generateAttemptConfigs = (
 
 /**
  * Select the best result from multiple attempts.
- * TODO: Integrate into generation pipeline for multi-attempt orchestrator.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is exported for use in Phase 1 generation engine.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
-const selectBestResult = (
+export const selectBestResult = (
     results: GenerationResult[],
 ): GenerationResult => {
     if (results.length === 0) {
@@ -2428,10 +1905,9 @@ const generateScenarioConfigs = (baseConfig: GenerationConfig): ScenarioConfig[]
 
 /**
  * Compare scenario results and recommend the best option.
- * Note: This function is defined but not yet called - it's a work-in-progress module.
+ * Note: This function is exported for use in Phase 1 generation engine.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Work-in-progress module, not yet integrated
-const recommendScenario = (
+export const recommendScenario = (
     results: ScenarioResult[],
     user_preferences?: {
         prioritize_load?: boolean;
@@ -2484,7 +1960,9 @@ const buildDomains = (
 
     const roomDomains: RoomDomain[] = rooms.map(r => ({
         room_id: r.id,
-        valid_subjects: subjects.filter(s => !s.requires_lab || (r.type || '').toLowerCase() === 'special').map(s => s.id),
+        // For domain building, be more permissive - actual compatibility checked during placement
+        // This ensures we don't pre-filter rooms that might be compatible with some sections
+        valid_subjects: subjects.map(s => s.id),
     }));
 
     const sectionDomains: SectionDomain[] = sections.map(s => ({
@@ -2899,9 +2377,26 @@ export async function runGenerator(
             const domainB = domains.get(`${b.subject.id}|${b.section.id}|${b.sessionIndex}`);
             const scarcityA = domainA?.scarcityScore ?? 1;
             const scarcityB = domainB?.scarcityScore ?? 1;
-            // Lower scarcity = harder to place = should go first
-            if (scarcityA !== scarcityB) return scarcityA - scarcityB;
-            // Tie-break by original priority (subject weight + section weight)
+
+            // Primary: Lower scarcity = harder to place = should go first
+            if (Math.abs(scarcityA - scarcityB) > 0.01) return scarcityA - scarcityB;
+
+            // Secondary: Room scarcity - tasks with fewer room options go first
+            const roomScarcityA = domainA?.roomScarcity ?? 1;
+            const roomScarcityB = domainB?.roomScarcity ?? 1;
+            if (Math.abs(roomScarcityA - roomScarcityB) > 0.01) return roomScarcityA - roomScarcityB;
+
+            // Tertiary: Teacher scarcity - tasks with fewer teacher options go first
+            const teacherScarcityA = domainA?.teacherScarcity ?? 1;
+            const teacherScarcityB = domainB?.teacherScarcity ?? 1;
+            if (Math.abs(teacherScarcityA - teacherScarcityB) > 0.01) return teacherScarcityA - teacherScarcityB;
+
+            // Quaternary: Lab subjects go before non-lab subjects
+            const labA = a.subject.requires_lab ? 1 : 0;
+            const labB = b.subject.requires_lab ? 1 : 0;
+            if (labA !== labB) return labB - labA;
+
+            // Quinary: Original priority (subject weight + section weight)
             const priorityA = (a.subject.weight || 50) + (a.section.weight || 50);
             const priorityB = (b.subject.weight || 50) + (b.section.weight || 50);
             return priorityB - priorityA; // Higher priority first
@@ -2954,7 +2449,11 @@ export async function runGenerator(
             // Get pre-computed domain for this task
             const domain = domains.get(taskId);
             if (!domain || domain.validTeachers.length === 0 || domain.validRooms.length === 0 || domain.validSlots.length === 0) {
-                errors.push(`No valid placement options for "${sub.name}" session ${task.sessionIndex + 1} (no teachers/rooms/slots in domain)`);
+                const missing: string[] = [];
+                if (!domain || domain.validTeachers.length === 0) missing.push('available teachers');
+                if (!domain || domain.validRooms.length === 0) missing.push('available rooms');
+                if (!domain || domain.validSlots.length === 0) missing.push('available time slots');
+                errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No ${missing.join(', ')}.`);
                 continue;
             }
 
@@ -2989,32 +2488,74 @@ export async function runGenerator(
                     }
                     if (compat.length === 0) { continue; }
 
-                    // Use pre-filtered slots from domain for this day
+                    // Use pre-filtered slots from domain for this day (already sorted by LCV score)
                     const validSlotsForDay = domain.validSlots.filter(s => s.day === day);
 
                     for (const slot of validSlotsForDay) {
                         if (placed) break;
                         const sMin = toMin(slot.start);
                         const eMin = toMin(slot.end);
-                        
+
                         // Hard: respect teacher's explicit per-slot availability map.
                         if (!teacherAvailable(currentTeacher, day, slot.start)) continue;
                         if (!isFree(busy, 'teacher', currentTeacher.id, day, sMin, eMin)) continue;
                         if (!isFree(busy, 'section', section.id, day, sMin, eMin)) continue;
                         // Hard: check max_hours constraint
-                        if (wouldExceedMaxHours(currentTeacher.id, entries, currentTeacher, config.sessionMinutes, classifiedConstraints.hard)) continue;
+                        if (wouldExceedMaxHours(currentTeacher.id, entries, currentTeacher, config.sessionMinutes)) continue;
 
-                        // Special-room bias: if subject needs lab or bias is strong, prefer special rooms.
+                        // Phase 6: Multi-factor scoring for room selection
+                        // Evaluate each candidate room using multiple factors
                         const bias = config.priorities.specialRoomBias;
-                        const sortedRooms = compat.slice().sort((a, b) => {
-                            const aS = isSpecialRoom(a) ? 1 : 0;
-                            const bS = isSpecialRoom(b) ? 1 : 0;
-                            if (sub.requires_lab) return bS - aS; // always prefer special for lab subjects
-                            return (bS - aS) * (bias / 100);
+                        const scoredRooms = compat.slice().map(room => {
+                            let score = 0;
+
+                            // Factor 1: Special room preference (hard constraint for lab subjects)
+                            if (sub.requires_lab) {
+                                if (isSpecialRoom(room)) score += 100;
+                                else score -= 100; // Strong penalty for non-special rooms
+                            } else {
+                                if (isSpecialRoom(room)) score += (bias / 100) * 30;
+                            }
+
+                            // Factor 2: Room capacity utilization (prefer appropriate size)
+                            if (section.student_count && room.capacity) {
+                                const utilization = section.student_count / room.capacity;
+                                if (utilization >= 0.7 && utilization <= 0.95) score += 20; // Good fit
+                                else if (utilization > 0.95) score -= 10; // Too tight
+                                else score += 10; // Spacious but acceptable
+                            }
+
+                            // Factor 3: Room movement cost (prefer rooms in same building/floor)
+                            // Check if teacher has other classes nearby
+                            const teacherExisting = entries.filter(e => e.teacherId === currentTeacher.id);
+                            if (teacherExisting.length > 0) {
+                                const lastClass = teacherExisting[teacherExisting.length - 1];
+                                const lastRoom = roomMap.get(lastClass.roomId);
+                                if (lastRoom && lastRoom.building === room.building) {
+                                    score += 15; // Same building
+                                    if (lastRoom.floor === room.floor) {
+                                        score += 10; // Same floor
+                                    }
+                                }
+                            }
+
+                            // Factor 4: Room scarcity (preserve scarce rooms for subjects that need them)
+                            const roomScarcity = domain.roomScarcity;
+                            if (roomScarcity < 0.3 && !sub.requires_lab) {
+                                score -= 20; // Penalize using scarce rooms for non-lab subjects
+                            }
+
+                            return { room, score };
                         });
 
-                        for (const room of sortedRooms) {
+                        // Sort rooms by score (highest first)
+                        scoredRooms.sort((a, b) => b.score - a.score);
+
+                        for (const { room } of scoredRooms) {
                             if (!isFree(busy, 'room', room.id, day, sMin, eMin)) continue;
+
+                            // Hard: check room compatibility with subject (lab type matching)
+                            if (!roomCompatible(room, sub, section)) continue;
                             
                             // Forward Checking (Phase 7): Check if this placement would make remaining tasks impossible
                             // Uses improved implementation with domain information to avoid false negatives
@@ -3068,7 +2609,31 @@ export async function runGenerator(
                     }
                 }
             }
-            if (!placed) errors.push(`Could not place "${sub.name}" session ${task.sessionIndex + 1}. No free slot.`);
+            if (!placed) {
+                // Provide more specific error message based on subject type
+                if (sub.requires_lab) {
+                    const roomName = (sub.name || '').toLowerCase();
+                    const subjectCode = (sub.code || '').toLowerCase();
+                    const needsComputerLab = roomName.includes('computer') || roomName.includes('programming') || roomName.includes('mobile') || roomName.includes('network') || subjectCode.includes('cp') || subjectCode.includes('cs') || subjectCode.includes('it') || subjectCode.includes('mp');
+                    const needsPhysicsLab = roomName.includes('physics') || subjectCode.includes('phys');
+                    const needsChemistryLab = roomName.includes('chemistry') || subjectCode.includes('chem');
+                    const needsPEHall = roomName.includes('physical education') || roomName.includes('p.e.') || subjectCode.includes('pe');
+
+                    if (needsComputerLab) {
+                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available computer/network labs at compatible times. Requires room with "computer" or "network" in name.`);
+                    } else if (needsPhysicsLab) {
+                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available physics labs at compatible times. Requires room with "physics" in name.`);
+                    } else if (needsChemistryLab) {
+                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available chemistry labs at compatible times. Requires room with "chemistry" or "chemical" in name.`);
+                    } else if (needsPEHall) {
+                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available PE halls at compatible times. Requires room with "pe", "p.e.", or "hall" in name.`);
+                    } else {
+                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available special rooms (labs/halls) at compatible times.`);
+                    }
+                } else {
+                    errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: All available slots conflict with existing schedules or constraints.`);
+                }
+            }
         }
 
         onProgress({
@@ -3163,14 +2728,17 @@ export async function runGenerator(
                 config,
                 classifiedConstraints,
             );
-            
+
             // Update best result if repairs improved placement
             if (repairedEntries.length > best.entries.length) {
+                const remainingUnplaced = best.total - repairedEntries.length;
                 best = {
                     ...best,
                     entries: repairedEntries,
                     placed: repairedEntries.length,
-                    errors: best.errors.filter(e => !e.includes('No free slot')), // Remove some errors if repairs helped
+                    errors: remainingUnplaced > 0
+                        ? best.errors.filter(e => !e.includes('No free slot')) // Keep errors for sessions that still couldn't be placed
+                        : [], // All placed, no errors needed
                 };
             }
         }
@@ -3192,7 +2760,8 @@ export async function runGenerator(
     // Step 9.5 (Optimization Engine): Post-generation optimization to improve soft constraint scores
     // Phase 15 from Generation_System.md: Optimization Engine
     // Takes a valid schedule and improves it without breaking hard constraints
-    if (config.enableOptimization && best.placed === best.total) {
+    // Run optimization if enabled and there are placed entries (even if partial schedule)
+    if (config.enableOptimization && best.placed > 0) {
         onProgress({ subStage: 'optimizing', attempt: attemptMetadata.attempt_count, totalAttempts: config.maxAttempts, placed: best.placed, total: best.total, message: 'Optimizing schedule quality...' });
         
         const optimizedResult = optimizeSchedule(

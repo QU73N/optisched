@@ -3,7 +3,7 @@ import type { Notification } from '../types/database';
 
 export async function createNotification(
     userId: string,
-    type: 'schedule_change' | 'sharing_request' | 'approval' | 'system' | 'reminder',
+    type: 'schedule_change' | 'sharing_request' | 'approval' | 'system' | 'reminder' | 'conflict_alert' | 'announcement',
     title: string,
     message: string,
     data: Record<string, unknown> = {},
@@ -93,10 +93,10 @@ export async function deleteNotification(notificationId: string): Promise<void> 
 }
 
 // Real-time subscription to notifications
-export function subscribeToNotifications(
+export async function subscribeToNotifications(
     callback: (notification: Notification) => void
-): () => void {
-    const { data: authData } = supabase.auth.getUser();
+): Promise<() => void> {
+    const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user;
     if (!user) return () => {};
 
@@ -119,4 +119,133 @@ export function subscribeToNotifications(
     return () => {
         supabase.removeChannel(channel);
     };
+}
+
+// Create a conflict alert notification for admins
+export async function createConflictAlert(
+    conflictCount: number,
+    severity: 'low' | 'medium' | 'high',
+    details?: Record<string, unknown>
+): Promise<void> {
+    const { data: authData } = await supabase.auth.getUser();
+    const user = authData?.user;
+    if (!user) return;
+
+    // Check if user is admin
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    if (profile?.role !== 'admin') return;
+
+    await createNotification(
+        user.id,
+        'conflict_alert',
+        `Schedule Conflicts Detected (${severity.toUpperCase()})`,
+        `${conflictCount} conflict${conflictCount !== 1 ? 's' : ''} found in the schedule. Please review and resolve.`,
+        {
+            conflict_count: conflictCount,
+            severity,
+            timestamp: new Date().toISOString(),
+            ...details,
+        },
+        '/admin/conflicts',
+        24 // Expires in 24 hours
+    );
+}
+
+// Create an announcement for all users
+export async function createAnnouncement(
+    title: string,
+    message: string,
+    actionUrl?: string,
+    expiresHours?: number
+): Promise<number> {
+    const { data: authData } = await supabase.auth.getUser();
+    const user = authData?.user;
+    if (!user) throw new Error('User not authenticated');
+
+    // Check if user is admin
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    if (profile?.role !== 'admin') throw new Error('Only admins can create announcements');
+
+    // Get all active users
+    const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('is_active', true);
+
+    if (error) throw error;
+    if (!profiles) return 0;
+
+    // Create announcement for each user
+    let createdCount = 0;
+    for (const profile of profiles) {
+        try {
+            await createNotification(
+                profile.id,
+                'announcement',
+                title,
+                message,
+                {
+                    created_by: user.id,
+                    created_at: new Date().toISOString(),
+                },
+                actionUrl,
+                expiresHours || 168 // Default 7 days
+            );
+            createdCount++;
+        } catch (err) {
+            console.error(`Failed to create announcement for user ${profile.id}:`, err);
+        }
+    }
+
+    return createdCount;
+}
+
+// Create conflict resolution notification
+export async function createConflictResolutionNotification(
+    conflictsResolved: number,
+    conflictsRemaining: number
+): Promise<void> {
+    const { data: authData } = await supabase.auth.getUser();
+    const user = authData?.user;
+    if (!user) return;
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    if (profile?.role !== 'admin') return;
+
+    const title = conflictsRemaining === 0 
+        ? 'All Conflicts Resolved' 
+        : 'Conflicts Partially Resolved';
+    
+    const message = conflictsRemaining === 0
+        ? `Successfully resolved all ${conflictsResolved} conflicts. The schedule is now conflict-free.`
+        : `Resolved ${conflictsResolved} conflicts. ${conflictsRemaining} conflict${conflictsRemaining !== 1 ? 's' : ''} remain.`;
+
+    await createNotification(
+        user.id,
+        'conflict_alert',
+        title,
+        message,
+        {
+            resolved_count: conflictsResolved,
+            remaining_count: conflictsRemaining,
+            timestamp: new Date().toISOString(),
+        },
+        '/admin/conflicts',
+        24
+    );
 }

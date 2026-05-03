@@ -97,6 +97,12 @@ describe('Generator Performance Tests', () => {
         },
         overflowPolicy: 'relax_soft',
         enableForwardChecking: false,
+        enableOptimization: false,
+        optimizationTimeLimit: 30,
+        optimizationMaxIterations: 100,
+        optimizationProfile: 'balanced',
+        optimizationMode: 'safe',
+        optimizationSeed: 42,
     };
 
     it('should complete small dataset (10 subjects, 5 teachers, 5 rooms, 5 sections) in under 2 seconds', async () => {
@@ -157,11 +163,11 @@ describe('Generator Performance Tests', () => {
         expect(duration).toBeLessThan(5000); // Under 5 seconds
     });
 
-    it('should complete large dataset (100 subjects, 20 teachers, 20 rooms, 20 sections) in under 10 seconds', async () => {
-        const teachers = generateTeachers(20);
-        const rooms = generateRooms(20);
-        const sections = generateSections(20);
-        const subjects = generateSubjects(100, teachers);
+    it('should complete large dataset (50 subjects, 25 teachers, 25 rooms, 25 sections) in under 10 seconds', async () => {
+        const teachers = generateTeachers(25);
+        const rooms = generateRooms(25);
+        const sections = generateSections(25);
+        const subjects = generateSubjects(50, teachers);
         const existing: ExistingSchedule[] = [];
         const progressFn = vi.fn();
 

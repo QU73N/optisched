@@ -93,7 +93,7 @@ const Analytics: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Analytics & Insights</h1>
+                    <h1 className="dashboard-title"><BarChart3 size={20} /> Analytics & Insights</h1>
                     <p className="dashboard-subtitle">Schedule performance and resource utilization</p>
                 </div>
             </div>

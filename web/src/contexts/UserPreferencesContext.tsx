@@ -14,9 +14,10 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     const { profile } = useAuth();
     const [preferences, setPreferences] = useState<Omit<UserPreferences, 'user_id' | 'updated_at' | 'created_at'>>({
         theme: 'light',
-        time_format: '24h',
-        landing_animations: true,
+        time_format: '12h',
+        landing_animations: false,
         dashboard_animations: false,
+        compact_mode: false,
         email_notifications: true,
         schedule_notifications: true,
         announcement_notifications: true,

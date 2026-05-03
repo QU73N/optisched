@@ -118,8 +118,8 @@ const StudentHelp: React.FC = () => {
                         <div className="dash-list" style={{ gap: 8 }}>
                             {FAQS.map((f, i) => (
                                 <details key={i} style={{ padding: '8px 12px', background: 'var(--bg-inset)', borderRadius: 'var(--radius-sm)' }}>
-                                    <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{f.q}</summary>
-                                    <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-secondary)' }}>{f.a}</div>
+                                    <summary className="font-semibold text-base" style={{ cursor: 'pointer', color: 'var(--text-primary)' }}>{f.q}</summary>
+                                    <div className="text-sm" style={{ marginTop: 6, color: 'var(--text-secondary)' }}>{f.a}</div>
                                 </details>
                             ))}
                         </div>

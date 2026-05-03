@@ -1,13 +1,13 @@
 import { supabase } from '../lib/supabase';
 import { createNotification } from './notificationService';
 
-export interface InstitutionalPolicy {
+export interface SystemRule {
     id: string;
-    policy_key: string;
-    policy_value: string;
-    description: string;
-    is_active: boolean;
-    created_at: string;
+    rule_key: string;
+    rule_value: unknown;
+    description: string | null;
+    category: string;
+    role_overrides: Record<string, unknown>;
     updated_at: string;
 }
 
@@ -37,22 +37,29 @@ export interface SaveGenerationMetadataInput {
     created_by: string | null;
 }
 
-export async function getInstitutionalPolicies(): Promise<InstitutionalPolicy[]> {
+/**
+ * Get system rules for generation configuration
+ * Uses system_rules table instead of institutional_policies
+ */
+export async function getSystemRules(): Promise<SystemRule[]> {
     const { data, error } = await supabase
-        .from('institutional_policies')
-        .select('*')
-        .eq('is_active', true);
+        .from('system_rules')
+        .select('*');
 
     if (error) throw error;
     return data || [];
 }
 
-export async function getPolicyValue(key: string): Promise<string | null> {
+/**
+ * Get a specific system rule value
+ * @param key - The rule key to fetch
+ * @returns The rule value or null if not found
+ */
+export async function getRuleValue(key: string): Promise<unknown> {
     const { data, error } = await supabase
-        .from('institutional_policies')
-        .select('policy_value')
-        .eq('policy_key', key)
-        .eq('is_active', true)
+        .from('system_rules')
+        .select('rule_value')
+        .eq('rule_key', key)
         .single();
 
     if (error) {
@@ -63,15 +70,19 @@ export async function getPolicyValue(key: string): Promise<string | null> {
         throw error;
     }
 
-    return data?.policy_value || null;
+    return data?.rule_value ?? null;
 }
 
-export async function getPoliciesAsRecord(): Promise<Record<string, string>> {
-    const policies = await getInstitutionalPolicies();
-    const record: Record<string, string> = {};
+/**
+ * Get all system rules as a record
+ * @returns Record of rule_key -> rule_value
+ */
+export async function getRulesAsRecord(): Promise<Record<string, unknown>> {
+    const rules = await getSystemRules();
+    const record: Record<string, unknown> = {};
 
-    for (const policy of policies) {
-        record[policy.policy_key] = policy.policy_value;
+    for (const rule of rules) {
+        record[rule.rule_key] = rule.rule_value;
     }
 
     return record;

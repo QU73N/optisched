@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { X, CheckCircle, AlertTriangle, AlertCircle, Info } from 'lucide-react';
 
+/* eslint-disable react-refresh/only-export-components */
+
 interface ToastOptions {
     id?: string;
     title: string;
@@ -85,19 +87,19 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const getIcon = (type?: string) => {
         switch (type) {
-            case 'success': return <CheckCircle size={22} color="#10b981" />;
-            case 'error': return <AlertCircle size={22} color="#ef4444" />;
-            case 'warning': return <AlertTriangle size={22} color="#f59e0b" />;
-            default: return <Info size={22} color="#3b82f6" />;
+            case 'success': return <CheckCircle size={22} style={{ color: 'var(--accent-success, #3FAF73)' }} />;
+            case 'error': return <AlertCircle size={22} style={{ color: 'var(--accent-error, #E05D5D)' }} />;
+            case 'warning': return <AlertTriangle size={22} style={{ color: 'var(--accent-warning, #E6A23C)' }} />;
+            default: return <Info size={22} style={{ color: 'var(--accent-primary, #4988C4)' }} />;
         }
     };
 
     const getAccentColor = (type?: string) => {
         switch (type) {
-            case 'success': return '#10b981';
-            case 'error': return '#ef4444';
-            case 'warning': return '#f59e0b';
-            default: return '#3b82f6';
+            case 'success': return 'var(--accent-success, #3FAF73)';
+            case 'error': return 'var(--accent-error, #E05D5D)';
+            case 'warning': return 'var(--accent-warning, #E6A23C)';
+            default: return 'var(--accent-primary, #4988C4)';
         }
     };
 
@@ -154,9 +156,9 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 .toast-hidden { opacity: 0; transform: translateX(100px); pointer-events: none; }
 
                 .toast-box {
-                    background: rgba(15, 23, 42, 0.95);
+                    background: var(--bg-elevated, rgba(15, 23, 42, 0.95));
                     backdrop-filter: blur(20px);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
                     border-left: 4px solid;
                     border-radius: 12px;
                     padding: 16px 20px;
@@ -173,19 +175,19 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
                 .toast-icon { flex-shrink: 0; margin-top: 2px; }
                 .toast-content { flex: 1; }
-                .toast-title { font-size: 14px; font-weight: 600; color: white; margin: 0; }
-                .toast-message { font-size: 13px; color: var(--text-secondary, #94a3b8); margin: 4px 0 0; line-height: 1.4; }
+                .toast-title { font-size: 14px; font-weight: 600; color: var(--text-primary, #E6EDF5); margin: 0; }
+                .toast-message { font-size: 13px; color: var(--text-secondary, #A9B4C2); margin: 4px 0 0; line-height: 1.4; }
 
                 .toast-close {
                     background: none;
                     border: none;
-                    color: var(--text-muted, #64748b);
+                    color: var(--text-muted, #7C8A9A);
                     cursor: pointer;
                     padding: 2px;
                     border-radius: 4px;
                     transition: color 0.2s;
                 }
-                .toast-close:hover { color: white; }
+                .toast-close:hover { color: var(--text-primary, #E6EDF5); }
 
                 .toast-actions {
                     display: flex;
@@ -193,7 +195,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                     justify-content: flex-end;
                     margin-top: 12px;
                     padding-top: 12px;
-                    border-top: 1px solid rgba(255, 255, 255, 0.06);
+                    border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
                 }
 
                 .toast-action-btn {
@@ -205,12 +207,12 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                     transition: all 0.2s;
                     border: none;
                 }
-                .toast-action-btn.primary { background: #3b82f6; color: white; }
-                .toast-action-btn.primary:hover { background: #2563eb; }
-                .toast-action-btn.destructive { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-                .toast-action-btn.destructive:hover { background: rgba(239, 68, 68, 0.25); }
-                .toast-action-btn.cancel { background: rgba(255, 255, 255, 0.05); color: var(--text-secondary, #94a3b8); }
-                .toast-action-btn.cancel:hover { background: rgba(255, 255, 255, 0.1); }
+                .toast-action-btn.primary { background: var(--accent-primary, #4988C4); color: white; }
+                .toast-action-btn.primary:hover { background: var(--accent-primary-hover, #BDE8F5); }
+                .toast-action-btn.destructive { background: var(--accent-error-subtle, rgba(224, 93, 93, 0.15)); color: var(--accent-error, #E05D5D); }
+                .toast-action-btn.destructive:hover { background: var(--accent-error-subtle, rgba(224, 93, 93, 0.25)); }
+                .toast-action-btn.cancel { background: var(--bg-inset, rgba(255, 255, 255, 0.05)); color: var(--text-secondary, #A9B4C2); }
+                .toast-action-btn.cancel:hover { background: var(--bg-hover, rgba(255, 255, 255, 0.1)); }
             `}</style>
         </ToastContext.Provider>
     );

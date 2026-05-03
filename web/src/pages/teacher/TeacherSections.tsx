@@ -140,13 +140,13 @@ const TeacherSections: React.FC = () => {
                             </div>
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                 {r.subject_codes.map(c => (
-                                    <code key={c} style={{ background: 'var(--bg-inset)', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 4, fontSize: 11 }}>{c}</code>
+                                    <code key={c} className="text-xs" style={{ background: 'var(--bg-inset)', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 4 }}>{c}</code>
                                 ))}
                             </div>
                             {perms.ruleEnabled('teachers_can_view_section_rosters') && rosters[r.section_id] && (
                                 <details style={{ marginTop: 10 }}>
-                                    <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>View roster ({rosters[r.section_id].length})</summary>
-                                    <ul style={{ margin: '8px 0 0 16px', fontSize: 12, color: 'var(--text-muted)' }}>
+                                    <summary className="text-sm" style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>View roster ({rosters[r.section_id].length})</summary>
+                                    <ul className="text-sm" style={{ margin: '8px 0 0 16px', color: 'var(--text-muted)' }}>
                                         {rosters[r.section_id].map(s => (
                                             <li key={s.email}>{s.full_name}</li>
                                         ))}

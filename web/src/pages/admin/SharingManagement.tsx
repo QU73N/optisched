@@ -116,7 +116,7 @@ const SharingManagement: React.FC = () => {
             <div className="dashboard fade-in">
                 <div className="dashboard-header">
                     <div>
-                        <h1 className="dashboard-title">Sharing & Collaboration</h1>
+                        <h1 className="dashboard-title"><Share2 size={20} /> Sharing & Collaboration</h1>
                         <p className="dashboard-subtitle">Manage resource sharing with other schedule managers</p>
                     </div>
                 </div>
@@ -131,7 +131,7 @@ const SharingManagement: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Sharing & Collaboration</h1>
+                    <h1 className="dashboard-title"><Share2 size={20} /> Sharing & Collaboration</h1>
                     <p className="dashboard-subtitle">Manage resource sharing with other schedule managers</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => setShowShareModal(true)}>

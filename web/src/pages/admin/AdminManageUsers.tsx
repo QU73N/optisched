@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { CREATABLE_ROLES, ROLE_DISPLAY_NAMES, POWER_ADMIN_ROLES, SELECTABLE_ROLE_DISPLAY, TEACHER_ADDABLE_ROLES } from '../../types/database';
 import type { UserRole } from '../../types/database';
-import { UserPlus, Trash2, Search, X, Loader2, Edit3 } from 'lucide-react';
+import { UserPlus, Trash2, Search, X, Loader2, Edit3, Users } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 interface UserProfile {
@@ -30,27 +31,18 @@ interface ProfileData {
     department?: string | null;
 }
 
-const EMAIL_DOMAIN = 'meycauayan.sti.edu.ph';
 const STUDENT_ROLES = ['student'];
 const TEACHER_ROLES = ['teacher'];
 const ADMIN_VARIANT_ROLES = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'];
 
 const AdminManageUsers: React.FC = () => {
     const { role: currentRole } = useAuth();
+    const navigate = useNavigate();
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
     const [dbSections, setDbSections] = useState<{ id: string; name: string; program: string; year_level: number }[]>([]);
-
-    // Create modal
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [creating, setCreating] = useState(false);
-    const [newUser, setNewUser] = useState({
-        fullName: '', email: '', password: '', role: 'student' as string, studentId: '',
-        section: '', program: '', yearLevel: '', department: '',
-    });
-    const [formError, setFormError] = useState<string | null>(null);
 
     // Edit modal
     const [editUser, setEditUser] = useState<UserProfile | null>(null);
@@ -94,96 +86,13 @@ const AdminManageUsers: React.FC = () => {
             u.section?.toLowerCase().includes(search.toLowerCase()) ||
             u.department?.toLowerCase().includes(search.toLowerCase()) ||
             u.program?.toLowerCase().includes(search.toLowerCase()) ||
-            (ROLE_DISPLAY_NAMES[u.role as UserRole] || '').toLowerCase().includes(search.toLowerCase());
+            (ROLE_DISPLAY_NAMES[u.role as UserRole] || '').toLowerCase().includes(search.toLowerCase()) ||
+            u.year_level?.toString().includes(search) ||
+            u.year_level?.toString().includes(search);
         const matchesRole = roleFilter === 'all' || u.role === roleFilter ||
             (roleFilter === 'admin_all' && ADMIN_VARIANT_ROLES.includes(u.role));
         return matchesSearch && matchesRole;
     });
-
-    const generateEmail = (fullName: string, studentId: string) => {
-        const nameParts = fullName.trim().split(' ');
-        const surname = nameParts[nameParts.length - 1]?.toLowerCase() || 'user';
-        const idStr = studentId?.trim() || Math.random().toString(36).slice(-6);
-        const last6 = idStr.slice(-6);
-        return `${surname}.${last6}@${EMAIL_DOMAIN}`;
-    };
-
-    const getEmailPlaceholder = (role: string) => {
-        if (STUDENT_ROLES.includes(role)) return `e.g. surname.123456@${EMAIL_DOMAIN}`;
-        if (TEACHER_ROLES.includes(role)) return `e.g. surname.123456@${EMAIL_DOMAIN}`;
-        return `e.g. surname.123456@${EMAIL_DOMAIN}`;
-    };
-
-    // ── CREATE ──
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setFormError(null);
-
-        if (!newUser.fullName || !newUser.password) {
-            setFormError('Please fill in name and password.');
-            return;
-        }
-        if (!/^[a-zA-Z\s.-]+$/.test(newUser.fullName)) {
-            setFormError('Name can only contain letters, spaces, dots, and hyphens.');
-            return;
-        }
-        if (newUser.password.length < 8) {
-            setFormError('Password must be at least 8 characters.');
-            return;
-        }
-        if (!creatableRoles.includes(newUser.role as UserRole)) {
-            setFormError('You do not have permission to create this role.');
-            return;
-        }
-
-        let email = newUser.email.trim();
-        if (!email) {
-            email = generateEmail(newUser.fullName, newUser.studentId);
-        }
-
-        setCreating(true);
-        try {
-            let userId: string | null = null;
-
-            // NOTE: Service role operations moved to Edge Functions for security
-            // Using client-side signUp with user_metadata (requires RLS policies)
-            const { data, error } = await supabase.auth.signUp({
-                email, password: newUser.password,
-                options: { data: { role: newUser.role, full_name: newUser.fullName } },
-            });
-            if (error) { setFormError(error.message); setCreating(false); return; }
-            userId = data.user?.id || null;
-
-            if (userId) {
-                await new Promise(r => setTimeout(r, 500));
-                const profileData: ProfileData = {
-                    id: userId, full_name: newUser.fullName, role: newUser.role, email,
-                };
-                // Add role-specific fields
-                if (STUDENT_ROLES.includes(newUser.role)) {
-                    if (newUser.section) profileData.section = newUser.section;
-                    if (newUser.program) profileData.program = newUser.program;
-                    if (newUser.yearLevel) profileData.year_level = parseInt(newUser.yearLevel) || null;
-                }
-                if (TEACHER_ROLES.includes(newUser.role)) {
-                    if (newUser.department) profileData.department = newUser.department;
-                }
-                if (ADMIN_VARIANT_ROLES.includes(newUser.role)) {
-                    if (newUser.department) profileData.department = newUser.department;
-                }
-                await supabase.from('profiles').upsert(profileData, { onConflict: 'id' });
-            }
-
-            setShowCreateModal(false);
-            setNewUser({ fullName: '', email: '', password: '', role: 'student', studentId: '', section: '', program: '', yearLevel: '', department: '' });
-            fetchUsers();
-        } catch (err: unknown) {
-            console.error('Create user error:', err);
-            setFormError(err instanceof Error ? err.message : 'Failed to create account.');
-        } finally {
-            setCreating(false);
-        }
-    };
 
     // ── EDIT ──
     const openEditModal = (user: UserProfile) => {
@@ -264,59 +173,15 @@ const AdminManageUsers: React.FC = () => {
     const teacherCount = users.filter(u => u.role === 'teacher').length;
     const studentCount = users.filter(u => u.role === 'student').length;
 
-    // ── Render role-specific fields ──
-    const renderRoleFields = (role: string, values: Record<string, string>, onChange: (field: string, value: string) => void) => {
-        if (STUDENT_ROLES.includes(role)) {
-            return (
-                <>
-                    <div className="field">
-                        <label className="field-label">PROGRAM</label>
-                        <input className="input" placeholder="e.g. BSIT, BSCS, BSHM" value={values.program || ''} onChange={e => onChange('program', e.target.value)} />
-                    </div>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                        <div className="field" style={{ flex: 1 }}>
-                            <label className="field-label">YEAR LEVEL</label>
-                            <select className="input" value={values.yearLevel || values.year_level || ''} onChange={e => onChange('yearLevel', e.target.value)} style={{ appearance: 'auto' }}>
-                                <option value="">Select</option>
-                                <option value="1">1st Year</option>
-                                <option value="2">2nd Year</option>
-                                <option value="3">3rd Year</option>
-                                <option value="4">4th Year</option>
-                            </select>
-                        </div>
-                        <div className="field" style={{ flex: 1 }}>
-                            <label className="field-label">SECTION</label>
-                            <select className="input" value={values.section || ''} onChange={e => onChange('section', e.target.value)} style={{ appearance: 'auto' }}>
-                                <option value="">Select section</option>
-                                {dbSections.map(s => (
-                                    <option key={s.id} value={s.name}>{s.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                </>
-            );
-        }
-        if (TEACHER_ROLES.includes(role) || ADMIN_VARIANT_ROLES.includes(role)) {
-            return (
-                <div className="field">
-                    <label className="field-label">DEPARTMENT</label>
-                    <input className="input" placeholder="e.g. Computer Science, Information Technology" value={values.department || ''} onChange={e => onChange('department', e.target.value)} />
-                </div>
-            );
-        }
-        return null;
-    };
-
     return (
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">User Management</h1>
+                    <h1 className="dashboard-title"><Users size={20} /> User Management</h1>
                     <p className="dashboard-subtitle">{users.length} registered users</p>
                 </div>
                 {creatableRoles.length > 0 && (
-                    <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+                    <button className="btn btn-primary" onClick={() => navigate('/admin/users/add')}>
                         <UserPlus size={16} />
                         Add User
                     </button>
@@ -408,63 +273,6 @@ const AdminManageUsers: React.FC = () => {
                             )}
                         </tbody>
                     </table>
-                </div>
-            )}
-
-            {/* ── Create User Modal ── */}
-            {showCreateModal && (
-                <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-                    <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Create New Account</h2>
-                            <button className="btn btn-ghost" onClick={() => setShowCreateModal(false)} aria-label="Close modal"><X size={20} /></button>
-                        </div>
-                        <form onSubmit={handleCreate} className="modal-form">
-                            {/* Role */}
-                            <div className="field">
-                                <label className="field-label">ROLE</label>
-                                <div className="role-selector">
-                                    {creatableRoles.map(r => (
-                                        <button key={r} type="button"
-                                            className={`role-btn ${newUser.role === r ? 'role-btn-active' : ''}`}
-                                            onClick={() => setNewUser(p => ({ ...p, role: r }))}
-                                        >{ROLE_DISPLAY_NAMES[r]}</button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="field">
-                                <label className="field-label">FULL NAME</label>
-                                <input className="input" placeholder="Full Name (Surname Last)" value={newUser.fullName} onChange={e => setNewUser(p => ({ ...p, fullName: e.target.value }))} />
-                            </div>
-                            <div className="field">
-                                <label className="field-label">STUDENT / EMPLOYEE ID</label>
-                                <input className="input" placeholder="e.g. 02000123456" value={newUser.studentId} onChange={e => setNewUser(p => ({ ...p, studentId: e.target.value }))} />
-                            </div>
-
-                            {/* Role-specific fields */}
-                            {renderRoleFields(newUser.role, newUser, (field, value) => setNewUser(p => ({ ...p, [field]: value })))}
-
-                            <div className="field">
-                                <label className="field-label">EMAIL (or leave blank for auto-generate)</label>
-                                <input className="input" placeholder={getEmailPlaceholder(newUser.role)} value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} />
-                                <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                                    Format: surname.last6digits@{EMAIL_DOMAIN}
-                                </span>
-                            </div>
-                            <div className="field">
-                                <label className="field-label">PASSWORD</label>
-                                <input className="input" type="password" placeholder="Min 8 characters" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} />
-                            </div>
-
-                            {formError && (
-                                <div className="login-error" role="alert" aria-live="polite">{formError}</div>
-                            )}
-
-                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={creating}>
-                                {creating ? <><Loader2 size={16} className="spin" /> Creating...</> : 'Create Account'}
-                            </button>
-                        </form>
-                    </div>
                 </div>
             )}
 

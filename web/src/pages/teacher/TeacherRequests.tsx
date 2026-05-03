@@ -187,9 +187,9 @@ const TeacherRequests: React.FC = () => {
                                 Submitted {new Date(r.created_at).toLocaleString()}
                                 {r.proposed_day && <> · proposes {r.proposed_day} {r.proposed_time || ''}</>}
                             </div>
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{r.reason}</div>
+                            <div className="text-base" style={{ color: 'var(--text-secondary)' }}>{r.reason}</div>
                             {r.admin_notes && (
-                                <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-inset)', borderLeft: '3px solid var(--accent-primary)', borderRadius: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                <div className="text-sm" style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-inset)', borderLeft: '3px solid var(--accent-primary)', borderRadius: 4, color: 'var(--text-secondary)' }}>
                                     <strong>Admin response:</strong> {r.admin_notes}
                                 </div>
                             )}

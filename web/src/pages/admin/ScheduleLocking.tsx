@@ -97,7 +97,7 @@ const ScheduleLocking: React.FC = () => {
             <div className="dashboard fade-in">
                 <div className="dashboard-header">
                     <div>
-                        <h1 className="dashboard-title">Schedule Locking</h1>
+                        <h1 className="dashboard-title"><Lock size={20} /> Schedule Locking</h1>
                         <p className="dashboard-subtitle">Manage schedule locks</p>
                     </div>
                 </div>
@@ -113,7 +113,7 @@ const ScheduleLocking: React.FC = () => {
             <div className="dashboard fade-in">
                 <div className="dashboard-header">
                     <div>
-                        <h1 className="dashboard-title">Schedule Locking</h1>
+                        <h1 className="dashboard-title"><Lock size={20} /> Schedule Locking</h1>
                         <p className="dashboard-subtitle">Manage schedule locks to prevent unauthorized modifications</p>
                     </div>
                 </div>
@@ -128,7 +128,7 @@ const ScheduleLocking: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Schedule Locking</h1>
+                    <h1 className="dashboard-title"><Lock size={20} /> Schedule Locking</h1>
                     <p className="dashboard-subtitle">Manage schedule locks to prevent unauthorized modifications</p>
                 </div>
             </div>

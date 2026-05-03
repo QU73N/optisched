@@ -103,12 +103,12 @@ const StudentSchedule: React.FC = () => {
                     <p className="dashboard-subtitle">{profile?.program && profile?.section ? `${profile.program} - Section ${profile.section}` : 'Class schedule'}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button className="btn btn-secondary" onClick={exportCSV} style={{ padding: '6px 14px', fontSize: 13 }} disabled={schedules.length === 0}>
+                    <button className="btn btn-secondary btn-sm" onClick={exportCSV} disabled={schedules.length === 0}>
                         <Download size={14} /> Export
                     </button>
                     <div style={{ display: 'flex', gap: 2, background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', padding: 3, border: '1px solid var(--border-default)' }}>
                         {[{ key: 'timeline', icon: <Timer size={14} /> }, { key: 'grid', icon: <LayoutGrid size={14} /> }, { key: 'table', icon: <List size={14} /> }].map(v => (
-                            <button key={v.key} className={`btn ${viewMode === v.key ? 'btn-primary' : 'btn-ghost'}`} style={{ padding: '5px 10px', fontSize: 12 }} onClick={() => setViewMode(v.key as any)}>{v.icon}</button>
+                            <button key={v.key} className={`btn ${viewMode === v.key ? 'btn-primary' : 'btn-ghost'} btn-xs`} onClick={() => setViewMode(v.key as any)}>{v.icon}</button>
                         ))}
                     </div>
                 </div>
@@ -126,24 +126,24 @@ const StudentSchedule: React.FC = () => {
                 <>
                     {/* Day Navigator */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <button className="btn btn-ghost" onClick={() => navigateDay(-1)} style={{ padding: 6 }}><ChevronLeft size={20} /></button>
+                        <button className="btn btn-ghost btn-icon" onClick={() => navigateDay(-1)}><ChevronLeft size={20} /></button>
                         <div style={{ display: 'flex', gap: 6, flex: 1, justifyContent: 'center' }}>
                             {dayOrder.map(day => {
                                 const count = groupedByDay[day]?.length || 0;
                                 const isActive = day === selectedDay;
                                 return (
-                                    <button key={day} onClick={() => setSelectedDay(day)} style={{
+                                    <button key={day} onClick={() => setSelectedDay(day)} className={isActive ? 'font-semibold' : 'font-normal'} style={{
                                         padding: '8px 16px', borderRadius: 10, border: isActive ? '1px solid var(--brand-primary)' : '1px solid var(--border-default)',
                                         background: isActive ? 'rgba(59,130,246,0.12)' : 'transparent', color: isActive ? 'var(--brand-primary)' : 'var(--text-secondary)',
-                                        cursor: 'pointer', fontSize: 13, fontWeight: isActive ? 600 : 400, transition: 'all 0.2s'
+                                        cursor: 'pointer', transition: 'all 0.2s'
                                     }}>
                                         {day.slice(0, 3)}
-                                        {count > 0 && <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)' }}>{count}</span>}
+                                        {count > 0 && <span className="text-xs" style={{ display: 'block', color: 'var(--text-muted)' }}>{count}</span>}
                                     </button>
                                 );
                             })}
                         </div>
-                        <button className="btn btn-ghost" onClick={() => navigateDay(1)} style={{ padding: 6 }}><ChevronRight size={20} /></button>
+                        <button className="btn btn-ghost btn-icon" onClick={() => navigateDay(1)}><ChevronRight size={20} /></button>
                     </div>
 
                     {/* AM/PM chips */}
@@ -159,7 +159,7 @@ const StudentSchedule: React.FC = () => {
                         <div className="card" style={{ padding: '0 0 0 60px', position: 'relative', overflow: 'hidden' }}>
                             {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => (
                                 <div key={i} style={{ position: 'absolute', left: 0, right: 0, top: i * HOUR_HEIGHT, height: HOUR_HEIGHT, borderTop: '1px solid rgba(255,255,255,0.04)', zIndex: 0 }}>
-                                    <span style={{ position: 'absolute', left: 8, top: -8, fontSize: 10, color: 'var(--text-muted)', width: 44, textAlign: 'right' }}>
+                                    <span className="text-xs" style={{ position: 'absolute', left: 8, top: -8, color: 'var(--text-muted)', width: 44, textAlign: 'right' }}>
                                         {formatTime12(`${START_HOUR + i}:00`).replace(':00 ', ' ')}
                                     </span>
                                 </div>
@@ -177,12 +177,12 @@ const StudentSchedule: React.FC = () => {
                                             background: `${color}18`, border: `1px solid ${color}50`, borderLeft: `4px solid ${color}`,
                                             borderRadius: 10, padding: '8px 12px', zIndex: 1, overflow: 'hidden',
                                         }}>
-                                            <div style={{ fontWeight: 600, fontSize: 13 }}>{(s.subject as any)?.code} — {(s.subject as any)?.name}</div>
-                                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, display: 'flex', gap: 12 }}>
+                                            <div className="font-semibold text-base">{(s.subject as any)?.code} — {(s.subject as any)?.name}</div>
+                                            <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 2, display: 'flex', gap: 12 }}>
                                                 <span><Clock size={10} /> {formatTime12(s.start_time)} – {formatTime12(s.end_time)}</span>
                                                 <span><MapPin size={10} /> {(s.room as any)?.name}</span>
                                             </div>
-                                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{(s.teacher as any)?.profile?.full_name || 'TBA'}</div>
+                                            <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 2 }}>{(s.teacher as any)?.profile?.full_name || 'TBA'}</div>
                                         </div>
                                     );
                                 })}
@@ -194,14 +194,14 @@ const StudentSchedule: React.FC = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
                     {dayOrder.filter(d => groupedByDay[d]?.length > 0).map(day => (
                         <div key={day} className="card" style={{ padding: 16 }}>
-                            <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border-default)' }}>{day}</h4>
+                            <h4 className="text-md font-bold" style={{ marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border-default)' }}>{day}</h4>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                 {groupedByDay[day].map(s => (
                                     <div key={s.id} style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', padding: 10, borderLeft: '3px solid var(--accent-success)' }}>
-                                        <div style={{ fontWeight: 600, fontSize: 13 }}>{(s.subject as any)?.code}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}><Clock size={10} style={{ marginRight: 4 }} />{s.start_time?.slice(0,5)} - {s.end_time?.slice(0,5)}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}><MapPin size={10} style={{ marginRight: 4 }} />{(s.room as any)?.name}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{(s.teacher as any)?.profile?.full_name || 'TBA'}</div>
+                                        <div className="font-semibold text-base">{(s.subject as any)?.code}</div>
+                                        <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 2 }}><Clock size={10} style={{ marginRight: 4 }} />{s.start_time?.slice(0,5)} - {s.end_time?.slice(0,5)}</div>
+                                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}><MapPin size={10} style={{ marginRight: 4 }} />{(s.room as any)?.name}</div>
+                                        <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 2 }}>{(s.teacher as any)?.profile?.full_name || 'TBA'}</div>
                                     </div>
                                 ))}
                             </div>
@@ -216,9 +216,9 @@ const StudentSchedule: React.FC = () => {
                             <tbody>
                                 {sorted.map(s => (
                                     <tr key={s.id}>
-                                        <td style={{ fontWeight: 600 }}>{s.day_of_week}</td>
+                                        <td className="font-semibold">{s.day_of_week}</td>
                                         <td><Clock size={14} style={{ color: 'var(--text-muted)', marginRight: 4 }} />{s.start_time?.slice(0,5)} - {s.end_time?.slice(0,5)}</td>
-                                        <td><strong>{(s.subject as any)?.code}</strong><br /><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{(s.subject as any)?.name}</span></td>
+                                        <td><strong>{(s.subject as any)?.code}</strong><br /><span className="text-sm" style={{ color: 'var(--text-muted)' }}>{(s.subject as any)?.name}</span></td>
                                         <td>{(s.teacher as any)?.profile?.full_name || 'TBA'}</td>
                                         <td><MapPin size={14} style={{ color: 'var(--text-muted)', marginRight: 4 }} />{(s.room as any)?.name}</td>
                                     </tr>

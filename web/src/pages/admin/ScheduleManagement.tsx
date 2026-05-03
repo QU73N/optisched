@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, MoreVertical, Scissors, Merge, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
+import { scheduleVersionService } from '../../services/scheduleVersionService';
 import { ADMIN_ROLES } from '../../types/database';
 import type { DayOfWeek, ScheduleStatus } from '../../types/database';
-import { ArrowLeft, GraduationCap, MapPin, Search, Users, Lock, Scissors, Merge, MoreVertical, X, History } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { scheduleAudit, logAudit } from '../../services/auditService';
 import '../admin/Dashboard.css';
 import ScheduleVersionHistory from './ScheduleVersionHistory';
 
@@ -75,16 +78,11 @@ const CATEGORY_META: { key: Category; label: string; icon: React.ComponentType<{
     { key: 'rooms', label: 'Rooms', icon: MapPin, empty: 'No rooms found.' },
 ];
 
-type StatusFilter = 'published' | 'all' | 'draft' | 'submitted';
-const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
-    { key: 'published', label: 'Published' },
-    { key: 'submitted', label: 'Submitted' },
-    { key: 'draft',     label: 'Drafts' },
-    { key: 'all',       label: 'All' },
-];
-
 const ScheduleManagement: React.FC = () => {
-    const { role, roles } = useAuth();
+    const { role, roles, user } = useAuth();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const versionId = searchParams.get('version');
     const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
     const isAdmin = allRoles.some(r => ADMIN_ROLES.includes(r));
     const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
@@ -92,75 +90,256 @@ const ScheduleManagement: React.FC = () => {
     const [category, setCategory] = useState<Category>('sections');
     const [selected, setSelected] = useState<Entity | null>(null);
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('published');
     const [sections, setSections] = useState<{ id: string; name: string; program: string | null; year_level: number | null }[]>([]);
     const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
     const [rooms, setRooms] = useState<{ id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null }[]>([]);
+    const [versionName, setVersionName] = useState<string | null>(null);
+
+    // Initialize scheduleVersionService
+    useEffect(() => {
+        if (user && supabase) {
+            scheduleVersionService.initialize(supabase, user.id);
+        }
+    }, [user]);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
         
-        // Use RPC functions to bypass RLS join issues
-        const [schedRes, secRes, tchRes, roomRes] = await Promise.all([
-            supabase.rpc('get_schedules_with_details'),
-            supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
-            supabase.rpc('get_teachers_with_profiles'),
-            supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
-        ]);
+        if (versionId) {
+            // Load schedules from specific version
+            try {
+                // Get version info
+                const { data: version } = await supabase
+                    .from('schedule_versions')
+                    .select('*')
+                    .eq('id', versionId)
+                    .single();
+                
+                if (version) {
+                    setVersionName(`Version ${version.version_number} (${version.change_type})`);
+                    
+                    // Extract schedules from snapshot
+                    const snapshot = version.snapshot as any;
+                    const schedulesFromVersion: ScheduleRow[] = [];
+                    
+                    if (snapshot && Array.isArray(snapshot)) {
+                        for (const sched of snapshot) {
+                            schedulesFromVersion.push({
+                                id: sched.id,
+                                day_of_week: sched.day_of_week,
+                                start_time: sched.start_time,
+                                end_time: sched.end_time,
+                                status: sched.status,
+                                semester: sched.semester,
+                                academic_year: sched.academic_year,
+                                subject: sched.subject ? { name: sched.subject.name, code: sched.subject.code } : null,
+                                teacher: sched.teacher ? { id: sched.teacher.id, profile: { full_name: sched.teacher.profile?.full_name || 'Unknown' } } : null,
+                                room: sched.room ? { id: sched.room.id, name: sched.room.name, building: sched.room.building } : null,
+                                section: sched.section ? { id: sched.section.id, name: sched.section.name, program: sched.section.program } : null,
+                            });
+                        }
+                    }
+                    
+                    setSchedules(schedulesFromVersion);
+                }
+                
+                // Still load sections, teachers, rooms for filtering
+                const [secRes, tchRes, roomRes] = await Promise.all([
+                    supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
+                    supabase.rpc('get_teachers_with_profiles'),
+                    supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
+                ]);
+                
+                setSections((secRes.data as unknown as typeof sections) || []);
+                setTeachers(
+                    ((tchRes.data as unknown as { id: string; full_name: string }[]) || [])
+                        .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed' }))
+                );
+                setRooms((roomRes.data as unknown as typeof rooms) || []);
+            } catch (error) {
+                console.error('Error loading version:', error);
+            }
+        } else {
+            // Load current schedules
+            const [schedRes, secRes, tchRes, roomRes] = await Promise.all([
+                supabase.rpc('get_schedules_with_details'),
+                supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
+                supabase.rpc('get_teachers_with_profiles'),
+                supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
+            ]);
+            
+            if (schedRes.error) console.error('Schedules error:', schedRes.error);
+            if (tchRes.error) console.error('Teachers error:', tchRes.error);
+            if (secRes.error) console.error('Sections error:', secRes.error);
+            if (roomRes.error) console.error('Rooms error:', roomRes.error);
+            
+            // Map RPC response to ScheduleRow format
+            const schedulesData = (schedRes.data as unknown as Array<{
+                id: string;
+                teacher_id: string;
+                subject_id: string;
+                room_id: string;
+                section_id: string;
+                day_of_week: string;
+                start_time: string;
+                end_time: string;
+                status: string;
+                semester: string;
+                academic_year: string;
+                subject_name: string;
+                subject_code: string;
+                teacher_name: string;
+                room_name: string;
+                room_building: string;
+                section_name: string;
+                section_program: string;
+            }>) || [];
+            
+            setSchedules(schedulesData.map(s => ({
+                id: s.id,
+                day_of_week: s.day_of_week as DayOfWeek,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                status: s.status as ScheduleStatus,
+                semester: s.semester,
+                academic_year: s.academic_year,
+                subject: { name: s.subject_name, code: s.subject_code },
+                teacher: { id: s.teacher_id, profile: { full_name: s.teacher_name } },
+                room: { id: s.room_id, name: s.room_name, building: s.room_building },
+                section: { id: s.section_id, name: s.section_name, program: s.section_program },
+            })));
+            
+            setSections((secRes.data as unknown as typeof sections) || []);
+            setTeachers(
+                ((tchRes.data as unknown as { id: string; full_name: string }[]) || [])
+                    .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed' }))
+            );
+            setRooms((roomRes.data as unknown as typeof rooms) || []);
+        }
         
-        if (schedRes.error) console.error('Schedules error:', schedRes.error);
-        if (tchRes.error) console.error('Teachers error:', tchRes.error);
-        if (secRes.error) console.error('Sections error:', secRes.error);
-        if (roomRes.error) console.error('Rooms error:', roomRes.error);
-        
-        // Map RPC response to ScheduleRow format
-        const schedulesData = (schedRes.data as unknown as Array<{
-            id: string;
-            teacher_id: string;
-            subject_id: string;
-            room_id: string;
-            section_id: string;
-            day_of_week: string;
-            start_time: string;
-            end_time: string;
-            status: string;
-            semester: string;
-            academic_year: string;
-            subject_name: string;
-            subject_code: string;
-            teacher_name: string;
-            room_name: string;
-            room_building: string;
-            section_name: string;
-            section_program: string;
-        }>) || [];
-        
-        setSchedules(schedulesData.map(s => ({
-            id: s.id,
-            day_of_week: s.day_of_week as DayOfWeek,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            status: s.status as ScheduleStatus,
-            semester: s.semester,
-            academic_year: s.academic_year,
-            subject: { name: s.subject_name, code: s.subject_code },
-            teacher: { id: s.teacher_id, profile: { full_name: s.teacher_name } },
-            room: { id: s.room_id, name: s.room_name, building: s.room_building },
-            section: { id: s.section_id, name: s.section_name, program: s.section_program },
-        })));
-        
-        setSections((secRes.data as unknown as typeof sections) || []);
-        setTeachers(
-            ((tchRes.data as unknown as { id: string; full_name: string }[]) || [])
-                .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed' }))
-        );
-        setRooms((roomRes.data as unknown as typeof rooms) || []);
         setLoading(false);
-    }, []);
+    }, [versionId]);
 
+    // Fetch data on mount and when versionId changes
     useEffect(() => {
         fetchData();
-    }, [fetchData]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [versionId]);
+
+    const handleDeleteVersion = async () => {
+        if (!versionId) return;
+
+        if (!confirm('Are you sure you want to delete this version? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            // Get the version to extract schedule IDs
+            const { data: version } = await supabase
+                .from('schedule_versions')
+                .select('*')
+                .eq('id', versionId)
+                .single();
+
+            if (version && version.snapshot) {
+                const snapshot = version.snapshot as any;
+                const schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
+                
+                // Get schedule IDs from the snapshot
+                const scheduleIds = schedules
+                    .map((s: any) => s.id)
+                    .filter((id: string) => id);
+
+                if (scheduleIds.length > 0) {
+                    // Update schedules to draft status (unpublish from distribution)
+                    await supabase
+                        .from('schedules')
+                        .update({ status: 'draft' })
+                        .in('id', scheduleIds);
+
+                    // Log audit for each schedule
+                    for (const scheduleId of scheduleIds) {
+                        await scheduleAudit.deleted(scheduleId, { reason: 'Version deleted' });
+                    }
+                }
+            }
+
+            // Delete the version
+            const { error } = await supabase
+                .from('schedule_versions')
+                .delete()
+                .eq('id', versionId);
+
+            if (error) throw error;
+
+            // Log version deletion
+            await logAudit('delete', 'schedule_versions', versionId, { 
+                version_number: version?.version_number,
+                change_type: version?.change_type,
+                deleted_by: user?.id 
+            });
+
+            // Navigate back to current schedules
+            navigate('/admin/schedules');
+        } catch (err: unknown) {
+            console.error('Failed to delete version:', err);
+            alert('Failed to delete version');
+        }
+    };
+
+    const handleUnpublishVersion = async () => {
+        if (!versionId) return;
+
+        if (!confirm('Are you sure you want to unpublish this version? It will become a draft and students/teachers will not see it.')) {
+            return;
+        }
+
+        try {
+            // Get the version to extract schedule IDs
+            const { data: version } = await supabase
+                .from('schedule_versions')
+                .select('*')
+                .eq('id', versionId)
+                .single();
+
+            if (version) {
+                // Update the version to draft
+                await supabase
+                    .from('schedule_versions')
+                    .update({ change_type: 'draft', is_active: false })
+                    .eq('id', versionId);
+
+                if (version.snapshot) {
+                    const snapshot = version.snapshot as any;
+                    const schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
+                    
+                    // Get schedule IDs from the snapshot
+                    const scheduleIds = schedules
+                        .map((s: any) => s.id)
+                        .filter((id: string) => id);
+
+                    if (scheduleIds.length > 0) {
+                        // Update schedules to draft status
+                        await supabase
+                            .from('schedules')
+                            .update({ status: 'draft' })
+                            .in('id', scheduleIds);
+
+                        // Log audit for each schedule
+                        for (const scheduleId of scheduleIds) {
+                            await scheduleAudit.unpublished(scheduleId, { unpublished_by: user?.id });
+                        }
+                    }
+                }
+
+                alert('Version unpublished successfully');
+                navigate('/admin/schedules/versions');
+            }
+        } catch (err: unknown) {
+            console.error('Failed to unpublish version:', err);
+            alert('Failed to unpublish version');
+        }
+    };
 
     const entities: Entity[] = useMemo(() => {
         if (category === 'sections') {
@@ -182,9 +361,9 @@ const ScheduleManagement: React.FC = () => {
         return rooms.map(r => ({
             id: r.id,
             label: r.name,
-            sub: `${r.type || 'General'} · Floor ${r.floor ?? 'N/A'} · Capacity ${r.capacity ?? 'N/A'}`,
+            sub: `${r.type ? r.type.charAt(0).toUpperCase() + r.type.slice(1) : 'General'} · Floor ${r.floor ?? 'N/A'} · Capacity ${r.capacity ?? 'N/A'}`,
             details: [
-                `Type: ${r.type || 'General'}`,
+                `Type: ${r.type ? r.type.charAt(0).toUpperCase() + r.type.slice(1) : 'General'}`,
                 `Floor: ${r.floor ?? 'N/A'}`,
                 `Capacity: ${r.capacity ?? 'N/A'}`,
             ],
@@ -210,19 +389,10 @@ const ScheduleManagement: React.FC = () => {
         setSearch('');
     };
 
-    const visibleSchedules = useMemo(() => {
-        if (statusFilter === 'all') return schedules;
-        return schedules.filter(s => {
-            const status = (s.status || 'draft').toLowerCase();
-            const normalizedStatus = status === 'approved' ? 'published' : status;
-            return normalizedStatus === statusFilter;
-        });
-    }, [schedules, statusFilter]);
-
     // Count visible schedules (unique entity + semester + academic_year)
     const visibleScheduleCount = useMemo(() => {
         const scheduleMap = new Map<string, boolean>();
-        visibleSchedules.forEach(s => {
+        schedules.forEach(s => {
             let entityId = '';
             if (category === 'sections') entityId = s.section?.id || '';
             else if (category === 'teachers') entityId = s.teacher?.id || '';
@@ -234,7 +404,7 @@ const ScheduleManagement: React.FC = () => {
             scheduleMap.set(key, true);
         });
         return scheduleMap.size;
-    }, [visibleSchedules, category]);
+    }, [schedules, category]);
 
     // Count total schedules (unique entity + semester + academic_year)
     const totalScheduleCount = useMemo(() => {
@@ -271,45 +441,9 @@ const ScheduleManagement: React.FC = () => {
 
     const selectedSchedules = useMemo(() => {
         if (!selected) return [] as ScheduleRow[];
-        // When an entity is selected, show all sessions for that entity (ignore status filter)
+        // When an entity is selected, show all sessions for that entity
         return schedules.filter(selected.match);
     }, [schedules, selected]);
-
-    // Count unique schedules (entity + semester + academic_year) by status
-    const statusCounts = useMemo(() => {
-        // Group sessions by (entity_id, semester, academic_year) and track their status
-        const scheduleMap = new Map<string, string>();
-        
-        schedules.forEach(s => {
-            // Determine the entity ID based on current category
-            let entityId = '';
-            if (category === 'sections') entityId = s.section?.id || '';
-            else if (category === 'teachers') entityId = s.teacher?.id || '';
-            else if (category === 'rooms') entityId = s.room?.id || '';
-            
-            if (!entityId) return;
-            
-            const key = `${entityId}|${s.semester}|${s.academic_year}`;
-            // Normalize 'approved' to 'published'
-            let status = (s.status || 'draft').toLowerCase();
-            if (status === 'approved') status = 'published';
-            
-            // If this schedule already has a status, keep the most significant one
-            // published > submitted > draft
-            const existing = scheduleMap.get(key);
-            if (!existing || (status === 'published' && existing !== 'published') ||
-                (status === 'submitted' && existing === 'draft')) {
-                scheduleMap.set(key, status);
-            }
-        });
-        
-        const counts: Record<string, number> = { all: scheduleMap.size, published: 0, submitted: 0, draft: 0 };
-        scheduleMap.forEach(status => {
-            if (status in counts) counts[status]++;
-        });
-        
-        return counts;
-    }, [schedules, category]);
 
     if (!isAdmin) {
         return (
@@ -325,32 +459,52 @@ const ScheduleManagement: React.FC = () => {
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div>
-                    <h1 className="dashboard-title">Schedule Management</h1>
+                    <h1 className="dashboard-title"><CalendarDays size={20} /> Schedule Management</h1>
                     <p className="dashboard-subtitle">
-                        {selected
-                            ? `Weekly schedule for ${selected.label}`
-                            : `Browse by category · ${visibleScheduleCount} of ${totalScheduleCount} schedules`}
+                        {versionName ? (
+                            <>Viewing version: <strong>{versionName}</strong></>
+                        ) : selected ? (
+                            `Weekly schedule for ${selected.label}`
+                        ) : (
+                            `Browse by category · ${visibleScheduleCount} of ${totalScheduleCount} schedules`
+                        )}
                     </p>
                 </div>
-            </div>
-
-            {!selected && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }} role="radiogroup" aria-label="Status filter">
-                    {STATUS_FILTERS.map(f => (
-                        <button
-                            key={f.key}
-                            type="button"
-                            role="radio"
-                            aria-checked={statusFilter === f.key}
-                            className={`sg-chip ${statusFilter === f.key ? 'sg-chip-active' : ''}`}
-                            onClick={() => setStatusFilter(f.key)}
-                        >
-                            {f.label}
-                            <span className="sg-chip-sub">{statusCounts[f.key] ?? 0}</span>
-                        </button>
-                    ))}
+                <div style={{ display: 'flex', gap: 8 }}>
+                    {versionName && (
+                        <>
+                            <button
+                                onClick={handleUnpublishVersion}
+                                className="btn btn-secondary"
+                                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                            >
+                                <Download size={16} /> Unpublish
+                            </button>
+                            <button
+                                onClick={handleDeleteVersion}
+                                className="btn"
+                                style={{
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    backgroundColor: 'var(--accent-error-10, rgba(200, 75, 75, 0.1))',
+                                    border: '1px solid var(--accent-error)',
+                                    color: 'var(--accent-error)',
+                                }}
+                            >
+                                <Trash2 size={16} /> Delete
+                            </button>
+                            <Link to="/admin/schedules" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <ArrowLeft size={16} /> Back to Current
+                            </Link>
+                        </>
+                    )}
+                    <Link to="/admin/schedules/versions" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        <History size={16} /> View Versions
+                    </Link>
                 </div>
-            )}
+            </div>
 
             {!selected && (
                 <div className="sm-tabs" role="tablist" aria-label="Schedule category">

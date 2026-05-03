@@ -8,7 +8,7 @@ import {
     Shield, FileSearch, CheckCircle, Activity, Server, Save,
     AlertOctagon, ToggleRight, Megaphone, Briefcase, Building2,
     Palette, Inbox, Clock, BookOpen, History, Share2, FileText,
-    User, Calendar, ListChecks, MapPin, HelpCircle, Bot
+    User, Calendar, ListChecks, MapPin, HelpCircle, Bot, Monitor
 } from 'lucide-react';
 
 export interface NavLink {
@@ -53,7 +53,7 @@ export const POWER_ADMIN_NAV: NavGroup[] = [
             { to: '/admin/audit', icon: FileSearch, label: 'Audit Log', powerOnly: true },
             { to: '/admin/activity', icon: Activity, label: 'User Activity' },
             { to: '/admin/sessions', icon: Server, label: 'Sessions' },
-            { to: '/admin/health', icon: Server, label: 'System Health' },
+            { to: '/admin/health', icon: Monitor, label: 'System Health' },
             { to: '/admin/backup', icon: Save, label: 'Backup', powerOnly: true },
             { to: '/admin/override', icon: AlertOctagon, label: 'Override', powerOnly: true },
             { to: '/admin/flags', icon: ToggleRight, label: 'Feature Flags', powerOnly: true },
@@ -91,7 +91,7 @@ export const SYSTEM_ADMIN_NAV: NavGroup[] = [
             { to: '/admin/rules', icon: Shield, label: 'System Rules' },
             { to: '/admin/activity', icon: Activity, label: 'User Activity' },
             { to: '/admin/sessions', icon: Server, label: 'Sessions' },
-            { to: '/admin/health', icon: Server, label: 'System Health' },
+            { to: '/admin/health', icon: Monitor, label: 'System Health' },
             { to: '/admin/lifecycle', icon: Briefcase, label: 'Account Lifecycle' },
             { to: '/admin/structure', icon: Building2, label: 'Departments' },
             { to: '/admin/branding', icon: Palette, label: 'Branding' },
