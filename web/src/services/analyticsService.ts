@@ -267,9 +267,9 @@ class AnalyticsService {
         .eq('period_type', 'daily')
         .eq('period_start', dayStart.toISOString())
         .eq('period_end', dayEnd.toISOString())
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error checking existing analytics:', error);
         return;
       }

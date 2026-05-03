@@ -87,9 +87,10 @@ export async function approveRequest(requestId: string, notes?: string): Promise
         .from('approval_requests')
         .select('resource_type, resource_id, change_data')
         .eq('id', requestId)
-        .single();
+        .maybeSingle();
 
     if (fetchError) throw fetchError;
+    if (!request) throw new Error('Approval request not found');
 
     const { data, error } = await supabase.rpc('approve_request', {
         p_request_id: requestId,

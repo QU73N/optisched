@@ -142,7 +142,7 @@ export async function manualScheduleCleanup(): Promise<CleanupResult> {
         .from('profiles')
         .select('role')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
     
     if (!profile || (profile.role !== 'power_admin' && profile.role !== 'admin')) {
         throw new Error('Only Power Admins can manually trigger cleanup');
@@ -165,7 +165,7 @@ export async function manualNotificationCleanup(): Promise<CleanupResult> {
         .from('profiles')
         .select('role')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
     
     if (!profile || (profile.role !== 'power_admin' && profile.role !== 'admin')) {
         throw new Error('Only Power Admins can manually trigger cleanup');

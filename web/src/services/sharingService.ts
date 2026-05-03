@@ -25,8 +25,9 @@ export async function shareResource(
         .from('sharing_requests')
         .select('*, from_user:profiles(*), to_user:profiles(*)')
         .eq('id', data)
-        .single();
+        .maybeSingle();
 
+    if (!request) throw new Error('Failed to fetch created sharing request');
     return request as SharingRequest;
 }
 

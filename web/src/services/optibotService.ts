@@ -513,7 +513,7 @@ async function executeAction(action: string, params: ActionParams): Promise<{ su
             case 'delete_event': {
                 const { event_title } = params;
                 if (!event_title) return { success: false, message: 'Please specify event title.' };
-                const { data: found } = await dbClient.from('custom_events').select('id').ilike('title', `%${event_title}%`).limit(1).single();
+                const { data: found } = await dbClient.from('custom_events').select('id').ilike('title', `%${event_title}%`).limit(1).maybeSingle();
                 if (!found) return { success: false, message: `No event found matching "${event_title}".` };
                 const { error } = await dbClient.from('custom_events').delete().eq('id', found.id);
                 if (error) return { success: false, message: error.message };
@@ -523,7 +523,7 @@ async function executeAction(action: string, params: ActionParams): Promise<{ su
             case 'delete_user': {
                 const { user_email } = params;
                 if (!user_email) return { success: false, message: 'Please specify user email.' };
-                const { data: found } = await dbClient.from('profiles').select('id').eq('email', user_email).single();
+                const { data: found } = await dbClient.from('profiles').select('id').eq('email', user_email).maybeSingle();
                 if (!found) return { success: false, message: `No user found with email "${user_email}".` };
                 await dbClient.from('profiles').delete().eq('id', found.id);
                 // NOTE: auth.admin.deleteUser requires service role - move to Edge Function
@@ -538,22 +538,22 @@ async function executeAction(action: string, params: ActionParams): Promise<{ su
                 }
                 let subject_id = null, teacher_id = null, room_id = null, section_id = null;
                 if (subject_name) {
-                    const { data } = await dbClient.from('subjects').select('id').ilike('name', `%${subject_name}%`).limit(1).single();
+                    const { data } = await dbClient.from('subjects').select('id').ilike('name', `%${subject_name}%`).limit(1).maybeSingle();
                     if (data) subject_id = data.id; else return { success: false, message: `Subject "${subject_name}" not found.` };
                 }
                 if (teacher_name) {
-                    const { data } = await dbClient.from('profiles').select('id').ilike('full_name', `%${teacher_name}%`).eq('role', 'teacher').limit(1).single();
+                    const { data } = await dbClient.from('profiles').select('id').ilike('full_name', `%${teacher_name}%`).eq('role', 'teacher').limit(1).maybeSingle();
                     if (data) {
-                        const { data: tchRecord } = await dbClient.from('teachers').select('id').eq('profile_id', data.id).single();
+                        const { data: tchRecord } = await dbClient.from('teachers').select('id').eq('profile_id', data.id).maybeSingle();
                         if (tchRecord) teacher_id = tchRecord.id;
                     }
                 }
                 if (room_name) {
-                    const { data } = await dbClient.from('rooms').select('id').ilike('name', `%${room_name}%`).limit(1).single();
+                    const { data } = await dbClient.from('rooms').select('id').ilike('name', `%${room_name}%`).limit(1).maybeSingle();
                     if (data) room_id = data.id;
                 }
                 if (section_name) {
-                    const { data } = await dbClient.from('sections').select('id').ilike('name', `%${section_name}%`).limit(1).single();
+                    const { data } = await dbClient.from('sections').select('id').ilike('name', `%${section_name}%`).limit(1).maybeSingle();
                     if (data) section_id = data.id;
                 }
 
@@ -589,7 +589,7 @@ async function executeAction(action: string, params: ActionParams): Promise<{ su
                     return { success: true, message: 'Schedule deleted.' };
                 }
                 if (!subject_name || !day_of_week) return { success: false, message: 'Specify subject_name and day_of_week.' };
-                const { data: subj } = await dbClient.from('subjects').select('id').ilike('name', `%${subject_name}%`).limit(1).single();
+                const { data: subj } = await dbClient.from('subjects').select('id').ilike('name', `%${subject_name}%`).limit(1).maybeSingle();
                 if (!subj) return { success: false, message: `Subject "${subject_name}" not found.` };
                 let query = dbClient.from('schedules').delete().eq('subject_id', subj.id).eq('day_of_week', day_of_week);
                 if (start_time) query = query.eq('start_time', start_time);
@@ -659,7 +659,7 @@ async function executeAction(action: string, params: ActionParams): Promise<{ su
             case 'update_profile': {
                 const { user_email, updates } = params;
                 if (!updates || !user_email) return { success: false, message: 'Missing user_email or updates.' };
-                const { data: found } = await dbClient.from('profiles').select('id').eq('email', user_email as string).single();
+                const { data: found } = await dbClient.from('profiles').select('id').eq('email', user_email as string).maybeSingle();
                 if (!found) return { success: false, message: `No user found with email "${user_email}".` };
 
                 // If email is being changed, update Supabase Auth first

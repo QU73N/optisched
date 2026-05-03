@@ -30,12 +30,9 @@ export async function getScheduleVersion(versionId: string): Promise<ScheduleVer
         .from('schedule_versions')
         .select('*')
         .eq('id', versionId)
-        .single();
+        .maybeSingle();
     
-    if (error) {
-        if (error.code === 'PGRST116') return null; // Not found
-        throw error;
-    }
+    if (error) throw error;
     return data;
 }
 
@@ -124,12 +121,9 @@ export async function getScheduleVersionSet(versionSetId: string): Promise<Sched
         .from('schedule_version_sets')
         .select('*')
         .eq('id', versionSetId)
-        .single();
+        .maybeSingle();
     
-    if (error) {
-        if (error.code === 'PGRST116') return null;
-        throw error;
-    }
+    if (error) throw error;
     return data;
 }
 

@@ -76,8 +76,9 @@ export async function createBreak(breakData: Omit<InstitutionBreak, 'id' | 'crea
         .from('institution_breaks')
         .insert(breakData)
         .select()
-        .single();
+        .maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error('Failed to create break');
     return data;
 }
 
@@ -87,8 +88,9 @@ export async function updateBreak(id: string, breakData: Partial<Omit<Institutio
         .update({ ...breakData, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error('Failed to update break');
     return data;
 }
 

@@ -591,7 +591,7 @@ class ScheduleVersionService {
                 .from('schedule_versions')
                 .select('*')
                 .eq('id', versionId)
-                .single();
+                .maybeSingle();
 
             if (versionError || !versionData) {
                 throw new Error('Version not found');
@@ -602,7 +602,7 @@ class ScheduleVersionService {
                 .from('schedule_version_set_items')
                 .select('version_set_id')
                 .eq('schedule_version_id', versionId)
-                .single();
+                .maybeSingle();
 
             if (!versionSetItem) {
                 throw new Error('Version not in a version set');
@@ -703,7 +703,7 @@ class ScheduleVersionService {
                         academic_year: snapshot.academic_year || '',
                     })
                     .select('id')
-                    .single();
+                    .maybeSingle();
 
                 if (insertError) {
                     // ROLLBACK: We cannot restore the deleted schedules without their data
@@ -842,7 +842,7 @@ class ScheduleVersionService {
                 .from('schedule_versions')
                 .select('is_active')
                 .eq('id', versionId)
-                .single();
+                .maybeSingle();
 
             if (versionError || !versionData) {
                 throw new Error('Version not found');

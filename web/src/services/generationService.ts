@@ -60,15 +60,9 @@ export async function getRuleValue(key: string): Promise<unknown> {
         .from('system_rules')
         .select('rule_value')
         .eq('rule_key', key)
-        .single();
+        .maybeSingle();
 
-    if (error) {
-        if (error.code === 'PGRST116') {
-            // Not found, return null
-            return null;
-        }
-        throw error;
-    }
+    if (error) throw error;
 
     return data?.rule_value ?? null;
 }
@@ -110,7 +104,7 @@ export async function saveGenerationMetadata(input: SaveGenerationMetadataInput)
                 created_by: input.created_by,
             })
             .select('id')
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
         return data?.id || null;
