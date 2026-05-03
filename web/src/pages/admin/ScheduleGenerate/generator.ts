@@ -2036,6 +2036,10 @@ export async function runGenerator(
     const slots = buildSlots(config);
     const days = config.days.length ? config.days : ['Monday'];
 
+    // Get priority settings early for impossibility check
+    const subjectP = config.priorities.subjects;
+    const sectionP = config.priorities.sections;
+
     // Step 5 (Impossible Schedule Detector): Detect if schedule is impossible
     // If impossible, return early with actionable error messages
     const impossibilityCheck = detectImpossibleSchedule(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, slots, config);
@@ -2047,15 +2051,20 @@ export async function runGenerator(
             );
             return sum + sessionsNeeded(s, config.sessionMinutes) * matchSections.length;
         }, 0);
-        // Calculate high priority count for early return
-        const subjectP = config.priorities.subjects;
-        const sectionP = config.priorities.sections;
-        const highPriorityTotal = normalizedData.normalizedSubjects.filter(s => {
-            const sec = normalizedData.normalizedSections.find(x => (s.program === 'ALL' || x.program === s.program) && x.year_level === s.year_level);
+        // Calculate high priority task count for early return
+        let highPriorityTaskCount = 0;
+        for (const s of normalizedData.normalizedSubjects) {
+            const matchSections = scopedSections.filter(
+                sec => (s.program === 'ALL' || s.program === sec.program) && s.year_level === sec.year_level,
+            );
             const subScore = priorityOf(subjectP, s.id);
-            const secScore = sec ? priorityOf(sectionP, sec.id) : 50;
-            return subScore >= 70 || secScore >= 70;
-        }).length;
+            for (const sec of matchSections) {
+                const secScore = priorityOf(sectionP, sec.id);
+                if (subScore >= 70 || secScore >= 70) {
+                    highPriorityTaskCount += sessionsNeeded(s, config.sessionMinutes);
+                }
+            }
+        }
         // Update progress with error before returning
         onProgress({
             subStage: 'idle',
@@ -2072,7 +2081,7 @@ export async function runGenerator(
             errors: impossibilityCheck.reasons,
             score: 0,
             highPriorityPlaced: 0,
-            highPriorityTotal,
+            highPriorityTotal: highPriorityTaskCount,
             mode: config.mode,
             diff: [],
         };
@@ -2299,17 +2308,6 @@ export async function runGenerator(
         toPlaced(e, subjectMap, teacherMap, roomMap, sectionMap),
     );
 
-    const subjectP = config.priorities.subjects;
-    const sectionP = config.priorities.sections;
-    const highPriorityIds = new Set(
-        scopedSubjects.filter(s => {
-            const sec = scopedSections.find(x => (s.program === 'ALL' || x.program === s.program) && x.year_level === s.year_level);
-            const subScore = priorityOf(subjectP, s.id);
-            const secScore = sec ? priorityOf(sectionP, sec.id) : 50;
-            return subScore >= 70 || secScore >= 70;
-        }).map(s => s.id),
-    );
-
     // Step 6 (Generation Metadata Recorder): Initialize metadata for tracking generation
     // TODO: In future integration, save metadata to generation_runs table
     // For now, we initialize but don't save to database to avoid breaking changes
@@ -2331,7 +2329,7 @@ export async function runGenerator(
         errors: [],
         score: 0,
         highPriorityPlaced: 0,
-        highPriorityTotal: highPriorityIds.size,
+        highPriorityTotal: 0, // Will be calculated in each attempt
         mode: config.mode,
         diff: [],
     };
@@ -2371,6 +2369,17 @@ export async function runGenerator(
             }
         }
 
+        // Calculate high-priority task count (based on tasks, not subjects)
+        const highPriorityTaskIds = new Set<string>();
+        for (const task of rankedTasks) {
+            const subScore = priorityOf(subjectP, task.subject.id);
+            const secScore = priorityOf(sectionP, task.section.id);
+            if (subScore >= 70 || secScore >= 70) {
+                const taskId = `${task.subject.id}-${task.section.id}-${task.sessionIndex}`;
+                highPriorityTaskIds.add(taskId);
+            }
+        }
+
         // Phase 5: Domain Construction - Pre-compute valid options for each task
         // This prunes invalid options early and enables MRV ranking
         const domains = constructDomains(
@@ -2405,19 +2414,21 @@ export async function runGenerator(
             const teacherScarcityB = domainB?.teacherScarcity ?? 1;
             if (Math.abs(teacherScarcityA - teacherScarcityB) > 0.01) return teacherScarcityA - teacherScarcityB;
 
-            // Quaternary: Lab subjects go before non-lab subjects
-            const labA = a.subject.requires_lab ? 1 : 0;
-            const labB = b.subject.requires_lab ? 1 : 0;
-            if (labA !== labB) return labB - labA;
-
-            // Quinary: Original priority (subject weight + section weight)
-            const priorityA = (a.subject.weight || 50) + (a.section.weight || 50);
-            const priorityB = (b.subject.weight || 50) + (b.section.weight || 50);
-            return priorityB - priorityA; // Higher priority first
+            // Final: Random tiebreaker for exploration
+            return Math.random() - 0.5;
         });
 
         // Check if there are any tasks to place
         if (rankedTasks.length === 0) {
+            // Calculate high priority task count for this case
+            let highPriorityTaskCount = 0;
+            for (const task of rankedTasks) {
+                const subScore = priorityOf(subjectP, task.subject.id);
+                const secScore = priorityOf(sectionP, task.section.id);
+                if (subScore >= 70 || secScore >= 70) {
+                    highPriorityTaskCount++;
+                }
+            }
             onProgress({
                 subStage: 'idle',
                 attempt: 0,
@@ -2433,7 +2444,7 @@ export async function runGenerator(
                 errors: ['No placement tasks generated. This may be due to subjects not matching any sections or invalid configuration.'],
                 score: 0,
                 highPriorityPlaced: 0,
-                highPriorityTotal: highPriorityIds.size,
+                highPriorityTotal: highPriorityTaskCount,
                 mode: config.mode,
                 diff: [],
             };
@@ -2671,15 +2682,30 @@ export async function runGenerator(
         });
         await new Promise(r => setTimeout(r, 60));
 
-        const highPlaced = entries.filter(e => highPriorityIds.has(e.subjectId)).length;
+        // Count how many high-priority tasks were placed
+        let highPriorityPlacedCount = 0;
+        for (const entry of entries) {
+            // Find the corresponding task for this entry
+            const task = rankedTasks.find(t => 
+                t.subject.id === entry.subjectId && 
+                t.section.id === entry.sectionId
+            );
+            if (task) {
+                const taskId = `${task.subject.id}-${task.section.id}-${task.sessionIndex}`;
+                if (highPriorityTaskIds.has(taskId)) {
+                    highPriorityPlacedCount++;
+                }
+            }
+        }
+
         const current: GenerationResult = {
             total: rankedTasks.length,
             placed: entries.length,
             entries,
             errors,
             score,
-            highPriorityPlaced: highPlaced,
-            highPriorityTotal: highPriorityIds.size,
+            highPriorityPlaced: highPriorityPlacedCount,
+            highPriorityTotal: highPriorityTaskIds.size,
             mode: config.mode,
             diff: [],
         };
