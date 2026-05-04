@@ -6,7 +6,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
-import { logAudit } from '../../hooks/useActivityLogger';
+// Temporarily disabled audit logging - log_audit RPC function doesn't exist
+// import { logAudit } from '../../hooks/useActivityLogger';
 import { scheduleVersionService } from '../../services/scheduleVersionService';
 import {
     CheckCircle, XCircle, Clock, AlertTriangle, Loader2, Lock,
@@ -105,8 +106,8 @@ const ApprovalsPage: React.FC = () => {
             
             const pubRes = await (scheduleVersionService as { publishApprovedSchedule: (id: string, opts: { changeReason: string }) => Promise<{ success: boolean; message: string }> }).publishApprovedSchedule(batchId, { changeReason: 'Published from approvals page' });
             if (!pubRes.success) throw new Error(pubRes.message);
-            
-            await logAudit('schedule.approve', 'schedule_versions', id);
+
+            // await logAudit('schedule.approve', 'schedule_versions', id); // Temporarily disabled
             setItems(prev => prev.filter(i => i.id !== id));
         } catch (err) {
             console.error('[Approvals] approve failed', err);
@@ -153,10 +154,10 @@ const ApprovalsPage: React.FC = () => {
                     p_changed_by: user?.id,
                     p_previous_version_id: id
                 });
-            
+
             if (versionError) throw versionError;
-            
-            await logAudit('schedule.reject', 'schedule_versions', id);
+
+            // await logAudit('schedule.reject', 'schedule_versions', id); // Temporarily disabled
             setItems(prev => prev.filter(i => i.id !== id));
         } catch (err) {
             console.error('[Approvals] reject failed', err);

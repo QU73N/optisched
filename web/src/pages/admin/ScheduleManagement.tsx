@@ -6,7 +6,8 @@ import { scheduleVersionService } from '../../services/scheduleVersionService';
 import { ADMIN_ROLES } from '../../types/database';
 import type { DayOfWeek, ScheduleStatus } from '../../types/database';
 import { useAuth } from '../../contexts/AuthContext';
-import { scheduleAudit, logAudit } from '../../services/auditService';
+// Temporarily disabled audit logging - log_audit RPC function doesn't exist
+// import { scheduleAudit, logAudit } from '../../services/auditService';
 import '../admin/Dashboard.css';
 import ScheduleVersionHistory from './ScheduleVersionHistory';
 
@@ -388,9 +389,9 @@ const ScheduleManagement: React.FC = () => {
                         .in('id', scheduleIds);
 
                     // Log audit for each schedule
-                    for (const scheduleId of scheduleIds) {
-                        await scheduleAudit.deleted(scheduleId, { reason: 'Version deleted' });
-                    }
+                    // for (const scheduleId of scheduleIds) {
+                    //     await scheduleAudit.deleted(scheduleId, { reason: 'Version deleted' });
+                    // }
                 }
             }
 
@@ -403,11 +404,11 @@ const ScheduleManagement: React.FC = () => {
             if (error) throw error;
 
             // Log version deletion
-            await logAudit('delete', 'schedule_versions', versionId, { 
-                version_number: version?.version_number,
-                change_type: version?.change_type,
-                deleted_by: user?.id 
-            });
+            // await logAudit('delete', 'schedule_versions', versionId, {
+            //     version_number: version?.version_number,
+            //     change_type: version?.change_type,
+            //     deleted_by: user?.id
+            // });
 
             // Navigate back to current schedules
             navigate('/admin/schedules');
@@ -456,9 +457,9 @@ const ScheduleManagement: React.FC = () => {
                             .in('id', scheduleIds);
 
                         // Log audit for each schedule
-                        for (const scheduleId of scheduleIds) {
-                            await scheduleAudit.unpublished(scheduleId, { unpublished_by: user?.id });
-                        }
+                        // for (const scheduleId of scheduleIds) {
+                        //     await scheduleAudit.unpublished(scheduleId, { unpublished_by: user?.id });
+                        // }
                     }
                 }
 
