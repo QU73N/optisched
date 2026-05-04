@@ -2571,13 +2571,13 @@ export async function runGenerator(
                         
                         const teacherFree = isFree(busy, 'teacher', currentTeacher.id, day, sMin, eMin);
                         if (!teacherFree) {
-                            console.log(`[PLACEMENT] Teacher conflict: ${currentTeacher.full_name} at ${day} ${slot.start}-${slot.end}`);
+                            console.log(`[PLACEMENT] BLOCKING: Teacher conflict detected - SKIPPING placement for ${currentTeacher.full_name} at ${day} ${slot.start}-${slot.end}`);
                             continue;
                         }
                         
                         const sectionFree = isFree(busy, 'section', section.id, day, sMin, eMin);
                         if (!sectionFree) {
-                            console.log(`[PLACEMENT] Section conflict: ${section.name} at ${day} ${slot.start}-${slot.end}`);
+                            console.log(`[PLACEMENT] BLOCKING: Section conflict detected - SKIPPING placement for ${section.name} at ${day} ${slot.start}-${slot.end}`);
                             continue;
                         }
                         // Hard: check max_hours constraint
@@ -2639,9 +2639,16 @@ export async function runGenerator(
                                 toMin(e.start) < eMin && 
                                 toMin(e.end) > sMin
                             );
-                            if (roomAlreadyBooked) continue;
+                            if (roomAlreadyBooked) {
+                                console.log(`[PLACEMENT] Room already booked: ${room.name} at ${day} ${slot.start}-${slot.end}`);
+                                continue;
+                            }
                             
-                            if (!isFree(busy, 'room', room.id, day, sMin, eMin)) continue;
+                            const roomFree = isFree(busy, 'room', room.id, day, sMin, eMin);
+                            if (!roomFree) {
+                                console.log(`[PLACEMENT] BLOCKING: Room conflict detected - SKIPPING placement for ${room.name} at ${day} ${slot.start}-${slot.end}`);
+                                continue;
+                            }
 
                             // Hard: check room compatibility with subject (lab type matching)
                             if (!roomCompatible(room, sub, section)) continue;
