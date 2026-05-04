@@ -47,7 +47,16 @@ const toHHMM = (mins: number) => {
 };
 
 // Helper to check if a time slot overlaps with any break
-const overlapsBreak = (start: number, end: number, config: GenerationConfig, day: string): boolean => {
+const overlapsBreak = (
+    start: number,
+    end: number,
+    config: GenerationConfig,
+    day: string,
+    sectionBreaks?: Map<string, AssignedBreak[]>,
+    teacherBreaks?: Map<string, TeacherAssignedBreak[]>,
+    sectionId?: string,
+    teacherId?: string,
+): boolean => {
     // Check common break first (hard constraint override)
     if (config.commonBreak.enabled && config.commonBreak.day === day) {
         const commonStart = toMin(config.commonBreak.time);
@@ -56,30 +65,192 @@ const overlapsBreak = (start: number, end: number, config: GenerationConfig, day
             return true;
         }
     }
-    
+
     // Check regular breaks based on mode
     if (config.breakMode === 'fixed') {
         const fixedStart = toMin(config.fixedBreak.start);
         const fixedEnd = toMin(config.fixedBreak.end);
         return fixedStart < end && start < fixedEnd;
     }
-    
-    // For variable mode, we'll need to check assigned breaks
-    // For now, return false (will be implemented with variable break assignment)
+
+    // For variable mode, check assigned breaks
+    if (config.breakMode === 'variable' && sectionBreaks && teacherBreaks) {
+        // Check section break
+        if (sectionId) {
+            const breaks = sectionBreaks.get(sectionId) || [];
+            for (const breakInfo of breaks) {
+                if (breakInfo.day === day) {
+                    const breakStart = toMin(breakInfo.start);
+                    const breakEnd = toMin(breakInfo.end);
+                    if (breakStart < end && start < breakEnd) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Check teacher break
+        if (teacherId) {
+            const breaks = teacherBreaks.get(teacherId) || [];
+            for (const breakInfo of breaks) {
+                if (breakInfo.day === day) {
+                    const breakStart = toMin(breakInfo.start);
+                    const breakEnd = toMin(breakInfo.end);
+                    if (breakStart < end && start < breakEnd) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
     return false;
 };
 
-const buildSlots = (cfg: GenerationConfig, day: string): { start: string; end: string }[] => {
+const buildSlots = (
+    cfg: GenerationConfig,
+    day: string,
+    sectionBreaks?: Map<string, AssignedBreak[]>,
+    teacherBreaks?: Map<string, TeacherAssignedBreak[]>,
+): { start: string; end: string }[] => {
     const slots: { start: string; end: string }[] = [];
     const dayStart = toMin(cfg.dayStart);
     const dayEnd = toMin(cfg.dayEnd);
     const step = cfg.sessionMinutes;
     for (let s = dayStart; s + step <= dayEnd; s += step) {
         const e = s + step;
-        if (overlapsBreak(s, e, cfg, day)) continue;
+        // For variable mode, we don't filter slots during buildSlots
+        // because breaks are section/teacher-specific and will be checked during placement
+        if (cfg.breakMode !== 'variable' && overlapsBreak(s, e, cfg, day, sectionBreaks, teacherBreaks)) continue;
         slots.push({ start: toHHMM(s), end: toHHMM(e) });
     }
     return slots;
+};
+
+// Variable Break Assignment Logic
+
+interface AssignedBreak {
+    sectionId: string;
+    day: string;
+    start: string;
+    end: string;
+}
+
+interface TeacherAssignedBreak {
+    teacherId: string;
+    day: string;
+    start: string;
+    end: string;
+}
+
+/**
+ * Generate all possible variable break slots based on config
+ * Returns array of break time slots within the configured window
+ */
+const generateVariableBreakSlots = (config: GenerationConfig): Array<{ start: string; end: string }> => {
+    const slots: Array<{ start: string; end: string }> = [];
+    const windowStart = toMin(config.variableBreak.startTime);
+    const windowEnd = toMin(config.variableBreak.endTime);
+    const duration = config.variableBreak.duration;
+    const increments = config.variableBreak.increments;
+
+    // Generate all possible break slots within the window
+    for (let start = windowStart; start + duration <= windowEnd; start += increments) {
+        const end = start + duration;
+        slots.push({ start: toHHMM(start), end: toHHMM(end) });
+    }
+
+    return slots;
+};
+
+/**
+ * Assign variable breaks to sections with even distribution
+ * Returns a map of sectionId -> array of assigned breaks (one per day)
+ * This is a soft constraint - the system tries to distribute evenly but doesn't enforce it strictly
+ */
+const assignVariableBreaksToSections = (
+    sections: Section[],
+    days: string[],
+    config: GenerationConfig,
+): Map<string, AssignedBreak[]> => {
+    const assignments = new Map<string, AssignedBreak[]>();
+    const possibleBreakSlots = generateVariableBreakSlots(config);
+
+    if (possibleBreakSlots.length === 0) {
+        return assignments;
+    }
+
+    // For each section, assign a break for each day
+    // Distribute sections evenly across break slots (round-robin for simplicity)
+    let slotIndex = 0;
+    for (const section of sections) {
+        const sectionBreaks: AssignedBreak[] = [];
+        for (const day of days) {
+            const breakSlot = possibleBreakSlots[slotIndex % possibleBreakSlots.length];
+            sectionBreaks.push({
+                sectionId: section.id,
+                day,
+                start: breakSlot.start,
+                end: breakSlot.end,
+            });
+            // Move to next slot for next section/day to distribute evenly
+            slotIndex++;
+        }
+        assignments.set(section.id, sectionBreaks);
+    }
+
+    return assignments;
+};
+
+/**
+ * Assign breaks to teachers based on their assigned sections
+ * Teachers get breaks at the same time as their assigned sections to avoid conflicts
+ * Returns a map of teacherId -> array of assigned breaks
+ */
+const assignBreaksToTeachers = (
+    teachers: Teacher[],
+    sectionBreaks: Map<string, AssignedBreak[]>,
+    teacherSectionMap: Map<string, string[]>, // teacherId -> sectionIds
+): Map<string, TeacherAssignedBreak[]> => {
+    const assignments = new Map<string, TeacherAssignedBreak[]>();
+
+    for (const teacher of teachers) {
+        const teacherSectionIds = teacherSectionMap.get(teacher.id) || [];
+        const teacherBreaks: TeacherAssignedBreak[] = [];
+
+        // Collect all break times from all sections this teacher teaches
+        const sectionBreakTimes = new Map<string, Set<string>>(); // day -> set of break times
+        for (const sectionId of teacherSectionIds) {
+            const breaks = sectionBreaks.get(sectionId) || [];
+            for (const breakInfo of breaks) {
+                if (!sectionBreakTimes.has(breakInfo.day)) {
+                    sectionBreakTimes.set(breakInfo.day, new Set());
+                }
+                sectionBreakTimes.get(breakInfo.day)!.add(`${breakInfo.start}-${breakInfo.end}`);
+            }
+        }
+
+        // Assign teacher breaks for each day
+        for (const [day, breakTimes] of sectionBreakTimes) {
+            // If teacher has multiple sections with different break times on same day,
+            // we need to handle conflicts. For now, assign the first break time.
+            // In a full implementation, this would require more sophisticated scheduling.
+            const firstBreak = Array.from(breakTimes)[0];
+            const [start, end] = firstBreak.split('-');
+            teacherBreaks.push({
+                teacherId: teacher.id,
+                day,
+                start,
+                end,
+            });
+        }
+
+        if (teacherBreaks.length > 0) {
+            assignments.set(teacher.id, teacherBreaks);
+        }
+    }
+
+    return assignments;
 };
 
 interface Busy {
@@ -2351,10 +2522,48 @@ export async function runGenerator(
         : normalizedData.normalizedRooms.filter(r => r.is_available !== false);
     const days = config.days.length ? config.days : ['Monday'];
 
+    // Variable Break Assignment (pre-generation)
+    let sectionBreaks: Map<string, AssignedBreak[]> = new Map();
+    let teacherBreaks: Map<string, TeacherAssignedBreak[]> = new Map();
+
+    if (config.breakMode === 'variable') {
+        // Build teacher-section map for teacher break assignment
+        const teacherSectionMap = new Map<string, string[]>();
+        for (const teacher of normalizedData.normalizedTeachers) {
+            teacherSectionMap.set(teacher.id, []);
+        }
+
+        // Populate teacher-section map from subjects
+        for (const subject of normalizedData.normalizedSubjects) {
+            if (subject.teacher_id) {
+                const sections = teacherSectionMap.get(subject.teacher_id) || [];
+                for (const section of scopedSections) {
+                    if ((subject.program === 'ALL' || subject.program === section.program) &&
+                        subject.year_level === section.year_level) {
+                        if (!sections.includes(section.id)) {
+                            sections.push(section.id);
+                        }
+                    }
+                }
+                teacherSectionMap.set(subject.teacher_id, sections);
+            }
+        }
+
+        // Assign breaks to sections
+        sectionBreaks = assignVariableBreaksToSections(scopedSections, days, config);
+
+        // Assign breaks to teachers
+        teacherBreaks = assignBreaksToTeachers(
+            normalizedData.normalizedTeachers,
+            sectionBreaks,
+            teacherSectionMap,
+        );
+    }
+
     // Build slots per day (breaks can vary by day with common break)
     const slotsByDay = new Map<string, { start: string; end: string }[]>();
     for (const day of days) {
-        slotsByDay.set(day, buildSlots(config, day));
+        slotsByDay.set(day, buildSlots(config, day, sectionBreaks, teacherBreaks));
     }
 
     // Get priority settings early for impossibility check
@@ -2957,7 +3166,15 @@ export async function runGenerator(
 
                             // Hard: check room compatibility with subject (lab type matching)
                             if (!roomCompatible(room, sub, section)) continue;
-                            
+
+                            // Hard: check break conflicts for variable mode
+                            if (config.breakMode === 'variable') {
+                                if (overlapsBreak(sMin, eMin, config, day, sectionBreaks, teacherBreaks, section.id, currentTeacher.id)) {
+                                    console.log(`[PLACEMENT] BLOCKING: Break conflict detected for ${section.name} with ${currentTeacher.full_name} at ${day} ${slot.start}-${slot.end}`);
+                                    continue;
+                                }
+                            }
+
                             // Forward Checking (Phase 7): Check if this placement would make remaining tasks impossible
                             // Uses improved implementation with domain information to avoid false negatives
                             // Only enabled if config.enableForwardChecking is true (can be expensive on large datasets)
