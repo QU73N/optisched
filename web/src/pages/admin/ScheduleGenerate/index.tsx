@@ -2418,13 +2418,14 @@ const DiffRow: React.FC<{ entry: DiffEntry }> = ({ entry }) => {
     );
 };
 
-const StageHeader: React.FC<{ icon: React.ReactNode; title: string; desc: string; compact?: boolean }> = ({ icon, title, desc, compact = false }) => (
-    <div className="sg-stage-head">
+const StageHeader: React.FC<{ icon: React.ReactNode; title: string; desc: string; compact?: boolean; legend?: React.ReactNode }> = ({ icon, title, desc, compact = false, legend }) => (
+    <div className="sg-stage-head" style={legend ? { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 } : undefined}>
         <div className="sg-stage-icon">{icon}</div>
         <div>
             <div className="sg-stage-title">{title}</div>
             {!compact && <div className="sg-stage-desc">{desc}</div>}
         </div>
+        {legend && <div className="sg-prio-legend" style={{ flexShrink: 0 }}>{legend}</div>}
     </div>
 );
 
@@ -2571,22 +2572,22 @@ const PrioritiesStage: React.FC<{
 
     return (
         <div>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-                <StageHeader
-                    icon={<Flag size={16} />}
-                    title="Priorities"
-                    desc="Flag what matters most. The engine places high priority items first and protects their slots."
-                    compact={compact}
-                />
-                <div className="sg-prio-legend" style={{ flexShrink: 0 }}>
-                    {PRIORITY_TIERS.map(t => (
-                        <span key={t.key} className={`sg-prio-pill sg-prio-${t.key}`}>
-                            {t.label}
-                            <span className="sg-prio-pill-sub">{t.desc}</span>
-                        </span>
-                    ))}
-                </div>
-            </div>
+            <StageHeader
+                icon={<Flag size={16} />}
+                title="Priorities"
+                desc="Flag what matters most. The engine places high priority items first and protects their slots."
+                compact={compact}
+                legend={
+                    <>
+                        {PRIORITY_TIERS.map(t => (
+                            <span key={t.key} className={`sg-prio-pill sg-prio-${t.key}`}>
+                                {t.label}
+                                <span className="sg-prio-pill-sub">{t.desc}</span>
+                            </span>
+                        ))}
+                    </>
+                }
+            />
 
             <div className="sg-prio-toolbar">
                 <div className="sg-tabs-mini">
