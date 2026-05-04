@@ -25,7 +25,8 @@ import { getRulesAsRecord, notifyStudentsOfScheduleChanges } from '../../../serv
 import { scheduleStateManager } from '../../../services/scheduleStateManager';
 import { scheduleLogger } from '../../../services/scheduleLogger';
 import { scheduleVersionService } from '../../../services/scheduleVersionService';
-import { scheduleAudit } from '../../../services/auditService';
+// Temporarily disabled audit logging - log_audit RPC function doesn't exist
+// import { scheduleAudit } from '../../../services/auditService';
 import { detectConflicts } from '../../../services/conflictDetector';
 import { PublishOverwriteConfirm } from '../../../components/PublishOverwriteConfirm';
 
@@ -321,17 +322,18 @@ const ScheduleGenerate: React.FC = () => {
                 }).in('id', ids);
                 if (error) throw error;
             }
-            
+
             // Log audit for each schedule status change
-            for (const id of ids) {
-                if (to === 'submitted') {
-                    await scheduleAudit.submitted(id, { submitted_by: user?.id });
-                } else if (to === 'published') {
-                    await scheduleAudit.published(id, { published_by: user?.id });
-                } else if (to === 'approved') {
-                    await scheduleAudit.approved(id, { approved_by: user?.id });
-                }
-            }
+            // Temporarily disabled - log_audit RPC function doesn't exist
+            // for (const id of ids) {
+            //     if (to === 'submitted') {
+            //         await scheduleAudit.submitted(id, { submitted_by: user?.id });
+            //     } else if (to === 'published') {
+            //         await scheduleAudit.published(id, { published_by: user?.id });
+            //     } else if (to === 'approved') {
+            //         await scheduleAudit.approved(id, { approved_by: user?.id });
+            //     }
+            // }
             
             await refreshExisting();
             setWorkflowNote(`${ids.length} ${WORKFLOW_META[from].label.toLowerCase()} ${ids.length === 1 ? 'entry' : 'entries'} moved to ${WORKFLOW_META[to].label}.`);
@@ -794,17 +796,19 @@ const ScheduleGenerate: React.FC = () => {
             }
 
             // Step 7: Audit logging
-            saveState.step = 'audit_logging';
-            if (savedSchedules && savedSchedules.length > 0) {
-                for (const schedule of savedSchedules) {
-                    await scheduleAudit.created(schedule.id, {
-                        section: result.entries[0]?.sectionId,
-                        teacher: result.entries[0]?.teacherId,
-                        subject: result.entries[0]?.subjectId,
-                    });
-                }
-                console.log('[SAVE] Audit logged for', savedSchedules.length, 'schedules');
-            }
+            // Temporarily disabled - log_audit RPC function doesn't exist
+            // saveState.step = 'audit_logging';
+            // if (savedSchedules && savedSchedules.length > 0) {
+            //     for (const schedule of savedSchedules) {
+            //         await scheduleAudit.created(schedule.id, {
+            //             section: result.entries[0]?.sectionId,
+            //             teacher: result.entries[0]?.teacherId,
+            //             subject: result.entries[0]?.subjectId,
+            //         });
+            //     }
+            //     console.log('[SAVE] Audit logged for', savedSchedules.length, 'schedules');
+            // }
+            console.log('[SAVE] Audit logging skipped (RPC function not implemented)');
 
             // Step 8: Student notifications
             saveState.step = 'notify_students';
