@@ -7,14 +7,14 @@ import type { Teacher, Room, Section, Subject, ExistingSchedule } from '../../pa
 /**
  * Generation modes supported by the engine
  */
-export type GenerationMode = 
+export type GenerationMode =
   | 'full'      // Rebuild the selected scope from scratch
   | 'partial'   // Recalculate only affected sections/teachers/rooms/subjects
   | 'draft'     // Create temporary schedule for review (no overwrite)
   | 'locked'    // Regenerate only in allowed slots while keeping approved/protected sessions fixed
-  | 'whatif'    // Test a possible scenario without saving
+  | 'what-if'   // Test a possible scenario without saving
   | 'emergency' // React to broken schedule (room loss, teacher absence, scope change)
-  | 'multiscenario'; // Generate several candidate schedules and compare
+  | 'multi-scenario'; // Generate several candidate schedules and compare
 
 /**
  * Progress callback type for long-running generation

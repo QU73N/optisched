@@ -170,7 +170,7 @@ export class ScheduleGenerator {
         this.config.institutional_options.priority_override_policy = 'strict';
         break;
 
-      case 'whatif':
+      case 'what-if':
         // What-if - no saving, single attempt, full optimization disabled
         this.config.max_attempts = 1;
         this.config.enable_optimization = false;
@@ -186,7 +186,7 @@ export class ScheduleGenerator {
         this.config.institutional_options.special_room_fallback_policy = 'relax';
         break;
 
-      case 'multiscenario':
+      case 'multi-scenario':
         // Multi-scenario - generate multiple candidates
         this.config.max_attempts = 5;
         this.config.enable_optimization = true;

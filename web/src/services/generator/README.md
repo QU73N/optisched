@@ -100,9 +100,9 @@ The engine supports 7 generation modes:
 - **partial** - Regenerate only affected elements, respecting protected sessions
 - **draft** - Create temporary schedule for review without saving
 - **locked** - Regenerate only in allowed slots while keeping protected sessions fixed
-- **whatif** - Test scenarios without saving results
+- **what-if** - Test scenarios without saving results
 - **emergency** - React to broken schedules with relaxed constraints
-- **multiscenario** - Generate multiple candidate schedules for comparison
+- **multi-scenario** - Generate multiple candidate schedules for comparison
 
 ## Usage Example
 

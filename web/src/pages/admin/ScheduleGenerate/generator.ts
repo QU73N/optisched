@@ -3064,7 +3064,7 @@ export async function runGenerator(
         score: best.score,
         mode: config.mode,
         partial_target: config.partialTarget as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
-        status: best.placed === best.total ? 'completed' : 'partial',
+        status: best.placed === best.total ? 'completed' : 'failed',
         completed_at: new Date(),
         created_by: null, // TODO: Add user ID when auth is integrated
     });

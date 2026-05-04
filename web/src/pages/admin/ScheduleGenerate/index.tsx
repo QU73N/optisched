@@ -1304,7 +1304,7 @@ const ScopeStage: React.FC<{
                     maxCapacity: 100,
                     overflowPercent: 5,
                 };
-            case 'whatif':
+            case 'what-if':
                 // What-if: flexible to explore different configurations
                 return {
                     overflowPolicy: 'expand_scope' as const,
@@ -1318,7 +1318,7 @@ const ScopeStage: React.FC<{
                     maxCapacity: 100,
                     overflowPercent: 50,
                 };
-            case 'multiscenario':
+            case 'multi-scenario':
                 // Multi-scenario: balanced approach for valid comparisons
                 return {
                     overflowPolicy: 'relax_soft' as const,
@@ -1380,9 +1380,9 @@ const ScopeStage: React.FC<{
                                 {mode === 'partial' && <GitBranch size={16} />}
                                 {mode === 'draft' && <FileClock size={16} />}
                                 {mode === 'locked' && <Lock size={16} />}
-                                {mode === 'whatif' && <Lightbulb size={16} />}
+                                {mode === 'what-if' && <Lightbulb size={16} />}
                                 {mode === 'emergency' && <RefreshCw size={16} />}
-                                {mode === 'multiscenario' && <Layers size={16} />}
+                                {mode === 'multi-scenario' && <Layers size={16} />}
                             </span>
                             <span className="sg-mode-card-title">{MODE_LABELS[mode].label}</span>
                         </div>
@@ -2433,33 +2433,42 @@ const PrioritiesStage: React.FC<{
     // Also considers load_category for smarter defaults.
     // Subjects: lab subjects and subjects with scarce teachers land on High, electives on Low.
     const smartSuggest = () => {
-        if (kind === 'sections') {
-            const sized = sections.filter(s => s.student_count != null) as { id: string; student_count: number | null }[];
-            if (sized.length === 0) return;
+        // Configure sections priorities
+        const sized = sections.filter(s => s.student_count != null) as { id: string; student_count: number | null }[];
+        const sectionPriorities: Record<string, number> = {};
+        if (sized.length > 0) {
             const counts = sized.map(s => s.student_count || 0).sort((a, b) => a - b);
             const qHigh = counts[Math.floor(counts.length * 0.75)] ?? counts[counts.length - 1];
             const qLow  = counts[Math.floor(counts.length * 0.25)] ?? counts[0];
-            const next: Record<string, number> = {};
             for (const s of sections) {
                 const n = s.student_count ?? -1;
-                if ((s.load_category === 'heavy' || (n >= qHigh && n > 0))) next[s.id] = PRIORITY_VALUES.high;
-                else if (s.load_category === 'light' || (n > 0 && n <= qLow)) next[s.id] = PRIORITY_VALUES.low;
+                if ((s.load_category === 'heavy' || (n >= qHigh && n > 0))) sectionPriorities[s.id] = PRIORITY_VALUES.high;
+                else if (s.load_category === 'light' || (n > 0 && n <= qLow)) sectionPriorities[s.id] = PRIORITY_VALUES.low;
             }
-            setMap(next);
-        } else {
-            const next: Record<string, number> = {};
-            for (const s of subjects) {
-                const teacherPool = (s.teacher_eligibility_pool && typeof s.teacher_eligibility_pool === 'object')
-                    ? Object.keys(s.teacher_eligibility_pool as Record<string, unknown>).length
-                    : 0;
-                const scarceTeachers = teacherPool <= 2 || (s.teacher_id ? false : teacherPool === 0);
-                const needsLab = s.requires_lab;
-
-                if (needsLab || scarceTeachers) next[s.id] = PRIORITY_VALUES.high;
-                else if (!s.program) next[s.id] = PRIORITY_VALUES.low;
-            }
-            setMap(next);
         }
+
+        // Configure subjects priorities
+        const subjectPriorities: Record<string, number> = {};
+        for (const s of subjects) {
+            const teacherPool = (s.teacher_eligibility_pool && typeof s.teacher_eligibility_pool === 'object')
+                ? Object.keys(s.teacher_eligibility_pool as Record<string, unknown>).length
+                : 0;
+            const scarceTeachers = teacherPool <= 2 || (s.teacher_id ? false : teacherPool === 0);
+            const needsLab = s.requires_lab;
+
+            if (needsLab || scarceTeachers) subjectPriorities[s.id] = PRIORITY_VALUES.high;
+            else if (!s.program) subjectPriorities[s.id] = PRIORITY_VALUES.low;
+        }
+
+        // Update both sections and subjects priorities simultaneously
+        setConfig(c => ({
+            ...c,
+            priorities: {
+                ...c.priorities,
+                sections: sectionPriorities,
+                subjects: subjectPriorities,
+            },
+        }));
     };
 
     const cycleTier = (id: string) => {
@@ -2516,9 +2525,7 @@ const PrioritiesStage: React.FC<{
                 <button
                     className="sg-icon-btn sg-reset-btn"
                     onClick={smartSuggest}
-                    title={kind === 'sections'
-                        ? 'Flag larger sections as high, smaller as low'
-                        : 'Flag lab subjects as high, electives as low'}
+                    title="Auto-configure priorities for both sections and subjects"
                 >
                     <Lightbulb size={13} /> Smart Suggest
                 </button>
