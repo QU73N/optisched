@@ -1582,12 +1582,24 @@ const SoftSlider: React.FC<{ label: string; desc: string; value: number; onChang
 // Stage 4 — Review
 // ---------------------------------------------------------------------------
 
+// Helper function to format time based on user preference
+const formatTimeDisplay = (time: string, format: '12h' | '24h') => {
+    if (format === '24h') return time;
+    
+    const [hours, minutes] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12; // Convert 0 to 12
+    const displayMinutes = minutes.toString().padStart(2, '0');
+    return `${displayHours}:${displayMinutes} ${period}`;
+};
+
 const ReviewStage: React.FC<{
     config: GenerationConfig;
     blockers: string[];
     counts: { subjects: number; teachers: number; rooms: number; sections: number; existing: number };
     targetLabel: string;
 }> = ({ config, blockers, counts, targetLabel }) => {
+    const { preferences } = useUserPreferences();
     return (
         <div>
             <StageHeader icon={<ListChecks size={16} />} title="Review inputs" desc="Quick summary before running the engine." />
@@ -1618,9 +1630,9 @@ const ReviewStage: React.FC<{
                 <ReviewBlock title="Structure"
                     items={[
                         ['Days', compressDayRange(config.days)],
-                        ['Hours', `${config.dayStart} to ${config.dayEnd}`],
+                        ['Hours', `${formatTimeDisplay(config.dayStart, preferences.time_format)} to ${formatTimeDisplay(config.dayEnd, preferences.time_format)}`],
                         ['Session', `${config.sessionMinutes} min`],
-                        ['Breaks', config.breaks.map(b => `${b.label} ${b.start} to ${b.end}`).join(', ') || 'None'],
+                        ['Breaks', config.breaks.map(b => `${b.label} ${formatTimeDisplay(b.start, preferences.time_format)} to ${formatTimeDisplay(b.end, preferences.time_format)}`).join(', ') || 'None'],
                     ]}
                 />
                 <ReviewBlock title="Soft Weights"
