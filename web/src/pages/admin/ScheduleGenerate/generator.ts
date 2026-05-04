@@ -1872,7 +1872,7 @@ const calculateSoftConstraintScore = (
     const counts = Array.from(teacherCounts.values());
     const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
     const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
-    const balancedScore = Math.max(0, 100 - variance * 20);
+    const balancedScore = Math.max(0, 100 - variance * 10); // More lenient penalty
     breakdown.balancedLoad = balancedScore;
     totalScore += balancedScore * (softWeights.balancedLoad / 100);
     maxScore += 100 * (softWeights.balancedLoad / 100);
@@ -1889,7 +1889,7 @@ const calculateSoftConstraintScore = (
     for (const rooms of teacherRooms.values()) {
         totalRoomSwitches += Math.max(0, rooms.size - 1);
     }
-    const roomSwitchScore = Math.max(0, 100 - totalRoomSwitches * 5);
+    const roomSwitchScore = Math.max(0, 100 - totalRoomSwitches * 3); // More lenient penalty
     breakdown.minimizeRoomSwitch = roomSwitchScore;
     totalScore += roomSwitchScore * (softWeights.minimizeRoomSwitch / 100);
     maxScore += 100 * (softWeights.minimizeRoomSwitch / 100);
@@ -1931,7 +1931,7 @@ const calculateSoftConstraintScore = (
     }
     // Score: fewer gaps = higher score (0-100)
     const avgGapPerSection = totalSections > 0 ? totalGapMinutes / totalSections : 0;
-    const compactScore = Math.max(0, 100 - avgGapPerSection / 10); // 10 minutes gap = 10 point penalty
+    const compactScore = Math.max(0, 100 - avgGapPerSection / 20); // 20 minutes gap = 10 point penalty (more lenient)
     breakdown.compactSchedule = compactScore;
     totalScore += compactScore * (softWeights.compactSchedule / 100);
     maxScore += 100 * (softWeights.compactSchedule / 100);
@@ -1942,9 +1942,12 @@ const calculateSoftConstraintScore = (
     let preferredTimeMatches = 0;
     for (const entry of placed) {
         const startMin = timeToMinutes(entry.start);
-        // Preferred window: 08:30 (510 min) to 14:30 (870 min)
+        // Preferred window: 08:30 (510 min) to 14:30 (870 min) = full points
+        // Acceptable window: 07:00 (420 min) to 17:30 (1050 min) = half points
         if (startMin >= 510 && startMin <= 870) {
-            preferredTimeMatches++;
+            preferredTimeMatches += 1; // Full point for ideal window
+        } else if (startMin >= 420 && startMin <= 1050) {
+            preferredTimeMatches += 0.5; // Half point for acceptable window
         }
     }
     const preferredTimeScore = placed.length > 0 ? (preferredTimeMatches / placed.length) * 100 : 0;
@@ -1974,7 +1977,7 @@ const calculateSoftConstraintScore = (
         }
     }
     const avgDailyVariance = dailyVarianceCount > 0 ? dailyVarianceSum / dailyVarianceCount : 0;
-    const dailyBalanceScore = Math.max(0, 100 - avgDailyVariance * 30);
+    const dailyBalanceScore = Math.max(0, 100 - avgDailyVariance * 15); // More lenient penalty
     breakdown.dailyLoadBalance = dailyBalanceScore;
     totalScore += dailyBalanceScore * (softWeights.dailyLoadBalance / 100);
     maxScore += 100 * (softWeights.dailyLoadBalance / 100);
@@ -2033,7 +2036,7 @@ const calculateSoftConstraintScore = (
         const meanRoomUsage = roomUsages.reduce((a, b) => a + b, 0) / roomUsages.length;
         const roomVariance = roomUsages.reduce((a, b) => a + (b - meanRoomUsage) ** 2, 0) / roomUsages.length;
         // Lower variance = more even utilization = higher score
-        const roomUtilizationScore = Math.max(0, 100 - roomVariance * 10);
+        const roomUtilizationScore = Math.max(0, 100 - roomVariance * 5); // More lenient penalty
         breakdown.roomUtilization = roomUtilizationScore;
         totalScore += roomUtilizationScore * (softWeights.roomUtilization / 100);
         maxScore += 100 * (softWeights.roomUtilization / 100);
