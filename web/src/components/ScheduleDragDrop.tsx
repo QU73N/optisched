@@ -1,19 +1,37 @@
 import React, { useState, useCallback } from 'react';
-import type { PlacedEntry, Room, Teacher, Section } from '../pages/admin/ScheduleGenerate/types';
+import type { Room, Teacher, Section } from '../pages/admin/ScheduleGenerate/types';
+
+// Generic entry interface that works with both PlacedEntry and ScheduleRow
+interface ScheduleEntry {
+    key: string; // Unique identifier (e.g., "subjectId-sectionId-day-start" or database id)
+    subjectId: string;
+    sectionId: string;
+    teacherId: string;
+    roomId: string;
+    day: string;
+    start: string;
+    end: string;
+    subjectName: string;
+    teacherName: string;
+    roomName: string;
+    sectionName: string;
+    subjectCode?: string;
+}
 
 interface ScheduleDragDropProps {
-    entries: PlacedEntry[];
+    entries: ScheduleEntry[];
     rooms: Room[];
     teachers: Teacher[];
     sections: Section[];
-    onEntriesChange: (entries: PlacedEntry[]) => void;
+    onUpdate: (entry: ScheduleEntry, newDay?: string, newStartTime?: string, newEndTime?: string) => Promise<void> | void;
     dayOrder: string[];
     START_HOUR: number;
     TOTAL_SLOTS: number;
     formatTime: (t: string) => string;
     colorForKey: (key: string) => string;
     viewMode: 'section' | 'teacher' | 'room';
-    events: Array<{ entry: PlacedEntry; dayIdx: number; start: number; span: number }>;
+    events: Array<{ entry: ScheduleEntry; dayIdx: number; start: number; span: number }>;
+    canEdit?: boolean;
 }
 
 export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
@@ -21,7 +39,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
     rooms,
     teachers,
     sections,
-    onEntriesChange,
+    onUpdate,
     dayOrder,
     START_HOUR,
     TOTAL_SLOTS,
@@ -29,15 +47,16 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
     colorForKey,
     viewMode,
     events,
+    canEdit = true,
 }) => {
-    const [draggedEntry, setDraggedEntry] = useState<PlacedEntry | null>(null);
+    const [draggedEntry, setDraggedEntry] = useState<ScheduleEntry | null>(null);
     const [showConflictWarning, setShowConflictWarning] = useState(false);
     const [conflictDetails, setConflictDetails] = useState<{
         conflicts: string[];
         suggestions: { type: 'room' | 'time'; value: string; reason: string }[];
     } | null>(null);
     const [pendingMove, setPendingMove] = useState<{
-        entry: PlacedEntry;
+        entry: ScheduleEntry;
         newDay?: string;
         newStartTime?: string;
         newEndTime?: string;
@@ -45,7 +64,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
 
     // Check for conflicts when moving a schedule entry
     const checkConflicts = useCallback((
-        entry: PlacedEntry,
+        entry: ScheduleEntry,
         newDay?: string,
         newStartTime?: string,
         newEndTime?: string
@@ -59,11 +78,11 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         const checkSectionId = entry.sectionId;
 
         // Create a unique key for the entry to exclude it from conflict checks
-        const entryKey = `${entry.subjectId}-${entry.sectionId}-${entry.day}-${entry.start}`;
+        const entryKey = entry.key;
 
         // Check room conflicts
         const roomConflict = entries.some(e => 
-            `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}` !== entryKey &&
+            e.key !== entryKey &&
             e.day === checkDay &&
             e.roomId === checkRoomId &&
             ((e.start >= checkStartTime && e.start < checkEndTime) ||
@@ -77,7 +96,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
 
         // Check teacher conflicts
         const teacherConflict = entries.some(e => 
-            `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}` !== entryKey &&
+            e.key !== entryKey &&
             e.day === checkDay &&
             e.teacherId === checkTeacherId &&
             ((e.start >= checkStartTime && e.start < checkEndTime) ||
@@ -91,7 +110,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
 
         // Check section conflicts
         const sectionConflict = entries.some(e => 
-            `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}` !== entryKey &&
+            e.key !== entryKey &&
             e.day === checkDay &&
             e.sectionId === checkSectionId &&
             ((e.start >= checkStartTime && e.start < checkEndTime) ||
@@ -108,7 +127,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
 
     // Generate suggestions for resolving conflicts
     const generateSuggestions = useCallback((
-        entry: PlacedEntry,
+        entry: ScheduleEntry,
         newDay?: string,
         newStartTime?: string
     ) => {
@@ -118,13 +137,13 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         const checkEndTime = entry.end;
 
         // Create a unique key for the entry to exclude it from availability checks
-        const entryKey = `${entry.subjectId}-${entry.sectionId}-${entry.day}-${entry.start}`;
+        const entryKey = entry.key;
 
         // Find available rooms at the same time
         const occupiedRoomIds = new Set(
             entries
                 .filter(e => 
-                    `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}` !== entryKey &&
+                    e.key !== entryKey &&
                     e.day === checkDay && 
                     ((e.start >= checkStartTime && e.start < checkEndTime) ||
                      (e.end > checkStartTime && e.end <= checkEndTime) ||
@@ -155,7 +174,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
             if (slotStartTime === checkStartTime) continue; // Skip current time
 
             const timeConflict = entries.some(e => 
-                `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}` !== entryKey &&
+                e.key !== entryKey &&
                 e.day === checkDay &&
                 e.roomId === entryRoomId &&
                 ((e.start >= slotStartTime && e.start < slotEndTime) ||
@@ -177,44 +196,33 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
 
     // Apply the move to entries
     const applyMove = useCallback((
-        entry: PlacedEntry,
+        entry: ScheduleEntry,
         newDay?: string,
         newStartTime?: string,
         newEndTime?: string
     ) => {
-        const entryKey = `${entry.subjectId}-${entry.sectionId}-${entry.day}-${entry.start}`;
-        const updatedEntries = entries.map(e => {
-            const key = `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}`;
-            if (key === entryKey) {
-                const updated = { ...e };
-                if (newDay) updated.day = newDay;
-                if (newStartTime) updated.start = newStartTime;
-                if (newEndTime) updated.end = newEndTime;
-                return updated;
-            }
-            return e;
-        });
-
-        onEntriesChange(updatedEntries);
-    }, [entries, onEntriesChange]);
+        onUpdate(entry, newDay, newStartTime, newEndTime);
+    }, [onUpdate]);
 
     // Handle drag start
-    const handleDragStart = useCallback((e: React.DragEvent, entry: PlacedEntry) => {
+    const handleDragStart = useCallback((e: React.DragEvent, entry: ScheduleEntry) => {
+        if (!canEdit) return;
         setDraggedEntry(entry);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('application/json', JSON.stringify({
+            key: entry.key,
             subjectId: entry.subjectId,
             sectionId: entry.sectionId,
             day: entry.day,
             start: entry.start,
             subjectName: entry.subjectName
         }));
-    }, []);
+    }, [canEdit]);
 
     // Handle drop on a time slot
     const handleDrop = useCallback((e: React.DragEvent, day: string, startTime: string) => {
         e.preventDefault();
-        if (!draggedEntry) return;
+        if (!draggedEntry || !canEdit) return;
 
         // Calculate the duration based on the entry's original duration
         const originalStartMinutes = parseInt(draggedEntry.start.split(':')[0]) * 60 + parseInt(draggedEntry.start.split(':')[1]);
@@ -246,7 +254,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         }
         
         setDraggedEntry(null);
-    }, [draggedEntry, checkConflicts, generateSuggestions, formatTime, applyMove]);
+    }, [draggedEntry, checkConflicts, generateSuggestions, formatTime, applyMove, canEdit]);
 
     // Confirm the move despite conflicts
     const confirmMove = useCallback(() => {
@@ -305,8 +313,9 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                             key={`bg-${day}-${slot}`}
                             className="sm-cal-cell sm-cal-slot"
                             style={{ gridColumn: di + 2, gridRow: slot + 2 }}
-                            onDragOver={(e) => e.preventDefault()}
+                            onDragOver={(e) => canEdit && e.preventDefault()}
                             onDrop={(e) => {
+                                if (!canEdit) return;
                                 const startTime = formatTime(`${START_HOUR + Math.floor(slot / 2)}:${(slot % 2) * 30}`);
                                 handleDrop(e, day, startTime);
                             }}
@@ -326,12 +335,12 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                         <div
                             key={`${ev.entry.sectionId}-${ev.entry.day}-${ev.entry.start}`}
                             className="sm-cal-cell"
-                            draggable
+                            draggable={canEdit}
                             onDragStart={(e) => handleDragStart(e, ev.entry)}
                             style={{
                                 gridColumn: ev.dayIdx + 2,
                                 gridRow: `${ev.start + 2} / span ${ev.span}`,
-                                cursor: 'move',
+                                cursor: canEdit ? 'move' : 'default',
                             }}
                         >
                             <div

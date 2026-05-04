@@ -2064,6 +2064,9 @@ const OutcomeStage: React.FC<{
     // Local state for editable schedule entries (for drag-and-drop)
     const [localEntries, setLocalEntries] = useState<typeof result.entries>(result.entries);
 
+    // Type helper for ScheduleDragDrop component
+    type ScheduleEntry = typeof result.entries[number] & { key: string };
+
     const dayOrder = useMemo(() => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], []);
     const START_HOUR = 7;
     const END_HOUR = 19;
@@ -2276,18 +2279,33 @@ const OutcomeStage: React.FC<{
                         </div>
 
                         <ScheduleDragDrop
-                            entries={localEntries}
+                            entries={localEntries.map(e => ({ ...e, key: `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}` }) as ScheduleEntry)}
                             rooms={rooms}
                             teachers={teachers}
                             sections={sections}
-                            onEntriesChange={setLocalEntries}
+                            onUpdate={async (entry, newDay, newStartTime, newEndTime) => {
+                                // Update local entries for PlacedEntry
+                                const entryKey = entry.key;
+                                const updatedEntries = localEntries.map(e => {
+                                    const key = `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}`;
+                                    if (key === entryKey) {
+                                        const updated = { ...e };
+                                        if (newDay) updated.day = newDay;
+                                        if (newStartTime) updated.start = newStartTime;
+                                        if (newEndTime) updated.end = newEndTime;
+                                        return updated;
+                                    }
+                                    return e;
+                                });
+                                setLocalEntries(updatedEntries);
+                            }}
                             dayOrder={dayOrder}
                             START_HOUR={START_HOUR}
                             TOTAL_SLOTS={TOTAL_SLOTS}
                             formatTime={formatTime}
                             colorForKey={colorForKey}
                             viewMode={viewMode}
-                            events={events}
+                            events={events.map(ev => ({ ...ev, entry: { ...ev.entry, key: `${ev.entry.subjectId}-${ev.entry.sectionId}-${ev.entry.day}-${ev.entry.start}` } as ScheduleEntry })) as any}
                         />
                     </div>
                 ) : selectedId ? (
