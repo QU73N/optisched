@@ -1477,7 +1477,50 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
         <div>
             <StageHeader icon={<Sliders size={16} />} title="Constraints" desc="Hard rules are always enforced. Tune soft weights to guide optimization." compact={compact} />
 
-            <div className="sg-subhead"><Lock size={12} /> Hard Constraints. Always On.</div>
+            <div className="sg-subhead"><ShieldCheck size={12} /> Institutional Policies</div>
+            <button
+                type="button"
+                className="sg-hard-constraints-btn"
+                onClick={() => setPoliciesOpen(!policiesOpen)}
+                aria-expanded={policiesOpen}
+                style={{ marginBottom: 16 }}
+            >
+                <span>Configure institutional policies</span>
+                {policiesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {policiesOpen && (
+                <div className="sg-hard-list-expanded" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                        <div className="sg-field-label">Overflow Policy</div>
+                        <select
+                            className="input"
+                            value={config.overflowPolicy || 'relax_soft'}
+                            onChange={e => setConfig(c => ({ ...c, overflowPolicy: e.target.value as 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only' }))}
+                        >
+                            <option value="fail">Fail on Overflow</option>
+                            <option value="relax_soft">Relax Soft Constraints</option>
+                            <option value="expand_scope">Expand Search Scope</option>
+                            <option value="partial_only">Partial Only</option>
+                        </select>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        Overflow policy controls how the generator handles sections that exceed room capacity.
+                        "Fail" stops generation, "Relax soft" temporarily reduces soft constraint weights,
+                        "Expand scope" searches more aggressively, and "Partial only" applies only to partial regeneration.
+                    </div>
+                </div>
+            )}
+
+            <div className="sg-grid-3" style={{ marginTop: 16 }}>
+                <div>
+                    <div className="sg-field-label">Attempts</div>
+                    <select className="input" value={config.maxAttempts} onChange={e => setConfig(c => ({ ...c, maxAttempts: Number(e.target.value) }))}>
+                        {[10, 25, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                </div>
+            </div>
+
+            <div className="sg-subhead" style={{ marginTop: 20 }}><Lock size={12} /> Hard Constraints. Always On.</div>
             <button
                 type="button"
                 className="sg-hard-constraints-btn"
@@ -1506,48 +1549,6 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 <SoftSlider label="Workload Fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} compact={compact} />
                 <SoftSlider label="Subject Spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} compact={compact} />
                 <SoftSlider label="Room Utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} />
-            </div>
-
-            <div className="sg-subhead" style={{ marginTop: 20 }}><ShieldCheck size={12} /> Institutional Policies</div>
-            <button
-                type="button"
-                className="sg-hard-constraints-btn"
-                onClick={() => setPoliciesOpen(!policiesOpen)}
-                aria-expanded={policiesOpen}
-            >
-                <span>Configure institutional policies</span>
-                {policiesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-            {policiesOpen && (
-                <div className="sg-hard-list-expanded" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div>
-                        <div className="sg-field-label">Overflow Policy</div>
-                        <select
-                            className="input"
-                            value={config.overflowPolicy || 'relax_soft'}
-                            onChange={e => setConfig(c => ({ ...c, overflowPolicy: e.target.value as 'fail' | 'relax_soft' | 'expand_scope' | 'partial_only' }))}
-                        >
-                            <option value="fail">Fail on Overflow</option>
-                            <option value="relax_soft">Relax Soft Constraints</option>
-                            <option value="expand_scope">Expand Search Scope</option>
-                            <option value="partial_only">Partial Only</option>
-                        </select>
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        Overflow policy controls how the generator handles sections that exceed room capacity. 
-                        "Fail" stops generation, "Relax soft" temporarily reduces soft constraint weights, 
-                        "Expand scope" searches more aggressively, and "Partial only" applies only to partial regeneration.
-                    </div>
-                </div>
-            )}
-
-            <div className="sg-grid-3" style={{ marginTop: policiesOpen ? 20 : 16 }}>
-                <div>
-                    <div className="sg-field-label">Attempts</div>
-                    <select className="input" value={config.maxAttempts} onChange={e => setConfig(c => ({ ...c, maxAttempts: Number(e.target.value) }))}>
-                        {[10, 25, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                </div>
             </div>
         </div>
     );
