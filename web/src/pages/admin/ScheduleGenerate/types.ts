@@ -130,6 +130,7 @@ export interface SoftWeights {
     workloadFairness: number;     // 0 to 100 — (now hard constraint, kept for compatibility)
     subjectSpacing: number;       // 0 to 100 — avoid stacking the same subject on one day
     roomUtilization: number;      // 0 to 100 — reward high utilization of scarce rooms
+    specialRoomBias: number;      // 0 to 100 — how strongly to reserve labs and studios for subjects that need them
 }
 
 export type PriorityTier = 'high' | 'normal' | 'low';
@@ -155,7 +156,6 @@ export const tierFromValue = (v: number): PriorityTier => {
 export interface Priorities {
     sections: Record<string, number>; // sectionId -> 0..100, missing means 50
     subjects: Record<string, number>; // subjectId -> 0..100, missing means 50
-    specialRoomBias: number;          // 0..100, how strongly special subjects prefer special rooms
 }
 
 export type GenerationMode = 'full' | 'partial' | 'draft' | 'locked' | 'what-if' | 'emergency' | 'multi-scenario';
@@ -352,8 +352,9 @@ export const DEFAULT_CONFIG: GenerationConfig = {
         workloadFairness: 60,
         subjectSpacing: 50,
         roomUtilization: 40,
+        specialRoomBias: 70,
     },
-    priorities: { sections: {}, subjects: {}, specialRoomBias: 70 },
+    priorities: { sections: {}, subjects: {} },
     maxAttempts: 100,
     overflowPolicy: 'relax_soft',
     enableForwardChecking: false, // Disabled by default for performance

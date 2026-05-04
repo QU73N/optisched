@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 
 import { useAuth } from '../../../contexts/AuthContext';
@@ -1558,6 +1558,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                     <SoftSlider label="Workload Fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} compact={compact} />
                     <SoftSlider label="Subject Spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} compact={compact} />
                     <SoftSlider label="Room Utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} />
+                    <SoftSlider label="Special Room Bias" desc="How strongly to reserve labs and studios for subjects that need them." value={config.soft.specialRoomBias} onChange={v => updateSoft('specialRoomBias', v)} compact={compact} />
                 </div>
             )}
         </div>
@@ -1626,6 +1627,7 @@ const ReviewStage: React.FC<{
                     items={[
                         ['Balanced Load', `${config.soft.balancedLoad}`],
                         ['Compact', `${config.soft.compactSchedule}`],
+                        ['Special Room Bias', `${config.soft.specialRoomBias}`],
                         ['Attempts', String(config.maxAttempts)],
                     ]}
                 />
@@ -1634,7 +1636,6 @@ const ReviewStage: React.FC<{
                         ['High Priority Sections', String(Object.values(config.priorities.sections).filter(v => v >= 70).length)],
                         ['High Priority Subjects', String(Object.values(config.priorities.subjects).filter(v => v >= 70).length)],
                         ['Low Priority Items', String([...Object.values(config.priorities.sections), ...Object.values(config.priorities.subjects)].filter(v => v <= 30).length)],
-                        ['Special Room Bias', `${config.priorities.specialRoomBias}`],
                     ]}
                 />
             </div>
@@ -1884,7 +1885,7 @@ const OutcomeStage: React.FC<{
     const [viewMode, setViewMode] = useState<'section' | 'teacher' | 'room'>('section');
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
-    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOrder = useMemo(() => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], []);
     const SHORT_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     const START_HOUR = 7;
     const END_HOUR = 19;
@@ -1898,10 +1899,10 @@ const OutcomeStage: React.FC<{
         return (h || 0) * 60 + (m || 0);
     };
 
-    const slotIndex = (t: string) => {
+    const slotIndex = useCallback((t: string) => {
         const mins = timeToMinutes(t) - START_HOUR * 60;
         return Math.max(0, Math.min(TOTAL_SLOTS, Math.round(mins / SLOT_MINUTES)));
-    };
+    }, [START_HOUR, SLOT_MINUTES, TOTAL_SLOTS]);
 
     const formatTime = (t: string) => {
         if (!t) return '';
@@ -1946,11 +1947,11 @@ const OutcomeStage: React.FC<{
         return groups;
     }, [result]);
 
-    const selectedEntries = selectedId
+    const selectedEntries = useMemo(() => selectedId
         ? (viewMode === 'section' ? groupedBySection[selectedId]
            : viewMode === 'teacher' ? groupedByTeacher[selectedId]
            : groupedByRoom[selectedId]) || []
-        : [];
+        : [], [selectedId, viewMode, groupedBySection, groupedByTeacher, groupedByRoom]);
 
     // Convert entries to event format for grid display
     const events = useMemo(() => {
@@ -2536,21 +2537,6 @@ const PrioritiesStage: React.FC<{
                 desc="Flag what matters most. The engine places high priority items first and protects their slots."
                 compact={compact}
             />
-
-            <div className="sg-prio-bias">
-                <div className="sg-slider-head">
-                    <div>
-                        <div className="sg-slider-label">Special Room Bias</div>
-                        {!compact && <div className="sg-slider-desc">How strongly to reserve labs and studios for subjects that need them. Lab subjects always get labs.</div>}
-                    </div>
-                    <div className="sg-slider-val">{config.priorities.specialRoomBias}</div>
-                </div>
-                <input
-                    type="range" min={0} max={100} step={5}
-                    value={config.priorities.specialRoomBias}
-                    onChange={e => setConfig(c => ({ ...c, priorities: { ...c.priorities, specialRoomBias: Number(e.target.value) } }))}
-                />
-            </div>
 
             <div className="sg-prio-toolbar">
                 <div className="sg-tabs-mini">
