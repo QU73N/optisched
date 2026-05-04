@@ -497,6 +497,10 @@ const ScheduleGenerate: React.FC = () => {
     const performSave = async (initialState: 'draft' | 'submitted') => {
         if (!result) return;
         setSaving(true); setSaveError(null);
+        
+        // Initialize version service
+        scheduleVersionService.initialize(supabase, user?.id || '');
+        
         try {
             if (config.mode === 'partial') {
                 const t = config.partialTarget;
@@ -514,8 +518,9 @@ const ScheduleGenerate: React.FC = () => {
                 if (delErr) throw delErr;
             }
 
-            // Insert new schedule entries
-            const inserts = result.entries.map(e => ({
+            // Convert result entries to Schedule format
+            const schedules = result.entries.map(e => ({
+                id: crypto.randomUUID(),
                 subject_id: e.subjectId,
                 teacher_id: e.teacherId,
                 room_id: e.roomId,
@@ -527,59 +532,72 @@ const ScheduleGenerate: React.FC = () => {
                 academic_year: '2025-2026',
                 status: initialState,
                 is_active: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                created_by: user?.id || null,
             }));
-            console.log('[PERFORM SAVE] Inserting schedules with status:', initialState);
-            console.log('[PERFORM SAVE] First insert status:', inserts[0]?.status);
-            console.log('[PERFORM SAVE] Total inserts:', inserts.length);
-            console.log('[PERFORM SAVE] Attempting direct HTTP insert');
-            const { error: insertError, status: insertStatus } = await directInsert({
-              table: 'schedules',
-              data: inserts,
-              onConflict: 'id',
-              returning: 'minimal',
-            });
 
-            if (insertError) {
-              console.error('[PERFORM SAVE] Direct HTTP insert failed:', insertError);
-              console.error('[PERFORM SAVE] Status:', insertStatus);
-              
-              // FALLBACK 1: Try RPC
-              console.log('[PERFORM SAVE] Attempting RPC fallback');
-              const { error: rpcError } = await supabase.rpc('insert_schedules_batch_v2', {
-                p_schedules: inserts,
-              });
-              
-              if (rpcError) {
-                console.error('[PERFORM SAVE] RPC fallback also failed:', rpcError);
-                throw new Error(`Save failed - Direct HTTP: ${insertError.message}, RPC: ${rpcError.message}`);
-              }
-              
-              console.log('[PERFORM SAVE] RPC fallback succeeded');
-              setSavedId('ok');
+            console.log('[PERFORM SAVE] Saving schedules with status:', initialState);
+            console.log('[PERFORM SAVE] Total schedules:', schedules.length);
+
+            let saveResult;
+            if (initialState === 'draft') {
+                // Use the new saveDraft method
+                saveResult = await scheduleVersionService.saveDraft(schedules, {
+                    academic_year: '2025-2026',
+                    semester: '1st Semester',
+                    score: result.score,
+                    conflictCount: 0, // Will be updated by Conflicts tab scan
+                    changeReason: 'Generated schedule from Generate tab',
+                });
+                
+                if (saveResult.success) {
+                    setSavedId('draft');
+                    console.log('[PERFORM SAVE] Draft saved successfully');
+                } else {
+                    throw new Error(saveResult.message);
+                }
             } else {
-              console.log('[PERFORM SAVE] Direct HTTP insert succeeded, status:', insertStatus);
-              setSavedId('ok');
+                // For submitted, first save as draft, then submit
+                const draftResult = await scheduleVersionService.saveDraft(schedules, {
+                    academic_year: '2025-2026',
+                    semester: '1st Semester',
+                    score: result.score,
+                    conflictCount: 0,
+                    changeReason: 'Generated schedule for submission',
+                });
+                
+                if (!draftResult.success) {
+                    throw new Error(draftResult.message);
+                }
+                
+                console.log('[PERFORM SAVE] Draft saved, now submitting...');
+                
+                // Now submit the draft
+                const submitResult = await scheduleVersionService.submitSchedule(draftResult.version_set_id!, {
+                    changeReason: 'Submitted from Generate tab',
+                });
+                
+                if (submitResult.success) {
+                    setSavedId('submitted');
+                    console.log('[PERFORM SAVE] Schedule submitted successfully');
+                } else {
+                    throw new Error(submitResult.message);
+                }
             }
 
-            // Query the inserted schedules to get their IDs
-            // Since we can't get IDs from the insert, query by the most recent records
-            const { data: insertedSchedules, error: queryError } = await supabase
+            // Scan for conflicts and save to conflicts table
+            const { data: savedScheduleData } = await supabase
                 .from('schedules')
-                .select('id')
+                .select('*, subject:subjects(*), teacher:teachers(*, profile_id:profiles(*)), room:rooms(*), section:sections(*)')
                 .eq('status', initialState)
-                .eq('is_active', true)
-                .eq('semester', '1st Semester')
-                .eq('academic_year', '2025-2026')
-                .order('created_at', { ascending: false })
-                .limit(result.entries.length);
+                .eq('is_active', true);
 
-            if (queryError) {
-                console.error('[PERFORM SAVE] Query error:', queryError);
-                // Continue anyway - the insert succeeded
-            } else {
-                console.log('[PERFORM SAVE] Queried', insertedSchedules?.length, 'inserted schedules');
+            if (savedScheduleData && savedScheduleData.length > 0) {
+                const conflicts = detectConflicts(savedScheduleData);
+
                 // Log audit for each created schedule
-                for (const schedule of insertedSchedules || []) {
+                for (const schedule of savedScheduleData) {
                     await scheduleAudit.created(schedule.id, {
                         section: result.entries[0]?.sectionId,
                         teacher: result.entries[0]?.teacherId,
@@ -587,73 +605,39 @@ const ScheduleGenerate: React.FC = () => {
                     });
                 }
 
-                // Scan for conflicts and save to conflicts table
-                if (insertedSchedules && insertedSchedules.length > 0) {
-                    const { data: savedScheduleData } = await supabase
-                        .from('schedules')
-                        .select('*, subject:subjects(*), teacher:teachers(*, profile_id:profiles(*)), room:rooms(*), section:sections(*)')
-                        .in('id', insertedSchedules.map((d: { id: string }) => d.id));
-
-                    if (savedScheduleData) {
-                        const conflicts = detectConflicts(savedScheduleData);
-
-                        // Save conflicts to database
-                        if (conflicts.length > 0) {
-                            const conflictInserts = conflicts.map((c: { type: string; severity: string; title: string; description: string; scheduleAId: string | null; scheduleBId: string | null }) => ({
-                                type: c.type,
-                                severity: c.severity,
-                                title: c.title,
-                                description: c.description,
-                                schedule_a_id: c.scheduleAId,
-                                schedule_b_id: c.scheduleBId,
-                                is_resolved: false,
-                            }));
-                            
-                            // Use direct HTTP for conflict insert as well
-                            const { error: conflictError } = await directInsert({
-                                table: 'conflicts',
-                                data: conflictInserts,
-                            });
-                            
-                            if (conflictError) {
-                                console.error('[PERFORM SAVE] Conflict insert error:', conflictError);
-                                // Try fallback to Supabase client for conflicts
-                                const { error: fallbackConflictError } = await supabase
-                                    .from('conflicts')
-                                    .insert(conflictInserts);
-                                
-                                if (fallbackConflictError) {
-                                    console.error('[PERFORM SAVE] Fallback conflict insert also failed:', fallbackConflictError);
-                                }
-                            }
+                // Save conflicts to database
+                if (conflicts.length > 0) {
+                    const conflictInserts = conflicts.map((c: { type: string; severity: string; title: string; description: string; scheduleAId: string | null; scheduleBId: string | null }) => ({
+                        type: c.type,
+                        severity: c.severity,
+                        title: c.title,
+                        description: c.description,
+                        schedule_a_id: c.scheduleAId,
+                        schedule_b_id: c.scheduleBId,
+                        is_resolved: false,
+                    }));
+                    
+                    // Use direct HTTP for conflict insert
+                    const { error: conflictError } = await directInsert({
+                        table: 'conflicts',
+                        data: conflictInserts,
+                    });
+                    
+                    if (conflictError) {
+                        console.error('[PERFORM SAVE] Conflict insert error:', conflictError);
+                        // Try fallback to Supabase client for conflicts
+                        const { error: fallbackConflictError } = await supabase
+                            .from('conflicts')
+                            .insert(conflictInserts);
+                        
+                        if (fallbackConflictError) {
+                            console.error('[PERFORM SAVE] Fallback conflict insert also failed:', fallbackConflictError);
                         }
                     }
                 }
             }
             
             await refreshExisting();
-
-            // Update canonical state manager with the saved schedules
-            const { data: savedSchedules } = await supabase
-                .from('schedules')
-                .select('*')
-                .in('status', ['published', 'draft'])
-                .eq('is_active', true);
-            
-            if (savedSchedules) {
-                const version = await scheduleStateManager.updateState(
-                    savedSchedules,
-                    'generate',
-                    {
-                        conflictCount: 0, // Will be updated by Conflicts tab scan
-                        softScore: result.score,
-                        changeDescription: `Generated schedule with ${result.placed} sessions`,
-                    }
-                );
-                scheduleLogger.generate.schedulePersisted(version.version, savedId || 'ok');
-                scheduleLogger.generate.stateUpdated(version.version, version.hash);
-                scheduleLogger.generate.scheduleCreated(version.version, version.hash, `Saved as ${initialState}`);
-            }
 
             // Notify students of schedule changes
             const affectedSectionIds = Array.from(new Set(result.entries.map(e => e.sectionId)));
@@ -683,6 +667,9 @@ const ScheduleGenerate: React.FC = () => {
         if (!result) return;
         
         setShowOverwriteConfirm(false);
+        
+        // Initialize version service
+        scheduleVersionService.initialize(supabase, user?.id || '');
         
         // Use version service to publish with overwrite
         const schedules = result.entries.map(e => ({

@@ -2315,7 +2315,9 @@ export async function runGenerator(
         : [];
     const lockedExisting = isPartial
         ? existing.filter(e => !targetMatches(e, target))
-        : existing.filter(e => scopedSectionIds.size === 0 || scopedSectionIds.has(e.section_id));
+        : scopedSectionIds.size === 0 || scopedSectionIds.size === scopedSections.length
+            ? [] // Full mode with all sections: regenerate from scratch
+            : existing.filter(e => scopedSectionIds.has(e.section_id)); // Full mode with specific sections: lock only those
 
     const baseBusy: Busy[] = lockedExisting.map(e => ({
         teacherId: e.teacher_id,

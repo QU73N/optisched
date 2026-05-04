@@ -127,8 +127,8 @@ CREATE TABLE public.client_error_logs (
 );
 CREATE TABLE public.conflicts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  type text NOT NULL CHECK (type = ANY (ARRAY['room_conflict'::text, 'teacher_overlap'::text, 'capacity_exceeded'::text, 'unassigned'::text])),
-  severity text NOT NULL CHECK (severity = ANY (ARRAY['high'::text, 'medium'::text, 'low'::text])),
+  type text NOT NULL,
+  severity text NOT NULL,
   title text NOT NULL,
   description text NOT NULL,
   schedule_a_id uuid,
@@ -137,6 +137,7 @@ CREATE TABLE public.conflicts (
   resolved_at timestamp with time zone,
   resolved_by uuid,
   created_at timestamp with time zone DEFAULT now(),
+  conflict_original_id text UNIQUE,
   CONSTRAINT conflicts_pkey PRIMARY KEY (id),
   CONSTRAINT conflicts_schedule_a_id_fkey FOREIGN KEY (schedule_a_id) REFERENCES public.schedules(id),
   CONSTRAINT conflicts_schedule_b_id_fkey FOREIGN KEY (schedule_b_id) REFERENCES public.schedules(id),
@@ -185,6 +186,65 @@ CREATE TABLE public.feature_flags (
   CONSTRAINT feature_flags_pkey PRIMARY KEY (key),
   CONSTRAINT feature_flags_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.generation_runs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  config jsonb NOT NULL,
+  scope jsonb NOT NULL,
+  seed integer NOT NULL,
+  priority_settings jsonb NOT NULL,
+  constraint_settings jsonb NOT NULL,
+  attempt_scores jsonb,
+  final_schedule jsonb,
+  repair_actions jsonb,
+  invalid_sessions jsonb,
+  failure_reason text,
+  failure_category text,
+  actionable_options jsonb,
+  total_sessions integer NOT NULL,
+  placed_sessions integer NOT NULL,
+  score numeric,
+  mode text NOT NULL CHECK (mode = ANY (ARRAY['full'::text, 'partial'::text, 'draft'::text, 'locked'::text, 'what-if'::text, 'emergency'::text, 'multi-scenario'::text])),
+  partial_target jsonb,
+  status text NOT NULL CHECK (status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text])),
+  started_at timestamp with time zone NOT NULL DEFAULT now(),
+  completed_at timestamp with time zone,
+  created_by uuid,
+  CONSTRAINT generation_runs_pkey PRIMARY KEY (id),
+  CONSTRAINT generation_runs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.group_chat_members (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  group_chat_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  joined_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT group_chat_members_pkey PRIMARY KEY (id),
+  CONSTRAINT group_chat_members_group_chat_id_fkey FOREIGN KEY (group_chat_id) REFERENCES public.group_chats(id),
+  CONSTRAINT group_chat_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.group_chat_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  group_chat_id uuid NOT NULL,
+  sender_id uuid NOT NULL,
+  message text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  is_read boolean DEFAULT false,
+  CONSTRAINT group_chat_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT group_chat_messages_group_chat_id_fkey FOREIGN KEY (group_chat_id) REFERENCES public.group_chats(id),
+  CONSTRAINT group_chat_messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.group_chats (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  type text NOT NULL CHECK (type = ANY (ARRAY['department'::text, 'section'::text, 'schedule_managers'::text])),
+  institution_id uuid,
+  department_name text,
+  section_id uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT group_chats_pkey PRIMARY KEY (id),
+  CONSTRAINT group_chats_institution_id_fkey FOREIGN KEY (institution_id) REFERENCES public.profiles(id),
+  CONSTRAINT group_chats_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id)
+);
 CREATE TABLE public.institution_breaks (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   name text NOT NULL,
@@ -202,10 +262,24 @@ CREATE TABLE public.institution_breaks (
   CONSTRAINT institution_breaks_pkey PRIMARY KEY (id),
   CONSTRAINT institution_breaks_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.institutional_policies (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  institution_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'::uuid,
+  policy_name text NOT NULL,
+  policy_value jsonb NOT NULL,
+  policy_category text NOT NULL CHECK (policy_category = ANY (ARRAY['scheduling'::text, 'breaks'::text, 'approvals'::text, 'regeneration'::text, 'overflow'::text, 'priority_override'::text])),
+  is_active boolean NOT NULL DEFAULT true,
+  version integer NOT NULL DEFAULT 1,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT institutional_policies_pkey PRIMARY KEY (id),
+  CONSTRAINT institutional_policies_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.notifications (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   user_id uuid NOT NULL,
-  type text NOT NULL CHECK (type = ANY (ARRAY['schedule_change'::text, 'sharing_request'::text, 'approval'::text, 'system'::text, 'reminder'::text])),
+  type text NOT NULL CHECK (type = ANY (ARRAY['schedule_change'::text, 'sharing_request'::text, 'approval'::text, 'system'::text, 'reminder'::text, 'conflict_alert'::text, 'announcement'::text])),
   title text NOT NULL,
   message text NOT NULL,
   data jsonb DEFAULT '{}'::jsonb,
@@ -251,6 +325,11 @@ CREATE TABLE public.profiles (
   section text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  ai_chat_count integer DEFAULT 0,
+  ai_chat_reset_date date DEFAULT CURRENT_DATE,
+  id_number text,
+  student_type text CHECK (student_type = ANY (ARRAY['shs'::text, 'college'::text])),
+  access_permissions jsonb DEFAULT '{}'::jsonb,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
@@ -290,8 +369,37 @@ CREATE TABLE public.rooms (
   owner_id uuid,
   is_public boolean DEFAULT false,
   shared_with ARRAY DEFAULT '{}'::uuid[],
+  subject_compatibility jsonb DEFAULT '{}'::jsonb,
+  equipment_available jsonb DEFAULT '{}'::jsonb,
+  movement_cost numeric DEFAULT 1.0,
   CONSTRAINT rooms_pkey PRIMARY KEY (id),
   CONSTRAINT rooms_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.scan_results (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  scanned_at timestamp with time zone NOT NULL DEFAULT now(),
+  scanned_by uuid,
+  total_conflicts integer NOT NULL DEFAULT 0 CHECK (total_conflicts >= 0),
+  hard_violations_count integer NOT NULL DEFAULT 0 CHECK (hard_violations_count >= 0),
+  soft_violations_count integer NOT NULL DEFAULT 0 CHECK (soft_violations_count >= 0),
+  soft_score integer NOT NULL DEFAULT 0 CHECK (soft_score >= 0),
+  scan_duration_ms integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT scan_results_pkey PRIMARY KEY (id),
+  CONSTRAINT scan_results_scanned_by_fkey FOREIGN KEY (scanned_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.schedule_batches (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  description text,
+  academic_year text NOT NULL,
+  semester text NOT NULL,
+  created_by uuid NOT NULL,
+  is_active boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT schedule_batches_pkey PRIMARY KEY (id),
+  CONSTRAINT schedule_batches_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.schedule_change_requests (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -325,6 +433,7 @@ CREATE TABLE public.schedule_version_sets (
   is_published boolean NOT NULL DEFAULT false,
   created_by uuid NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_active boolean NOT NULL DEFAULT false,
   CONSTRAINT schedule_version_sets_pkey PRIMARY KEY (id),
   CONSTRAINT schedule_version_sets_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
@@ -333,15 +442,21 @@ CREATE TABLE public.schedule_versions (
   schedule_id uuid NOT NULL,
   version_number integer NOT NULL,
   snapshot jsonb NOT NULL,
-  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['created'::text, 'updated'::text, 'deleted'::text, 'status_change'::text, 'checkpoint'::text])),
+  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['created'::text, 'updated'::text, 'deleted'::text, 'status_change'::text, 'checkpoint'::text, 'publish'::text, 'overwrite'::text, 'restore'::text])),
   change_summary text,
   change_reason text,
   changed_by uuid NOT NULL,
   changed_at timestamp with time zone NOT NULL DEFAULT now(),
   previous_version_id uuid,
+  is_active boolean NOT NULL DEFAULT false,
+  state_hash text,
+  soft_score numeric,
+  conflict_count integer,
+  batch_id uuid,
   CONSTRAINT schedule_versions_pkey PRIMARY KEY (id),
   CONSTRAINT schedule_versions_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.schedules(id),
-  CONSTRAINT schedule_versions_previous_version_fkey FOREIGN KEY (previous_version_id) REFERENCES public.schedule_versions(id)
+  CONSTRAINT schedule_versions_previous_version_fkey FOREIGN KEY (previous_version_id) REFERENCES public.schedule_versions(id),
+  CONSTRAINT schedule_versions_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.schedule_batches(id)
 );
 CREATE TABLE public.schedules (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -370,6 +485,11 @@ CREATE TABLE public.schedules (
   rejected_at timestamp with time zone,
   deleted_at timestamp with time zone,
   deleted_by uuid,
+  is_protected boolean DEFAULT false,
+  protection_level text CHECK (protection_level IS NULL OR (protection_level = ANY (ARRAY['none'::text, 'approved'::text, 'published'::text, 'admin_locked'::text]))),
+  protected_version_id uuid,
+  is_active boolean NOT NULL DEFAULT true,
+  batch_id uuid,
   CONSTRAINT schedules_pkey PRIMARY KEY (id),
   CONSTRAINT schedules_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
   CONSTRAINT schedules_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
@@ -377,9 +497,11 @@ CREATE TABLE public.schedules (
   CONSTRAINT schedules_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id),
   CONSTRAINT schedules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
   CONSTRAINT schedules_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.schedule_batches(id),
   CONSTRAINT schedules_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES public.profiles(id),
   CONSTRAINT schedules_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.profiles(id),
-  CONSTRAINT schedules_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id)
+  CONSTRAINT schedules_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id),
+  CONSTRAINT schedules_protected_version_id_fkey FOREIGN KEY (protected_version_id) REFERENCES public.schedule_versions(id)
 );
 CREATE TABLE public.sections (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -399,6 +521,8 @@ CREATE TABLE public.sections (
   owner_id uuid,
   is_public boolean DEFAULT false,
   shared_with ARRAY DEFAULT '{}'::uuid[],
+  load_category text CHECK (load_category IS NULL OR (load_category = ANY (ARRAY['light'::text, 'normal'::text, 'heavy'::text]))),
+  special_scheduling_rules jsonb DEFAULT '{}'::jsonb,
   CONSTRAINT sections_pkey PRIMARY KEY (id),
   CONSTRAINT sections_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.sections(id),
   CONSTRAINT sections_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
@@ -429,6 +553,14 @@ CREATE TABLE public.students (
   CONSTRAINT students_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
   CONSTRAINT students_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id)
 );
+CREATE TABLE public.subject_teachers (
+  subject_id uuid NOT NULL,
+  teacher_id uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT subject_teachers_pkey PRIMARY KEY (subject_id, teacher_id),
+  CONSTRAINT subject_teachers_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
+  CONSTRAINT subject_teachers_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id)
+);
 CREATE TABLE public.subjects (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   code text NOT NULL UNIQUE,
@@ -447,6 +579,8 @@ CREATE TABLE public.subjects (
   is_public boolean DEFAULT false,
   shared_with ARRAY DEFAULT '{}'::uuid[],
   sessions_per_week integer,
+  monthly_hour_targets numeric,
+  teacher_eligibility_pool jsonb DEFAULT '{}'::jsonb,
   CONSTRAINT subjects_pkey PRIMARY KEY (id),
   CONSTRAINT subjects_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
   CONSTRAINT subjects_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
@@ -488,6 +622,7 @@ CREATE TABLE public.teacher_preferences (
   preferred_time_end text DEFAULT '17:00'::text,
   max_classes_per_day integer DEFAULT 5,
   max_consecutive_classes integer DEFAULT 3,
+  shared_assignment boolean DEFAULT false,
   CONSTRAINT teacher_preferences_pkey PRIMARY KEY (id),
   CONSTRAINT teacher_preferences_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id)
 );
@@ -506,6 +641,7 @@ CREATE TABLE public.teachers (
   owner_id uuid,
   is_public boolean DEFAULT false,
   shared_with ARRAY DEFAULT '{}'::uuid[],
+  shared_assignment boolean DEFAULT false,
   CONSTRAINT teachers_pkey PRIMARY KEY (id),
   CONSTRAINT teachers_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id),
   CONSTRAINT teachers_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
@@ -557,4 +693,18 @@ CREATE TABLE public.user_permission_overrides (
   CONSTRAINT user_permission_overrides_pkey PRIMARY KEY (id),
   CONSTRAINT user_permission_overrides_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
   CONSTRAINT user_permission_overrides_set_by_fkey FOREIGN KEY (set_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.user_preferences (
+  user_id uuid NOT NULL,
+  theme text DEFAULT 'light'::text CHECK (theme = ANY (ARRAY['light'::text, 'dark'::text])),
+  time_format text DEFAULT '24h'::text CHECK (time_format = ANY (ARRAY['12h'::text, '24h'::text])),
+  landing_animations boolean DEFAULT true,
+  dashboard_animations boolean DEFAULT false,
+  email_notifications boolean DEFAULT true,
+  schedule_notifications boolean DEFAULT true,
+  announcement_notifications boolean DEFAULT true,
+  updated_at timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id),
+  CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );

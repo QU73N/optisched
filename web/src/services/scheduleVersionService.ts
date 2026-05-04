@@ -348,6 +348,305 @@ class ScheduleVersionService {
     }
 
     /**
+     * Save a schedule as draft
+     * 
+     * Creates a draft version of the schedule without affecting published schedules.
+     * Drafts are versioned and can be compared, but are not visible to students.
+     */
+    async saveDraft(
+        schedules: Schedule[],
+        options: {
+            academic_year: string;
+            semester: string;
+            score?: number;
+            conflictCount?: number;
+            changeReason?: string;
+        }
+    ): Promise<PublishResult> {
+        if (!this.supabase || !this.currentUserId) {
+            throw new Error('Version service not initialized');
+        }
+
+        const startTime = Date.now();
+        scheduleLogger.system.workflowStarted('Schedule save draft');
+
+        let createdBatchId: string | null = null;
+        let createdVersionId: string | null = null;
+        let insertedScheduleIds: string[] = [];
+
+        try {
+            // Compute state hash for the new schedules
+            const stateHash = scheduleValidation.computeStateHash(schedules);
+
+            // Step 1 - Create new batch for the draft
+            const { data: newBatch, error: batchError } = await this.supabase
+                .rpc('create_schedule_batch', {
+                    p_name: `Draft Batch ${new Date().toISOString()}`,
+                    p_description: options.changeReason || 'Draft schedule',
+                    p_academic_year: options.academic_year,
+                    p_semester: options.semester,
+                    p_created_by: this.currentUserId,
+                });
+
+            if (batchError) {
+                throw new Error(`Failed to create batch: ${batchError.message}`);
+            }
+
+            createdBatchId = newBatch;
+            console.log(`[VERSION SERVICE] Created draft batch ${createdBatchId}`);
+
+            // Step 2 - Deactivate existing draft schedules (keep only one active draft)
+            const { error: deactivateError } = await this.supabase
+                .from('schedules')
+                .update({ is_active: false })
+                .eq('status', 'draft')
+                .eq('is_active', true);
+
+            if (deactivateError) {
+                console.warn('[VERSION SERVICE] Failed to deactivate previous drafts:', deactivateError);
+                // Continue anyway
+            }
+
+            // Step 3 - Insert new draft schedules with batch_id
+            const inserts = schedules.map(s => ({
+                subject_id: s.subject_id,
+                teacher_id: s.teacher_id,
+                room_id: s.room_id,
+                section_id: s.section_id,
+                day_of_week: s.day_of_week,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                status: 'draft',
+                is_active: true,
+                batch_id: createdBatchId,
+                semester: options.semester,
+                academic_year: options.academic_year,
+                created_by: this.currentUserId,
+            }));
+
+            const { data: insertedSchedules, error: insertError } = await this.supabase
+                .from('schedules')
+                .insert(inserts)
+                .select('id');
+
+            if (insertError) {
+                // ROLLBACK: Clean up
+                await this.supabase.from('schedule_batches').delete().eq('id', createdBatchId);
+                throw new Error(`Insert failed: ${insertError.message}`);
+            }
+
+            insertedScheduleIds = (insertedSchedules || []).map(s => s.id);
+            console.log(`[VERSION SERVICE] Inserted ${insertedScheduleIds.length} draft schedules into batch ${createdBatchId}`);
+
+            // Step 4 - Create batch-level version for the draft
+            const { data: version, error: versionError } = await this.supabase
+                .rpc('create_batch_version', {
+                    p_batch_id: createdBatchId,
+                    p_change_type: 'created',
+                    p_change_summary: `${schedules.length} sessions saved as draft`,
+                    p_change_reason: options.changeReason || 'Draft save',
+                    p_state_hash: stateHash,
+                    p_soft_score: options.score || 0,
+                    p_conflict_count: options.conflictCount || 0,
+                    p_changed_by: this.currentUserId,
+                    p_previous_version_id: null,
+                });
+
+            if (versionError) {
+                // ROLLBACK: Clean up
+                await this.supabase.from('schedules').delete().in('id', insertedScheduleIds);
+                await this.supabase.from('schedule_batches').delete().eq('id', createdBatchId);
+                throw new Error(`Version creation failed: ${versionError.message}. Partial changes have been rolled back.`);
+            }
+
+            createdVersionId = version;
+            console.log(`[VERSION SERVICE] Created draft version ${createdVersionId}`);
+
+            // Step 5 - Activate the draft batch
+            await this.supabase
+                .from('schedule_batches')
+                .update({ is_active: true })
+                .eq('id', createdBatchId);
+
+            // CRITICAL: Verify state hash after persistence
+            const { data: verifiedSchedules } = await this.supabase
+                .from('schedules')
+                .select('*')
+                .eq('batch_id', createdBatchId)
+                .eq('is_active', true);
+
+            if (!verifiedSchedules || verifiedSchedules.length !== schedules.length) {
+                throw new Error('Persistence verification failed: Schedule count mismatch');
+            }
+
+            const verifiedHash = scheduleValidation.computeStateHash(verifiedSchedules);
+            if (verifiedHash !== stateHash) {
+                scheduleLogger.system.error('system', 'persistence', 'CRITICAL: State hash mismatch after persistence', {
+                    expected: stateHash,
+                    actual: verifiedHash,
+                });
+                throw new Error('Persistence verification failed: State hash mismatch');
+            }
+
+            // Update canonical state manager
+            if (verifiedSchedules) {
+                const version = await scheduleStateManager.updateState(
+                    verifiedSchedules,
+                    'generate',
+                    {
+                        conflictCount: options.conflictCount || 0,
+                        softScore: options.score || 0,
+                        changeDescription: `Saved draft with ${verifiedSchedules.length} sessions`,
+                    }
+                );
+                console.log(`[VERSION SERVICE] State manager updated: ${version}`);
+            }
+
+            scheduleLogger.system.workflowCompleted('Schedule save draft', Date.now(), true);
+            scheduleLogger.system.stateSynced('version_service', verifiedSchedules.length);
+
+            return {
+                success: true,
+                message: `Successfully saved ${schedules.length} sessions as draft`,
+                version_set_id: createdBatchId,
+                version_count: 1,
+                active_version_id: createdVersionId,
+            };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            scheduleLogger.system.error('generate', 'persistence', 'Draft save failed', error);
+            scheduleLogger.system.workflowCompleted('Schedule save draft', Date.now() - startTime, false);
+
+            return {
+                success: false,
+                message: `Failed to save draft: ${errorMessage}`,
+                version_set_id: null,
+                version_count: 0,
+                active_version_id: null,
+                warnings: [errorMessage],
+            };
+        }
+    }
+
+    /**
+     * Submit a draft schedule for approval
+     * 
+     * Transitions a draft schedule to 'submitted' status.
+     * This creates a new version to track the status change.
+     */
+    async submitSchedule(
+        batchId: string,
+        options: {
+            changeReason?: string;
+        }
+    ): Promise<PublishResult> {
+        if (!this.supabase || !this.currentUserId) {
+            throw new Error('Version service not initialized');
+        }
+
+        const startTime = Date.now();
+        scheduleLogger.system.workflowStarted('Schedule submit');
+
+        try {
+            // Get the draft batch
+            const { data: batch, error: batchError } = await this.supabase
+                .from('schedule_batches')
+                .select('*')
+                .eq('id', batchId)
+                .single();
+
+            if (batchError || !batch) {
+                throw new Error('Draft batch not found');
+            }
+
+            // Get the active version for this batch
+            const { data: activeVersion } = await this.supabase
+                .rpc('get_active_batch_version', { p_batch_id: batchId });
+
+            if (!activeVersion || activeVersion.length === 0) {
+                throw new Error('No active version found for this batch');
+            }
+
+            // Get the schedules in this batch
+            const { data: schedules, error: schedulesError } = await this.supabase
+                .from('schedules')
+                .select('*')
+                .eq('batch_id', batchId)
+                .eq('is_active', true);
+
+            if (schedulesError || !schedules) {
+                throw new Error('Failed to fetch schedules from batch');
+            }
+
+            // Update schedules to submitted status
+            const { error: updateError } = await this.supabase
+                .from('schedules')
+                .update({ 
+                    status: 'submitted',
+                    submitted_at: new Date().toISOString(),
+                })
+                .eq('batch_id', batchId)
+                .eq('is_active', true);
+
+            if (updateError) {
+                throw new Error(`Failed to update status: ${updateError.message}`);
+            }
+
+            // Create a new version for the status change
+            const stateHash = scheduleValidation.computeStateHash(schedules);
+            const { data: newVersion, error: versionError } = await this.supabase
+                .rpc('create_batch_version', {
+                    p_batch_id: batchId,
+                    p_change_type: 'status_change',
+                    p_change_summary: 'Submitted for approval',
+                    p_change_reason: options.changeReason || 'Schedule submission',
+                    p_state_hash: stateHash,
+                    p_soft_score: activeVersion[0].soft_score || 0,
+                    p_conflict_count: activeVersion[0].conflict_count || 0,
+                    p_changed_by: this.currentUserId,
+                    p_previous_version_id: activeVersion[0].id,
+                });
+
+            if (versionError) {
+                // ROLLBACK: Revert status back to draft
+                await this.supabase
+                    .from('schedules')
+                    .update({ status: 'draft', submitted_at: null })
+                    .eq('batch_id', batchId)
+                    .eq('is_active', true);
+                throw new Error(`Version creation failed: ${versionError.message}. Status has been reverted.`);
+            }
+
+            // Activate the new version
+            await this.supabase
+                .rpc('activate_batch_version', { p_version_id: newVersion });
+
+            scheduleLogger.system.workflowCompleted('Schedule submit', Date.now(), true);
+
+            return {
+                success: true,
+                message: `Successfully submitted ${schedules.length} sessions for approval`,
+                version_set_id: batchId,
+                version_count: 1,
+                active_version_id: newVersion,
+            };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            scheduleLogger.system.error('generate', 'persistence', 'Schedule submission failed', error);
+            scheduleLogger.system.workflowCompleted('Schedule submit', Date.now() - startTime, false);
+
+            return {
+                success: false,
+                message: `Failed to submit schedule: ${errorMessage}`,
+                version_set_id: null,
+                version_count: 0,
+                active_version_id: null,
+                warnings: [errorMessage],
+            };
+        }
+    }
+
+    /**
      * Publish a new schedule with overwrite protection
      * 
      * CRITICAL: This method now uses batch-level versioning.
