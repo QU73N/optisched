@@ -2492,6 +2492,8 @@ export async function runGenerator(
             const taskId = `${sub.id}|${section.id}|${task.sessionIndex}`;
             const usedDays = usedDaysByTask.get(taskKey) || new Set<string>();
 
+            console.log(`[PLACEMENT] Starting placement for ${sub.name} (${sub.code}) session ${task.sessionIndex + 1} for ${section.name}`);
+
             // Get pre-computed domain for this task
             const domain = domains.get(taskId);
             if (!domain || domain.validTeachers.length === 0 || domain.validRooms.length === 0 || domain.validSlots.length === 0) {
