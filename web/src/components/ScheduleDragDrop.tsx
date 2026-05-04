@@ -32,6 +32,7 @@ interface ScheduleDragDropProps {
     viewMode: 'section' | 'teacher' | 'room';
     events: Array<{ entry: ScheduleEntry; dayIdx: number; start: number; span: number }>;
     canEdit?: boolean;
+    onContextMenu?: (e: React.MouseEvent, entry: ScheduleEntry) => void;
 }
 
 export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
@@ -48,6 +49,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
     viewMode,
     events,
     canEdit = true,
+    onContextMenu,
 }) => {
     const [draggedEntry, setDraggedEntry] = useState<ScheduleEntry | null>(null);
     const [showConflictWarning, setShowConflictWarning] = useState(false);
@@ -431,6 +433,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                             className="sm-cal-cell"
                             draggable={canEdit}
                             onDragStart={(e) => handleDragStart(e, ev.entry)}
+                            onContextMenu={onContextMenu ? (e) => onContextMenu(e, ev.entry) : undefined}
                             style={{
                                 gridColumn: ev.dayIdx + 2,
                                 gridRow: `${ev.start + 2} / span ${ev.span}`,

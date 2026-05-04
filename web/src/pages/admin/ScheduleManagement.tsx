@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, MoreVertical, Scissors, Merge, X, Maximize, Minimize, CheckCircle, Send } from 'lucide-react';
+import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, Scissors, Merge, X, Maximize, Minimize, CheckCircle, Send } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { scheduleVersionService } from '../../services/scheduleVersionService';
 import { ADMIN_ROLES } from '../../types/database';
@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 // import { scheduleAudit, logAudit } from '../../services/auditService';
 import '../admin/Dashboard.css';
 import ScheduleVersionHistory from './ScheduleVersionHistory';
+import { ScheduleDragDrop } from '../../components/ScheduleDragDrop';
 
 type Category = 'sections' | 'teachers' | 'rooms';
 
@@ -37,7 +38,6 @@ interface Entity {
 }
 
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const SHORT_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const START_HOUR = 7;
 const END_HOUR = 19;
 const SLOT_MINUTES = 30;
@@ -681,6 +681,10 @@ const ScheduleManagement: React.FC = () => {
                     onUpdate={() => {
                         fetchData();
                     }}
+                    rooms={rooms}
+                    teachers={teachers}
+                    sections={sections}
+                    category={category}
                 />
             ) : (
                 <>
@@ -740,14 +744,17 @@ interface ScheduleDetailProps {
     schedules: ScheduleRow[];
     onBack: () => void;
     onUpdate?: () => void;
+    rooms: { id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null }[];
+    teachers: { id: string; full_name: string }[];
+    sections: { id: string; name: string; program: string | null; year_level: number | null }[];
+    category: Category;
 }
 
-const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBack, onUpdate }) => {
+const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBack, onUpdate, rooms, teachers, sections, category }) => {
     const { role, roles } = useAuth();
     const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
     const canEdit = allRoles.some(r => ADMIN_ROLES.includes(r));
 
-    const [draggedEvent, setDraggedEvent] = useState<{ event: typeof events[0]; originalDay: number; originalStart: number } | null>(null);
     const [selectedEvent, setSelectedEvent] = useState<typeof events[0] | null>(null);
     const [showMenu, setShowMenu] = useState(false);
     const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -763,64 +770,63 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
         return { s, dayIdx, start, span: Math.max(1, end - start) };
     }).filter(e => e.dayIdx >= 0);
 
-    const handleDragStart = (e: React.DragEvent, event: typeof events[0]) => {
-        if (!canEdit) return;
-        e.dataTransfer.effectAllowed = 'move';
-        setDraggedEvent({ event, originalDay: event.dayIdx, originalStart: event.start });
-    };
+    // Convert ScheduleRow to ScheduleEntry format for ScheduleDragDrop
+    const scheduleEntries = useMemo(() => {
+        return schedules.map(s => ({
+            key: s.id,
+            subjectId: s.subject?.code || 'unknown',
+            sectionId: s.section?.id || 'unknown',
+            teacherId: s.teacher?.id || 'unknown',
+            roomId: s.room?.id || 'unknown',
+            day: s.day_of_week,
+            start: s.start_time,
+            end: s.end_time,
+            subjectName: s.subject?.name || 'Unknown',
+            teacherName: s.teacher?.profile?.full_name || '',
+            roomName: s.room?.name || '',
+            sectionName: s.section?.name || '',
+        }));
+    }, [schedules]);
 
-    const handleDragOver = (e: React.DragEvent) => {
-        if (!canEdit) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-    };
+    const dragDropEvents = useMemo(() => {
+        return scheduleEntries.map(entry => {
+            const dayIdx = dayOrder.indexOf(entry.day);
+            const start = slotIndex(entry.start);
+            const end = slotIndex(entry.end);
+            return { entry, dayIdx, start, span: Math.max(1, end - start) };
+        }).filter(e => e.dayIdx >= 0);
+    }, [scheduleEntries]);
 
-    const handleDrop = async (e: React.DragEvent, targetDay: number, targetSlot: number) => {
-        if (!canEdit || !draggedEvent) return;
-        e.preventDefault();
-
-        const { event, originalDay, originalStart } = draggedEvent;
-        const dayOffset = targetDay - originalDay;
-        const slotOffset = targetSlot - originalStart;
-
-        if (dayOffset === 0 && slotOffset === 0) {
-            setDraggedEvent(null);
-            return;
-        }
-
-        const newStartMinutes = timeToMinutes(event.s.start_time) + (dayOffset * 24 * 60) + (slotOffset * SLOT_MINUTES);
-        const newEndMinutes = timeToMinutes(event.s.end_time) + (dayOffset * 24 * 60) + (slotOffset * SLOT_MINUTES);
-
-        const newStartHour = Math.floor(newStartMinutes / 60);
-        const newStartMin = newStartMinutes % 60;
-        const newEndHour = Math.floor(newEndMinutes / 60);
-        const newEndMin = newEndMinutes % 60;
-
-        const newStartTime = `${newStartHour.toString().padStart(2, '0')}:${newStartMin.toString().padStart(2, '0')}`;
-        const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${newEndMin.toString().padStart(2, '0')}`;
-        const newDayOfWeek = dayOrder[targetDay % dayOrder.length];
+    // Handle schedule update from drag-and-drop
+    const handleScheduleUpdate = async (entry: typeof scheduleEntries[0], newDay?: string, newStartTime?: string, newEndTime?: string) => {
+        if (!newDay && !newStartTime && !newEndTime) return;
 
         try {
-            await supabase.from('schedules').update({
-                day_of_week: newDayOfWeek,
-                start_time: newStartTime,
-                end_time: newEndTime,
-            }).eq('id', event.s.id);
+            const updateData: any = {};
+            if (newDay) updateData.day_of_week = newDay;
+            if (newStartTime) updateData.start_time = newStartTime;
+            if (newEndTime) updateData.end_time = newEndTime;
+
+            await supabase.from('schedules').update(updateData).eq('id', entry.key);
             onUpdate?.();
         } catch (err) {
-            console.error('Error moving session:', err);
-            alert('Failed to move session');
+            console.error('Error updating schedule:', err);
+            alert('Failed to update schedule');
         }
-
-        setDraggedEvent(null);
     };
 
-    const handleContextMenu = (e: React.MouseEvent, event: typeof events[0]) => {
+    // Context menu handler for ScheduleDragDrop
+    const handleContextMenu = (e: React.MouseEvent, entry: typeof scheduleEntries[0]) => {
         if (!canEdit) return;
         e.preventDefault();
-        setSelectedEvent(event);
-        setMenuPosition({ x: e.clientX, y: e.clientY });
-        setShowMenu(true);
+        
+        // Find the corresponding event in the original events array
+        const event = events.find(ev => ev.s.id === entry.key);
+        if (event) {
+            setSelectedEvent(event);
+            setMenuPosition({ x: e.clientX, y: e.clientY });
+            setShowMenu(true);
+        }
     };
 
     const handleSplit = async () => {
@@ -947,203 +953,159 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                 <div className="sm-calendar"><div className="sm-cal-empty">No scheduled sessions.</div></div>
             ) : (
                 <div className="sm-calendar">
-                    <div
-                        className="sm-cal-grid"
-                        style={{ gridTemplateRows: `auto repeat(${TOTAL_SLOTS}, 22px)` }}
-                    >
-                        {/* Header row */}
-                        <div className="sm-cal-head" style={{ gridColumn: 1, gridRow: 1 }} />
-                        {SHORT_DAYS.map((d, i) => (
-                            <div key={d} className="sm-cal-head" style={{ gridColumn: i + 2, gridRow: 1 }}>{d}</div>
-                        ))}
+                    <ScheduleDragDrop
+                        entries={scheduleEntries}
+                        rooms={rooms.map(r => ({ 
+                            id: r.id, 
+                            name: r.name, 
+                            building: r.building || '', 
+                            type: r.type || '', 
+                            capacity: r.capacity || 0, 
+                            floor: r.floor || 0, 
+                            is_available: true, 
+                            weight: 0, 
+                            priority_note: null 
+                        }) as any)}
+                        teachers={teachers.map(t => ({ 
+                            id: t.id, 
+                            name: t.full_name, 
+                            full_name: t.full_name, 
+                            max_hours: 40, 
+                            weight: 0, 
+                            priority_note: null, 
+                            profile: { full_name: t.full_name } 
+                        }) as any)}
+                        sections={sections.map(s => ({ 
+                            id: s.id, 
+                            name: s.name, 
+                            year_level: s.year_level || 0, 
+                            program: s.program || '', 
+                            student_count: 0, 
+                            parent_id: null, 
+                            weight: 0, 
+                            priority_note: null, 
+                            path: '' 
+                        }) as any)}
+                        onUpdate={handleScheduleUpdate}
+                        dayOrder={dayOrder}
+                        START_HOUR={START_HOUR}
+                        TOTAL_SLOTS={TOTAL_SLOTS}
+                        formatTime={formatTime}
+                        colorForKey={colorForKey}
+                        viewMode={category === 'sections' ? 'section' : category === 'teachers' ? 'teacher' : 'room'}
+                        events={dragDropEvents}
+                        canEdit={canEdit}
+                        onContextMenu={handleContextMenu}
+                    />
 
-                        {/* Time labels (every hour) */}
-                        {Array.from({ length: TOTAL_SLOTS }).map((_, slot) => {
-                            const hour = START_HOUR + Math.floor(slot / 2);
-                            const isHour = slot % 2 === 0;
-                            const timeStr = `${hour.toString().padStart(2, '0')}:00`;
-                            return (
-                                <div
-                                    key={`time-${slot}`}
-                                    className="sm-cal-time"
-                                    style={{ gridColumn: 1, gridRow: slot + 2 }}
-                                >
-                                    {isHour ? formatTime(timeStr) : ''}
-                                </div>
-                            );
-                        })}
-
-                        {/* Empty day cells (background grid) */}
-                        {Array.from({ length: TOTAL_SLOTS }).flatMap((_, slot) =>
-                            dayOrder.map((day, di) => (
-                                <div
-                                    key={`bg-${day}-${slot}`}
-                                    className="sm-cal-cell sm-cal-slot"
-                                    style={{ gridColumn: di + 2, gridRow: slot + 2 }}
-                                    onDragOver={handleDragOver}
-                                    onDrop={(e) => handleDrop(e, di, slot)}
-                                />
-                            ))
-                        )}
-
-                        {/* Events overlaid with explicit grid placement */}
-                        {events.map(ev => {
-                            // Dynamic font sizing based on span (duration)
-                            const getFontSize = () => {
-                                if (ev.span <= 1) return '10px';
-                                if (ev.span <= 2) return '11px';
-                                return '12px';
-                            };
-                            
-                            return (
-                                <div
-                                    key={ev.s.id}
-                                    className="sm-cal-cell"
-                                    style={{
-                                        gridColumn: ev.dayIdx + 2,
-                                        gridRow: `${ev.start + 2} / span ${ev.span}`,
-                                    }}
-                                >
-                                    <div
-                                        className={`sm-cal-event ${colorForKey(ev.s.subject?.code || ev.s.id)} ${canEdit ? 'sm-cal-event-draggable' : ''}`}
-                                        title={`${ev.s.subject?.name || ''} · ${formatTime(ev.s.start_time)}–${formatTime(ev.s.end_time)}`}
-                                        draggable={canEdit}
-                                        onDragStart={(e) => handleDragStart(e, ev)}
-                                        onContextMenu={(e) => handleContextMenu(e, ev)}
-                                        style={{ fontSize: getFontSize() }}
-                                    >
-                                        <div className="sm-cal-event-title" style={{ fontSize: getFontSize(), fontWeight: ev.span <= 1 ? 600 : 500 }}>
-                                            {ev.s.subject?.code || ev.s.subject?.name || 'Session'}
-                                        </div>
-                                        {ev.span > 1 && (
-                                            <>
-                                                <div className="sm-cal-event-sub" style={{ fontSize: getFontSize() }}>
-                                                    {ev.s.room?.name || ev.s.teacher?.profile?.full_name || ev.s.section?.name || ''}
-                                                </div>
-                                                <div className="sm-cal-event-time" style={{ fontSize: getFontSize() }}>
-                                                    {formatTime(ev.s.start_time)}–{formatTime(ev.s.end_time)}
-                                                </div>
-                                            </>
-                                        )}
-                                        {canEdit && (
-                                            <div className="sm-cal-event-edit-hint">
-                                                <MoreVertical size={12} />
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-
-                        {/* Context Menu */}
-                        {showMenu && menuPosition && selectedEvent && (
-                            <div
-                                className="sm-context-menu"
-                                style={{ position: 'fixed', left: menuPosition.x, top: menuPosition.y, zIndex: 1000 }}
-                                onClick={(e) => e.stopPropagation()}
+                    {/* Context Menu */}
+                    {showMenu && menuPosition && selectedEvent && (
+                        <div
+                            className="sm-context-menu"
+                            style={{ position: 'fixed', left: menuPosition.x, top: menuPosition.y, zIndex: 1000 }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <button
+                                className="sm-context-menu-item"
+                                onClick={() => {
+                                    setShowVersionHistory(true);
+                                    setShowMenu(false);
+                                }}
                             >
-                                <button
-                                    className="sm-context-menu-item"
-                                    onClick={() => {
-                                        setShowVersionHistory(true);
-                                        setShowMenu(false);
-                                    }}
-                                >
-                                    <History size={14} />
-                                    View History
-                                </button>
-                                {canEdit && (
-                                    <>
-                                        <button
-                                            className="sm-context-menu-item"
-                                            onClick={() => {
-                                                setSplitModal(true);
-                                                setShowMenu(false);
-                                            }}
-                                        >
-                                            <Scissors size={14} />
-                                            Split Session
-                                        </button>
-                                        <button
-                                            className="sm-context-menu-item"
-                                            onClick={handleCombine}
-                                        >
-                                            <Merge size={14} />
-                                            Combine Sessions
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        )}
+                                <History size={14} />
+                                View History
+                            </button>
+                            {canEdit && (
+                                <>
+                                    <button
+                                        className="sm-context-menu-item"
+                                        onClick={() => {
+                                            setSplitModal(true);
+                                            setShowMenu(false);
+                                        }}
+                                    >
+                                        <Scissors size={14} />
+                                        Split Session
+                                    </button>
+                                    <button
+                                        className="sm-context-menu-item"
+                                        onClick={handleCombine}
+                                    >
+                                        <Merge size={14} />
+                                        Combine Sessions
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    )}
 
-                        {/* Split Modal */}
-                        {splitModal && (
-                            <div className="modal-overlay" onClick={() => setSplitModal(false)}>
-                                <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                                        <h2 style={{ fontSize: 18, fontWeight: 600 }}>Split Session</h2>
-                                        <button
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
-                                            onClick={() => setSplitModal(false)}
-                                        >
-                                            <X size={20} />
-                                        </button>
-                                    </div>
-                                    <div className="modal-form">
-                                        <label>Number of sessions</label>
-                                        <input
-                                            type="number"
-                                            min="2"
-                                            max="10"
-                                            value={splitCount}
-                                            onChange={(e) => setSplitCount(Math.max(2, Math.min(10, parseInt(e.target.value) || 2)))}
-                                            className="input"
-                                        />
-                                        <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 8 }}>
-                                            This will split the session into {splitCount} equal parts.
-                                        </p>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={() => setSplitModal(false)}
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            className="btn btn-primary"
-                                            onClick={handleSplit}
-                                        >
-                                            Split
-                                        </button>
-                                    </div>
+                    {/* Split Modal */}
+                    {splitModal && (
+                        <div className="modal-overlay" onClick={() => setSplitModal(false)}>
+                            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                    <h2 style={{ fontSize: 18, fontWeight: 600 }}>Split Session</h2>
+                                    <button
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                                        onClick={() => setSplitModal(false)}
+                                    >
+                                        <X size={20} />
+                                    </button>
                                 </div>
-                            </div>
-                        )}
-
-                        {/* Version History Modal */}
-                        {showVersionHistory && selectedEvent && (
-                            <div className="modal-overlay" onClick={() => setShowVersionHistory(false)}>
-                                <div className="modal-content" style={{ maxWidth: 900, maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                                        <h2 style={{ fontSize: 18, fontWeight: 600 }}>Version History</h2>
-                                        <button
-                                            className="btn btn-ghost"
-                                            style={{ padding: 4 }}
-                                            onClick={() => setShowVersionHistory(false)}
-                                        >
-                                            <X size={18} />
-                                        </button>
-                                    </div>
-                                    <ScheduleVersionHistory 
-                                        scheduleId={selectedEvent.s.id} 
-                                        scheduleName={`${selectedEvent.s.subject?.code || 'Schedule'} - ${selectedEvent.s.day_of_week}`}
-                                        onBack={() => setShowVersionHistory(false)} 
+                                <div className="modal-form">
+                                    <label>Number of sessions</label>
+                                    <input
+                                        type="number"
+                                        min="2"
+                                        max="10"
+                                        value={splitCount}
+                                        onChange={(e) => setSplitCount(Math.max(2, Math.min(10, parseInt(e.target.value) || 2)))}
+                                        className="input"
                                     />
+                                    <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 8 }}>
+                                        This will split the session into {splitCount} equal parts.
+                                    </p>
+                                </div>
+                                <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+                                    <button
+                                        className="btn btn-secondary"
+                                        onClick={() => setSplitModal(false)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handleSplit}
+                                    >
+                                        Split
+                                    </button>
                                 </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
+
+                    {/* Version History Modal */}
+                    {showVersionHistory && selectedEvent && (
+                        <div className="modal-overlay" onClick={() => setShowVersionHistory(false)}>
+                            <div className="modal-content" style={{ maxWidth: 900, maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                    <h2 style={{ fontSize: 18, fontWeight: 600 }}>Version History</h2>
+                                    <button
+                                        className="btn btn-ghost"
+                                        style={{ padding: 4 }}
+                                        onClick={() => setShowVersionHistory(false)}
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+                                <ScheduleVersionHistory 
+                                    scheduleId={selectedEvent.s.id} 
+                                    scheduleName={`${selectedEvent.s.subject?.code || 'Schedule'} - ${selectedEvent.s.day_of_week}`}
+                                    onBack={() => setShowVersionHistory(false)} 
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
