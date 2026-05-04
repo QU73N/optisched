@@ -2169,7 +2169,7 @@ const OutcomeStage: React.FC<{
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginBottom: 20 }}>
-                    {viewMode === 'section' && sections.map(section => (
+                    {viewMode === 'section' && sections.filter(s => (groupedBySection[s.id]?.length || 0) > 0).map(section => (
                         <button
                             key={section.id}
                             className={`btn ${selectedId === section.id ? 'btn-primary' : 'btn-secondary'}`}
@@ -2183,7 +2183,7 @@ const OutcomeStage: React.FC<{
                             </span>
                         </button>
                     ))}
-                    {viewMode === 'teacher' && teachers.map(teacher => (
+                    {viewMode === 'teacher' && teachers.filter(t => (groupedByTeacher[t.id]?.length || 0) > 0).map(teacher => (
                         <button
                             key={teacher.id}
                             className={`btn ${selectedId === teacher.id ? 'btn-primary' : 'btn-secondary'}`}
@@ -2197,7 +2197,7 @@ const OutcomeStage: React.FC<{
                             </span>
                         </button>
                     ))}
-                    {viewMode === 'room' && rooms.map(room => (
+                    {viewMode === 'room' && rooms.filter(r => (groupedByRoom[r.id]?.length || 0) > 0).map(room => (
                         <button
                             key={room.id}
                             className={`btn ${selectedId === room.id ? 'btn-primary' : 'btn-secondary'}`}
