@@ -2418,11 +2418,14 @@ const DiffRow: React.FC<{ entry: DiffEntry }> = ({ entry }) => {
     );
 };
 
-const StageHeader: React.FC<{ icon: React.ReactNode; title: string; desc: string; compact?: boolean }> = ({ icon, title, desc, compact = false }) => (
+const StageHeader: React.FC<{ icon: React.ReactNode; title: string; desc: string; compact?: boolean; titleIcon?: React.ReactNode }> = ({ icon, title, desc, compact = false, titleIcon }) => (
     <div className="sg-stage-head">
         <div className="sg-stage-icon">{icon}</div>
         <div>
-            <div className="sg-stage-title">{title}</div>
+            <div className="sg-stage-title">
+                {title}
+                {titleIcon && <span style={{ marginLeft: 6, display: 'inline-flex', verticalAlign: 'middle' }}>{titleIcon}</span>}
+            </div>
             {!compact && <div className="sg-stage-desc">{desc}</div>}
         </div>
     </div>
@@ -2571,23 +2574,25 @@ const PrioritiesStage: React.FC<{
 
     return (
         <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <div style={{ marginBottom: 16 }}>
                 <StageHeader
                     icon={<Flag size={16} />}
                     title="Priorities"
                     desc="Flag what matters most. The engine places high priority items first and protects their slots."
                     compact={compact}
-                />
-                <div className="sg-prio-tooltip-wrapper">
-                    <HelpCircle size={16} style={{ color: 'var(--text-muted)', cursor: 'help' }} />
-                    <div className="sg-prio-tooltip">
-                        {PRIORITY_TIERS.map(t => (
-                            <div key={t.key} className={`sg-prio-tooltip-item sg-prio-tooltip-${t.key}`}>
-                                <strong>{t.label}:</strong> {t.desc}
+                    titleIcon={
+                        <div className="sg-prio-tooltip-wrapper">
+                            <HelpCircle size={16} style={{ color: 'var(--text-muted)', cursor: 'help' }} />
+                            <div className="sg-prio-tooltip">
+                                {PRIORITY_TIERS.map(t => (
+                                    <div key={t.key} className={`sg-prio-tooltip-item sg-prio-tooltip-${t.key}`}>
+                                        <strong>{t.label}:</strong> {t.desc}
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-                </div>
+                        </div>
+                    }
+                />
             </div>
 
             <div className="sg-prio-toolbar">
