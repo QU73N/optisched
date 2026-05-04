@@ -80,8 +80,8 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         // Create a unique key for the entry to exclude it from conflict checks
         const entryKey = entry.key;
 
-        // Check room conflicts
-        const roomConflict = entries.some(e => 
+        // Check room conflicts with details
+        const roomConflicts = entries.filter(e => 
             e.key !== entryKey &&
             e.day === checkDay &&
             e.roomId === checkRoomId &&
@@ -89,13 +89,17 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
              (e.end > checkStartTime && e.end <= checkEndTime) ||
              (e.start <= checkStartTime && e.end >= checkEndTime))
         );
-        if (roomConflict) {
+        
+        if (roomConflicts.length > 0) {
             const roomName = rooms.find(r => r.id === checkRoomId)?.name || 'Unknown';
-            conflicts.push(`Room "${roomName}" is occupied at this time`);
+            const conflictDetails = roomConflicts.map(c => 
+                `${c.subjectName} (${c.sectionName}) at ${formatTime(c.start)}–${formatTime(c.end)}`
+            ).join(', ');
+            conflicts.push(`Room "${roomName}" is occupied by: ${conflictDetails}`);
         }
 
-        // Check teacher conflicts
-        const teacherConflict = entries.some(e => 
+        // Check teacher conflicts with details
+        const teacherConflicts = entries.filter(e => 
             e.key !== entryKey &&
             e.day === checkDay &&
             e.teacherId === checkTeacherId &&
@@ -103,13 +107,17 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
              (e.end > checkStartTime && e.end <= checkEndTime) ||
              (e.start <= checkStartTime && e.end >= checkEndTime))
         );
-        if (teacherConflict) {
+        
+        if (teacherConflicts.length > 0) {
             const teacherName = teachers.find(t => t.id === checkTeacherId)?.full_name || 'Unknown';
-            conflicts.push(`Teacher "${teacherName}" is scheduled elsewhere at this time`);
+            const conflictDetails = teacherConflicts.map(c => 
+                `${c.subjectName} in ${c.roomName} at ${formatTime(c.start)}–${formatTime(c.end)}`
+            ).join(', ');
+            conflicts.push(`Teacher "${teacherName}" is scheduled elsewhere: ${conflictDetails}`);
         }
 
-        // Check section conflicts
-        const sectionConflict = entries.some(e => 
+        // Check section conflicts with details
+        const sectionConflicts = entries.filter(e => 
             e.key !== entryKey &&
             e.day === checkDay &&
             e.sectionId === checkSectionId &&
@@ -117,13 +125,46 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
              (e.end > checkStartTime && e.end <= checkEndTime) ||
              (e.start <= checkStartTime && e.end >= checkEndTime))
         );
-        if (sectionConflict) {
+        
+        if (sectionConflicts.length > 0) {
             const sectionName = sections.find(s => s.id === checkSectionId)?.name || 'Unknown';
-            conflicts.push(`Section "${sectionName}" has another class at this time`);
+            const conflictDetails = sectionConflicts.map(c => 
+                `${c.subjectName} at ${formatTime(c.start)}–${formatTime(c.end)}`
+            ).join(', ');
+            conflicts.push(`Section "${sectionName}" has another class: ${conflictDetails}`);
+        }
+
+        // Check for tight scheduling (less than 10 minutes between classes for same teacher/section)
+        const MIN_GAP_MINUTES = 10;
+        const checkStartMinutes = parseInt(checkStartTime.split(':')[0]) * 60 + parseInt(checkStartTime.split(':')[1]);
+        const checkEndMinutes = parseInt(checkEndTime.split(':')[0]) * 60 + parseInt(checkEndTime.split(':')[1]);
+
+        const teacherTightSchedules = entries.filter(e => 
+            e.key !== entryKey &&
+            e.day === checkDay &&
+            e.teacherId === checkTeacherId
+        ).map(e => ({
+            entry: e,
+            start: parseInt(e.start.split(':')[0]) * 60 + parseInt(e.start.split(':')[1]),
+            end: parseInt(e.end.split(':')[0]) * 60 + parseInt(e.end.split(':')[1])
+        })).filter(e => 
+            Math.abs(e.end - checkStartMinutes) < MIN_GAP_MINUTES ||
+            Math.abs(e.start - checkEndMinutes) < MIN_GAP_MINUTES
+        );
+
+        if (teacherTightSchedules.length > 0) {
+            const teacherName = teachers.find(t => t.id === checkTeacherId)?.full_name || 'Unknown';
+            const gapDetails = teacherTightSchedules.map(e => {
+                const gap = Math.abs(e.end - checkStartMinutes) < MIN_GAP_MINUTES 
+                    ? `${Math.abs(e.end - checkStartMinutes)} min gap before ${e.entry.subjectName}`
+                    : `${Math.abs(e.start - checkEndMinutes)} min gap after ${e.entry.subjectName}`;
+                return gap;
+            }).join(', ');
+            conflicts.push(`Teacher "${teacherName}" has tight scheduling: ${gapDetails}`);
         }
 
         return conflicts;
-    }, [entries, rooms, teachers, sections]);
+    }, [entries, rooms, teachers, sections, formatTime]);
 
     // Generate suggestions for resolving conflicts
     const generateSuggestions = useCallback((
@@ -139,7 +180,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         // Create a unique key for the entry to exclude it from availability checks
         const entryKey = entry.key;
 
-        // Find available rooms at the same time
+        // Find available rooms at the same time (prioritize rooms with similar capacity/type)
         const occupiedRoomIds = new Set(
             entries
                 .filter(e => 
@@ -151,27 +192,50 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                 .map(e => e.roomId)
         );
 
-        rooms.forEach(room => {
-            if (!occupiedRoomIds.has(room.id)) {
-                suggestions.push({
-                    type: 'room',
-                    value: room.name,
-                    reason: `Room "${room.name}" is available at this time`
-                });
+        // Sort rooms by relevance (same building first, then capacity)
+        const currentRoom = rooms.find(r => r.id === entry.roomId);
+        const sortedRooms = [...rooms].sort((a, b) => {
+            // Prioritize rooms in the same building
+            if (currentRoom) {
+                if (a.building === currentRoom.building && b.building !== currentRoom.building) return -1;
+                if (b.building === currentRoom.building && a.building !== currentRoom.building) return 1;
             }
+            // Then by capacity similarity
+            const aCapDiff = Math.abs((a.capacity || 0) - (currentRoom?.capacity || 0));
+            const bCapDiff = Math.abs((b.capacity || 0) - (currentRoom?.capacity || 0));
+            return aCapDiff - bCapDiff;
         });
 
-        // Find available time slots in the same room (simplified - check each 30-min slot)
+        let roomSuggestions = 0;
+        for (const room of sortedRooms) {
+            if (!occupiedRoomIds.has(room.id) && roomSuggestions < 3) {
+                const buildingInfo = room.building ? ` in ${room.building}` : '';
+                const capacityInfo = room.capacity ? ` (cap: ${room.capacity})` : '';
+                suggestions.push({
+                    type: 'room',
+                    value: room.id,
+                    reason: `Room "${room.name}"${buildingInfo}${capacityInfo} is available at this time`
+                });
+                roomSuggestions++;
+            }
+        }
+
+        // Find available time slots in the same room (prioritize nearby slots)
         const entryRoomId = entry.roomId;
         const originalStartMinutes = parseInt(entry.start.split(':')[0]) * 60 + parseInt(entry.start.split(':')[1]);
         const originalEndMinutes = parseInt(entry.end.split(':')[0]) * 60 + parseInt(entry.end.split(':')[1]);
         const duration = originalEndMinutes - originalStartMinutes;
         
+        // Generate time slots and sort by proximity to original time
+        const timeSlots: { startTime: string; endTime: string; distance: number }[] = [];
         for (let slot = 0; slot < TOTAL_SLOTS; slot++) {
             const slotStartTime = formatTime(`${START_HOUR + Math.floor(slot / 2)}:${(slot % 2) * 30}`);
             const slotEndTime = formatTime(`${START_HOUR + Math.floor((slot + duration / 30) / 2)}:${((slot + duration / 30) % 2) * 30}`);
             
             if (slotStartTime === checkStartTime) continue; // Skip current time
+
+            const slotStartMinutes = parseInt(slotStartTime.split(':')[0]) * 60 + parseInt(slotStartTime.split(':')[1]);
+            const distance = Math.abs(slotStartMinutes - originalStartMinutes);
 
             const timeConflict = entries.some(e => 
                 e.key !== entryKey &&
@@ -182,17 +246,47 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                  (e.start <= slotStartTime && e.end >= slotEndTime))
             );
 
-            if (!timeConflict && suggestions.length < 3) {
-                suggestions.push({
-                    type: 'time',
-                    value: `${slotStartTime}–${slotEndTime}`,
-                    reason: `This time slot is available in room "${rooms.find(r => r.id === entryRoomId)?.name || 'Unknown'}"`
-                });
+            if (!timeConflict) {
+                timeSlots.push({ startTime: slotStartTime, endTime: slotEndTime, distance });
             }
         }
 
+        // Sort by distance and take closest 3
+        timeSlots.sort((a, b) => a.distance - b.distance);
+        const closestTimeSlots = timeSlots.slice(0, 3);
+
+        closestTimeSlots.forEach(slot => {
+            suggestions.push({
+                type: 'time',
+                value: `${slot.startTime}–${slot.endTime}`,
+                reason: `Time slot ${slot.startTime}–${slot.endTime} is available in room "${rooms.find(r => r.id === entryRoomId)?.name || 'Unknown'}"`
+            });
+        });
+
+        // Also suggest alternative days if the room is heavily booked
+        const dayOccupancy = dayOrder.map(day => ({
+            day,
+            count: entries.filter(e => e.day === day && e.roomId === entryRoomId).length
+        }));
+        
+        const lessBusyDays = dayOccupancy
+            .filter(d => d.day !== checkDay)
+            .sort((a, b) => a.count - b.count)
+            .slice(0, 2);
+
+        lessBusyDays.forEach(({ day, count }) => {
+            const currentCount = entries.filter(e => e.day === checkDay && e.roomId === entryRoomId).length;
+            if (count < currentCount) {
+                suggestions.push({
+                    type: 'time',
+                    value: day,
+                    reason: `${day} has fewer bookings (${count} vs ${currentCount}) for this room`
+                });
+            }
+        });
+
         return suggestions.slice(0, 5); // Limit to 5 suggestions
-    }, [entries, rooms, formatTime, START_HOUR, TOTAL_SLOTS]);
+    }, [entries, rooms, formatTime, START_HOUR, TOTAL_SLOTS, dayOrder]);
 
     // Apply the move to entries
     const applyMove = useCallback((
