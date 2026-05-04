@@ -1617,7 +1617,7 @@ const ReviewStage: React.FC<{
                 />
                 <ReviewBlock title="Structure"
                     items={[
-                        ['Days', config.days.map(d => d.slice(0, 3)).join(', ') || 'None'],
+                        ['Days', compressDayRange(config.days)],
                         ['Hours', `${config.dayStart} to ${config.dayEnd}`],
                         ['Session', `${config.sessionMinutes} min`],
                         ['Breaks', config.breaks.map(b => `${b.label} ${b.start} to ${b.end}`).join(', ') || 'None'],
@@ -1663,6 +1663,46 @@ const ReviewBlock: React.FC<{ title: string; items: [string, string][] }> = ({ t
         </dl>
     </div>
 );
+
+// Helper function to compress consecutive days into ranges
+const compressDayRange = (days: string[]): string => {
+    if (days.length === 0) return 'None';
+    if (days.length === 1) return days[0].slice(0, 3);
+    
+    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const shortDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    // Get indices of the selected days
+    const indices = days.map(d => dayOrder.indexOf(d)).sort((a, b) => a - b);
+    
+    // Group consecutive days into ranges
+    const ranges: string[] = [];
+    let start = indices[0];
+    let end = indices[0];
+    
+    for (let i = 1; i < indices.length; i++) {
+        if (indices[i] === end + 1) {
+            end = indices[i];
+        } else {
+            if (start === end) {
+                ranges.push(shortDays[start]);
+            } else {
+                ranges.push(`${shortDays[start]}-${shortDays[end]}`);
+            }
+            start = indices[i];
+            end = indices[i];
+        }
+    }
+    
+    // Add the last range
+    if (start === end) {
+        ranges.push(shortDays[start]);
+    } else {
+        ranges.push(`${shortDays[start]}-${shortDays[end]}`);
+    }
+    
+    return ranges.join(', ');
+};
 
 const resolveTargetLabel = (
     target: PartialTarget | null,
