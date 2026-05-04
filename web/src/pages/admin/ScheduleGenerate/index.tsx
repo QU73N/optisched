@@ -2065,7 +2065,6 @@ const OutcomeStage: React.FC<{
     const [localEntries, setLocalEntries] = useState<typeof result.entries>(result.entries);
 
     const dayOrder = useMemo(() => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], []);
-    const SHORT_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     const START_HOUR = 7;
     const END_HOUR = 19;
     const SLOT_MINUTES = 30;
@@ -2278,6 +2277,9 @@ const OutcomeStage: React.FC<{
 
                         <ScheduleDragDrop
                             entries={localEntries}
+                            rooms={rooms}
+                            teachers={teachers}
+                            sections={sections}
                             onEntriesChange={setLocalEntries}
                             dayOrder={dayOrder}
                             START_HOUR={START_HOUR}
