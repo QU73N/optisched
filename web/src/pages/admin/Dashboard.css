@@ -2635,6 +2635,98 @@
     padding: 6px 12px;
 }
 
+.sg-prio-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    min-width: 220px;
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.sg-prio-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--bg-elevated);
+}
+
+.sg-prio-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 7px solid transparent;
+    border-top-color: var(--border-default);
+    margin-top: -1px;
+}
+
+.sg-prio-tooltip:hover,
+.sg-prio-tooltip:hover::before,
+.sg-prio-tooltip:hover::after {
+    display: none;
+}
+
+.sg-prio-tooltip-item {
+    padding: 6px 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+.sg-prio-tooltip-item:first-child {
+    padding-top: 0;
+}
+
+.sg-prio-tooltip-item:last-child {
+    padding-bottom: 0;
+}
+
+.sg-prio-tooltip-item strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.sg-prio-tooltip-item.sg-prio-tooltip-high {
+    color: var(--accent-success);
+}
+
+.sg-prio-tooltip-item.sg-prio-tooltip-low {
+    color: var(--text-muted);
+}
+
+.sg-prio-tooltip-item.sg-prio-tooltip-normal {
+    color: var(--accent-primary);
+}
+
+.sg-prio-tooltip:hover {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Show tooltip on hover of parent container */
+.sg-prio-tooltip-wrapper:hover .sg-prio-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+.sg-prio-tooltip-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
 @media (max-width: 720px) {
     .sg-prio-toolbar { flex-direction: column; align-items: stretch; }
     .sg-prio-search { max-width: none; }

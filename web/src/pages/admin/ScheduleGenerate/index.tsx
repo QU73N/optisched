@@ -7,7 +7,7 @@ import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
 import type { Schedule } from '../../../types/database';
 import {
     AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
-    Flag, GitBranch, Inbox, Layers, Lightbulb, ListChecks, Lock, MapPin, Play, Plus,
+    Flag, GitBranch, HelpCircle, Inbox, Layers, Lightbulb, ListChecks, Lock, MapPin, Play, Plus,
     RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, ShieldCheck, Sliders, Sparkles, Upload,
     Users, X, XCircle,
 } from 'lucide-react';
@@ -2418,14 +2418,13 @@ const DiffRow: React.FC<{ entry: DiffEntry }> = ({ entry }) => {
     );
 };
 
-const StageHeader: React.FC<{ icon: React.ReactNode; title: string; desc: string; compact?: boolean; legend?: React.ReactNode }> = ({ icon, title, desc, compact = false, legend }) => (
-    <div className="sg-stage-head" style={legend ? { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 } : undefined}>
+const StageHeader: React.FC<{ icon: React.ReactNode; title: string; desc: string; compact?: boolean }> = ({ icon, title, desc, compact = false }) => (
+    <div className="sg-stage-head">
         <div className="sg-stage-icon">{icon}</div>
         <div>
             <div className="sg-stage-title">{title}</div>
             {!compact && <div className="sg-stage-desc">{desc}</div>}
         </div>
-        {legend && <div className="sg-prio-legend" style={{ flexShrink: 0 }}>{legend}</div>}
     </div>
 );
 
@@ -2572,22 +2571,24 @@ const PrioritiesStage: React.FC<{
 
     return (
         <div>
-            <StageHeader
-                icon={<Flag size={16} />}
-                title="Priorities"
-                desc="Flag what matters most. The engine places high priority items first and protects their slots."
-                compact={compact}
-                legend={
-                    <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <StageHeader
+                    icon={<Flag size={16} />}
+                    title="Priorities"
+                    desc="Flag what matters most. The engine places high priority items first and protects their slots."
+                    compact={compact}
+                />
+                <div className="sg-prio-tooltip-wrapper">
+                    <HelpCircle size={16} style={{ color: 'var(--text-muted)', cursor: 'help' }} />
+                    <div className="sg-prio-tooltip">
                         {PRIORITY_TIERS.map(t => (
-                            <span key={t.key} className={`sg-prio-pill sg-prio-${t.key}`}>
-                                {t.label}
-                                <span className="sg-prio-pill-sub">{t.desc}</span>
-                            </span>
+                            <div key={t.key} className={`sg-prio-tooltip-item sg-prio-tooltip-${t.key}`}>
+                                <strong>{t.label}:</strong> {t.desc}
+                            </div>
                         ))}
-                    </>
-                }
-            />
+                    </div>
+                </div>
+            </div>
 
             <div className="sg-prio-toolbar">
                 <div className="sg-tabs-mini">
