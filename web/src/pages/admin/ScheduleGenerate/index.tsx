@@ -2059,34 +2059,31 @@ const OutcomeStage: React.FC<{
 
     // Format teacher name: last name only, or "Last, F." if duplicate last names
     const formatTeacherName = (teacher: Teacher, allTeachers: Teacher[]) => {
-        // Use the new name fields if available (from profile)
-        let lastName = teacher.profile?.last_name;
-        let firstName = teacher.profile?.first_name;
-        
-        // Fall back to parsing from full_name if profile fields not available
-        if (!lastName || !firstName) {
-            const nameParts = teacher.full_name?.trim().split(' ') || [];
-            if (nameParts.length >= 3) {
-                // Format: "First Middle Last" or "First Middle Last Suffix"
-                // Last name is at index 2 (third word), suffix (if any) is at last index
-                lastName = nameParts[2];
-                firstName = nameParts[0];
-            } else if (nameParts.length === 2) {
-                // Format: "First Last"
-                lastName = nameParts[1];
-                firstName = nameParts[0];
-            } else if (nameParts.length === 1) {
-                lastName = nameParts[0];
-                firstName = '';
-            } else {
-                lastName = teacher.full_name || '';
-                firstName = '';
-            }
+        // Parse name from full_name
+        const nameParts = teacher.full_name?.trim().split(' ') || [];
+        let lastName = '';
+        let firstName = '';
+
+        if (nameParts.length >= 3) {
+            // Format: "First Middle Last" or "First Middle Last Suffix"
+            // Last name is at index 2 (third word), suffix (if any) is at last index
+            lastName = nameParts[2];
+            firstName = nameParts[0];
+        } else if (nameParts.length === 2) {
+            // Format: "First Last"
+            lastName = nameParts[1];
+            firstName = nameParts[0];
+        } else if (nameParts.length === 1) {
+            lastName = nameParts[0];
+            firstName = '';
+        } else {
+            lastName = teacher.full_name || '';
+            firstName = '';
         }
         
         // Check if any other teacher has the same last name
         const hasDuplicateLastName = allTeachers.some(t => {
-            const tLastName = t.profile?.last_name || (() => {
+            const tLastName = (() => {
                 const parts = t.full_name?.trim().split(' ') || [];
                 if (parts.length >= 3) return parts[2];
                 if (parts.length === 2) return parts[1];
@@ -2265,7 +2262,13 @@ const OutcomeStage: React.FC<{
                             formatTime={formatTime}
                             colorForKey={colorForKey}
                             viewMode={viewMode}
-                            events={events.map(ev => ({ ...ev, entry: { ...ev.entry, key: `${ev.entry.subjectId}-${ev.entry.sectionId}-${ev.entry.day}-${ev.entry.start}` } as ScheduleEntry })) as any}
+                            events={events.map(ev => ({ 
+                                ...ev, 
+                                entry: { 
+                                    ...ev.entry, 
+                                    key: `${ev.entry.subjectId}-${ev.entry.sectionId}-${ev.entry.day}-${ev.entry.start}` 
+                                } 
+                            }))}
                         />
                     </div>
                 ) : selectedId ? (
