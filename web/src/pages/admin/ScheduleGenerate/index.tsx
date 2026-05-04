@@ -2091,6 +2091,24 @@ const OutcomeStage: React.FC<{
         return EVENT_COLORS[Math.abs(h) % EVENT_COLORS.length];
     };
 
+    // Format teacher name: last name only, or "Last, F." if duplicate last names
+    const formatTeacherName = (teacher: Teacher, allTeachers: Teacher[]) => {
+        // Use the new name fields if available, otherwise parse from full_name
+        const lastName = teacher.profile?.last_name || teacher.full_name?.split(' ').pop() || teacher.full_name || '';
+        const firstName = teacher.profile?.first_name || teacher.full_name?.split(' ')[0] || '';
+        
+        // Check if any other teacher has the same last name
+        const hasDuplicateLastName = allTeachers.some(t => 
+            t.id !== teacher.id && 
+            (t.profile?.last_name || t.full_name?.split(' ').pop() || t.full_name || '') === lastName
+        );
+        
+        if (hasDuplicateLastName && firstName) {
+            return `${lastName}, ${firstName.charAt(0)}.`;
+        }
+        return lastName;
+    };
+
     // Group entries by section, teacher, or room
     const groupedBySection = useMemo(() => {
         const groups: Record<string, typeof result.entries> = {};
@@ -2191,7 +2209,7 @@ const OutcomeStage: React.FC<{
                             style={{ justifyContent: 'flex-start' }}
                         >
                             <Users size={14} style={{ marginRight: 8 }} />
-                            {teacher.full_name}
+                            {formatTeacherName(teacher, teachers)}
                             <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
                                 {groupedByTeacher[teacher.id]?.length || 0}
                             </span>
@@ -2219,7 +2237,7 @@ const OutcomeStage: React.FC<{
                             <div>
                                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                                     {viewMode === 'section' ? sections.find(s => s.id === selectedId)?.name
-                                     : viewMode === 'teacher' ? teachers.find(t => t.id === selectedId)?.full_name
+                                     : viewMode === 'teacher' ? formatTeacherName(teachers.find(t => t.id === selectedId)!, teachers)
                                      : rooms.find(r => r.id === selectedId)?.name}
                                 </div>
                                 <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -2315,7 +2333,7 @@ const OutcomeStage: React.FC<{
                     </div>
                 ) : (
                     <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
-                        Select a {viewMode} to view its schedule
+                        Select a {viewMode} to view their schedule
                     </div>
                 )}
             </div>
