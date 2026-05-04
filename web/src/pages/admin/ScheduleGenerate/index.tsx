@@ -1513,9 +1513,12 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                 <div className="sg-break-config-section">
                     <div className="sg-field-label sg-break-config-label">
                         Common Break
-                        <span className="sg-tooltip-icon" title="Overrides all other breaks on selected day. All classes and teachers have a break at this time.">
-                            <HelpCircle size={14} />
-                        </span>
+                        <div className="sg-break-tooltip-wrapper">
+                            <HelpCircle size={14} style={{ color: 'var(--text-muted)', cursor: 'help' }} />
+                            <div className="sg-break-tooltip">
+                                Overrides all other breaks on selected day. All classes and teachers have a break at this time.
+                            </div>
+                        </div>
                     </div>
                     <div className="sg-common-break-toggle">
                         <label className="sg-toggle-label">
