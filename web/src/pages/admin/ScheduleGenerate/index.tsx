@@ -496,29 +496,61 @@ const ScheduleGenerate: React.FC = () => {
 
     const performSave = async (initialState: 'draft' | 'submitted') => {
         if (!result) return;
-        setSaving(true); setSaveError(null);
-        
-        // Initialize version service
-        scheduleVersionService.initialize(supabase, user?.id || '');
-        
+        if (!user?.id) {
+            setSaveError('Not authenticated. Please log in again.');
+            return;
+        }
+
+        setSaving(true);
+        setSaveError(null);
+        setSavedId(null);
+
+        // Initialize state tracker with all variables
+        const saveState = {
+            step: 'init',
+            timestamp: Date.now(),
+            startScheduleCount: result.entries.length,
+            mode: config.mode,
+            partialTarget: config.partialTarget,
+            userId: user.id,
+            batchId: null as string | null,
+            versionId: null as string | null,
+            createdScheduleIds: [] as string[],
+            savedAt: null as string | null,
+            errors: [] as string[],
+        };
+
+        console.log('[SAVE START] Comprehensive save with state tracking:', saveState);
+
         try {
+            // Step 1: Verify service initialization
+            saveState.step = 'verify_service';
+            scheduleVersionService.initialize(supabase, user.id);
+            console.log('[SAVE] Version service initialized');
+
+            // Step 2: Handle partial mode cleanup
+            saveState.step = 'cleanup_partial';
             if (config.mode === 'partial') {
                 const t = config.partialTarget;
                 if (!t?.id) throw new Error('No partial regeneration target selected.');
+
                 const column =
                     t.kind === 'section' ? 'section_id' :
                     t.kind === 'teacher' ? 'teacher_id' :
-                    t.kind === 'room'    ? 'room_id' : 'subject_id';
-                // Only replace unpublished rows in the slice so live schedules survive.
+                    t.kind === 'room' ? 'room_id' : 'subject_id';
+
                 const { error: delErr } = await supabase
                     .from('schedules')
                     .delete()
                     .eq(column, t.id)
                     .in('status', ['draft', 'submitted', 'approved']);
+
                 if (delErr) throw delErr;
+                console.log('[SAVE] Cleaned up partial mode schedules for', t.kind);
             }
 
-            // Convert result entries to Schedule format
+            // Step 3: Convert result entries to Schedule format
+            saveState.step = 'convert_schedules';
             const schedules = result.entries.map(e => ({
                 id: crypto.randomUUID(),
                 subject_id: e.subjectId,
@@ -534,80 +566,117 @@ const ScheduleGenerate: React.FC = () => {
                 is_active: true,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
-                created_by: user?.id || null,
+                created_by: user.id,
             }));
 
-            console.log('[PERFORM SAVE] Saving schedules with status:', initialState);
-            console.log('[PERFORM SAVE] Total schedules:', schedules.length);
+            saveState.createdScheduleIds = schedules.map(s => s.id);
+            console.log('[SAVE] Converted to schedules format:', schedules.length, 'entries');
 
+            // Step 4: Save to database via version service
+            saveState.step = 'persist_version';
             let saveResult;
+
             if (initialState === 'draft') {
-                // Use the new saveDraft method
+                console.log('[SAVE] Saving as draft...');
                 saveResult = await scheduleVersionService.saveDraft(schedules, {
                     academic_year: '2025-2026',
                     semester: '1st Semester',
                     score: result.score,
-                    conflictCount: 0, // Will be updated by Conflicts tab scan
-                    changeReason: 'Generated schedule from Generate tab',
+                    conflictCount: 0,
+                    changeReason: 'Generated from Generate tab',
                 });
-                
-                if (saveResult.success) {
-                    setSavedId('draft');
-                    console.log('[PERFORM SAVE] Draft saved successfully');
-                } else {
-                    throw new Error(saveResult.message);
+
+                saveState.batchId = saveResult.version_set_id;
+                saveState.versionId = saveResult.active_version_id;
+
+                if (!saveResult.success) {
+                    throw new Error(saveResult.message || 'Draft save failed');
                 }
+
+                console.log('[SAVE] Draft saved with batch:', saveState.batchId);
             } else {
-                // For submitted, first save as draft, then submit
+                // Submitted mode: save as draft first
+                console.log('[SAVE] Saving as draft before submission...');
                 const draftResult = await scheduleVersionService.saveDraft(schedules, {
                     academic_year: '2025-2026',
                     semester: '1st Semester',
                     score: result.score,
                     conflictCount: 0,
-                    changeReason: 'Generated schedule for submission',
+                    changeReason: 'Generated for submission',
                 });
-                
+
+                saveState.batchId = draftResult.version_set_id;
+                saveState.versionId = draftResult.active_version_id;
+
                 if (!draftResult.success) {
-                    throw new Error(draftResult.message);
+                    throw new Error(draftResult.message || 'Draft save failed');
                 }
-                
-                console.log('[PERFORM SAVE] Draft saved, now submitting...');
-                
+
+                console.log('[SAVE] Draft saved, batch:', saveState.batchId);
+
                 // Now submit the draft
-                const submitResult = await scheduleVersionService.submitSchedule(draftResult.version_set_id!, {
-                    changeReason: 'Submitted from Generate tab',
-                });
-                
-                if (submitResult.success) {
-                    setSavedId('submitted');
-                    console.log('[PERFORM SAVE] Schedule submitted successfully');
-                } else {
-                    throw new Error(submitResult.message);
+                saveState.step = 'submit_version';
+                console.log('[SAVE] Submitting draft...');
+                const submitResult = await scheduleVersionService.submitSchedule(
+                    draftResult.version_set_id!,
+                    { changeReason: 'Submitted from Generate tab' }
+                );
+
+                if (!submitResult.success) {
+                    throw new Error(submitResult.message || 'Submission failed');
                 }
+
+                console.log('[SAVE] Schedule submitted successfully');
             }
 
-            // Scan for conflicts and save to conflicts table
-            const { data: savedScheduleData } = await supabase
+            // Step 5: Verify persistence
+            saveState.step = 'verify_persistence';
+            if (!saveState.batchId) {
+                throw new Error('Batch ID not set after save');
+            }
+
+            const { data: savedSchedules, error: fetchError } = await supabase
                 .from('schedules')
-                .select('*, subject:subjects(*), teacher:teachers(*, profile_id:profiles(*)), room:rooms(*), section:sections(*)')
-                .eq('status', initialState)
+                .select('id, status, is_active, batch_id')
+                .eq('batch_id', saveState.batchId)
                 .eq('is_active', true);
 
-            if (savedScheduleData && savedScheduleData.length > 0) {
-                const conflicts = detectConflicts(savedScheduleData);
+            if (fetchError || !savedSchedules) {
+                throw new Error(
+                    `Failed to verify saved schedules: ${fetchError?.message || 'Unknown error'}`
+                );
+            }
 
-                // Log audit for each created schedule
-                for (const schedule of savedScheduleData) {
-                    await scheduleAudit.created(schedule.id, {
-                        section: result.entries[0]?.sectionId,
-                        teacher: result.entries[0]?.teacherId,
-                        subject: result.entries[0]?.subjectId,
-                    });
-                }
+            if (savedSchedules.length !== schedules.length) {
+                const warning = `Schedule count mismatch: expected ${schedules.length}, got ${savedSchedules.length}`;
+                console.warn('[SAVE]', warning);
+                saveState.errors.push(warning);
+            }
 
-                // Save conflicts to database
+            console.log('[SAVE] Persistence verified:', savedSchedules.length, 'schedules');
+
+            // Step 6: Detect conflicts
+            saveState.step = 'detect_conflicts';
+            const { data: fullSchedules, error: fullError } = await supabase
+                .from('schedules')
+                .select(`
+                    id, subject_id, teacher_id, room_id, section_id, 
+                    day_of_week, start_time, end_time, status, is_active,
+                    subject:subjects(*),
+                    teacher:teachers(*),
+                    room:rooms(*),
+                    section:sections(*)
+                `)
+                .eq('batch_id', saveState.batchId)
+                .eq('is_active', true);
+
+            if (!fullError && fullSchedules && fullSchedules.length > 0) {
+                const conflicts = detectConflicts(fullSchedules);
+                console.log('[SAVE] Detected conflicts:', conflicts.length);
+
+                // Save conflicts
                 if (conflicts.length > 0) {
-                    const conflictInserts = conflicts.map((c: { type: string; severity: string; title: string; description: string; scheduleAId: string | null; scheduleBId: string | null }) => ({
+                    const conflictInserts = conflicts.map((c: any) => ({
                         type: c.type,
                         severity: c.severity,
                         title: c.title,
@@ -616,48 +685,80 @@ const ScheduleGenerate: React.FC = () => {
                         schedule_b_id: c.scheduleBId,
                         is_resolved: false,
                     }));
-                    
-                    // Use direct HTTP for conflict insert
-                    const { error: conflictError } = await directInsert({
-                        table: 'conflicts',
-                        data: conflictInserts,
-                    });
-                    
+
+                    const { error: conflictError } = await supabase
+                        .from('conflicts')
+                        .insert(conflictInserts);
+
                     if (conflictError) {
-                        console.error('[PERFORM SAVE] Conflict insert error:', conflictError);
-                        // Try fallback to Supabase client for conflicts
-                        const { error: fallbackConflictError } = await supabase
-                            .from('conflicts')
-                            .insert(conflictInserts);
-                        
-                        if (fallbackConflictError) {
-                            console.error('[PERFORM SAVE] Fallback conflict insert also failed:', fallbackConflictError);
-                        }
+                        console.warn('[SAVE] Conflict save error:', conflictError);
+                        saveState.errors.push(`Conflict save failed: ${conflictError.message}`);
+                    } else {
+                        console.log('[SAVE] Conflicts saved');
                     }
                 }
             }
-            
-            await refreshExisting();
 
-            // Notify students of schedule changes
-            const affectedSectionIds = Array.from(new Set(result.entries.map(e => e.sectionId)));
-            await notifyStudentsOfScheduleChanges(affectedSectionIds, initialState, false);
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            console.error('[PERFORM SAVE] Save failed with error:', err);
-            console.error('[PERFORM SAVE] Error message:', msg);
-            console.error('[PERFORM SAVE] Error stack:', err instanceof Error ? err.stack : 'No stack');
-            
-            // Check if it's a network error
-            if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-                setSaveError('Network error. Please check your connection and try again.');
-            } else if (msg.includes('404')) {
-                setSaveError('Server configuration error. Please contact support.');
-            } else if (msg.includes('401') || msg.includes('403')) {
-                setSaveError('Authentication error. Please log in again.');
-            } else {
-                setSaveError(`Save failed: ${msg}`);
+            // Step 7: Audit logging
+            saveState.step = 'audit_logging';
+            if (savedSchedules && savedSchedules.length > 0) {
+                for (const schedule of savedSchedules) {
+                    await scheduleAudit.created(schedule.id, {
+                        section: result.entries[0]?.sectionId,
+                        teacher: result.entries[0]?.teacherId,
+                        subject: result.entries[0]?.subjectId,
+                    });
+                }
+                console.log('[SAVE] Audit logged for', savedSchedules.length, 'schedules');
             }
+
+            // Step 8: Student notifications
+            saveState.step = 'notify_students';
+            const affectedSections = Array.from(new Set(result.entries.map(e => e.sectionId)));
+            await notifyStudentsOfScheduleChanges(affectedSections, initialState, false);
+            console.log('[SAVE] Notified students for', affectedSections.length, 'sections');
+
+            // Step 9: Refresh UI state
+            saveState.step = 'refresh_ui';
+            await refreshExisting();
+            console.log('[SAVE] Refreshed UI state');
+
+            // Success - update UI
+            saveState.savedAt = new Date().toISOString();
+            saveState.step = 'complete';
+            setSavedId(initialState);
+
+            console.log('[SAVE COMPLETE] Final state:', saveState);
+        } catch (err) {
+            saveState.step = 'error';
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            saveState.errors.push(errorMessage);
+
+            console.error('[SAVE ERROR] State at failure:', saveState);
+            console.error('[SAVE ERROR] Full error:', err);
+
+            // Determine user-friendly error message
+            let userMessage = 'Save failed';
+            if (errorMessage.includes('count mismatch')) {
+                userMessage = 'Some schedules failed to save. Please verify in the Schedules tab and try again.';
+            } else if (errorMessage.includes('not authenticated')) {
+                userMessage = 'Not authenticated. Please log in again.';
+            } else if (errorMessage.includes('version') || errorMessage.includes('batch')) {
+                userMessage = 'Version control error. Please try again.';
+            } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+                userMessage = 'Network error. Check your connection and try again.';
+            } else {
+                userMessage = `Save failed: ${errorMessage}`;
+            }
+
+            setSaveError(userMessage);
+
+            // Log to system
+            scheduleLogger.system.error('generate', 'save', 'Save failed', {
+                message: errorMessage,
+                state: saveState,
+                originalError: err,
+            });
         } finally {
             setSaving(false);
         }
