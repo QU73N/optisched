@@ -29,6 +29,7 @@ import { scheduleVersionService } from '../../../services/scheduleVersionService
 // import { scheduleAudit } from '../../../services/auditService';
 import { detectConflicts } from '../../../services/conflictDetector';
 import { PublishOverwriteConfirm } from '../../../components/PublishOverwriteConfirm';
+import { ScheduleDragDrop } from '../../../components/ScheduleDragDrop';
 
 // ---------------------------------------------------------------------------
 // Root component
@@ -2059,6 +2060,9 @@ const OutcomeStage: React.FC<{
 }> = ({ result, teachers, rooms, sections }) => {
     const [viewMode, setViewMode] = useState<'section' | 'teacher' | 'room'>('section');
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    
+    // Local state for editable schedule entries (for drag-and-drop)
+    const [localEntries, setLocalEntries] = useState<typeof result.entries>(result.entries);
 
     const dayOrder = useMemo(() => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], []);
     const SHORT_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -2135,36 +2139,36 @@ const OutcomeStage: React.FC<{
         return lastName;
     };
 
-    // Group entries by section, teacher, or room
+    // Group entries by section, teacher, or room (using localEntries for drag-and-drop)
     const groupedBySection = useMemo(() => {
-        const groups: Record<string, typeof result.entries> = {};
-        result.entries.forEach(entry => {
+        const groups: Record<string, typeof localEntries> = {};
+        localEntries.forEach(entry => {
             const key = entry.sectionId;
             if (!groups[key]) groups[key] = [];
             groups[key].push(entry);
         });
         return groups;
-    }, [result]);
+    }, [localEntries]);
 
     const groupedByTeacher = useMemo(() => {
-        const groups: Record<string, typeof result.entries> = {};
-        result.entries.forEach(entry => {
+        const groups: Record<string, typeof localEntries> = {};
+        localEntries.forEach(entry => {
             const key = entry.teacherId;
             if (!groups[key]) groups[key] = [];
             groups[key].push(entry);
         });
         return groups;
-    }, [result]);
+    }, [localEntries]);
 
     const groupedByRoom = useMemo(() => {
-        const groups: Record<string, typeof result.entries> = {};
-        result.entries.forEach(entry => {
+        const groups: Record<string, typeof localEntries> = {};
+        localEntries.forEach(entry => {
             const key = entry.roomId;
             if (!groups[key]) groups[key] = [];
             groups[key].push(entry);
         });
         return groups;
-    }, [result]);
+    }, [localEntries]);
 
     const selectedEntries = useMemo(() => selectedId
         ? (viewMode === 'section' ? groupedBySection[selectedId]
@@ -2272,86 +2276,17 @@ const OutcomeStage: React.FC<{
                             </div>
                         </div>
 
-                        <div className="sm-calendar">
-                            <div
-                                className="sm-cal-grid"
-                                style={{ gridTemplateRows: `auto repeat(${TOTAL_SLOTS}, 22px)` }}
-                            >
-                                {/* Header row */}
-                                <div className="sm-cal-head" style={{ gridColumn: 1, gridRow: 1 }} />
-                                {SHORT_DAYS.map((d, i) => (
-                                    <div key={d} className="sm-cal-head" style={{ gridColumn: i + 2, gridRow: 1 }}>{d}</div>
-                                ))}
-
-                                {/* Time labels (every hour) */}
-                                {Array.from({ length: TOTAL_SLOTS }).map((_, slot) => {
-                                    const hour = START_HOUR + Math.floor(slot / 2);
-                                    const isHour = slot % 2 === 0;
-                                    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
-                                    return (
-                                        <div
-                                            key={`time-${slot}`}
-                                            className="sm-cal-time"
-                                            style={{ gridColumn: 1, gridRow: slot + 2 }}
-                                        >
-                                            {isHour ? formatTime(timeStr) : ''}
-                                        </div>
-                                    );
-                                })}
-
-                                {/* Empty day cells (background grid) */}
-                                {Array.from({ length: TOTAL_SLOTS }).flatMap((_, slot) =>
-                                    dayOrder.map((day, di) => (
-                                        <div
-                                            key={`bg-${day}-${slot}`}
-                                            className="sm-cal-cell sm-cal-slot"
-                                            style={{ gridColumn: di + 2, gridRow: slot + 2 }}
-                                        />
-                                    ))
-                                )}
-
-                                {/* Events overlaid with explicit grid placement */}
-                                {events.map(ev => {
-                                    const getFontSize = () => {
-                                        if (ev.span <= 1) return '10px';
-                                        if (ev.span <= 2) return '11px';
-                                        return '12px';
-                                    };
-
-                                    return (
-                                        <div
-                                            key={`${ev.entry.sectionId}-${ev.entry.day}-${ev.entry.start}`}
-                                            className="sm-cal-cell"
-                                            style={{
-                                                gridColumn: ev.dayIdx + 2,
-                                                gridRow: `${ev.start + 2} / span ${ev.span}`,
-                                            }}
-                                        >
-                                            <div
-                                                className={`sm-cal-event ${colorForKey(ev.entry.subjectName || ev.entry.sectionId)}`}
-                                                title={`${ev.entry.subjectName} · ${formatTime(ev.entry.start)}–${formatTime(ev.entry.end)}`}
-                                                style={{ fontSize: getFontSize() }}
-                                            >
-                                                <div className="sm-cal-event-title" style={{ fontSize: getFontSize(), fontWeight: ev.span <= 1 ? 600 : 500 }}>
-                                                    {ev.entry.subjectName}
-                                                </div>
-                                                {ev.span > 1 && (
-                                                    <>
-                                                        <div className="sm-cal-event-sub" style={{ fontSize: getFontSize() }}>
-                                                            {viewMode !== 'teacher' && ev.entry.teacherName}
-                                                            {viewMode !== 'room' && ev.entry.roomName}
-                                                        </div>
-                                                        <div className="sm-cal-event-time" style={{ fontSize: getFontSize() }}>
-                                                            {formatTime(ev.entry.start)}–{formatTime(ev.entry.end)}
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <ScheduleDragDrop
+                            entries={localEntries}
+                            onEntriesChange={setLocalEntries}
+                            dayOrder={dayOrder}
+                            START_HOUR={START_HOUR}
+                            TOTAL_SLOTS={TOTAL_SLOTS}
+                            formatTime={formatTime}
+                            colorForKey={colorForKey}
+                            viewMode={viewMode}
+                            events={events}
+                        />
                     </div>
                 ) : selectedId ? (
                     <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
