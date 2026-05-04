@@ -476,14 +476,27 @@ class ScheduleVersionService {
                 .eq('is_active', true);
 
             if (!verifiedSchedules || verifiedSchedules.length !== schedules.length) {
-                throw new Error('Persistence verification failed: Schedule count mismatch');
+                scheduleLogger.system.error('system', 'persistence', 'Schedule count mismatch', {
+                    expected: schedules.length,
+                    actual: verifiedSchedules?.length || 0,
+                });
+                throw new Error(`Persistence verification failed: Schedule count mismatch (expected ${schedules.length}, got ${verifiedSchedules?.length || 0})`);
             }
 
             const verifiedHash = scheduleValidation.computeStateHash(verifiedSchedules);
+            console.log('[VERSION SERVICE] Hash verification:', {
+                expected: stateHash,
+                actual: verifiedHash,
+                scheduleCount: verifiedSchedules.length,
+                firstSchedule: verifiedSchedules[0],
+            });
+            
             if (verifiedHash !== stateHash) {
                 scheduleLogger.system.error('system', 'persistence', 'CRITICAL: State hash mismatch after persistence', {
                     expected: stateHash,
                     actual: verifiedHash,
+                    scheduleCount: verifiedSchedules.length,
+                    sampleSchedule: verifiedSchedules[0],
                 });
                 throw new Error('Persistence verification failed: State hash mismatch');
             }

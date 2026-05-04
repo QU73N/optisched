@@ -276,9 +276,16 @@ class ScheduleValidationService {
      * Compute a hash of schedule state
      */
     computeStateHash(schedules: Schedule[]): string {
-        const sorted = [...schedules].sort((a, b) => a.id.localeCompare(b.id));
+        // CRITICAL: Sort by essential fields (NOT id, which may be generated server-side)
+        const sorted = [...schedules].sort((a, b) => {
+            const aKey = `${a.subject_id}|${a.teacher_id}|${a.room_id}|${a.section_id}|${a.day_of_week}|${a.start_time}`;
+            const bKey = `${b.subject_id}|${b.teacher_id}|${b.room_id}|${b.section_id}|${b.day_of_week}|${b.start_time}`;
+            return aKey.localeCompare(bKey);
+        });
+        
+        // Create hash from essential fields ONLY (excludes id which changes after insertion)
         const stateStr = sorted.map(s => 
-            `${s.id}|${s.teacher_id || ''}|${s.room_id || ''}|${s.section_id || ''}|${s.day_of_week}|${s.start_time}|${s.end_time}|${s.subject_id || ''}`
+            `${s.teacher_id || ''}|${s.room_id || ''}|${s.section_id || ''}|${s.day_of_week}|${s.start_time}|${s.end_time}|${s.subject_id || ''}`
         ).join('||');
         
         let hash = 5381;
