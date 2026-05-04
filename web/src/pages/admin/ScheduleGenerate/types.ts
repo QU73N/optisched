@@ -9,7 +9,7 @@ export type StageKey =
     | 'review'
     | 'generate'
     | 'results'
-    | 'optimize'
+    | 'outcome'
     | 'save';
 
 export interface Subject {
@@ -373,7 +373,7 @@ export const STAGES: { key: StageKey; label: string; hint: string }[] = [
     { key: 'review',      label: 'Review',      hint: 'Confirm inputs' },
     { key: 'generate',    label: 'Generate',    hint: 'Run the engine' },
     { key: 'results',     label: 'Results',     hint: 'Preview placements' },
-    { key: 'optimize',    label: 'Optimize',    hint: 'Improve schedule quality' },
+    { key: 'outcome',     label: 'Outcome',     hint: 'View by student, teacher, room' },
     { key: 'save',        label: 'Save',        hint: 'Persist as draft' },
 ];
 

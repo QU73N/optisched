@@ -7,9 +7,9 @@ import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
 import type { Schedule } from '../../../types/database';
 import {
     AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
-    Flag, GitBranch, Inbox, Layers, Lightbulb, ListChecks, Lock, Loader2, MapPin, Play, Plus,
+    Flag, GitBranch, Inbox, Layers, Lightbulb, ListChecks, Lock, MapPin, Play, Plus,
     RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, ShieldCheck, Sliders, Sparkles, Upload,
-    Users, X, XCircle, Zap,
+    Users, X, XCircle,
 } from 'lucide-react';
 import '../Dashboard.css';
 import {
@@ -18,9 +18,9 @@ import {
     type BreakWindow, type DiffEntry, type ExistingSchedule, type GenerationConfig,
     type GenerationProgress, type GenerationResult, type PartialKind, type PartialTarget,
     type PlacedEntry, type PriorityTier, type Room, type Section, type StageKey,
-    type Subject, type Teacher, type VersionSummary, type WorkflowState, type OptimizationReport,
+    type Subject, type Teacher, type VersionSummary, type WorkflowState,
 } from './types';
-import { runGenerator, optimizeSchedule } from './generator';
+import { runGenerator } from './generator';
 import { getRulesAsRecord, notifyStudentsOfScheduleChanges } from '../../../services/generationService';
 import { scheduleStateManager } from '../../../services/scheduleStateManager';
 import { scheduleLogger } from '../../../services/scheduleLogger';
@@ -77,12 +77,6 @@ const ScheduleGenerate: React.FC = () => {
         approveSchedule: (batchId: string, options: { changeReason: string }) => Promise<{ success: boolean; message?: string }>;
         publishApprovedSchedule: (batchId: string, options: { changeReason: string }) => Promise<{ success: boolean; message?: string; active_version_id?: string | null }>;
     };
-    
-    // Optimization state
-    const [optimizing, setOptimizing] = useState(false);
-    const [optimizationReport, setOptimizationReport] = useState<OptimizationReport | null>(null);
-    const [optimizedResult, setOptimizedResult] = useState<GenerationResult | null>(null);
-    const [optimizationError, setOptimizationError] = useState<string | null>(null);
 
     // Version control state
     const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
@@ -396,9 +390,6 @@ const ScheduleGenerate: React.FC = () => {
         setResult(null);
         setSavedId(null);
         setSaveError(null);
-        setOptimizedResult(null);
-        setOptimizationReport(null);
-        setOptimizationError(null);
         cancelRef.current = false;
         setGenerationStartTime(Date.now());
         // Initialize progress with config values
@@ -438,117 +429,6 @@ const ScheduleGenerate: React.FC = () => {
         setGenerating(false);
         setGenerationStartTime(null);
         setProgress(p => ({ ...p, subStage: 'idle', message: 'Cancelled' }));
-    };
-
-    const runOptimization = async () => {
-        if (!result) return;
-        
-        setOptimizing(true);
-        setOptimizationReport(null);
-        setOptimizedResult(null);
-        setOptimizationError(null);
-        
-        try {
-            // Build maps for optimization
-            const teachersMap = new Map(teachers.map(t => [t.id, t]));
-            const roomsMap = new Map(rooms.map(r => [r.id, r]));
-            
-            // Build proper ClassifiedConstraints structure
-            // Note: optimizer only uses hard constraints, soft is converted internally
-            const classifiedConstraints = {
-                hard: {
-                    no_teacher_overlap: true,
-                    no_room_overlap: true,
-                    no_section_overlap: true,
-                    room_capacity_compliance: true,
-                    teacher_qualification_enforcement: true,
-                    teacher_availability_enforcement: true,
-                    max_consecutive_hours: 4,
-                    max_daily_load: 6,
-                    subject_hour_completion: false,
-                    special_subject_room_priority: false,
-                    break_enforcement: config.breaks.length > 0,
-                    schedule_lock_protection: false,
-                },
-                soft: {
-                    balanced_weekly_load: config.soft.balancedLoad > 0,
-                    reduced_idle_gaps: config.soft.compactSchedule > 0,
-                    compact_section_schedules: config.soft.compactSchedule > 0,
-                    room_movement_minimization: config.soft.minimizeRoomSwitch > 0,
-                    time_of_day_preference: config.soft.teacherPreferredTime > 0,
-                    room_utilization_efficiency: config.soft.roomUtilization > 0,
-                    schedule_compactness: config.soft.compactSchedule > 0,
-                    fairness_between_teachers: config.soft.workloadFairness > 0,
-                    priority_weighting: config.soft.dailyLoadBalance > 0,
-                },
-                preferences: {
-                    preferred_rooms: {},
-                    preferred_time_windows: {},
-                    preferred_days: {},
-                    preferred_sequencing: {},
-                    preferred_special_room_use: false,
-                },
-            };
-            
-            // Run optimization (synchronous function)
-            const optimizedEntries = optimizeSchedule(
-                result.entries,
-                teachersMap,
-                roomsMap,
-                sections,
-                config,
-                classifiedConstraints,
-                result.score,
-                (p) => setProgress(p),
-            );
-            
-            setOptimizedResult({
-                ...result,
-                entries: optimizedEntries.entries,
-                score: optimizedEntries.score,
-            });
-            
-            setOptimizationReport({
-                initialScore: result.score,
-                finalScore: optimizedEntries.score,
-                scoreImprovement: optimizedEntries.score - result.score,
-                scoreBreakdown: {
-                    initial: {
-                        balancedLoad: result.score,
-                        compactSchedule: result.score,
-                        minimizeRoomSwitch: result.score,
-                        teacherPreferredTime: result.score,
-                        dailyLoadBalance: result.score,
-                        workloadFairness: result.score,
-                        subjectSpacing: result.score,
-                        roomUtilization: result.score,
-                    },
-                    final: {
-                        balancedLoad: optimizedEntries.score,
-                        compactSchedule: optimizedEntries.score,
-                        minimizeRoomSwitch: optimizedEntries.score,
-                        teacherPreferredTime: optimizedEntries.score,
-                        dailyLoadBalance: optimizedEntries.score,
-                        workloadFairness: optimizedEntries.score,
-                        subjectSpacing: optimizedEntries.score,
-                        roomUtilization: optimizedEntries.score,
-                    },
-                },
-                iterations: 1,
-                acceptedMoves: 0,
-                rejectedMoves: 0,
-                movesByType: {},
-                terminationReason: 'no_improvement',
-                changelog: [],
-            });
-            
-        } catch (error) {
-            console.error('Optimization failed:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred during optimization';
-            setOptimizationError(errorMessage);
-        } finally {
-            setOptimizing(false);
-        }
     };
 
     const saveAs = async (initialState: 'draft' | 'submitted') => {
@@ -928,10 +808,6 @@ const ScheduleGenerate: React.FC = () => {
         setResult(null);
         setSavedId(null);
         setSaveError(null);
-        setOptimizedResult(null);
-        setOptimizationReport(null);
-        setOptimizationError(null);
-        setOptimizing(false);
         setStage('scope');
         setMaxStageReached('scope');
     };
@@ -1024,32 +900,17 @@ const ScheduleGenerate: React.FC = () => {
                     {stage === 'results' && result && (
                         <ResultsStage
                             result={result}
-                            onOptimize={() => setStage('optimize')}
+                            onOutcome={() => setStage('outcome')}
                             onSave={() => setStage('save')}
                         />
                     )}
-                    {stage === 'optimize' && result && (
-                        <OptimizeStage
+                    {stage === 'outcome' && result && (
+                        <OutcomeStage
                             result={result}
-                            optimizing={optimizing}
-                            optimizationReport={optimizationReport}
-                            optimizedResult={optimizedResult}
-                            optimizationError={optimizationError}
-                            onOptimize={runOptimization}
-                            onUseOptimized={() => {
-                                if (optimizedResult) {
-                                    setResult(optimizedResult);
-                                    setOptimizedResult(null);
-                                    setOptimizationReport(null);
-                                }
-                            }}
-                            onDiscard={() => {
-                                setOptimizedResult(null);
-                                setOptimizationReport(null);
-                                setOptimizationError(null);
-                                setStage('results');
-                                setMaxStageReached('results');
-                            }}
+                            teachers={teachers}
+                            rooms={rooms}
+                            sections={sections}
+                            onSave={() => setStage('save')}
                         />
                     )}
                     {stage === 'save' && result && (
@@ -1142,10 +1003,10 @@ const ScheduleGenerate: React.FC = () => {
                             <Sparkles size={14} /> Start generation
                         </button>
                     ) : stage === 'results' ? (
-                        <button className="btn btn-primary" onClick={() => setStage('optimize')} disabled={!result || result.entries.length === 0}>
-                            Optimize Schedule <ArrowRight size={14} />
+                        <button className="btn btn-primary" onClick={() => setStage('outcome')} disabled={!result || result.entries.length === 0}>
+                            View Outcome <ArrowRight size={14} />
                         </button>
-                    ) : stage === 'optimize' ? (
+                    ) : stage === 'outcome' ? (
                         <button className="btn btn-primary" onClick={() => setStage('save')} disabled={!result || result.entries.length === 0}>
                             Continue to save <ArrowRight size={14} />
                         </button>
@@ -1928,7 +1789,7 @@ const GenerateStage: React.FC<{
 // Stage 6 — Results
 // ---------------------------------------------------------------------------
 
-const ResultsStage: React.FC<{ result: GenerationResult; onOptimize: () => void; onSave: () => void }> = ({ result, onOptimize, onSave }) => {
+const ResultsStage: React.FC<{ result: GenerationResult; onOutcome: () => void; onSave: () => void }> = ({ result, onOutcome, onSave }) => {
     const perfect = result.placed === result.total && result.errors.length === 0;
     const scoreRounded = result.score.toFixed(2);
     const unplacedCount = result.total - result.placed;
@@ -1996,10 +1857,10 @@ const ResultsStage: React.FC<{ result: GenerationResult; onOptimize: () => void;
                 </div>
             )}
 
-            {/* Action buttons for optimize or save */}
+            {/* Action buttons for outcome or save */}
             <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                <button className="btn btn-secondary" onClick={onOptimize} disabled={result.entries.length === 0}>
-                    <Zap size={14} /> Optimize Schedule
+                <button className="btn btn-secondary" onClick={onOutcome} disabled={result.entries.length === 0}>
+                    <Layers size={14} /> View Outcome
                 </button>
                 <button className="btn btn-primary" onClick={onSave} disabled={result.entries.length === 0}>
                     <Save size={14} /> Save Schedule
@@ -2010,135 +1871,185 @@ const ResultsStage: React.FC<{ result: GenerationResult; onOptimize: () => void;
 };
 
 // ---------------------------------------------------------------------------
-// Stage 7 — Optimize
+// Stage 7 — Outcome
 // ---------------------------------------------------------------------------
 
-const OptimizeStage: React.FC<{
+const OutcomeStage: React.FC<{
     result: GenerationResult;
-    optimizing: boolean;
-    optimizationReport: OptimizationReport | null;
-    optimizedResult: GenerationResult | null;
-    optimizationError: string | null;
-    onOptimize: () => void;
-    onUseOptimized: () => void;
-    onDiscard: () => void;
-}> = ({ result, optimizing, optimizationReport, optimizedResult, optimizationError, onOptimize, onUseOptimized, onDiscard }) => {
+    teachers: Teacher[];
+    rooms: Room[];
+    sections: Section[];
+    onSave: () => void;
+}> = ({ result, teachers, rooms, sections, onSave }) => {
+    const [viewMode, setViewMode] = useState<'section' | 'teacher' | 'room'>('section');
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+
+    // Group entries by section, teacher, or room
+    const groupedBySection = useMemo(() => {
+        const groups: Record<string, typeof result.entries> = {};
+        result.entries.forEach(entry => {
+            const key = entry.sectionId;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(entry);
+        });
+        return groups;
+    }, [result]);
+
+    const groupedByTeacher = useMemo(() => {
+        const groups: Record<string, typeof result.entries> = {};
+        result.entries.forEach(entry => {
+            const key = entry.teacherId;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(entry);
+        });
+        return groups;
+    }, [result]);
+
+    const groupedByRoom = useMemo(() => {
+        const groups: Record<string, typeof result.entries> = {};
+        result.entries.forEach(entry => {
+            const key = entry.roomId;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(entry);
+        });
+        return groups;
+    }, [result]);
+
+    const selectedEntries = selectedId
+        ? (viewMode === 'section' ? groupedBySection[selectedId]
+           : viewMode === 'teacher' ? groupedByTeacher[selectedId]
+           : groupedByRoom[selectedId]) || []
+        : [];
+
     return (
         <div>
             <StageHeader
-                icon={<Sparkles size={16} />}
-                title="Optimize Schedule"
-                desc="Improve schedule quality using post-optimization without breaking hard constraints."
+                icon={<Layers size={16} />}
+                title="Outcome"
+                desc="View the generated schedule from different perspectives."
             />
 
-            {!optimizedResult ? (
-                <div style={{ padding: '20px 0' }}>
-                    {optimizationError && (
-                        <div className="sg-banner sg-banner-error" style={{ marginBottom: 16 }}>
-                            <XCircle size={14} /> {optimizationError}
-                        </div>
-                    )}
-                    
-                    <div style={{ marginBottom: 20 }}>
-                        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Current Score</h3>
-                        <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent-primary)' }}>
-                            {result.score.toFixed(2)}
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            {result.placed} of {result.total} sessions placed
-                        </div>
-                    </div>
-
-                    <button 
-                        className="btn btn-primary" 
-                        onClick={onOptimize} 
-                        disabled={optimizing}
-                        style={{ width: '100%' }}
+            <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    <button
+                        className={`btn ${viewMode === 'section' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => { setViewMode('section'); setSelectedId(null); }}
                     >
-                        {optimizing ? (
-                            <>
-                                <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} />
-                                Optimizing...
-                            </>
-                        ) : (
-                            <>
-                                <Sparkles size={16} style={{ marginRight: 8 }} />
-                                Run Optimization
-                            </>
-                        )}
+                        <Users size={14} style={{ marginRight: 8 }} /> Sections
                     </button>
-
-                    <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-                        <p><strong>Safe Mode:</strong> Only accepts strictly improving changes. Ideal for demonstrations.</p>
-                        <p><strong>Advanced Mode:</strong> Uses simulated annealing to escape local optima. May temporarily accept small negative moves early in the process.</p>
-                    </div>
-                </div>
-            ) : (
-                <div style={{ padding: '20px 0' }}>
-                    <div style={{ marginBottom: 20 }}>
-                        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Optimization Complete</h3>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                            <div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Before</div>
-                                <div style={{ fontSize: 24, fontWeight: 600 }}>{result.score.toFixed(2)}</div>
-                            </div>
-                            <div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>After</div>
-                                <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--accent-success)' }}>
-                                    {optimizedResult.score.toFixed(2)}
-                                </div>
-                            </div>
-                        </div>
-
-                        {optimizationReport && (
-                            <div style={{ 
-                                padding: 12, 
-                                background: optimizationReport.scoreImprovement > 0 
-                                    ? 'var(--accent-success-alpha, rgba(47, 143, 91, 0.1)' 
-                                    : 'var(--accent-warning-alpha, rgba(211, 139, 32, 0.1))',
-                                borderRadius: 6,
-                                marginBottom: 16
-                            }}>
-                                <div style={{ 
-                                    fontSize: 18, 
-                                    fontWeight: 700,
-                                    color: optimizationReport.scoreImprovement > 0 ? 'var(--accent-success)' : 'var(--accent-warning)'
-                                }}>
-                                    {optimizationReport.scoreImprovement > 0 ? '+' : ''}{optimizationReport.scoreImprovement.toFixed(2)}
-                                </div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                    Score improvement
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <button 
-                        className="btn btn-primary" 
-                        onClick={onUseOptimized}
-                        style={{ width: '100%', marginBottom: 8 }}
+                    <button
+                        className={`btn ${viewMode === 'teacher' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => { setViewMode('teacher'); setSelectedId(null); }}
                     >
-                        <Check size={16} style={{ marginRight: 8 }} />
-                        Use Optimized Schedule
+                        <MapPin size={14} style={{ marginRight: 8 }} /> Teachers
                     </button>
-
-                    <button 
-                        className="btn btn-secondary" 
-                        onClick={onDiscard}
-                        style={{ width: '100%' }}
+                    <button
+                        className={`btn ${viewMode === 'room' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => { setViewMode('room'); setSelectedId(null); }}
                     >
-                        <X size={16} style={{ marginRight: 8 }} />
-                        Discard Optimization
+                        <MapPin size={14} style={{ marginRight: 8 }} /> Rooms
                     </button>
                 </div>
-            )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginBottom: 20 }}>
+                    {viewMode === 'section' && sections.map(section => (
+                        <button
+                            key={section.id}
+                            className={`btn ${selectedId === section.id ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setSelectedId(section.id)}
+                            style={{ justifyContent: 'flex-start' }}
+                        >
+                            <Users size={14} style={{ marginRight: 8 }} />
+                            {section.name}
+                            <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
+                                {groupedBySection[section.id]?.length || 0}
+                            </span>
+                        </button>
+                    ))}
+                    {viewMode === 'teacher' && teachers.map(teacher => (
+                        <button
+                            key={teacher.id}
+                            className={`btn ${selectedId === teacher.id ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setSelectedId(teacher.id)}
+                            style={{ justifyContent: 'flex-start' }}
+                        >
+                            <MapPin size={14} style={{ marginRight: 8 }} />
+                            {teacher.full_name}
+                            <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
+                                {groupedByTeacher[teacher.id]?.length || 0}
+                            </span>
+                        </button>
+                    ))}
+                    {viewMode === 'room' && rooms.map(room => (
+                        <button
+                            key={room.id}
+                            className={`btn ${selectedId === room.id ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setSelectedId(room.id)}
+                            style={{ justifyContent: 'flex-start' }}
+                        >
+                            <MapPin size={14} style={{ marginRight: 8 }} />
+                            {room.name}
+                            <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
+                                {groupedByRoom[room.id]?.length || 0}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+
+                {selectedId && selectedEntries.length > 0 ? (
+                    <div style={{ background: 'var(--surface-soft)', borderRadius: 8, padding: 16 }}>
+                        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+                            {viewMode === 'section' ? sections.find(s => s.id === selectedId)?.name
+                             : viewMode === 'teacher' ? teachers.find(t => t.id === selectedId)?.full_name
+                             : rooms.find(r => r.id === selectedId)?.name}
+                        </h3>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                    <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Day</th>
+                                    <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Time</th>
+                                    <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Subject</th>
+                                    {viewMode !== 'teacher' && <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Teacher</th>}
+                                    {viewMode !== 'room' && <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Room</th>}
+                                    {viewMode !== 'section' && <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Section</th>}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {selectedEntries.map((entry, idx) => (
+                                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color-alpha)' }}>
+                                        <td style={{ padding: '8px', fontSize: 13 }}>{entry.day}</td>
+                                        <td style={{ padding: '8px', fontSize: 13 }}>{entry.start} - {entry.end}</td>
+                                        <td style={{ padding: '8px', fontSize: 13 }}>{entry.subjectName}</td>
+                                        {viewMode !== 'teacher' && <td style={{ padding: '8px', fontSize: 13 }}>{entry.teacherName}</td>}
+                                        {viewMode !== 'room' && <td style={{ padding: '8px', fontSize: 13 }}>{entry.roomName}</td>}
+                                        {viewMode !== 'section' && <td style={{ padding: '8px', fontSize: 13 }}>{entry.sectionName}</td>}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : selectedId ? (
+                    <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
+                        No entries found for this selection
+                    </div>
+                ) : (
+                    <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
+                        Select a {viewMode} to view its schedule
+                    </div>
+                )}
+            </div>
+
+            <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <button className="btn btn-primary" onClick={onSave} disabled={result.entries.length === 0}>
+                    <Save size={14} /> Save Schedule
+                </button>
+            </div>
         </div>
     );
 };
 
 // ---------------------------------------------------------------------------
-// Stage 7 — Save
+// Stage 8 — Save
 // ---------------------------------------------------------------------------
 
 const SaveStage: React.FC<{
