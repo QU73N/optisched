@@ -87,19 +87,31 @@ const getDatabaseDepartmentName = (displayName: string): string => {
 };
 
 // Helper function to combine name fields into full_name
+// Format: First Middle Last Suffix (e.g., "Egnacio Y. Ello Jr.")
 const combineFullName = (lastName: string, firstName: string, middleInitial: string, suffix: string): string => {
-    if (suffix && suffix.trim()) {
-        // Format: "Last Suffix, First Middle"
-        if (middleInitial && middleInitial.trim()) {
-            return `${lastName} ${suffix}, ${firstName} ${middleInitial}`;
-        }
-        return `${lastName} ${suffix}, ${firstName}`;
+    const parts = [];
+    
+    // Add first name
+    if (firstName && firstName.trim()) {
+        parts.push(firstName.trim());
     }
-    // Format: "First Middle Last"
+    
+    // Add middle initial if present
     if (middleInitial && middleInitial.trim()) {
-        return `${firstName} ${middleInitial} ${lastName}`;
+        parts.push(middleInitial.trim());
     }
-    return `${firstName} ${lastName}`;
+    
+    // Add last name
+    if (lastName && lastName.trim()) {
+        parts.push(lastName.trim());
+    }
+    
+    // Add suffix if present
+    if (suffix && suffix.trim()) {
+        parts.push(suffix.trim());
+    }
+    
+    return parts.join(' ');
 };
 
 const AddUser: React.FC = () => {
@@ -770,6 +782,22 @@ const AddUser: React.FC = () => {
                                         value={formData.suffix}
                                         onChange={e => setFormData(prev => ({ ...prev, suffix: e.target.value }))}
                                     />
+                                </div>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                                        FULL NAME (preview)
+                                    </label>
+                                    <div style={{ 
+                                        padding: '10px 12px', 
+                                        borderRadius: 'var(--radius-sm)', 
+                                        background: 'var(--bg-surface)', 
+                                        border: '1px solid var(--border-default)',
+                                        fontSize: 14,
+                                        color: 'var(--text-primary)',
+                                        fontStyle: 'italic'
+                                    }}>
+                                        {combineFullName(formData.lastName, formData.firstName, formData.middleInitial, formData.suffix) || 'Enter name components to see preview'}
+                                    </div>
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
