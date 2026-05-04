@@ -891,7 +891,7 @@ const classifyConstraints = (
         max_daily_load: 8,
         subject_hour_completion: true,
         special_subject_room_priority: true,
-        break_enforcement: config.breaks.length > 0,
+        break_enforcement: true, // Breaks are always configured in new structure (fixed or variable mode)
         schedule_lock_protection: true,
     };
 
@@ -914,7 +914,7 @@ const classifyConstraints = (
         preferred_time_windows: {}, // TODO: Populate from teacher preferences
         preferred_days: {}, // TODO: Populate from teacher preferences
         preferred_sequencing: {}, // TODO: Populate from curriculum
-        preferred_special_room_use: config.priorities.specialRoomBias > 50,
+        preferred_special_room_use: config.soft.specialRoomBias > 50,
     };
 
     return { hard, soft, preferences };
@@ -959,7 +959,7 @@ const constructDomains = (
     roomDomainMap: Map<string, RoomDomain>,
     _sectionDomainMap: Map<string, SectionDomain>,
     days: string[],
-    slots: { start: string; end: string }[],
+    slotsByDay: Map<string, { start: string; end: string }[]>,
 ): Map<string, SessionDomain> => {
     const domains = new Map<string, SessionDomain>();
 
@@ -1027,7 +1027,8 @@ const constructDomains = (
         // Pre-filter and rank valid slots with LCV scoring
         const validSlots: Array<{ start: string; end: string; day: string; score: number }> = [];
         for (const day of validDays) {
-            for (const slot of slots) {
+            const daySlots = slotsByDay.get(day) || [];
+            for (const slot of daySlots) {
                 // Check if any teacher is available at this slot
                 const hasAvailableTeacher = validTeachers.some(tid => {
                     const teacher = teachers.get(tid);
@@ -1067,7 +1068,9 @@ const constructDomains = (
         const teacherScarcity = validTeachers.length / Math.max(1, teachers.size);
         const roomScarcity = validRooms.length / Math.max(1, rooms.size);
         const dayScarcity = validDays.length / Math.max(1, days.length);
-        const slotScarcity = validSlots.length / Math.max(1, slots.length * days.length);
+        // Calculate total slots across all days for slot scarcity
+        const totalSlots = Array.from(slotsByDay.values()).reduce((sum, daySlots) => sum + daySlots.length, 0);
+        const slotScarcity = validSlots.length / Math.max(1, totalSlots);
         const scarcityScore = (teacherScarcity + roomScarcity + dayScarcity + slotScarcity) / 4;
 
         domains.set(taskId, {
@@ -2419,7 +2422,7 @@ export async function runGenerator(
     });
     await new Promise(r => setTimeout(r, 50));
 
-    const domains = buildDomains(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, slots);
+    const domains = buildDomains(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, firstDaySlots);
     // Create domain maps for efficient lookup
     const teacherDomainMap = new Map(domains.teacher_domains.map(d => [d.teacher_id, d]));
     const roomDomainMap = new Map(domains.room_domains.map(d => [d.room_id, d]));
@@ -2710,7 +2713,7 @@ export async function runGenerator(
             roomDomainMap,
             sectionDomainMap,
             days,
-            slots,
+            slotsByDay,
         );
 
         // Phase 4: Improved Ranking - Re-rank tasks by scarcity (MRV heuristic)
@@ -2887,7 +2890,7 @@ export async function runGenerator(
 
                         // Phase 6: Multi-factor scoring for room selection
                         // Evaluate each candidate room using multiple factors
-                        const bias = config.priorities.specialRoomBias;
+                        const bias = config.soft.specialRoomBias;
                         const scoredRooms = compat.slice().map(room => {
                             let score = 0;
 
@@ -3134,7 +3137,7 @@ export async function runGenerator(
             roomDomainMap,
             sectionDomainMap,
             days,
-            slots,
+            slotsByDay,
         );
 
         // Apply repairs to try to place unplaced tasks
@@ -3249,7 +3252,10 @@ export async function runGenerator(
         priority_settings: config.priorities as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- JSONB field
         constraint_settings: { 
             soft: config.soft, 
-            breaks: config.breaks, 
+            breakMode: config.breakMode,
+            fixedBreak: config.fixedBreak,
+            variableBreak: config.variableBreak,
+            commonBreak: config.commonBreak,
             overflow_policy: config.overflowPolicy, 
             enable_forward_checking: config.enableForwardChecking,
             repair_applied: best.placed < best.total,
