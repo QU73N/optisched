@@ -77,13 +77,36 @@ const isFree = (
     day: string,
     startMin: number,
     endMin: number,
-) => !busy.some(b => {
-    if (b.day !== day) return false;
-    if (startMin >= b.endMin || endMin <= b.startMin) return false;
-    if (kind === 'teacher') return b.teacherId === id;
-    if (kind === 'room') return b.roomId === id;
-    return b.sectionId === id;
-});
+) => {
+    const result = !busy.some(b => {
+        if (b.day !== day) return false;
+        if (startMin >= b.endMin || endMin <= b.startMin) return false;
+        if (kind === 'teacher') return b.teacherId === id;
+        if (kind === 'room') return b.roomId === id;
+        return b.sectionId === id;
+    });
+    
+    // Log conflict detection
+    if (!result) {
+        const conflict = busy.find(b => {
+            if (b.day !== day) return false;
+            if (startMin >= b.endMin || endMin <= b.startMin) return false;
+            if (kind === 'teacher') return b.teacherId === id;
+            if (kind === 'room') return b.roomId === id;
+            return b.sectionId === id;
+        });
+        console.log(`[CONFLICT CHECK] ${kind} conflict detected:`, {
+            kind,
+            id,
+            day,
+            newStart: startMin,
+            newEnd: endMin,
+            conflicting: conflict
+        });
+    }
+    
+    return result;
+};
 
 /**
  * Forward Checking (Phase 7) - Improved implementation using domain information.
@@ -2529,7 +2552,10 @@ export async function runGenerator(
                             toMin(e.start) < eMin && 
                             toMin(e.end) > sMin
                         );
-                        if (teacherAlreadyBooked) continue;
+                        if (teacherAlreadyBooked) {
+                            console.log(`[PLACEMENT] Teacher already booked: ${currentTeacher.full_name} at ${day} ${slot.start}-${slot.end}`);
+                            continue;
+                        }
                         
                         // EXPLICIT CHECK: Verify section is not already booked at this time
                         const sectionAlreadyBooked = entries.some(e => 
@@ -2538,10 +2564,22 @@ export async function runGenerator(
                             toMin(e.start) < eMin && 
                             toMin(e.end) > sMin
                         );
-                        if (sectionAlreadyBooked) continue;
+                        if (sectionAlreadyBooked) {
+                            console.log(`[PLACEMENT] Section already booked: ${section.name} at ${day} ${slot.start}-${slot.end}`);
+                            continue;
+                        }
                         
-                        if (!isFree(busy, 'teacher', currentTeacher.id, day, sMin, eMin)) continue;
-                        if (!isFree(busy, 'section', section.id, day, sMin, eMin)) continue;
+                        const teacherFree = isFree(busy, 'teacher', currentTeacher.id, day, sMin, eMin);
+                        if (!teacherFree) {
+                            console.log(`[PLACEMENT] Teacher conflict: ${currentTeacher.full_name} at ${day} ${slot.start}-${slot.end}`);
+                            continue;
+                        }
+                        
+                        const sectionFree = isFree(busy, 'section', section.id, day, sMin, eMin);
+                        if (!sectionFree) {
+                            console.log(`[PLACEMENT] Section conflict: ${section.name} at ${day} ${slot.start}-${slot.end}`);
+                            continue;
+                        }
                         // Hard: check max_hours constraint
                         if (wouldExceedMaxHours(currentTeacher.id, entries, currentTeacher, config.sessionMinutes)) continue;
 
@@ -2644,14 +2682,17 @@ export async function runGenerator(
                                 start: slot.start,
                                 end: slot.end,
                             });
-                            busy.push({
+                            const newBusy = {
                                 teacherId: currentTeacher.id,
                                 roomId: room.id,
                                 sectionId: section.id,
                                 day,
                                 startMin: sMin,
                                 endMin: eMin,
-                            });
+                            };
+                            busy.push(newBusy);
+                            console.log(`[PLACEMENT] SUCCESS: Placed ${sub.name} for ${section.name} with ${currentTeacher.full_name} in ${room.name} at ${day} ${slot.start}-${slot.end}`);
+                            console.log(`[PLACEMENT] Busy array size: ${busy.length}`);
                             usedDays.add(day);
                             usedDaysByTask.set(taskKey, usedDays);
                             placed = true;
