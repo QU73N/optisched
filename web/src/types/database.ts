@@ -81,6 +81,11 @@ export interface Profile {
     email: string;
     role: UserRole;
     full_name: string;
+    // New name fields (full_name is computed from these)
+    last_name: string | null;
+    first_name: string | null;
+    middle_initial: string | null;
+    suffix: string | null;
     avatar_url: string | null;
     department: string | null;
     program: string | null;
