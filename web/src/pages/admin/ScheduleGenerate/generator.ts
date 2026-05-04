@@ -2009,6 +2009,7 @@ export async function runGenerator(
     input: GenerateInput,
     onProgress: ProgressFn,
 ): Promise<GenerationResult> {
+    console.log('[GENERATOR] runGenerator called with mode:', input.config.mode);
     const { subjects, teachers, rooms, sections, existing, config, institutionalPolicies = {} } = input;
 
     const isPartial = config.mode === 'partial' && !!config.partialTarget;
@@ -2440,6 +2441,7 @@ export async function runGenerator(
         });
 
         // Check if there are any tasks to place
+        console.log('[PLACEMENT] rankedTasks.length:', rankedTasks.length);
         if (rankedTasks.length === 0) {
             // Calculate high priority task count for this case
             let highPriorityTaskCount = 0;
