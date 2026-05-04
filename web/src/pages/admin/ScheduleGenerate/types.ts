@@ -92,7 +92,7 @@ export interface ExistingSchedule {
     end_time: string;
     status: string | null;
     created_at: string | null;
-    is_protected?: boolean | null; // for locked regeneration
+    is_protected?: boolean | null; // for protected schedules
     protection_level?: 'none' | 'approved' | 'published' | 'admin_locked' | null;
     protected_version_id?: string | null;
 }
@@ -178,16 +178,11 @@ export interface Priorities {
     subjects: Record<string, number>; // subjectId -> 0..100, missing means 50
 }
 
-export type GenerationMode = 'full' | 'partial' | 'draft' | 'locked' | 'what-if' | 'emergency' | 'multi-scenario';
+export type GenerationMode = 'full' | 'partial';
 
 export const MODE_LABELS: Record<GenerationMode, { label: string; desc: string }> = {
     full: { label: 'Full generation', desc: 'Rebuild the selected scope from scratch.' },
     partial: { label: 'Partial regeneration', desc: 'Recalculate only affected sections while preserving the rest.' },
-    draft: { label: 'Draft generation', desc: 'Create a temporary schedule for review without overwriting.' },
-    locked: { label: 'Locked regeneration', desc: 'Regenerate only inside allowed slots while keeping approved sessions fixed.' },
-    'what-if': { label: 'What-if simulation', desc: 'Test a scheduling scenario without saving for comparison.' },
-    emergency: { label: 'Emergency repair', desc: 'Repair only the impacted area after sudden changes.' },
-    'multi-scenario': { label: 'Multi-scenario', desc: 'Generate several candidate schedules and compare side by side.' },
 };
 export type PartialKind = 'section' | 'teacher' | 'room' | 'subject';
 
@@ -447,8 +442,6 @@ export const HARD_CONSTRAINTS: string[] = [
 // Generation System Types
 // ============================================================================
 
-export type GenerationModeExtended = 'full' | 'partial' | 'draft' | 'locked' | 'what-if' | 'emergency' | 'multi-scenario';
-
 export interface GenerationRun {
     id: string;
     config: GenerationConfig;
@@ -486,7 +479,7 @@ export interface GenerationRun {
     total_sessions: number;
     placed_sessions: number;
     score?: number;
-    mode: GenerationModeExtended;
+    mode: GenerationMode;
     partial_target?: PartialTarget;
     status: 'running' | 'completed' | 'failed';
     started_at: string;

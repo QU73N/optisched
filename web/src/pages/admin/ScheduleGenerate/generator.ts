@@ -3442,7 +3442,7 @@ export async function runGenerator(
     void violations; // Prepared for future use
     void suggestions; // Prepared for future use
 
-    // Step 10 (Multi-Scenario Generator): Generate scenario configs
+    // Step 10 (Scenario Generator): Generate scenario configs for future integration
     // Note: Scenario generation is prepared and called
     // Scenario presentation to users requires UI integration and is deferred to future integration
     const scenarios = generateScenarioConfigs(config);

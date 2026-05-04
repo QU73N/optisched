@@ -1169,41 +1169,6 @@ const ScopeStage: React.FC<{
                     maxCapacity: 100,
                     overflowPercent: 10,
                 };
-            case 'draft':
-                // Draft mode: flexible to explore options
-                return {
-                    overflowPolicy: 'relax_soft' as const,
-                    maxCapacity: 100,
-                    overflowPercent: 20,
-                };
-            case 'locked':
-                // Locked mode: strict to avoid conflicts with locked items
-                return {
-                    overflowPolicy: 'relax_soft' as const,
-                    maxCapacity: 100,
-                    overflowPercent: 5,
-                };
-            case 'what-if':
-                // What-if: flexible to explore different configurations
-                return {
-                    overflowPolicy: 'expand_scope' as const,
-                    maxCapacity: 100,
-                    overflowPercent: 25,
-                };
-            case 'emergency':
-                // Emergency: very flexible to get a working schedule quickly
-                return {
-                    overflowPolicy: 'expand_scope' as const,
-                    maxCapacity: 100,
-                    overflowPercent: 50,
-                };
-            case 'multi-scenario':
-                // Multi-scenario: balanced approach for valid comparisons
-                return {
-                    overflowPolicy: 'relax_soft' as const,
-                    maxCapacity: 100,
-                    overflowPercent: 15,
-                };
             default:
                 return {
                     overflowPolicy: 'fail' as const,
@@ -1246,7 +1211,7 @@ const ScopeStage: React.FC<{
             <StageHeader icon={<Users size={16} />} title="Scope" desc="Pick a generation mode, then choose what to generate." compact={compact} />
 
             <div className="sg-mode-cards">
-                {(Object.keys(MODE_LABELS) as GenerationMode[]).map(mode => (
+                {(['full', 'partial'] as GenerationMode[]).map(mode => (
                     <button
                         key={mode}
                         type="button"
@@ -1257,11 +1222,6 @@ const ScopeStage: React.FC<{
                             <span className="sg-mode-card-icon">
                                 {mode === 'full' && <Sparkles size={16} />}
                                 {mode === 'partial' && <GitBranch size={16} />}
-                                {mode === 'draft' && <FileClock size={16} />}
-                                {mode === 'locked' && <Lock size={16} />}
-                                {mode === 'what-if' && <Lightbulb size={16} />}
-                                {mode === 'emergency' && <RefreshCw size={16} />}
-                                {mode === 'multi-scenario' && <Layers size={16} />}
                             </span>
                             <span className="sg-mode-card-title">{MODE_LABELS[mode].label}</span>
                         </div>
