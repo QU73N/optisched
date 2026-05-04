@@ -1511,16 +1511,22 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
 
                 {/* Section 2: Common Break */}
                 <div className="sg-break-config-section">
-                    <div className="sg-field-label sg-break-config-label">Common Break</div>
+                    <div className="sg-field-label sg-break-config-label">
+                        Common Break
+                        <span className="sg-tooltip-icon" title="Overrides all other breaks on selected day. All classes and teachers have a break at this time.">
+                            <HelpCircle size={14} />
+                        </span>
+                    </div>
                     <div className="sg-common-break-toggle">
-                        <label className="sg-checkbox-label">
+                        <label className="sg-toggle-label">
                             <input
                                 type="checkbox"
                                 checked={config.commonBreak.enabled}
                                 onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, enabled: e.target.checked } }))}
-                                className="sg-checkbox"
+                                className="sg-toggle-checkbox"
                             />
-                            <span>Enable common break (overrides all other breaks on selected day)</span>
+                            <span className="sg-toggle-slider"></span>
+                            <span className="sg-toggle-text">Enable Common Break</span>
                         </label>
                     </div>
 
