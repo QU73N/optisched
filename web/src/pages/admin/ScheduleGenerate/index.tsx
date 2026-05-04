@@ -908,7 +908,6 @@ const ScheduleGenerate: React.FC = () => {
                             teachers={teachers}
                             rooms={rooms}
                             sections={sections}
-                            onSave={() => setStage('save')}
                         />
                     )}
                     {stage === 'save' && result && (
@@ -1881,8 +1880,7 @@ const OutcomeStage: React.FC<{
     teachers: Teacher[];
     rooms: Room[];
     sections: Section[];
-    onSave: () => void;
-}> = ({ result, teachers, rooms, sections, onSave }) => {
+}> = ({ result, teachers, rooms, sections }) => {
     const [viewMode, setViewMode] = useState<'section' | 'teacher' | 'room'>('section');
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -1926,7 +1924,7 @@ const OutcomeStage: React.FC<{
             groups[key].push(entry);
         });
         return groups;
-    }, [result.entries]);
+    }, [result]);
 
     const groupedByTeacher = useMemo(() => {
         const groups: Record<string, typeof result.entries> = {};
@@ -1936,7 +1934,7 @@ const OutcomeStage: React.FC<{
             groups[key].push(entry);
         });
         return groups;
-    }, [result.entries]);
+    }, [result]);
 
     const groupedByRoom = useMemo(() => {
         const groups: Record<string, typeof result.entries> = {};
@@ -1946,7 +1944,7 @@ const OutcomeStage: React.FC<{
             groups[key].push(entry);
         });
         return groups;
-    }, [result.entries]);
+    }, [result]);
 
     const selectedEntries = selectedId
         ? (viewMode === 'section' ? groupedBySection[selectedId]
@@ -1962,7 +1960,7 @@ const OutcomeStage: React.FC<{
             const end = slotIndex(entry.end);
             return { entry, dayIdx, start, span: Math.max(1, end - start) };
         }).filter(e => e.dayIdx >= 0);
-    }, [selectedEntries]);
+    }, [selectedEntries, dayOrder, slotIndex]);
 
     return (
         <div>
@@ -2144,12 +2142,6 @@ const OutcomeStage: React.FC<{
                         Select a {viewMode} to view its schedule
                     </div>
                 )}
-            </div>
-
-            <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                <button className="btn btn-primary" onClick={onSave} disabled={result.entries.length === 0}>
-                    <Save size={14} /> Save Schedule
-                </button>
             </div>
         </div>
     );
