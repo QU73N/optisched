@@ -30,70 +30,88 @@ const ScheduleVersions: React.FC = () => {
     const [versions, setVersions] = useState<ScheduleVersion[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [filter, setFilter] = useState<'all' | 'published' | 'submitted' | 'draft'>('all');
+    const [filter, setFilter] = useState<'all' | 'published' | 'previous' | 'submitted' | 'draft'>('all');
 
     const loadVersions = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
             
-            // Load all schedule versions
-            const { data: versionData, error: versionsError } = await supabase
+            // Load all schedule versions, ordered by creation time ascending to assign labels chronologically
+            const { data: rawVersionData, error: versionsError } = await supabase
                 .from('schedule_versions')
                 .select('*')
-                .order('changed_at', { ascending: false });
+                .order('changed_at', { ascending: true });
             
             if (versionsError) throw versionsError;
             
-            // Filter versions based on change_type
-            let filteredVersions = versionData || [];
+            let allVersions: ScheduleVersion[] = rawVersionData || [];
             
-            if (filter !== 'all') {
-                // Map filter to change_type values
-                const changeTypeMap: Record<string, string[]> = {
-                    'published': ['publish', 'overwrite', 'restore'],
-                    'submitted': ['submitted'],
-                    'draft': ['draft'], // Only show explicit draft versions, not auto-generated ones
-                };
-                
-                const targetTypes = changeTypeMap[filter] || [];
-                filteredVersions = filteredVersions.filter(v => targetTypes.includes(v.change_type));
-            } else {
-                // For 'all', show all meaningful version types
-                filteredVersions = filteredVersions.filter(v => 
-                    ['publish', 'overwrite', 'restore', 'submitted', 'draft'].includes(v.change_type)
-                );
-            }
+            // Check if there is an active published version
+            const hasActivePublished = allVersions.some(v => v.is_active && ['publish', 'overwrite', 'restore'].includes(v.change_type));
             
-            // Only create virtual version for 'all' or 'published' when no actual versions exist
-            // For 'submitted' and 'draft', just show empty if no versions
-            if ((filter === 'all' || filter === 'published') && filteredVersions.length === 0) {
-                // Check if there are any current schedules
+            // If no active published version exists in history, but there ARE current schedules in the database,
+            // we create a virtual version so they can still see what is currently active.
+            if (!hasActivePublished) {
                 const { data: currentSchedules, error: schedulesError } = await supabase
                     .from('schedules')
-                    .select('id, status, academic_year, semester')
+                    .select('id, status, academic_year, semester, created_at')
+                    .eq('status', 'published')
+                    .eq('is_active', true)
+                    .order('created_at', { ascending: true })
                     .limit(1);
                 
                 if (!schedulesError && currentSchedules && currentSchedules.length > 0) {
-                    // Create a virtual version representing current schedules
                     const virtualVersion: ScheduleVersion = {
                         id: 'current',
                         schedule_id: 'current',
                         version_number: 1,
                         snapshot: null, // Will load current schedules when viewed
-                        change_type: 'current',
-                        change_summary: 'Current schedules',
+                        change_type: 'publish', // acts as a publish
+                        change_summary: 'Current active schedules',
                         changed_by: 'system',
-                        changed_at: new Date().toISOString(),
+                        changed_at: currentSchedules[0].created_at || new Date(0).toISOString(), // Use oldest date
                         is_active: true,
                     };
-                    setVersions([virtualVersion]);
-                } else {
-                    setVersions([]);
+                    allVersions.push(virtualVersion);
+                }
+            }
+
+            // Assign absolute labels based on chronological order
+            // Only assign labels to things that count as "major" versions?
+            // Actually, draft, submitted, publish all get chronological labels
+            allVersions.forEach((v, index) => {
+                const letter = String.fromCharCode(97 + (index % 26)); // a, b, c
+                const number = Math.floor(index / 26) + 1;
+                (v as any).label = `v${number}${letter}`;
+            });
+
+            // Now sort descending for newest-first display
+            allVersions.sort((a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime());
+
+            // Filter versions based on category rules
+            let filteredVersions = allVersions;
+            
+            if (filter !== 'all') {
+                if (filter === 'published') {
+                    // Active published versions only
+                    filteredVersions = filteredVersions.filter(v => v.is_active && ['publish', 'overwrite', 'restore'].includes(v.change_type));
+                } else if (filter === 'previous') {
+                    // Inactive published versions
+                    filteredVersions = filteredVersions.filter(v => !v.is_active && ['publish', 'overwrite', 'restore'].includes(v.change_type));
+                } else if (filter === 'submitted') {
+                    filteredVersions = filteredVersions.filter(v => ['status_change'].includes(v.change_type));
+                } else if (filter === 'draft') {
+                    filteredVersions = filteredVersions.filter(v => ['created'].includes(v.change_type));
                 }
             } else {
-                setVersions(filteredVersions);
+                // For 'all', show all meaningful version types
+                filteredVersions = filteredVersions.filter(v => 
+                    ['publish', 'overwrite', 'restore', 'status_change', 'created'].includes(v.change_type)
+                );
             }
+            
+            setVersions(filteredVersions);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to load versions');
         } finally {
@@ -115,12 +133,7 @@ const ScheduleVersions: React.FC = () => {
         });
     };
 
-    const getVersionLabel = (index: number) => {
-        // Generate labels like v1a, v1b, v1c, etc.
-        const letter = String.fromCharCode(97 + (index % 26)); // a, b, c, ...
-        const number = Math.floor(index / 26) + 1;
-        return `v${number}${letter}`;
-    };
+
 
     const handleViewVersion = (version: ScheduleVersion) => {
         // Navigate to schedules view with version ID (or 'current' for current schedules)
@@ -159,6 +172,7 @@ const ScheduleVersions: React.FC = () => {
                 {[
                     { key: 'all', label: 'All' },
                     { key: 'published', label: 'Published' },
+                    { key: 'previous', label: 'Previous' },
                     { key: 'submitted', label: 'Submitted' },
                     { key: 'draft', label: 'Drafts' },
                 ].map(f => (
@@ -225,9 +239,26 @@ const ScheduleVersions: React.FC = () => {
                     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
                     gap: 16
                 }}>
-                    {versions.map((version, index) => {
-                        const versionLabel = getVersionLabel(index);
+                    {versions.map((version) => {
+                        const versionLabel = (version as any).label || 'v1a';
                         const snapshot = version.snapshot as any;
+                        
+                        let academicYear = 'N/A';
+                        let semester = 'N/A';
+                        let scheduleCount = 0;
+                        
+                        if (snapshot && Array.isArray(snapshot)) {
+                            scheduleCount = snapshot.length;
+                            if (snapshot.length > 0) {
+                                academicYear = snapshot[0].academic_year || 'N/A';
+                                semester = snapshot[0].semester || 'N/A';
+                            }
+                        } else if (snapshot) {
+                            academicYear = snapshot.academic_year || 'N/A';
+                            semester = snapshot.semester || 'N/A';
+                            scheduleCount = 1; // It's a single schedule data object
+                        }
+                        const isGloballyActive = version.is_active && ['publish', 'overwrite', 'restore'].includes(version.change_type);
                         
                         return (
                             <div 
@@ -260,16 +291,16 @@ const ScheduleVersions: React.FC = () => {
                                 }}>
                                     <div style={{
                                         padding: '6px 12px',
-                                        backgroundColor: version.is_active ? 'var(--accent-success-10, rgba(47, 143, 91, 0.1))' : 'var(--surface-soft)',
-                                        border: version.is_active ? '2px solid var(--accent-success)' : '1px solid var(--border-light)',
+                                        backgroundColor: isGloballyActive ? 'var(--accent-success-10, rgba(47, 143, 91, 0.1))' : 'var(--surface-soft)',
+                                        border: isGloballyActive ? '2px solid var(--accent-success)' : '1px solid var(--border-light)',
                                         borderRadius: 'var(--radius-sm)',
                                         fontSize: 14,
                                         fontWeight: 700,
-                                        color: version.is_active ? 'var(--accent-success)' : 'var(--text-primary)'
+                                        color: isGloballyActive ? 'var(--accent-success)' : 'var(--text-primary)'
                                     }}>
                                         {versionLabel}
                                     </div>
-                                    {version.is_active && (
+                                    {isGloballyActive && (
                                         <CheckCircle size={16} style={{ color: 'var(--accent-success)' }} />
                                     )}
                                 </div>
@@ -282,7 +313,11 @@ const ScheduleVersions: React.FC = () => {
                                         margin: 0,
                                         color: 'var(--text-primary)'
                                     }}>
-                                        {version.id === 'current' ? 'Schedule (Current)' : `Schedule ${version.change_type === 'publish' ? '(Published)' : '(Saved)'}`}
+                                        {isGloballyActive ? 'Schedule (Current)' : 
+                                         version.change_type === 'created' ? 'Schedule (Draft)' :
+                                         version.change_type === 'status_change' ? 'Schedule (Submitted)' :
+                                         ['publish', 'overwrite', 'restore'].includes(version.change_type) ? 'Schedule (Previous)' :
+                                         'Schedule (Saved)'}
                                     </h3>
                                     {version.change_summary && (
                                         <p style={{ 
@@ -307,7 +342,7 @@ const ScheduleVersions: React.FC = () => {
                                     {version.id !== 'current' && (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <FileText size={14} />
-                                            <span>{snapshot?.academic_year || 'N/A'} · {snapshot?.semester || 'N/A'}</span>
+                                            <span>{academicYear} · {semester} ({scheduleCount} session{scheduleCount !== 1 ? 's' : ''})</span>
                                         </div>
                                     )}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, MoreVertical, Scissors, Merge, X, Maximize, Minimize } from 'lucide-react';
+import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, MoreVertical, Scissors, Merge, X, Maximize, Minimize, CheckCircle, Send } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { scheduleVersionService } from '../../services/scheduleVersionService';
 import { ADMIN_ROLES } from '../../types/database';
@@ -24,6 +24,7 @@ interface ScheduleRow {
     teacher: { id: string; profile: { full_name: string } | null } | null;
     room: { id: string; name: string; building: string | null } | null;
     section: { id: string; name: string; program: string | null } | null;
+    batch_id?: string;
 }
 
 interface Entity {
@@ -94,6 +95,12 @@ const ScheduleManagement: React.FC = () => {
     const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
     const [rooms, setRooms] = useState<{ id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null }[]>([]);
     const [versionName, setVersionName] = useState<string | null>(null);
+    const [versionStatus, setVersionStatus] = useState<{
+        change_type: string;
+        is_active: boolean;
+        schedules_status: string;
+        batch_id: string | null;
+    } | null>(null);
 
     // Initialize scheduleVersionService
     useEffect(() => {
@@ -118,12 +125,40 @@ const ScheduleManagement: React.FC = () => {
                 if (version) {
                     setVersionName(`Version ${version.version_number} (${version.change_type})`);
                     
-                    // Extract schedules from snapshot
+                    // We will reconstruct the schedules after fetching the related entities
+                    // so we wait until secRes, tchRes, roomRes, and subRes are loaded.
+                }
+                
+                // Still load sections, teachers, rooms, and subjects for filtering and reconstruction
+                const [secRes, tchRes, roomRes, subRes] = await Promise.all([
+                    supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
+                    supabase.rpc('get_teachers_with_profiles'),
+                    supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
+                    supabase.from('subjects').select('id, name, code'),
+                ]);
+                
+                const loadedSections = (secRes.data as unknown as typeof sections) || [];
+                const loadedTeachers = ((tchRes.data as unknown as { id: string; full_name: string }[]) || [])
+                    .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed' }));
+                const loadedRooms = (roomRes.data as unknown as typeof rooms) || [];
+                const loadedSubjects = (subRes.data as any[]) || [];
+                
+                setSections(loadedSections);
+                setTeachers(loadedTeachers);
+                setRooms(loadedRooms);
+
+                if (version) {
                     const snapshot = version.snapshot as any;
                     const schedulesFromVersion: ScheduleRow[] = [];
                     
                     if (snapshot && Array.isArray(snapshot)) {
                         for (const sched of snapshot) {
+                            // Find related entities to reconstruct objects
+                            const subject = loadedSubjects.find(s => s.id === sched.subject_id);
+                            const teacher = loadedTeachers.find(t => t.id === sched.teacher_id);
+                            const room = loadedRooms.find(r => r.id === sched.room_id);
+                            const section = loadedSections.find(s => s.id === sched.section_id);
+
                             schedulesFromVersion.push({
                                 id: sched.id,
                                 day_of_week: sched.day_of_week,
@@ -132,30 +167,22 @@ const ScheduleManagement: React.FC = () => {
                                 status: sched.status,
                                 semester: sched.semester,
                                 academic_year: sched.academic_year,
-                                subject: sched.subject ? { name: sched.subject.name, code: sched.subject.code } : null,
-                                teacher: sched.teacher ? { id: sched.teacher.id, profile: { full_name: sched.teacher.profile?.full_name || 'Unknown' } } : null,
-                                room: sched.room ? { id: sched.room.id, name: sched.room.name, building: sched.room.building } : null,
-                                section: sched.section ? { id: sched.section.id, name: sched.section.name, program: sched.section.program } : null,
+                                batch_id: sched.batch_id,
+                                subject: subject ? { name: subject.name, code: subject.code } : null,
+                                teacher: teacher ? { id: teacher.id, profile: { full_name: teacher.full_name } } : null,
+                                room: room ? { id: room.id, name: room.name, building: room.building } : null,
+                                section: section ? { id: section.id, name: section.name, program: section.program } : null,
                             });
                         }
                     }
-                    
                     setSchedules(schedulesFromVersion);
+                    setVersionStatus({
+                        change_type: version.change_type,
+                        is_active: version.is_active,
+                        schedules_status: schedulesFromVersion[0]?.status || 'unknown',
+                        batch_id: schedulesFromVersion[0]?.batch_id || null,
+                    });
                 }
-                
-                // Still load sections, teachers, rooms for filtering
-                const [secRes, tchRes, roomRes] = await Promise.all([
-                    supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
-                    supabase.rpc('get_teachers_with_profiles'),
-                    supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
-                ]);
-                
-                setSections((secRes.data as unknown as typeof sections) || []);
-                setTeachers(
-                    ((tchRes.data as unknown as { id: string; full_name: string }[]) || [])
-                        .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed' }))
-                );
-                setRooms((roomRes.data as unknown as typeof rooms) || []);
             } catch (error) {
                 console.error('Error loading version:', error);
             }
@@ -225,6 +252,109 @@ const ScheduleManagement: React.FC = () => {
         fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [versionId]);
+
+    const canApprove = allRoles.some(r => ['admin', 'power_admin', 'schedule_admin', 'system_admin'].includes(r));
+
+    const handleSubmitVersion = async () => {
+        if (!versionStatus?.batch_id) return;
+        if (!confirm(canApprove ? 'Submit and instantly publish this draft? This will replace the active schedule.' : 'Submit this draft for approval?')) return;
+        try {
+            if (canApprove) {
+                let res = await scheduleVersionService.submitSchedule(versionStatus.batch_id, { changeReason: 'Submitted from schedule management' });
+                if (!res.success) throw new Error(res.message);
+                
+                res = await (scheduleVersionService as any).approveSchedule(versionStatus.batch_id, { changeReason: 'Auto-approved by admin' });
+                if (!res.success) throw new Error(res.message);
+                
+                res = await (scheduleVersionService as any).publishApprovedSchedule(versionStatus.batch_id, { changeReason: 'Auto-published by admin' });
+                if (!res.success) throw new Error(res.message);
+                
+                alert('Successfully published schedule.');
+                if (res.active_version_id) {
+                    navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
+                } else {
+                    fetchData();
+                }
+            } else {
+                const res = await scheduleVersionService.submitSchedule(versionStatus.batch_id, { changeReason: 'Submitted from schedule management' });
+                if (!res.success) throw new Error(res.message);
+                alert('Successfully submitted draft.');
+                if (res.active_version_id) {
+                    navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
+                } else {
+                    fetchData();
+                }
+            }
+        } catch (err: unknown) {
+            console.error(err);
+            alert(`Failed to submit: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    };
+
+    const handleApprovePublishVersion = async () => {
+        if (!versionStatus?.batch_id) return;
+        if (!confirm('Approve and publish this submitted schedule? This will become the new active schedule.')) return;
+        try {
+            let res = await (scheduleVersionService as any).approveSchedule(versionStatus.batch_id, { changeReason: 'Approved from schedule management' });
+            if (!res.success) throw new Error(res.message);
+            res = await (scheduleVersionService as any).publishApprovedSchedule(versionStatus.batch_id, { changeReason: 'Published from schedule management' });
+            if (!res.success) throw new Error(res.message);
+            alert('Successfully approved and published schedule.');
+            if (res.active_version_id) {
+                navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
+            } else {
+                fetchData();
+            }
+        } catch (err: unknown) {
+            console.error(err);
+            alert(`Failed to approve & publish: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    };
+
+    const handlePublishPreviousVersion = async () => {
+        if (!schedules.length) return;
+        if (!confirm('Restore and publish this previous version? This will overwrite the current active schedule.')) return;
+        try {
+
+            
+            // To get accurate subject_id, we should fetch from db or use the existing ones if we stored them.
+            // Oh wait, ScheduleRow doesn't store subject_id. Let me check if we can fetch it.
+            // A simpler way: we have `versionId`! We can just fetch the raw snapshot from `schedule_versions`!
+            const { data: v } = await supabase.from('schedule_versions').select('snapshot').eq('id', versionId).single();
+            if (!v || !v.snapshot) throw new Error('Could not find version snapshot');
+            
+            const rawSchedules = Array.isArray(v.snapshot) ? v.snapshot : [v.snapshot];
+            const mappedSchedules = rawSchedules.map((s: any) => ({
+                id: crypto.randomUUID(),
+                subject_id: s.subject_id,
+                teacher_id: s.teacher_id,
+                room_id: s.room_id,
+                section_id: s.section_id,
+                day_of_week: s.day_of_week,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                status: 'published',
+                is_active: true,
+                semester: s.semester,
+                academic_year: s.academic_year,
+                created_by: user?.id,
+            }));
+
+            const res = await scheduleVersionService.publishSchedule(mappedSchedules as any, {
+                academic_year: mappedSchedules[0]?.academic_year || '2025-2026',
+                semester: mappedSchedules[0]?.semester || '1st Semester',
+                changeReason: 'Restored from previous version',
+                force: true, // Auto overwrite
+            });
+            
+            if (!res.success) throw new Error(res.message);
+            alert('Successfully restored and published previous schedule.');
+            navigate('/admin/schedules');
+        } catch (err: unknown) {
+            console.error(err);
+            alert(`Failed to restore: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    };
 
     const handleDeleteVersion = async () => {
         if (!versionId) return;
@@ -306,7 +436,7 @@ const ScheduleManagement: React.FC = () => {
                 // Update the version to draft
                 await supabase
                     .from('schedule_versions')
-                    .update({ change_type: 'draft', is_active: false })
+                    .update({ change_type: 'created', is_active: false })
                     .eq('id', versionId);
 
                 if (version.snapshot) {
@@ -473,13 +603,26 @@ const ScheduleManagement: React.FC = () => {
                 <div style={{ display: 'flex', gap: 8 }}>
                     {versionName && (
                         <>
-                            <button
-                                onClick={handleUnpublishVersion}
-                                className="btn btn-secondary"
-                                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}
-                            >
-                                <Download size={16} /> Unpublish
-                            </button>
+                            {versionStatus?.schedules_status === 'published' && versionStatus?.is_active && (
+                                <button onClick={handleUnpublishVersion} className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                    <Download size={16} /> Unpublish
+                                </button>
+                            )}
+                            {versionStatus?.schedules_status === 'published' && !versionStatus?.is_active && (
+                                <button onClick={handlePublishPreviousVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                    <CheckCircle size={16} /> Publish
+                                </button>
+                            )}
+                            {versionStatus?.schedules_status === 'submitted' && canApprove && (
+                                <button onClick={handleApprovePublishVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                    <CheckCircle size={16} /> Approve & Publish
+                                </button>
+                            )}
+                            {versionStatus?.schedules_status === 'draft' && (
+                                <button onClick={handleSubmitVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                    <Send size={16} /> Submit
+                                </button>
+                            )}
                             <button
                                 onClick={handleDeleteVersion}
                                 className="btn"
@@ -495,9 +638,11 @@ const ScheduleManagement: React.FC = () => {
                             >
                                 <Trash2 size={16} /> Delete
                             </button>
-                            <Link to="/admin/schedules" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                <ArrowLeft size={16} /> Back to Current
-                            </Link>
+                            {!(versionStatus?.schedules_status === 'published' && versionStatus?.is_active) && (
+                                <Link to="/admin/schedules" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                    <ArrowLeft size={16} /> Back to Current
+                                </Link>
+                            )}
                         </>
                     )}
                     <Link to="/admin/schedules/versions" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
-import { directInsert } from '../../../lib/supabaseDirect';
+
 import { useAuth } from '../../../contexts/AuthContext';
 import { useUserPreferences } from '../../../contexts/UserPreferencesContext';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
@@ -115,7 +115,7 @@ const ScheduleGenerate: React.FC = () => {
                     supabase.from('teachers').select('id, max_hours, weight, priority_note, profile_id'),
                     supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available, weight, priority_note'),
                     supabase.from('sections').select('id, name, program, year_level, student_count, parent_id, weight, path, node_type, is_active, description, metadata, sort_order, load_category, special_scheduling_rules'),
-                    supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at'),
+                    supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at, batch_id'),
                     supabase.from('teacher_preferences').select('teacher_id, preferred_days, preferred_time_start, preferred_time_end, max_classes_per_day, max_consecutive_classes, availability'),
                     supabase.from('profiles').select('id, full_name'),
                 ]);
@@ -256,14 +256,40 @@ const ScheduleGenerate: React.FC = () => {
     const transitionAll = async (from: WorkflowState, to: WorkflowState) => {
         // Collect the row ids in this status so the update never reaches unrelated
         // schedules that land in the table between the read and the write.
-        const ids = existing.filter(e => ((e.status as WorkflowState) || 'draft') === from).map(e => e.id);
+        const matchingSchedules = existing.filter(e => ((e.status as WorkflowState) || 'draft') === from);
+        const ids = matchingSchedules.map(e => e.id);
         if (ids.length === 0) return;
+        
+        // Extract batch ID for version service operations
+        const batchIds = new Set(matchingSchedules.filter(s => (s as any).batch_id).map(s => (s as any).batch_id));
+        const batchId = Array.from(batchIds)[0] as string | undefined;
+
         setWorkflowBusy(from);
         setWorkflowNote(null);
         setWorkflowError(null);
         try {
-            const { error } = await supabase.from('schedules').update({ status: to }).in('id', ids);
-            if (error) throw error;
+            if (batchId && user?.id) {
+                scheduleVersionService.initialize(supabase, user.id);
+                if (to === 'submitted') {
+                    const result = await scheduleVersionService.submitSchedule(batchId, { changeReason: 'Submitted via workflow panel' });
+                    if (!result.success) throw new Error(result.message);
+                } else if (to === 'approved') {
+                    const result = await (scheduleVersionService as any).approveSchedule(batchId, { changeReason: 'Approved via workflow panel' });
+                    if (!result.success) throw new Error(result.message);
+                } else if (to === 'published') {
+                    const result = await (scheduleVersionService as any).publishApprovedSchedule(batchId, { changeReason: 'Published via workflow panel' });
+                    if (!result.success) throw new Error(result.message);
+                }
+            } else {
+                // Fallback for legacy items without batch_id
+                const { error } = await supabase.from('schedules').update({ 
+                    status: to,
+                    submitted_at: to === 'submitted' ? new Date().toISOString() : undefined,
+                    approved_at: to === 'approved' ? new Date().toISOString() : undefined,
+                    approved_by: to === 'approved' && user ? user.id : undefined,
+                }).in('id', ids);
+                if (error) throw error;
+            }
             
             // Log audit for each schedule status change
             for (const id of ids) {
@@ -557,17 +583,17 @@ const ScheduleGenerate: React.FC = () => {
                 teacher_id: e.teacherId,
                 room_id: e.roomId,
                 section_id: e.sectionId,
-                day_of_week: e.day,
+                day_of_week: e.day as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday',
                 start_time: e.start,
                 end_time: e.end,
                 semester: '1st Semester',
                 academic_year: '2025-2026',
-                status: initialState,
+                status: initialState as any,
                 is_active: true,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 created_by: user.id,
-            }));
+            })) as any[];
 
             saveState.createdScheduleIds = schedules.map(s => s.id);
             console.log('[SAVE] Converted to schedules format:', schedules.length, 'entries');
@@ -754,7 +780,7 @@ const ScheduleGenerate: React.FC = () => {
             setSaveError(userMessage);
 
             // Log to system
-            scheduleLogger.system.error('generate', 'save', 'Save failed', {
+            scheduleLogger.system.error('generate', 'persistence', 'Save failed', {
                 message: errorMessage,
                 state: saveState,
                 originalError: err,

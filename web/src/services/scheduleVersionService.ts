@@ -374,6 +374,17 @@ class ScheduleVersionService {
         let createdVersionId: string | null = null;
         let insertedScheduleIds: string[] = [];
 
+        if (!schedules || schedules.length === 0) {
+            return {
+                success: false,
+                message: 'No schedules provided to save. Draft cannot be empty.',
+                version_set_id: null,
+                version_count: 0,
+                active_version_id: null,
+                warnings: [],
+            };
+        }
+
         try {
             // Compute state hash for the new schedules
             const stateHash = scheduleValidation.computeStateHash(schedules);
@@ -462,11 +473,14 @@ class ScheduleVersionService {
             createdVersionId = version;
             console.log(`[VERSION SERVICE] Created draft version ${createdVersionId}`);
 
-            // Step 5 - Activate the draft batch
+            // Step 5 - Activate the draft batch and version
             await this.supabase
                 .from('schedule_batches')
                 .update({ is_active: true })
                 .eq('id', createdBatchId);
+                
+            await this.supabase
+                .rpc('activate_batch_version', { p_version_id: createdVersionId });
 
             // CRITICAL: Verify state hash after persistence
             const { data: verifiedSchedules } = await this.supabase
@@ -501,7 +515,7 @@ class ScheduleVersionService {
                 created_by: s.created_by,
             }));
 
-            const verifiedHash = scheduleValidation.computeStateHash(normalizedFetched);
+            const verifiedHash = scheduleValidation.computeStateHash(normalizedFetched as unknown as Schedule[]);
             console.log('[VERSION SERVICE] Hash verification:', {
                 expected: stateHash,
                 actual: verifiedHash,
@@ -682,6 +696,136 @@ class ScheduleVersionService {
     }
 
     /**
+     * Approve a submitted schedule
+     * Transitions a submitted schedule to 'approved' status.
+     * Creates a new version for the status change.
+     */
+    async approveSchedule(
+        batchId: string,
+        options: { changeReason?: string } = {}
+    ): Promise<PublishResult> {
+        if (!this.supabase || !this.currentUserId) throw new Error('Version service not initialized');
+        const startTime = Date.now();
+        scheduleLogger.system.workflowStarted('Schedule approve');
+
+        try {
+            // Get active version
+            const { data: activeVersion } = await this.supabase.rpc('get_active_batch_version', { p_batch_id: batchId });
+            if (!activeVersion || activeVersion.length === 0) throw new Error('No active version found');
+
+            // Get schedules
+            const { data: schedules } = await this.supabase.from('schedules').select('*').eq('batch_id', batchId).eq('is_active', true);
+            if (!schedules) throw new Error('Failed to fetch schedules');
+
+            // Update schedules
+            const { error: updateError } = await this.supabase.from('schedules')
+                .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: this.currentUserId })
+                .eq('batch_id', batchId).eq('is_active', true);
+            if (updateError) throw updateError;
+
+            // Create version
+            const stateHash = scheduleValidation.computeStateHash(schedules);
+            const { data: newVersion, error: versionError } = await this.supabase.rpc('create_batch_version', {
+                p_batch_id: batchId,
+                p_change_type: 'status_change',
+                p_change_summary: 'Approved for publishing',
+                p_change_reason: options.changeReason || 'Schedule approval',
+                p_state_hash: stateHash,
+                p_soft_score: activeVersion[0].soft_score || 0,
+                p_conflict_count: activeVersion[0].conflict_count || 0,
+                p_changed_by: this.currentUserId,
+                p_previous_version_id: activeVersion[0].id,
+            });
+
+            if (versionError) {
+                // Rollback
+                await this.supabase.from('schedules').update({ status: 'submitted', approved_at: null, approved_by: null }).eq('batch_id', batchId).eq('is_active', true);
+                throw versionError;
+            }
+
+            await this.supabase.rpc('activate_batch_version', { p_version_id: newVersion });
+            scheduleLogger.system.workflowCompleted('Schedule approve', Date.now(), true);
+            return { success: true, message: 'Schedule approved successfully', version_set_id: batchId, version_count: 1, active_version_id: newVersion };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            scheduleLogger.system.error('generate', 'persistence', 'Schedule approval failed', error);
+            scheduleLogger.system.workflowCompleted('Schedule approve', Date.now() - startTime, false);
+            return { success: false, message: errorMessage, version_set_id: null, version_count: 0, active_version_id: null, warnings: [] };
+        }
+    }
+
+    /**
+     * Publish an approved schedule
+     * Transitions an approved schedule to 'published' status.
+     * Deactivates existing published schedules.
+     */
+    async publishApprovedSchedule(
+        batchId: string,
+        options: { changeReason?: string } = {}
+    ): Promise<PublishResult> {
+        if (!this.supabase || !this.currentUserId) throw new Error('Version service not initialized');
+        const startTime = Date.now();
+        scheduleLogger.system.workflowStarted('Schedule publish');
+        
+        try {
+            // Deactivate existing published schedules
+            const hasActive = await this.hasActiveSchedule();
+            if (hasActive) {
+                await this.supabase.from('schedules').update({ is_active: false }).eq('status', 'published').eq('is_active', true);
+                
+                // Deactivate old published versions from other batches
+                await this.supabase.from('schedule_versions')
+                    .update({ is_active: false })
+                    .in('change_type', ['publish', 'overwrite', 'restore'])
+                    .eq('is_active', true);
+            }
+
+            // Get active version
+            const { data: activeVersion } = await this.supabase.rpc('get_active_batch_version', { p_batch_id: batchId });
+            if (!activeVersion || activeVersion.length === 0) throw new Error('No active version found');
+
+            // Get schedules
+            const { data: schedules } = await this.supabase.from('schedules').select('*').eq('batch_id', batchId).eq('is_active', true);
+            if (!schedules) throw new Error('Failed to fetch schedules');
+
+            // Update schedules
+            const { error: updateError } = await this.supabase.from('schedules')
+                .update({ status: 'published' })
+                .eq('batch_id', batchId).eq('is_active', true);
+            if (updateError) throw updateError;
+
+            // Create version
+            const stateHash = scheduleValidation.computeStateHash(schedules);
+            const { data: newVersion, error: versionError } = await this.supabase.rpc('create_batch_version', {
+                p_batch_id: batchId,
+                p_change_type: hasActive ? 'overwrite' : 'publish',
+                p_change_summary: 'Published schedule',
+                p_change_reason: options.changeReason || 'Publish approved schedule',
+                p_state_hash: stateHash,
+                p_soft_score: activeVersion[0].soft_score || 0,
+                p_conflict_count: activeVersion[0].conflict_count || 0,
+                p_changed_by: this.currentUserId,
+                p_previous_version_id: activeVersion[0].id,
+            });
+
+            if (versionError) throw versionError;
+
+            await this.supabase.rpc('activate_batch_version', { p_version_id: newVersion });
+            
+            // Activate the batch
+            await this.supabase.from('schedule_batches').update({ is_active: true }).eq('id', batchId);
+            
+            scheduleLogger.system.workflowCompleted('Schedule publish', Date.now(), true);
+            return { success: true, message: 'Schedule published successfully', version_set_id: batchId, version_count: 1, active_version_id: newVersion };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            scheduleLogger.system.error('generate', 'persistence', 'Schedule publish failed', error);
+            scheduleLogger.system.workflowCompleted('Schedule publish', Date.now() - startTime, false);
+            return { success: false, message: errorMessage, version_set_id: null, version_count: 0, active_version_id: null, warnings: [] };
+        }
+    }
+
+    /**
      * Publish a new schedule with overwrite protection
      * 
      * CRITICAL: This method now uses batch-level versioning.
@@ -801,7 +945,7 @@ class ScheduleVersionService {
             createdBatchId = newBatch;
             console.log(`[VERSION SERVICE] Created batch ${createdBatchId}`);
 
-            // Step 2 - Deactivate existing published schedules (soft delete)
+            // Step 2 - Deactivate existing published schedules
             if (hasActive) {
                 const { error: deactivateError } = await this.supabase
                     .from('schedules')
@@ -810,6 +954,12 @@ class ScheduleVersionService {
                     .eq('is_active', true);
 
                 if (deactivateError) throw deactivateError;
+                
+                // Deactivate old published versions from other batches
+                await this.supabase.from('schedule_versions')
+                    .update({ is_active: false })
+                    .in('change_type', ['publish', 'overwrite', 'restore'])
+                    .eq('is_active', true);
             }
 
             // Step 3 - Insert new schedules with batch_id

@@ -272,21 +272,58 @@ class ScheduleValidationService {
         return hours * 60 + minutes;
     }
 
-    /**
-     * Compute a hash of schedule state
-     */
     computeStateHash(schedules: Schedule[]): string {
-        // CRITICAL: Sort by essential fields (NOT id, which may be generated server-side)
+        const normalizeStr = (val: string | undefined | null) => {
+            if (!val) return '';
+            return String(val).trim().toLowerCase();
+        };
+
+        const normalizeTime = (t: string | undefined | null) => {
+            if (!t) return '';
+            const parts = String(t).trim().split(':');
+            return parts.length >= 2 ? `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}` : String(t).trim();
+        };
+
+        // CRITICAL: Sort by ALL essential fields to guarantee deterministic ordering
         const sorted = [...schedules].sort((a, b) => {
-            const aKey = `${a.subject_id}|${a.teacher_id}|${a.room_id}|${a.section_id}|${a.day_of_week}|${a.start_time}`;
-            const bKey = `${b.subject_id}|${b.teacher_id}|${b.room_id}|${b.section_id}|${b.day_of_week}|${b.start_time}`;
+            const aStart = normalizeTime(a.start_time);
+            const bStart = normalizeTime(b.start_time);
+            const aEnd = normalizeTime(a.end_time);
+            const bEnd = normalizeTime(b.end_time);
+            
+            const aKey = [
+                normalizeStr(a.subject_id),
+                normalizeStr(a.teacher_id),
+                normalizeStr(a.room_id),
+                normalizeStr(a.section_id),
+                normalizeStr(a.day_of_week),
+                aStart,
+                aEnd
+            ].join('|');
+            
+            const bKey = [
+                normalizeStr(b.subject_id),
+                normalizeStr(b.teacher_id),
+                normalizeStr(b.room_id),
+                normalizeStr(b.section_id),
+                normalizeStr(b.day_of_week),
+                bStart,
+                bEnd
+            ].join('|');
+            
             return aKey.localeCompare(bKey);
         });
         
-        // Create hash from essential fields ONLY (excludes id which changes after insertion)
-        const stateStr = sorted.map(s => 
-            `${s.teacher_id || ''}|${s.room_id || ''}|${s.section_id || ''}|${s.day_of_week}|${s.start_time}|${s.end_time}|${s.subject_id || ''}`
-        ).join('||');
+        // Create hash from normalized essential fields
+        const stateStr = sorted.map(s => [
+            normalizeStr(s.teacher_id),
+            normalizeStr(s.room_id),
+            normalizeStr(s.section_id),
+            normalizeStr(s.day_of_week),
+            normalizeTime(s.start_time),
+            normalizeTime(s.end_time),
+            normalizeStr(s.subject_id)
+        ].join('|')).join('||');
         
         let hash = 5381;
         for (let i = 0; i < stateStr.length; i++) {

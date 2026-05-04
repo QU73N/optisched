@@ -3,7 +3,7 @@
 
 ALTER FUNCTION approve_request SET search_path = public;
 ALTER FUNCTION archive_old_logs SET search_path = public;
-ALTER FUNCTION audit_logs_compute_hash SET search_path = public;
+ALTER FUNCTION audit_logs_compute_hash SET search_path = public, extensions;
 ALTER FUNCTION audit_role_change SET search_path = public;
 ALTER FUNCTION can_approve_schedules SET search_path = public;
 ALTER FUNCTION can_manage_users SET search_path = public;

@@ -603,7 +603,7 @@ CREATE OR REPLACE FUNCTION audit_logs_compute_hash()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
     NEW.data_hash := md5(row_to_json(NEW)::text);
