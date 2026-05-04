@@ -1414,20 +1414,18 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                 </div>
 
                 {/* Section 1: Break Mode */}
-                <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)' }}>
-                    <div className="sg-field-label" style={{ marginBottom: 12 }}>Break Mode</div>
-                    <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                <div className="sg-break-config-section">
+                    <div className="sg-field-label sg-break-config-label">Break Mode</div>
+                    <div className="sg-break-mode-toggle">
                         <button
                             className={`btn ${config.breakMode === 'fixed' ? 'btn-primary' : 'btn-secondary'}`}
                             onClick={() => setConfig(c => ({ ...c, breakMode: 'fixed' }))}
-                            style={{ flex: 1 }}
                         >
                             Fixed Break
                         </button>
                         <button
                             className={`btn ${config.breakMode === 'variable' ? 'btn-primary' : 'btn-secondary'}`}
                             onClick={() => setConfig(c => ({ ...c, breakMode: 'variable' }))}
-                            style={{ flex: 1 }}
                         >
                             Variable Break
                         </button>
@@ -1512,14 +1510,15 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                 </div>
 
                 {/* Section 2: Common Break */}
-                <div style={{ marginTop: 16, padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)' }}>
-                    <div className="sg-field-label" style={{ marginBottom: 12 }}>Common Break</div>
-                    <div style={{ marginBottom: 12 }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <div className="sg-break-config-section">
+                    <div className="sg-field-label sg-break-config-label">Common Break</div>
+                    <div className="sg-common-break-toggle">
+                        <label className="sg-checkbox-label">
                             <input
                                 type="checkbox"
                                 checked={config.commonBreak.enabled}
                                 onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, enabled: e.target.checked } }))}
+                                className="sg-checkbox"
                             />
                             <span>Enable common break (overrides all other breaks on selected day)</span>
                         </label>

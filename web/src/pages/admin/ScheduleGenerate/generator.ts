@@ -21,7 +21,9 @@ import type {
     HardConstraintSet,
     SoftConstraintSet,
     PreferenceConstraintSet,
-    BreakWindow,
+    FixedBreakConfig,
+    VariableBreakConfig,
+    CommonBreakConfig,
     SoftConstraintViolation,
     OptimizationSuggestion,
     ScenarioConfig,
@@ -44,17 +46,37 @@ const toHHMM = (mins: number) => {
     return `${h}:${m}`;
 };
 
-const overlapsBreak = (start: number, end: number, breaks: BreakWindow[]) =>
-    breaks.some(b => toMin(b.start) < end && start < toMin(b.end));
+// Helper to check if a time slot overlaps with any break
+const overlapsBreak = (start: number, end: number, config: GenerationConfig, day: string): boolean => {
+    // Check common break first (hard constraint override)
+    if (config.commonBreak.enabled && config.commonBreak.day === day) {
+        const commonStart = toMin(config.commonBreak.time);
+        const commonEnd = commonStart + config.commonBreak.duration;
+        if (commonStart < end && start < commonEnd) {
+            return true;
+        }
+    }
+    
+    // Check regular breaks based on mode
+    if (config.breakMode === 'fixed') {
+        const fixedStart = toMin(config.fixedBreak.start);
+        const fixedEnd = toMin(config.fixedBreak.end);
+        return fixedStart < end && start < fixedEnd;
+    }
+    
+    // For variable mode, we'll need to check assigned breaks
+    // For now, return false (will be implemented with variable break assignment)
+    return false;
+};
 
-const buildSlots = (cfg: GenerationConfig): { start: string; end: string }[] => {
+const buildSlots = (cfg: GenerationConfig, day: string): { start: string; end: string }[] => {
     const slots: { start: string; end: string }[] = [];
     const dayStart = toMin(cfg.dayStart);
     const dayEnd = toMin(cfg.dayEnd);
     const step = cfg.sessionMinutes;
     for (let s = dayStart; s + step <= dayEnd; s += step) {
         const e = s + step;
-        if (overlapsBreak(s, e, cfg.breaks)) continue;
+        if (overlapsBreak(s, e, cfg, day)) continue;
         slots.push({ start: toHHMM(s), end: toHHMM(e) });
     }
     return slots;
@@ -2324,8 +2346,13 @@ export async function runGenerator(
     const availableRooms = (isPartial && target?.kind === 'room')
         ? normalizedData.normalizedRooms.filter(r => r.id === target.id && r.is_available !== false)
         : normalizedData.normalizedRooms.filter(r => r.is_available !== false);
-    const slots = buildSlots(config);
     const days = config.days.length ? config.days : ['Monday'];
+
+    // Build slots per day (breaks can vary by day with common break)
+    const slotsByDay = new Map<string, { start: string; end: string }[]>();
+    for (const day of days) {
+        slotsByDay.set(day, buildSlots(config, day));
+    }
 
     // Get priority settings early for impossibility check
     const subjectP = config.priorities.subjects;
@@ -2333,7 +2360,9 @@ export async function runGenerator(
 
     // Step 5 (Impossible Schedule Detector): Detect if schedule is impossible
     // If impossible, return early with actionable error messages
-    const impossibilityCheck = detectImpossibleSchedule(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, slots, config);
+    // Use slots from the first day for impossibility check (conservative estimate)
+    const firstDaySlots = slotsByDay.get(days[0]) || [];
+    const impossibilityCheck = detectImpossibleSchedule(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, firstDaySlots, config);
     if (!impossibilityCheck.is_possible) {
         // Calculate total tasks accounting for all matching sections
         const totalTasks = normalizedData.normalizedSubjects.reduce((sum, s) => {
