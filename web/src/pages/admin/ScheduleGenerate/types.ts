@@ -121,6 +121,26 @@ export interface BreakWindow {
     end: string;   // HH:MM
 }
 
+export interface FixedBreakConfig {
+    label: string;
+    start: string;  // HH:MM
+    end: string;    // HH:MM
+}
+
+export interface VariableBreakConfig {
+    startTime: string;  // HH:MM - earliest possible break start
+    endTime: string;    // HH:MM - latest possible break end
+    duration: number;   // break duration in minutes
+    increments: number; // time slot increments in minutes
+}
+
+export interface CommonBreakConfig {
+    enabled: boolean;
+    day: string;        // Monday, Tuesday, etc.
+    time: string;       // HH:MM
+    duration: number;   // break duration in minutes
+}
+
 export interface SoftWeights {
     balancedLoad: number;         // 0 to 100 — spread sessions evenly across teachers
     compactSchedule: number;      // 0 to 100 — reduce idle gaps inside section days
@@ -194,7 +214,13 @@ export interface GenerationConfig {
     dayStart: string;              // HH:MM
     dayEnd: string;                // HH:MM
     sessionMinutes: number;        // 60 | 90 | 120
-    breaks: BreakWindow[];
+    
+    // Break Configuration
+    breakMode: 'fixed' | 'variable';
+    fixedBreak: FixedBreakConfig;
+    variableBreak: VariableBreakConfig;
+    commonBreak: CommonBreakConfig;
+    
     // Constraints
     soft: SoftWeights;
     // Priorities
@@ -340,9 +366,27 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     dayStart: '07:00',
     dayEnd: '17:30',
     sessionMinutes: 90,
-    breaks: [
-        { id: 'lunch', label: 'Lunch', start: '12:00', end: '13:00' },
-    ],
+    
+    // Break Configuration
+    breakMode: 'fixed',
+    fixedBreak: {
+        label: 'Lunch',
+        start: '12:00',
+        end: '13:00',
+    },
+    variableBreak: {
+        startTime: '11:00',
+        endTime: '13:00',
+        duration: 60,
+        increments: 30,
+    },
+    commonBreak: {
+        enabled: false,
+        day: 'Friday',
+        time: '12:00',
+        duration: 60,
+    },
+    
     soft: {
         balancedLoad: 60,
         compactSchedule: 70,

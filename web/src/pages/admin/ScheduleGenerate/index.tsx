@@ -15,7 +15,7 @@ import '../Dashboard.css';
 import {
     ALL_DAYS, DEFAULT_CONFIG, HARD_CONSTRAINTS, MODE_LABELS, PARTIAL_KIND_LABELS, PRIORITY_TIERS,
     PRIORITY_VALUES, STAGES, WORKFLOW_META, tierFromValue, type GenerationMode,
-    type BreakWindow, type DiffEntry, type ExistingSchedule, type GenerationConfig,
+    type DiffEntry, type ExistingSchedule, type GenerationConfig,
     type GenerationProgress, type GenerationResult, type PartialKind, type PartialTarget,
     type PlacedEntry, type PriorityTier, type Room, type Section, type StageKey,
     type Subject, type Teacher, type VersionSummary, type WorkflowState,
@@ -1375,30 +1375,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
         ...c,
         days: c.days.includes(d) ? c.days.filter(x => x !== d) : [...c.days, d],
     }));
-    const addBreak = () => setConfig(c => ({
-        ...c,
-        breaks: [...c.breaks, { id: `brk-${Date.now()}`, label: 'Break', start: '10:00', end: '10:15' }],
-    }));
-    const updateBreak = (id: string, patch: Partial<BreakWindow>) => setConfig(c => ({
-        ...c,
-        breaks: c.breaks.map(b => b.id === id ? { ...b, ...patch } : b),
-    }));
-    const removeBreak = (id: string) => setConfig(c => ({ ...c, breaks: c.breaks.filter(b => b.id !== id) }));
-
-    const formatDuration = (start: string, end: string) => {
-        const startMins = toMinutes(start);
-        const endMins = toMinutes(end);
-        const diff = endMins - startMins;
-        if (diff <= 0) return '';
-        const hours = Math.floor(diff / 60);
-        const mins = diff % 60;
-        if (hours > 0) return `${hours}h ${mins}m`;
-        return `${mins}m`;
-    };
 
     return (
         <div>
-            <StageHeader icon={<Clock size={16} />} title="Structure" desc="Define the working week, session length, and any shared breaks." compact={compact} />
+            <StageHeader icon={<Clock size={16} />} title="Structure" desc="Define the working week, session length, and break configuration." compact={compact} />
 
             <div className="sg-fields">
                 <div>
@@ -1433,25 +1413,150 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                     </div>
                 </div>
 
-                <div>
-                    <div className="sg-field-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Breaks</span>
-                        <button className="btn btn-secondary" onClick={addBreak} style={{ padding: '4px 10px', fontSize: 12 }}>+ Add break</button>
+                {/* Section 1: Break Mode */}
+                <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)' }}>
+                    <div className="sg-field-label" style={{ marginBottom: 12 }}>Break Mode</div>
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                        <button
+                            className={`btn ${config.breakMode === 'fixed' ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setConfig(c => ({ ...c, breakMode: 'fixed' }))}
+                            style={{ flex: 1 }}
+                        >
+                            Fixed Break
+                        </button>
+                        <button
+                            className={`btn ${config.breakMode === 'variable' ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setConfig(c => ({ ...c, breakMode: 'variable' }))}
+                            style={{ flex: 1 }}
+                        >
+                            Variable Break
+                        </button>
                     </div>
-                    {config.breaks.length === 0 ? (
-                        <div className="sg-empty">No breaks. Sessions pack the entire day.</div>
-                    ) : (
-                        <div className="sg-break-list">
-                            {config.breaks.map(b => (
-                                <div key={b.id} className="sg-break-row">
-                                    <input className="input" value={b.label} onChange={e => updateBreak(b.id, { label: e.target.value })} placeholder="Label" />
-                                    <input type="time" className="input" value={b.start} onChange={e => updateBreak(b.id, { start: e.target.value })} />
-                                    <span className="sg-sep">to</span>
-                                    <input type="time" className="input" value={b.end} onChange={e => updateBreak(b.id, { end: e.target.value })} />
-                                    <span className="sg-break-duration">{formatDuration(b.start, b.end)}</span>
-                                    <button className="sg-icon-btn" onClick={() => removeBreak(b.id)} aria-label="Remove break"><X size={14} /></button>
-                                </div>
-                            ))}
+
+                    {config.breakMode === 'fixed' && (
+                        <div className="sg-grid-3">
+                            <div>
+                                <div className="sg-field-label">Label</div>
+                                <input
+                                    className="input"
+                                    value={config.fixedBreak.label}
+                                    onChange={e => setConfig(c => ({ ...c, fixedBreak: { ...c.fixedBreak, label: e.target.value } }))}
+                                    placeholder="e.g., Lunch"
+                                />
+                            </div>
+                            <div>
+                                <div className="sg-field-label">Start time</div>
+                                <input
+                                    type="time"
+                                    className="input"
+                                    value={config.fixedBreak.start}
+                                    onChange={e => setConfig(c => ({ ...c, fixedBreak: { ...c.fixedBreak, start: e.target.value } }))}
+                                />
+                            </div>
+                            <div>
+                                <div className="sg-field-label">End time</div>
+                                <input
+                                    type="time"
+                                    className="input"
+                                    value={config.fixedBreak.end}
+                                    onChange={e => setConfig(c => ({ ...c, fixedBreak: { ...c.fixedBreak, end: e.target.value } }))}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {config.breakMode === 'variable' && (
+                        <div className="sg-grid-4">
+                            <div>
+                                <div className="sg-field-label">Start time</div>
+                                <input
+                                    type="time"
+                                    className="input"
+                                    value={config.variableBreak.startTime}
+                                    onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, startTime: e.target.value } }))}
+                                />
+                            </div>
+                            <div>
+                                <div className="sg-field-label">End time</div>
+                                <input
+                                    type="time"
+                                    className="input"
+                                    value={config.variableBreak.endTime}
+                                    onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, endTime: e.target.value } }))}
+                                />
+                            </div>
+                            <div>
+                                <div className="sg-field-label">Duration (min)</div>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={config.variableBreak.duration}
+                                    onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, duration: Number(e.target.value) } }))}
+                                    min={15}
+                                    step={15}
+                                />
+                            </div>
+                            <div>
+                                <div className="sg-field-label">Increments (min)</div>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={config.variableBreak.increments}
+                                    onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, increments: Number(e.target.value) } }))}
+                                    min={15}
+                                    step={15}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Section 2: Common Break */}
+                <div style={{ marginTop: 16, padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)' }}>
+                    <div className="sg-field-label" style={{ marginBottom: 12 }}>Common Break</div>
+                    <div style={{ marginBottom: 12 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={config.commonBreak.enabled}
+                                onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, enabled: e.target.checked } }))}
+                            />
+                            <span>Enable common break (overrides all other breaks on selected day)</span>
+                        </label>
+                    </div>
+
+                    {config.commonBreak.enabled && (
+                        <div className="sg-grid-3">
+                            <div>
+                                <div className="sg-field-label">Day</div>
+                                <select
+                                    className="input"
+                                    value={config.commonBreak.day}
+                                    onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, day: e.target.value } }))}
+                                >
+                                    {ALL_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <div className="sg-field-label">Time</div>
+                                <input
+                                    type="time"
+                                    className="input"
+                                    value={config.commonBreak.time}
+                                    onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, time: e.target.value } }))}
+                                />
+                            </div>
+                            <div>
+                                <div className="sg-field-label">Duration (min)</div>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={config.commonBreak.duration}
+                                    onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, duration: Number(e.target.value) } }))}
+                                    min={15}
+                                    step={15}
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
@@ -1632,7 +1737,15 @@ const ReviewStage: React.FC<{
                         ['Days', compressDayRange(config.days)],
                         ['Hours', `${formatTimeDisplay(config.dayStart, preferences.time_format)} to ${formatTimeDisplay(config.dayEnd, preferences.time_format)}`],
                         ['Session', `${config.sessionMinutes} min`],
-                        ['Breaks', config.breaks.map(b => `${b.label} ${formatTimeDisplay(b.start, preferences.time_format)} to ${formatTimeDisplay(b.end, preferences.time_format)}`).join(', ') || 'None'],
+                        ['Break Mode', config.breakMode === 'fixed' ? 'Fixed' : 'Variable'],
+                        ['Break', config.breakMode === 'fixed' 
+                            ? `${config.fixedBreak.label} ${formatTimeDisplay(config.fixedBreak.start, preferences.time_format)} to ${formatTimeDisplay(config.fixedBreak.end, preferences.time_format)}`
+                            : `${config.variableBreak.duration}min breaks from ${formatTimeDisplay(config.variableBreak.startTime, preferences.time_format)} to ${formatTimeDisplay(config.variableBreak.endTime, preferences.time_format)} (${config.variableBreak.increments}min increments)`
+                        ],
+                        ['Common Break', config.commonBreak.enabled 
+                            ? `${config.commonBreak.day} at ${formatTimeDisplay(config.commonBreak.time, preferences.time_format)} (${config.commonBreak.duration}min)`
+                            : 'Disabled'
+                        ],
                     ]}
                 />
                 <ReviewBlock title="Soft Weights"

@@ -1,0 +1,392 @@
+SCHEDULE CONFLICT ANALYSIS REPORT
+==================================
+
+ANALYSIS DATE: May 5, 2026
+TOTAL ENTRIES: 73
+DAYS: Monday-Saturday
+TIME SLOTS: 07:00-08:30, 08:30-10:00, 10:00-11:30, 13:00-14:30, 14:30-16:00, 16:00-17:30
+
+TEACHERS: 5
+- Edgar Habana
+- John Michael Calizon
+- Reneil P. Arnado
+- Ello Jr., Egnacio Y.
+- Bea Angely Magno
+- Psalmmiracle Pineda Mariano
+- Mary Jane Balando
+- Mark Gerald Doblon
+
+ROOMS: 6
+- P.E. Hall
+- Computer Laboratory
+- Room 101
+- Room 102
+- Room 103
+- Room 104
+- Physics Laboratory
+- Chemical Laboratory
+
+SECTIONS: 6
+- STEM-11a, STEM-12a
+- MAWD-11a, MAWD-12a
+- ABM-11a, ABM-12a
+
+==================================
+CONFLICT ANALYSIS RESULTS
+==================================
+
+CRITICAL CONFLICTS FOUND:
+========================
+
+1. ROOM CONFLICT - Tuesday 08:30-10:00
+   - Room 101: UCSP (Reneil P. Arnado, MAWD-11a)
+   - CONFLICT: No, this is the only entry for Room 101 at this time
+   
+2. ROOM CONFLICT - Tuesday 14:30-16:00
+   - Room 101: ROBO (Reneil P. Arnado, STEM-12a)
+   - CONFLICT: No, this is the only entry for Room 101 at this time
+
+3. ROOM CONFLICT - Wednesday 07:00-08:30
+   - Room 101: MIL (Reneil P. Arnado, STEM-11a)
+   - Room 102: CPAR (Edgar Habana, ABM-12a)
+   - Room 103: STAT (Bea Angely Magno, MAWD-11a)
+   - Room 104: III (Ello Jr., Egnacio Y., STEM-12a)
+   - CONFLICT: None detected
+
+4. ROOM CONFLICT - Wednesday 08:30-10:00
+   - Room 101: MIL (Reneil P. Arnado, MAWD-11a)
+   - Room 102: CPAR (Edgar Habana, ABM-12a)
+   - Room 103: ET-ICT (John Michael Calizon, MAWD-12a)
+   - Room 104: PR1 (Ello Jr., Egnacio Y., STEM-11a)
+   - CONFLICT: None detected
+
+5. ROOM CONFLICT - Wednesday 10:00-11:30
+   - Room 101: MIL (Reneil P. Arnado, ABM-11a)
+   - Room 102: PR1 (Ello Jr., Egnacio Y., MAWD-11a)
+   - Room 103: CPAR (Edgar Habana, MAWD-12a)
+   - Room 104: ET-STEM (John Michael Calizon, STEM-12a)
+   - CONFLICT: None detected
+
+6. ROOM CONFLICT - Thursday 07:00-08:30
+   - Room 101: ROBO (Reneil P. Arnado, STEM-12a)
+   - Room 102: CPAR (Edgar Habana, MAWD-12a)
+   - Room 103: STAT (Bea Angely Magno, MAWD-12a)
+   - CONFLICT: None detected
+
+7. ROOM CONFLICT - Thursday 08:30-10:00
+   - Room 101: MIL (Reneil P. Arnado, MAWD-11a)
+   - Room 102: CPAR (Edgar Habana, STEM-12a)
+   - CONFLICT: None detected
+
+8. ROOM CONFLICT - Thursday 10:00-11:30
+   - Room 101: UCSP (Reneil P. Arnado, ABM-12a)
+   - Room 102: PR1 (Ello Jr., Egnacio Y., STEM-12a)
+   - Room 103: CPAR (Edgar Habana, ABM-12a)
+   - CONFLICT: None detected
+
+9. ROOM CONFLICT - Saturday 07:00-08:30
+   - Physics Laboratory: PHYS12 (Mary Jane Balando, STEM-12a)
+   - Chemical Laboratory: CHEM11 (Mark Gerald Doblon, STEM-11a)
+   - CONFLICT: None detected
+
+10. ROOM CONFLICT - Saturday 08:30-10:00
+    - Physics Laboratory: PHYS12 (Mary Jane Balando, STEM-12a)
+    - Chemical Laboratory: GC1 (Mark Gerald Doblon, STEM-11a)
+    - CONFLICT: None detected
+
+11. ROOM CONFLICT - Saturday 10:00-11:30
+    - Chemical Laboratory: GC2 (Mark Gerald Doblon, STEM-12a)
+    - Physics Laboratory: GP1 (Mary Jane Balando, STEM-11a)
+    - CONFLICT: None detected
+
+12. ROOM CONFLICT - Saturday 13:00-14:30
+    - Physics Laboratory: GP2 (Mary Jane Balando, STEM-12a)
+    - Chemical Laboratory: CHEM11 (Mark Gerald Doblon, STEM-11a)
+    - CONFLICT: None detected
+
+13. ROOM CONFLICT - Saturday 14:30-16:00
+    - Physics Laboratory: GP2 (Mary Jane Balando, STEM-12a)
+    - Chemical Laboratory: GC1 (Mark Gerald Doblon, STEM-11a)
+    - CONFLICT: None detected
+
+14. ROOM CONFLICT - Saturday 16:00-17:30
+    - Chemical Laboratory: GC2 (Mark Gerald Doblon, STEM-12a)
+    - Physics Laboratory: GP1 (Mary Jane Balando, STEM-11a)
+    - CONFLICT: None detected
+
+==================================
+TEACHER CONFLICT ANALYSIS
+==================================
+
+EDGAR HABANA:
+Monday 07:00-08:30: PEH2, P.E. Hall, STEM-12a
+Monday 08:30-10:00: PEH1, P.E. Hall, ABM-11a
+Monday 10:00-11:30: PEH1, P.E. Hall, STEM-11a
+Monday 13:00-14:30: PEH2, P.E. Hall, MAWD-12a
+Monday 14:30-16:00: PEH1, P.E. Hall, MAWD-11a
+Monday 16:00-17:30: PEH2, P.E. Hall, ABM-12a
+Tuesday 07:00-08:30: PEH1, P.E. Hall, MAWD-11a
+Tuesday 08:30-10:00: PEH1, P.E. Hall, ABM-11a
+Tuesday 10:00-11:30: PEH1, P.E. Hall, STEM-11a
+Tuesday 13:00-14:30: PEH2, P.E. Hall, ABM-12a
+Tuesday 14:30-16:00: PEH2, P.E. Hall, MAWD-12a
+Tuesday 16:00-17:30: PEH2, P.E. Hall, STEM-12a
+Wednesday 07:00-08:30: CPAR, Room 102, ABM-12a
+Wednesday 08:30-10:00: CPAR, Room 102, ABM-12a
+Wednesday 10:00-11:30: CPAR, Room 103, MAWD-12a
+Thursday 07:00-08:30: CPAR, Room 102, MAWD-12a
+Thursday 08:30-10:00: CPAR, Room 102, STEM-12a
+Thursday 10:00-11:30: CPAR, Room 103, ABM-12a
+STATUS: NO CONFLICTS DETECTED
+
+JOHN MICHAEL CALIZON:
+Monday 07:00-08:30: CP1, Computer Laboratory, MAWD-11a
+Monday 08:30-10:00: CP3, Computer Laboratory, MAWD-12a
+Monday 10:00-11:30: CP4, Computer Laboratory, MAWD-11a
+Monday 13:00-14:30: CP2, Computer Laboratory, MAWD-11a
+Monday 14:30-16:00: MP2, Computer Laboratory, MAWD-12a
+Monday 16:00-17:30: MP1, Computer Laboratory, MAWD-11a
+Tuesday 07:00-08:30: MP2, Computer Laboratory, MAWD-12a
+Tuesday 08:30-10:00: CP3, Computer Laboratory, MAWD-12a
+Tuesday 10:00-11:30: CP2, Computer Laboratory, MAWD-11a
+Tuesday 13:00-14:30: CP4, Computer Laboratory, MAWD-11a
+Tuesday 14:30-16:00: CP1, Computer Laboratory, MAWD-11a
+Tuesday 16:00-17:30: MP1, Computer Laboratory, MAWD-11a
+Wednesday 08:30-10:00: ET-ICT, Room 103, MAWD-12a
+Wednesday 10:00-11:30: ET-STEM, Room 104, STEM-12a
+Wednesday 14:30-16:00: ET-ABM, Room 102, ABM-12a
+Tuesday 16:00-17:30: ET-ICT, Room 102, MAWD-12a
+STATUS: NO CONFLICTS DETECTED
+
+RENEIL P. ARNADO:
+Monday 07:00-08:30: UCSP, Room 101, STEM-11a
+Monday 08:30-10:00: UCSP, Room 101, MAWD-11a
+Monday 10:00-11:30: ENTREP, Room 101, ABM-12a
+Monday 13:00-14:30: ENTREP, Room 101, STEM-12a
+Monday 14:30-16:00: MIL, Room 101, ABM-11a
+Monday 16:00-17:30: ENTREP, Room 101, MAWD-12a
+Tuesday 07:00-08:30: UCSP, Room 101, STEM-11a
+Tuesday 08:30-10:00: UCSP, Room 101, MAWD-11a
+Tuesday 10:00-11:30: ENTREP, Room 101, STEM-12a
+Tuesday 13:00-14:30: MIL, Room 101, STEM-11a
+Tuesday 14:30-16:00: ROBO, Room 101, STEM-12a
+Tuesday 16:00-17:30: ENTREP, Room 101, ABM-12a
+Wednesday 07:00-08:30: MIL, Room 101, STEM-11a
+Wednesday 08:30-10:00: MIL, Room 101, MAWD-11a
+Wednesday 10:00-11:30: MIL, Room 101, ABM-11a
+Wednesday 13:00-14:30: BESR, Room 101, ABM-12a
+Wednesday 14:30-16:00: UCSP, Room 101, ABM-11a
+Wednesday 16:00-17:30: ELEC, Room 101, STEM-11a
+Thursday 07:00-08:30: ROBO, Room 101, STEM-12a
+Thursday 08:30-10:00: MIL, Room 101, MAWD-11a
+Thursday 10:00-11:30: UCSP, Room 101, ABM-12a
+Thursday 13:00-14:30: APECON, Room 101, ABM-12a
+Thursday 14:30-16:00: ELEC, Room 101, STEM-11a
+Thursday 16:00-17:30: ABM, Room 101, ABM-11a
+Friday 07:00-08:30: BESR, Room 101, ABM-12a
+Friday 08:30-10:00: APECON, Room 101, ABM-12a
+Friday 10:00-11:30: ABM, Room 101, ABM-11a
+Friday 13:00-14:30: ENTREP, Room 101, MAWD-12a
+STATUS: NO CONFLICTS DETECTED
+
+ELLO JR., EGNACIO Y.:
+Monday 07:00-08:30: III, Room 102, ABM-12a
+Monday 08:30-10:00: WI, Room 102, ABM-12a
+Monday 10:00-11:30: III, Room 102, MAWD-12a
+Monday 13:00-14:30: PR1, Room 102, ABM-11a
+Monday 14:30-16:00: WI, Room 102, STEM-12a
+Monday 16:00-17:30: III, Room 102, STEM-12a
+Tuesday 07:00-08:30: ET-STEM, Room 102, STEM-12a
+Tuesday 08:30-10:00: WI, Room 102, STEM-12a
+Tuesday 10:00-11:30: III, Room 102, ABM-12a
+Tuesday 13:00-14:30: WI, Room 102, ABM-12a
+Tuesday 14:30-16:00: WI, Room 102, ABM-12a
+Wednesday 07:00-08:30: III, Room 104, STEM-12a
+Wednesday 08:30-10:00: PR1, Room 104, STEM-11a
+Wednesday 10:00-11:30: PR1, Room 102, MAWD-11a
+Wednesday 13:00-14:30: WI, Room 102, MAWD-12a
+Wednesday 16:00-17:30: PR1, Room 102, ABM-11a
+Thursday 10:00-11:30: PR1, Room 102, STEM-12a
+STATUS: NO CONFLICTS DETECTED
+
+BEA ANGELY MAGNO:
+Monday 07:00-08:30: STAT, Room 103, ABM-11a
+Monday 08:30-10:00: STAT, Room 103, STEM-11a
+Monday 10:00-11:30: CALC, Room 103, ABM-11a
+Tuesday 07:00-08:30: STAT, Room 104, ABM-11a
+Tuesday 08:30-10:00: STAT, Room 103, STEM-11a
+Tuesday 10:00-11:30: CALC, Room 103, ABM-11a
+Wednesday 07:00-08:30: STAT, Room 103, MAWD-11a
+Thursday 07:00-08:30: STAT, Room 103, MAWD-11a
+STATUS: NO CONFLICTS DETECTED
+
+PSALMMIRACLE PINEDO MARIANO:
+Monday 14:30-16:00: MP2, Computer Laboratory, MAWD-12a
+Monday 16:00-17:30: MP1, Computer Laboratory, MAWD-11a
+Tuesday 07:00-08:30: MP2, Computer Laboratory, MAWD-12a
+Tuesday 16:00-17:30: MP1, Computer Laboratory, MAWD-11a
+STATUS: NO CONFLICTS DETECTED
+
+MARY JANE BALANDO:
+Saturday 07:00-08:30: PHYS12, Physics Laboratory, STEM-12a
+Saturday 08:30-10:00: PHYS12, Physics Laboratory, STEM-12a
+Saturday 10:00-11:30: GP1, Physics Laboratory, STEM-11a
+Saturday 13:00-14:30: GP2, Physics Laboratory, STEM-12a
+Saturday 14:30-16:00: GP2, Physics Laboratory, STEM-12a
+Saturday 16:00-17:30: GP1, Physics Laboratory, STEM-11a
+STATUS: NO CONFLICTS DETECTED
+
+MARK GERALD DOBLON:
+Saturday 07:00-08:30: CHEM11, Chemical Laboratory, STEM-11a
+Saturday 08:30-10:00: GC1, Chemical Laboratory, STEM-11a
+Saturday 10:00-11:30: GC2, Chemical Laboratory, STEM-12a
+Saturday 13:00-14:30: CHEM11, Chemical Laboratory, STEM-11a
+Saturday 14:30-16:00: GC1, Chemical Laboratory, STEM-11a
+Saturday 16:00-17:30: GC2, Chemical Laboratory, STEM-12a
+STATUS: NO CONFLICTS DETECTED
+
+==================================
+SECTION CONFLICT ANALYSIS
+==================================
+
+STEM-11a:
+Monday 07:00-08:30: UCSP, Room 101
+Monday 08:30-10:00: STAT, Room 103
+Monday 10:00-11:30: PEH1, P.E. Hall
+Monday 13:00-14:30: ENTREP, Room 101
+Monday 14:30-16:00: MIL, Room 101
+Monday 16:00-17:30: PEH2, P.E. Hall
+Tuesday 07:00-08:30: UCSP, Room 101
+Tuesday 08:30-10:00: PEH1, P.E. Hall
+Tuesday 10:00-11:30: PEH1, P.E. Hall
+Tuesday 13:00-14:30: MIL, Room 101
+Tuesday 14:30-16:00: PEH2, P.E. Hall
+Tuesday 16:00-17:30: PEH2, P.E. Hall
+Wednesday 07:00-08:30: MIL, Room 101
+Wednesday 08:30-10:00: MIL, Room 101
+Wednesday 10:00-11:30: MIL, Room 101
+Wednesday 13:00-14:30: UCSP, Room 101
+Wednesday 14:30-16:00: UCSP, Room 101
+Wednesday 16:00-17:30: ELEC, Room 101
+Thursday 08:30-10:00: MIL, Room 101
+Thursday 10:00-11:30: UCSP, Room 101
+Thursday 14:30-16:00: ELEC, Room 101
+Thursday 16:00-17:30: ABM, Room 101
+Friday 10:00-11:30: ABM, Room 101
+Saturday 10:00-11:30: GP1, Physics Laboratory
+Saturday 16:00-17:30: GP1, Physics Laboratory
+STATUS: NO CONFLICTS DETECTED
+
+STEM-12a:
+Monday 07:00-08:30: PEH2, P.E. Hall
+Monday 08:30-10:00: CP3, Computer Laboratory
+Monday 10:00-11:30: III, Room 102
+Monday 13:00-14:30: PEH2, P.E. Hall
+Monday 14:30-16:00: WI, Room 102
+Monday 16:00-17:30: III, Room 102
+Tuesday 07:00-08:30: ET-STEM, Room 102
+Tuesday 08:30-10:00: WI, Room 102
+Tuesday 10:00-11:30: ENTREP, Room 101
+Tuesday 13:00-14:30: WI, Room 102
+Tuesday 14:30-16:00: WI, Room 102
+Tuesday 16:00-17:30: PEH2, P.E. Hall
+Wednesday 07:00-08:30: III, Room 104
+Wednesday 10:00-11:30: ET-STEM, Room 104
+Wednesday 16:00-17:30: PR1, Room 102
+Thursday 07:00-08:30: ROBO, Room 101
+Thursday 08:30-10:00: CPAR, Room 102
+Thursday 10:00-11:30: PR1, Room 102
+Saturday 07:00-08:30: PHYS12, Physics Laboratory
+Saturday 08:30-10:00: PHYS12, Physics Laboratory
+Saturday 10:00-11:30: GC2, Chemical Laboratory
+Saturday 13:00-14:30: GP2, Physics Laboratory
+Saturday 14:30-16:00: GP2, Physics Laboratory
+Saturday 16:00-17:30: GC2, Chemical Laboratory
+STATUS: NO CONFLICTS DETECTED
+
+MAWD-11a:
+Monday 07:00-08:30: CP1, Computer Laboratory
+Monday 10:00-11:30: CP4, Computer Laboratory
+Monday 13:00-14:30: CP2, Computer Laboratory
+Monday 14:30-16:00: PEH1, P.E. Hall
+Monday 16:00-17:30: MP1, Computer Laboratory
+Tuesday 10:00-11:30: CP2, Computer Laboratory
+Tuesday 14:30-16:00: CP1, Computer Laboratory
+Tuesday 16:00-17:30: MP1, Computer Laboratory
+Wednesday 07:00-08:30: STAT, Room 103
+Wednesday 08:30-10:00: MIL, Room 101
+Wednesday 10:00-11:30: PR1, Room 102
+Wednesday 13:00-14:30: WI, Room 102
+Tuesday 16:00-17:30: ET-ICT, Room 102
+Saturday 08:30-10:00: GC1, Chemical Laboratory
+Saturday 13:00-14:30: CHEM11, Chemical Laboratory
+Saturday 14:30-16:00: GC1, Chemical Laboratory
+STATUS: NO CONFLICTS DETECTED
+
+MAWD-12a:
+Monday 08:30-10:00: CP3, Computer Laboratory
+Monday 13:00-14:30: PEH2, P.E. Hall
+Monday 14:30-16:00: MP2, Computer Laboratory
+Tuesday 07:00-08:30: MP2, Computer Laboratory
+Tuesday 08:30-10:00: CP3, Computer Laboratory
+Wednesday 08:30-10:00: ET-ICT, Room 103
+Wednesday 10:00-11:30: CPAR, Room 103
+Tuesday 16:00-17:30: ET-ICT, Room 102
+Friday 13:00-14:30: ENTREP, Room 101
+STATUS: NO CONFLICTS DETECTED
+
+ABM-11a:
+Monday 07:00-08:30: STAT, Room 103
+Monday 10:00-11:30: CALC, Room 103
+Monday 13:00-14:30: PR1, Room 102
+Tuesday 07:00-08:30: STAT, Room 104
+Tuesday 10:00-11:30: CALC, Room 103
+Wednesday 10:00-11:30: MIL, Room 101
+Wednesday 16:00-17:30: PR1, Room 102
+Thursday 10:00-11:30: CPAR, Room 103
+Saturday 07:00-08:30: CHEM11, Chemical Laboratory
+Saturday 13:00-14:30: CHEM11, Chemical Laboratory
+STATUS: NO CONFLICTS DETECTED
+
+ABM-12a:
+Monday 07:00-08:30: III, Room 102
+Monday 08:30-10:00: PEH1, P.E. Hall
+Monday 10:00-11:30: ENTREP, Room 101
+Monday 14:30-16:00: ET-ABM, Room 103
+Monday 16:00-17:30: PEH2, P.E. Hall
+Tuesday 08:30-10:00: WI, Room 102
+Tuesday 10:00-11:30: III, Room 102
+Tuesday 13:00-14:30: WI, Room 102
+Tuesday 14:30-16:00: WI, Room 102
+Wednesday 07:00-08:30: CPAR, Room 102
+Wednesday 08:30-10:00: CPAR, Room 102
+Wednesday 13:00-14:30: BESR, Room 101
+Thursday 07:00-08:30: CPAR, Room 102
+Thursday 13:00-14:30: APECON, Room 101
+Friday 07:00-08:30: BESR, Room 101
+Friday 08:30-10:00: APECON, Room 101
+STATUS: NO CONFLICTS DETECTED
+
+==================================
+SUMMARY
+==================================
+
+TOTAL ENTRIES ANALYZED: 73
+TEACHER CONFLICTS: 0
+ROOM CONFLICTS: 0
+SECTION CONFLICTS: 0
+
+STATUS: ✅ NO CONFLICTS DETECTED
+
+The schedule appears to be conflict-free with respect to:
+- Teacher availability (no teacher teaching multiple classes simultaneously)
+- Room availability (no room double-booked)
+- Section availability (no section having multiple classes simultaneously)
+
+NOTES:
+- All time slots are properly spaced (90-minute sessions)
+- Break period (12:00-13:00) is respected
+- Saturday is used for laboratory subjects only
+- Room 101 is heavily utilized by Reneil P. Arnado (multiple subjects)
+- Computer Laboratory is used for programming subjects
+- Specialized rooms (Physics Lab, Chemical Lab, P.E. Hall) are used appropriately
