@@ -483,22 +483,44 @@ class ScheduleVersionService {
                 throw new Error(`Persistence verification failed: Schedule count mismatch (expected ${schedules.length}, got ${verifiedSchedules?.length || 0})`);
             }
 
-            const verifiedHash = scheduleValidation.computeStateHash(verifiedSchedules);
+            // NORMALIZE FETCHED DATA: Remove server-generated fields before hash comparison
+            // The database INSERT adds id, created_at, updated_at fields not present in input
+            const normalizedFetched = verifiedSchedules.map(s => ({
+                subject_id: s.subject_id,
+                teacher_id: s.teacher_id,
+                room_id: s.room_id,
+                section_id: s.section_id,
+                day_of_week: s.day_of_week,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                status: s.status,
+                is_active: s.is_active,
+                batch_id: s.batch_id,
+                semester: s.semester,
+                academic_year: s.academic_year,
+                created_by: s.created_by,
+            }));
+
+            const verifiedHash = scheduleValidation.computeStateHash(normalizedFetched);
             console.log('[VERSION SERVICE] Hash verification:', {
                 expected: stateHash,
                 actual: verifiedHash,
                 scheduleCount: verifiedSchedules.length,
-                firstSchedule: verifiedSchedules[0],
+                inputScheduleCount: schedules.length,
             });
             
             if (verifiedHash !== stateHash) {
-                scheduleLogger.system.error('system', 'persistence', 'CRITICAL: State hash mismatch after persistence', {
-                    expected: stateHash,
-                    actual: verifiedHash,
-                    scheduleCount: verifiedSchedules.length,
-                    sampleSchedule: verifiedSchedules[0],
-                });
-                throw new Error('Persistence verification failed: State hash mismatch');
+                // DETAILED DEBUGGING: Log field comparison to diagnose mismatch
+                const debugInfo = {
+                    inputCount: schedules.length,
+                    fetchedCount: verifiedSchedules.length,
+                    normalizedCount: normalizedFetched.length,
+                    firstInputFields: schedules[0] ? Object.keys(schedules[0]).sort() : [],
+                    firstFetchedFields: verifiedSchedules[0] ? Object.keys(verifiedSchedules[0]).sort() : [],
+                    firstNormalizedFields: normalizedFetched[0] ? Object.keys(normalizedFetched[0]).sort() : [],
+                };
+                scheduleLogger.system.error('system', 'persistence', 'State hash mismatch - data normalization debugging', debugInfo);
+                throw new Error('Persistence verification failed: State hash mismatch after normalization');
             }
 
             // Update canonical state manager

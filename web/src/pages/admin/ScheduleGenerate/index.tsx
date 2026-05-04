@@ -1883,7 +1883,7 @@ const ResultsStage: React.FC<{ result: GenerationResult; onOptimize: () => void;
                                 const d = ALL_DAYS.indexOf(a.day) - ALL_DAYS.indexOf(b.day);
                                 return d !== 0 ? d : a.start.localeCompare(b.start);
                             }).map(e => (
-                                <tr key={`${e.subjectId}-${e.day}-${e.start}`}>
+                                <tr key={`${e.teacherId}-${e.subjectId}-${e.roomId}-${e.sectionId}-${e.day}-${e.start}`}>
                                     <td style={{ fontWeight: 600 }}>{e.day}</td>
                                     <td><Clock size={12} style={{ verticalAlign: 'middle', color: 'var(--text-muted)', marginRight: 4 }} />{e.start} to {e.end}</td>
                                     <td><strong>{e.subjectCode}</strong><br /><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.subjectName}</span></td>

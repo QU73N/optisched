@@ -86,24 +86,19 @@ const isFree = (
         return b.sectionId === id;
     });
     
-    // Log conflict detection
-    if (!result) {
-        const conflict = busy.find(b => {
-            if (b.day !== day) return false;
-            if (startMin >= b.endMin || endMin <= b.startMin) return false;
-            if (kind === 'teacher') return b.teacherId === id;
-            if (kind === 'room') return b.roomId === id;
-            return b.sectionId === id;
-        });
-        console.log(`[CONFLICT CHECK] ${kind} conflict detected:`, {
-            kind,
-            id,
-            day,
-            newStart: startMin,
-            newEnd: endMin,
-            conflicting: conflict
-        });
-    }
+    // SILENCED: Conflict detection logging suppressed - generates 1000+ redundant logs
+    // Conflicts are expected during generation and don't indicate errors.
+    // Uncomment below if debugging specific constraint violations:
+    // if (!result) {
+    //     const conflict = busy.find(b => {
+    //         if (b.day !== day) return false;
+    //         if (startMin >= b.endMin || endMin <= b.startMin) return false;
+    //         if (kind === 'teacher') return b.teacherId === id;
+    //         if (kind === 'room') return b.roomId === id;
+    //         return b.sectionId === id;
+    //     });
+    //     console.log(`[CONFLICT CHECK] ${kind} conflict detected:`, { kind, id, day, newStart: startMin, newEnd: endMin, conflicting: conflict });
+    // }
     
     return result;
 };
