@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useUserPreferences } from '../../../contexts/UserPreferencesContext';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
+import type { Schedule } from '../../../types/database';
 import {
     AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
     Flag, GitBranch, Inbox, Layers, Lightbulb, ListChecks, Lock, Loader2, MapPin, Play, Plus,
@@ -17,7 +18,7 @@ import {
     type BreakWindow, type DiffEntry, type ExistingSchedule, type GenerationConfig,
     type GenerationProgress, type GenerationResult, type PartialKind, type PartialTarget,
     type PlacedEntry, type PriorityTier, type Room, type Section, type StageKey,
-    type Subject, type Teacher, type VersionSummary, type WorkflowState,
+    type Subject, type Teacher, type VersionSummary, type WorkflowState, type OptimizationReport,
 } from './types';
 import { runGenerator, optimizeSchedule } from './generator';
 import { getRulesAsRecord, notifyStudentsOfScheduleChanges } from '../../../services/generationService';
@@ -61,10 +62,24 @@ const ScheduleGenerate: React.FC = () => {
     const [workflowNote, setWorkflowNote] = useState<string | null>(null);
     const [workflowError, setWorkflowError] = useState<string | null>(null);
     const cancelRef = useRef(false);
+
+    type DetectedConflict = {
+        type: string;
+        severity: string;
+        title: string;
+        description: string;
+        scheduleAId: string | null;
+        scheduleBId: string | null;
+    };
+
+    type VersionWorkflowService = typeof scheduleVersionService & {
+        approveSchedule: (batchId: string, options: { changeReason: string }) => Promise<{ success: boolean; message?: string }>;
+        publishApprovedSchedule: (batchId: string, options: { changeReason: string }) => Promise<{ success: boolean; message?: string; active_version_id?: string | null }>;
+    };
     
     // Optimization state
     const [optimizing, setOptimizing] = useState(false);
-    const [optimizationReport, setOptimizationReport] = useState<any>(null);
+    const [optimizationReport, setOptimizationReport] = useState<OptimizationReport | null>(null);
     const [optimizedResult, setOptimizedResult] = useState<GenerationResult | null>(null);
     const [optimizationError, setOptimizationError] = useState<string | null>(null);
 
@@ -111,7 +126,7 @@ const ScheduleGenerate: React.FC = () => {
                 }
                 
                 const [sub, t, r, sec, sch, prefs, prof] = await Promise.all([
-                    supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id, sessions_per_week, weight, priority_note'),
+                    supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id, teacher_eligibility_pool, sessions_per_week, weight, priority_note'),
                     supabase.from('teachers').select('id, max_hours, weight, priority_note, profile_id'),
                     supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available, weight, priority_note'),
                     supabase.from('sections').select('id, name, program, year_level, student_count, parent_id, weight, path, node_type, is_active, description, metadata, sort_order, load_category, special_scheduling_rules'),
@@ -212,7 +227,7 @@ const ScheduleGenerate: React.FC = () => {
         return () => {
             unsubscribe(); // Unsubscribe from state manager
         };
-    }, []);
+    }, [user?.id]);
 
     const blockers = useMemo(() => {
         const issues: string[] = [];
@@ -256,28 +271,30 @@ const ScheduleGenerate: React.FC = () => {
     const transitionAll = async (from: WorkflowState, to: WorkflowState) => {
         // Collect the row ids in this status so the update never reaches unrelated
         // schedules that land in the table between the read and the write.
-        const matchingSchedules = existing.filter(e => ((e.status as WorkflowState) || 'draft') === from);
+        const matchingSchedules = existing.filter(e => ((e.status as WorkflowState) || 'draft') === from) as Array<ExistingSchedule & { batch_id?: string | null }>;
         const ids = matchingSchedules.map(e => e.id);
         if (ids.length === 0) return;
         
         // Extract batch ID for version service operations
-        const batchIds = new Set(matchingSchedules.filter(s => (s as any).batch_id).map(s => (s as any).batch_id));
-        const batchId = Array.from(batchIds)[0] as string | undefined;
+        const batchIds = new Set(matchingSchedules.filter(s => Boolean(s.batch_id)).map(s => s.batch_id as string));
+        const batchId = Array.from(batchIds)[0];
 
         setWorkflowBusy(from);
         setWorkflowNote(null);
         setWorkflowError(null);
         try {
+            const versionWorkflowService = scheduleVersionService as VersionWorkflowService;
+
             if (batchId && user?.id) {
                 scheduleVersionService.initialize(supabase, user.id);
                 if (to === 'submitted') {
                     const result = await scheduleVersionService.submitSchedule(batchId, { changeReason: 'Submitted via workflow panel' });
                     if (!result.success) throw new Error(result.message);
                 } else if (to === 'approved') {
-                    const result = await (scheduleVersionService as any).approveSchedule(batchId, { changeReason: 'Approved via workflow panel' });
+                    const result = await versionWorkflowService.approveSchedule(batchId, { changeReason: 'Approved via workflow panel' });
                     if (!result.success) throw new Error(result.message);
                 } else if (to === 'published') {
-                    const result = await (scheduleVersionService as any).publishApprovedSchedule(batchId, { changeReason: 'Published via workflow panel' });
+                    const result = await versionWorkflowService.publishApprovedSchedule(batchId, { changeReason: 'Published via workflow panel' });
                     if (!result.success) throw new Error(result.message);
                 }
             } else {
@@ -299,8 +316,6 @@ const ScheduleGenerate: React.FC = () => {
                     await scheduleAudit.published(id, { published_by: user?.id });
                 } else if (to === 'approved') {
                     await scheduleAudit.approved(id, { approved_by: user?.id });
-                } else if (to === 'rejected' as any) {
-                    await scheduleAudit.rejected(id, { rejected_by: user?.id });
                 }
             }
             
@@ -480,7 +495,35 @@ const ScheduleGenerate: React.FC = () => {
             setOptimizationReport({
                 initialScore: result.score,
                 finalScore: optimizedEntries.score,
-                improvement: optimizedEntries.score - result.score,
+                scoreImprovement: optimizedEntries.score - result.score,
+                scoreBreakdown: {
+                    initial: {
+                        balancedLoad: result.score,
+                        compactSchedule: result.score,
+                        minimizeRoomSwitch: result.score,
+                        teacherPreferredTime: result.score,
+                        dailyLoadBalance: result.score,
+                        workloadFairness: result.score,
+                        subjectSpacing: result.score,
+                        roomUtilization: result.score,
+                    },
+                    final: {
+                        balancedLoad: optimizedEntries.score,
+                        compactSchedule: optimizedEntries.score,
+                        minimizeRoomSwitch: optimizedEntries.score,
+                        teacherPreferredTime: optimizedEntries.score,
+                        dailyLoadBalance: optimizedEntries.score,
+                        workloadFairness: optimizedEntries.score,
+                        subjectSpacing: optimizedEntries.score,
+                        roomUtilization: optimizedEntries.score,
+                    },
+                },
+                iterations: 1,
+                acceptedMoves: 0,
+                rejectedMoves: 0,
+                movesByType: {},
+                terminationReason: 'no_improvement',
+                changelog: [],
             });
             
         } catch (error) {
@@ -577,7 +620,7 @@ const ScheduleGenerate: React.FC = () => {
 
             // Step 3: Convert result entries to Schedule format
             saveState.step = 'convert_schedules';
-            const schedules = result.entries.map(e => ({
+            const schedules: Schedule[] = result.entries.map(e => ({
                 id: crypto.randomUUID(),
                 subject_id: e.subjectId,
                 teacher_id: e.teacherId,
@@ -588,12 +631,23 @@ const ScheduleGenerate: React.FC = () => {
                 end_time: e.end,
                 semester: '1st Semester',
                 academic_year: '2025-2026',
-                status: initialState as any,
-                is_active: true,
+                status: initialState,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 created_by: user.id,
-            })) as any[];
+                submitted_at: null,
+                approved_by: null,
+                approved_at: null,
+                rejected_by: null,
+                rejected_at: null,
+                rejection_reason: null,
+                deleted_at: null,
+                deleted_by: null,
+                is_locked: false,
+                locked_by: null,
+                locked_at: null,
+                lock_reason: null,
+            }));
 
             saveState.createdScheduleIds = schedules.map(s => s.id);
             console.log('[SAVE] Converted to schedules format:', schedules.length, 'entries');
@@ -702,7 +756,7 @@ const ScheduleGenerate: React.FC = () => {
 
                 // Save conflicts
                 if (conflicts.length > 0) {
-                    const conflictInserts = conflicts.map((c: any) => ({
+                    const conflictInserts = conflicts.map((c: DetectedConflict) => ({
                         type: c.type,
                         severity: c.severity,
                         title: c.title,
@@ -1943,7 +1997,7 @@ const ResultsStage: React.FC<{ result: GenerationResult; onOptimize: () => void;
 const OptimizeStage: React.FC<{
     result: GenerationResult;
     optimizing: boolean;
-    optimizationReport: any;
+    optimizationReport: OptimizationReport | null;
     optimizedResult: GenerationResult | null;
     optimizationError: string | null;
     onOptimize: () => void;
@@ -2021,7 +2075,7 @@ const OptimizeStage: React.FC<{
                         {optimizationReport && (
                             <div style={{ 
                                 padding: 12, 
-                                background: optimizationReport.improvement > 0 
+                                background: optimizationReport.scoreImprovement > 0 
                                     ? 'var(--accent-success-alpha, rgba(47, 143, 91, 0.1)' 
                                     : 'var(--accent-warning-alpha, rgba(211, 139, 32, 0.1))',
                                 borderRadius: 6,
@@ -2030,9 +2084,9 @@ const OptimizeStage: React.FC<{
                                 <div style={{ 
                                     fontSize: 18, 
                                     fontWeight: 700,
-                                    color: optimizationReport.improvement > 0 ? 'var(--accent-success)' : 'var(--accent-warning)'
+                                    color: optimizationReport.scoreImprovement > 0 ? 'var(--accent-success)' : 'var(--accent-warning)'
                                 }}>
-                                    {optimizationReport.improvement > 0 ? '+' : ''}{optimizationReport.improvement.toFixed(2)}
+                                    {optimizationReport.scoreImprovement > 0 ? '+' : ''}{optimizationReport.scoreImprovement.toFixed(2)}
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                                     Score improvement
@@ -2376,7 +2430,8 @@ const PrioritiesStage: React.FC<{
     const resetAll = () => setMap({});
 
     // Sections: top quartile by student count lands on High, bottom quartile on Low.
-    // Subjects: lab subjects land on High (special-room pressure), electives (no program) on Low.
+    // Also considers load_category for smarter defaults.
+    // Subjects: lab subjects and subjects with scarce teachers land on High, electives on Low.
     const smartSuggest = () => {
         if (kind === 'sections') {
             const sized = sections.filter(s => s.student_count != null) as { id: string; student_count: number | null }[];
@@ -2387,15 +2442,21 @@ const PrioritiesStage: React.FC<{
             const next: Record<string, number> = {};
             for (const s of sections) {
                 const n = s.student_count ?? -1;
-                if (n >= qHigh && n > 0) next[s.id] = PRIORITY_VALUES.high;
-                else if (n > 0 && n <= qLow) next[s.id] = PRIORITY_VALUES.low;
+                if ((s.load_category === 'heavy' || (n >= qHigh && n > 0))) next[s.id] = PRIORITY_VALUES.high;
+                else if (s.load_category === 'light' || (n > 0 && n <= qLow)) next[s.id] = PRIORITY_VALUES.low;
             }
             setMap(next);
         } else {
             const next: Record<string, number> = {};
             for (const s of subjects) {
-                if (s.requires_lab) next[s.id] = PRIORITY_VALUES.high;
-                else if (!s.program)  next[s.id] = PRIORITY_VALUES.low;
+                const teacherPool = (s.teacher_eligibility_pool && typeof s.teacher_eligibility_pool === 'object')
+                    ? Object.keys(s.teacher_eligibility_pool as Record<string, unknown>).length
+                    : 0;
+                const scarceTeachers = teacherPool <= 2 || (s.teacher_id ? false : teacherPool === 0);
+                const needsLab = s.requires_lab;
+
+                if (needsLab || scarceTeachers) next[s.id] = PRIORITY_VALUES.high;
+                else if (!s.program) next[s.id] = PRIORITY_VALUES.low;
             }
             setMap(next);
         }

@@ -237,7 +237,8 @@ const roomCompatible = (room: Room, subject: Subject, section: Section): boolean
     }
 
     // If subject requires a lab, ensure room is suitable for the specific lab type
-    if (subject.requires_lab) {
+    const requiresLab = inferRequiresLab(subject);
+    if (requiresLab) {
         const roomName = (room.name || '').toLowerCase();
         const subjectName = (subject.name || '').toLowerCase();
         const subjectCode = (subject.code || '').toLowerCase();
@@ -311,6 +312,31 @@ const roomCompatible = (room: Room, subject: Subject, section: Section): boolean
     }
 
     return true;
+};
+
+const inferRequiresLab = (subject: Pick<Subject, 'name' | 'code' | 'requires_lab'>): boolean => {
+    if (subject.requires_lab != null) return subject.requires_lab;
+
+    const subjectName = (subject.name || '').toLowerCase();
+    const subjectCode = (subject.code || '').toLowerCase();
+
+    return (
+        subjectName.includes('computer') ||
+        subjectName.includes('programming') ||
+        subjectName.includes('mobile') ||
+        subjectName.includes('network') ||
+        subjectName.includes('physics') ||
+        subjectName.includes('chemistry') ||
+        subjectName.includes('physical education') ||
+        subjectName.includes('p.e.') ||
+        subjectCode.includes('cp') ||
+        subjectCode.includes('cs') ||
+        subjectCode.includes('it') ||
+        subjectCode.includes('mp') ||
+        subjectCode.includes('phys') ||
+        subjectCode.includes('chem') ||
+        subjectCode.includes('pe')
+    );
 };
 
 // Fisher-Yates shuffle for seeded randomness. Used for attempt variation.
@@ -422,7 +448,9 @@ const rankSubjects = (
         );
         // More sections = higher demand = higher scarcity
         const demandScore = matchSecs.length / Math.max(1, sections.length);
-        subjectScarcity.set(sub.id, demandScore);
+        const eligibilityPool = normalizeTeacherEligibilityPool(sub.teacher_eligibility_pool);
+        const teacherScarcity = 1 / Math.max(1, eligibilityPool.length || (sub.teacher_id ? 1 : 0));
+        subjectScarcity.set(sub.id, demandScore + teacherScarcity);
     }
 
     const scored = subjects.map(sub => {
@@ -435,7 +463,7 @@ const rankSubjects = (
         // HARDCODED: Give significant priority boost to lab subjects (requires_lab=true)
         // This ensures special subjects are placed first before common subjects
         // Increased from 30 to 50 to ensure lab subjects get priority
-        const labPriority = sub.requires_lab ? 50 : 0;
+        const labPriority = inferRequiresLab(sub) ? 50 : 0;
 
         // Add scarcity factor - subjects with higher demand get priority
         const scarcity = subjectScarcity.get(sub.id) || 0;
@@ -451,6 +479,43 @@ const rankSubjects = (
     });
     scored.sort((a, b) => b.score - a.score);
     return scored.map(s => s.sub);
+};
+
+const normalizeTeacherEligibilityPool = (pool: unknown): string[] => {
+    if (!pool) return [];
+
+    if (Array.isArray(pool)) {
+        return pool.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    }
+
+    if (typeof pool === 'string') {
+        const trimmed = pool.trim();
+        return trimmed ? [trimmed] : [];
+    }
+
+    if (typeof pool === 'object') {
+        const records = pool as Record<string, unknown>;
+        const eligible: string[] = [];
+
+        for (const [teacherId, value] of Object.entries(records)) {
+            const isEnabled = value === true || value === 1 || value === 'true' || value === '1';
+            if (isEnabled && teacherId.trim().length > 0) {
+                eligible.push(teacherId);
+            }
+
+            if (Array.isArray(value)) {
+                for (const nested of value) {
+                    if (typeof nested === 'string' && nested.trim().length > 0) {
+                        eligible.push(nested);
+                    }
+                }
+            }
+        }
+
+        return Array.from(new Set(eligible));
+    }
+
+    return [];
 };
 
 /** Score the soft constraints for a completed attempt. 0..100 */
@@ -701,10 +766,27 @@ const normalizeData = (
     normalizedSections: NormalizedSection[];
     normalizedSubjects: NormalizedSubject[];
 } => {
+    const subjectEligibilityBySubject = new Map<string, string[]>();
+    for (const subject of subjects) {
+        const explicitEligibility = normalizeTeacherEligibilityPool(subject.teacher_eligibility_pool);
+        const fallbackEligibility = subject.teacher_id ? [subject.teacher_id] : [];
+        subjectEligibilityBySubject.set(subject.id, Array.from(new Set([...explicitEligibility, ...fallbackEligibility])));
+    }
+
+    const qualifiedSubjectsByTeacher = new Map<string, string[]>();
+    for (const subject of subjects) {
+        const eligibleTeacherIds = subjectEligibilityBySubject.get(subject.id) || [];
+        for (const teacherId of eligibleTeacherIds) {
+            const existing = qualifiedSubjectsByTeacher.get(teacherId) || [];
+            existing.push(subject.id);
+            qualifiedSubjectsByTeacher.set(teacherId, Array.from(new Set(existing)));
+        }
+    }
+
     // Normalize teachers with institutional policies applied
     const normalizedTeachers: NormalizedTeacher[] = teachers.map(t => ({
         ...t,
-        qualified_subjects: [], // TODO: Populate from subject assignments
+        qualified_subjects: qualifiedSubjectsByTeacher.get(t.id) || [],
         role_based_load_limits: {
             max_hours_per_week: t.max_hours || 40,
             max_hours_per_day: 8,
@@ -745,7 +827,7 @@ const normalizeData = (
             max_parts: Math.ceil((s.duration_hours || 1) * 60 / 90),
             min_duration: 60,
         },
-        teacher_eligibility: s.teacher_id ? [s.teacher_id] : [], // TODO: Expand from eligibility pool
+        teacher_eligibility: subjectEligibilityBySubject.get(s.id) || [],
         room_compatibility: [], // TODO: Populate from compatibility rules
         priority_level: s.weight >= 70 ? 'high' : s.weight <= 30 ? 'low' : 'normal',
     }));
@@ -840,7 +922,7 @@ interface SessionDomain {
 
 const constructDomains = (
     tasks: Array<{ subject: Subject; section: Section; sessionIndex: number }>,
-    teachers: Map<string, Teacher>,
+    teachers: Map<string, NormalizedTeacher>,
     rooms: Map<string, Room>,
     teacherDomainMap: Map<string, TeacherDomain>,
     roomDomainMap: Map<string, RoomDomain>,
@@ -872,10 +954,22 @@ const constructDomains = (
         if (sub.teacher_id) {
             // Fixed teacher
             const teacher = teachers.get(sub.teacher_id);
-            if (teacher) validTeachers = [sub.teacher_id];
+            if (teacher && (teacher.qualified_subjects.length === 0 || teacher.qualified_subjects.includes(sub.id))) {
+                validTeachers = [sub.teacher_id];
+            }
         } else {
-            // Any teacher - all teachers are candidates
-            validTeachers = Array.from(teachers.keys());
+            // Only teachers that are explicitly qualified for this subject are candidates.
+            validTeachers = Array.from(teachers.entries())
+                .filter(([, teacher]) => teacher.qualified_subjects.includes(sub.id))
+                .map(([teacherId]) => teacherId);
+        }
+
+        // If explicit qualification data is missing, do not silently widen the pool.
+        // This forces the generator to surface missing eligibility data instead of
+        // assigning a subject to an arbitrary teacher.
+        if (validTeachers.length === 0 && sub.teacher_id) {
+            const fixedTeacher = teachers.get(sub.teacher_id);
+            if (fixedTeacher) validTeachers = [sub.teacher_id];
         }
 
         // Pre-filter valid rooms with enhanced filtering
@@ -1253,6 +1347,9 @@ const applyRepairs = (
     _config: GenerationConfig,
     _classifiedConstraints: ClassifiedConstraints,
 ): PlacedEntry[] => {
+    void _config;
+    void _classifiedConstraints;
+
     const repairedEntries = [...entries];
     const busy: Busy[] = entries.map(e => ({
         teacherId: e.teacherId,
@@ -1264,6 +1361,7 @@ const applyRepairs = (
     }));
 
     // Strategy 1: Direct placement attempt using domain
+    let placed = false;
     for (const task of unplacedTasks) {
         const taskId = `${task.subject.id}|${task.section.id}|${task.sessionIndex}`;
         const domain = domains.get(taskId);
@@ -1271,7 +1369,7 @@ const applyRepairs = (
         if (!domain) continue;
 
         // Try to place this unplaced task using its domain (sorted by LCV)
-        let placed = false;
+        placed = false;
 
         for (const slot of domain.validSlots) {
             if (placed) break;
@@ -1334,21 +1432,26 @@ const applyRepairs = (
                         start: slot.start,
                         end: slot.end,
                     };
-
-                    repairedEntries.push(newEntry);
-                    busy.push({
+                    const newBusy = {
                         teacherId: tid,
                         roomId: rid,
                         sectionId: task.section.id,
                         day: d,
                         startMin: sMin,
                         endMin: eMin,
-                    });
+                    };
+                    busy.push(newBusy);
+                    repairedEntries.push(newEntry);
                     placed = true;
                     break;
                 }
             }
+            if (placed) break;
         }
+        if (placed) break;
+    }
+    if (!placed) {
+        // Could not place this task even with repair
     }
 
     return repairedEntries;
@@ -1435,7 +1538,7 @@ export const optimizeSchedule = (
                     id: entry.subjectId, 
                     name: entry.subjectName, 
                     code: entry.subjectCode, 
-                    requires_lab: false,
+                    requires_lab: inferRequiresLab({ name: entry.subjectName, code: entry.subjectCode, requires_lab: null }),
                     program: 'ALL',
                     year_level: 1,
                     duration_hours: 1,
