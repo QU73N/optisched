@@ -193,12 +193,26 @@ CREATE POLICY profiles_update_own ON profiles FOR UPDATE
     WITH CHECK (auth.uid() = id);
 
 -- Allow admins to update profiles with role hierarchy
+-- IMPORTANT: Prevents updating Power Admin profiles unless updater is also Power Admin
 CREATE POLICY profiles_update_hierarchical ON profiles FOR UPDATE
     USING (
         EXISTS (
             SELECT 1 FROM profiles p
             WHERE p.id = auth.uid()
             AND p.role IN ('admin', 'power_admin', 'system_admin')
+        )
+        AND NOT (
+            -- Prevent updating Power Admin profiles unless updater is also Power Admin
+            EXISTS (
+                SELECT 1 FROM profiles target
+                WHERE target.id = profiles.id
+                AND target.role = 'power_admin'
+                AND NOT EXISTS (
+                    SELECT 1 FROM profiles updater
+                    WHERE updater.id = auth.uid()
+                    AND updater.role = 'power_admin'
+                )
+            )
         )
     )
     WITH CHECK (
@@ -207,9 +221,23 @@ CREATE POLICY profiles_update_hierarchical ON profiles FOR UPDATE
             WHERE p.id = auth.uid()
             AND p.role IN ('admin', 'power_admin', 'system_admin')
         )
+        AND NOT (
+            -- Prevent updating Power Admin profiles unless updater is also Power Admin
+            EXISTS (
+                SELECT 1 FROM profiles target
+                WHERE target.id = profiles.id
+                AND target.role = 'power_admin'
+                AND NOT EXISTS (
+                    SELECT 1 FROM profiles updater
+                    WHERE updater.id = auth.uid()
+                    AND updater.role = 'power_admin'
+                )
+            )
+        )
     );
 
 -- Allow admins to delete profiles
+-- IMPORTANT: Prevents deleting Power Admin profiles
 CREATE POLICY profiles_delete_hierarchical ON profiles FOR DELETE
     USING (
         EXISTS (
@@ -217,10 +245,63 @@ CREATE POLICY profiles_delete_hierarchical ON profiles FOR DELETE
             WHERE p.id = auth.uid()
             AND p.role IN ('admin', 'power_admin', 'system_admin')
         )
+        AND NOT (
+            -- Prevent deleting Power Admin profiles
+            EXISTS (
+                SELECT 1 FROM profiles target
+                WHERE target.id = profiles.id
+                AND target.role = 'power_admin'
+            )
+        )
     );
 
 -- ============================================================================
--- CRITICAL FIX 5: ENSURE HANDLE_NEW_USER TRIGGER IS IDEMPOTENT
+-- CRITICAL FIX 5: BEFORE DELETE TRIGGER FOR POWER ADMIN PROTECTION
+-- ============================================================================
+-- Raises an exception if anyone tries to delete a Power Admin profile
+
+CREATE OR REPLACE FUNCTION prevent_power_admin_delete()
+RETURNS trigger AS $$
+BEGIN
+    IF OLD.role = 'power_admin' THEN
+        RAISE EXCEPTION 'Cannot delete Power Admin profile. This action is not allowed.';
+    END IF;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop trigger if exists and recreate
+DROP TRIGGER IF EXISTS prevent_power_admin_delete_trigger ON profiles;
+CREATE TRIGGER prevent_power_admin_delete_trigger
+    BEFORE DELETE ON profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION prevent_power_admin_delete();
+
+-- ============================================================================
+-- CRITICAL FIX 5.5: BEFORE UPDATE TRIGGER TO PREVENT POWER ADMIN DEMOTION
+-- ============================================================================
+-- Raises an exception if anyone tries to change a Power Admin's role
+
+CREATE OR REPLACE FUNCTION prevent_power_admin_demotion()
+RETURNS trigger AS $$
+BEGIN
+    -- Prevent changing role from power_admin to anything else
+    IF OLD.role = 'power_admin' AND NEW.role <> 'power_admin' THEN
+        RAISE EXCEPTION 'Cannot demote Power Admin. This action is not allowed.';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop trigger if exists and recreate
+DROP TRIGGER IF EXISTS prevent_power_admin_demotion_trigger ON profiles;
+CREATE TRIGGER prevent_power_admin_demotion_trigger
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION prevent_power_admin_demotion();
+
+-- ============================================================================
+-- CRITICAL FIX 6: ENSURE HANDLE_NEW_USER TRIGGER IS IDEMPOTENT
 -- ============================================================================
 -- The trigger should not fail if profile already exists
 
@@ -252,7 +333,7 @@ CREATE TRIGGER on_auth_user_created
     EXECUTE FUNCTION handle_new_user();
 
 -- ============================================================================
--- CRITICAL FIX 6: FIX EMAIL MISMATCHES
+-- CRITICAL FIX 7: FIX EMAIL MISMATCHES
 -- ============================================================================
 -- Sync email addresses between auth.users and profiles (auth is source of truth)
 
@@ -263,7 +344,7 @@ WHERE p.id = au.id
 AND p.email <> au.email;
 
 -- ============================================================================
--- CRITICAL FIX 7: NORMALIZE EMAIL ADDRESSES
+-- CRITICAL FIX 8: NORMALIZE EMAIL ADDRESSES
 -- ============================================================================
 -- Ensure all emails are lowercase
 

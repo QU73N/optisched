@@ -2640,6 +2640,15 @@
 
   .lp-footer-top { grid-template-columns: 1fr; gap: 24px; }
   .lp-footer-about { grid-column: auto; }
+}
+
+@media (max-width: 400px) {
+  /* Hide theme toggles in nav on very small screens to ensure sign-in button is clearly visible */
+  .lp-nav-right .lp-theme-btn { display: none; }
+  .lp-nav-right { gap: 0; }
+}
+
+@media (max-width: 560px) {
   .lp-footer-bottom { flex-direction: column; align-items: flex-start; gap: 12px; }
 
   .lp-modal { padding: 28px 22px 24px; }

@@ -74,13 +74,18 @@ const ConflictsAlerts: React.FC = () => {
         let scheduleIds: Set<string> = new Set();
         
         if (versionId) {
-            // Fetch schedule snapshots for this version
-            const { data: snapshots } = await supabase
-                .from('schedule_version_snapshots')
-                .select('schedule_id')
-                .eq('version_id', versionId);
+            // Fetch the version's snapshot data
+            const { data: version } = await supabase
+                .from('schedule_versions')
+                .select('snapshot')
+                .eq('id', versionId)
+                .single();
             
-            scheduleIds = new Set((snapshots || []).map((s: { schedule_id: string }) => s.schedule_id));
+            if (version && version.snapshot) {
+                const snapshot = version.snapshot as { id: string }[] | { id: string };
+                const schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
+                scheduleIds = new Set(schedules.map((s) => s.id).filter((id): id is string => !!id));
+            }
         } else {
             // Build status filter based on selected version (legacy behavior)
             const statusFilter = selectedVersion === 'all' 

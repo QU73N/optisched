@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSchedules, useAnnouncements } from '../../hooks/useSupabase';
 import { useCustomEvents } from '../../hooks/useCustomEvents';
-import { Calendar, Clock, BookOpen, Megaphone, MapPin, Users, PieChart as PieIcon } from 'lucide-react';
+import { Calendar, Clock, BookOpen, Megaphone, MapPin, Users, PieChart as PieIcon, Bot, List } from 'lucide-react';
 import {
     Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie
@@ -13,6 +14,7 @@ import '../admin/Dashboard.css';
 
 const StudentDashboard: React.FC = () => {
     const { profile } = useAuth();
+    const navigate = useNavigate();
 
     const dayIndex = new Date().getDay();
     const isOffDay = dayIndex === 0;
@@ -140,6 +142,18 @@ const StudentDashboard: React.FC = () => {
                     <p>{ongoingClass ? `${ongoingClass.subject} with ${ongoingClass.teacher} in ${ongoingClass.room}` : nextClass ? `Next class: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}` : profile?.section ? `Section ${profile.section}` : 'Your daily schedule overview'}</p>
                 </div>
                 <span className="dash-day-badge">{isOffDay ? 'Tomorrow: Monday' : scheduleDayName}</span>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="dash-quick-actions" style={{ marginBottom: 24 }}>
+                <button className="dash-action-btn" onClick={() => navigate('/schedule')}>
+                    <div className="dash-action-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><List size={16} color="#60a5fa" /></div>
+                    View Full Schedule
+                </button>
+                <button className="dash-action-btn" onClick={() => navigate('/optibot')}>
+                    <div className="dash-action-icon" style={{ background: 'rgba(139,92,246,0.1)' }}><Bot size={16} color="#a78bfa" /></div>
+                    Open OptiBot
+                </button>
             </div>
 
             {/* Stats */}

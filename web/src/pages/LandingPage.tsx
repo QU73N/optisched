@@ -632,7 +632,7 @@ const HeroSection: React.FC<{ onLogin: () => void; onScrollTo: (id: string) => v
 const TrustStrip: React.FC = () => (
     <section className="lp-trust landing-container">
         <div className="lp-trust-row">
-            <span className="lp-trust-pill reveal"><Shield size={14} /> Argon2id Password Hashing</span>
+            <span className="lp-trust-pill reveal"><Shield size={14} /> Secure Password Hashing</span>
             <span className="lp-trust-pill reveal delay-1"><Scale size={14} /> Hard and Soft Constraints</span>
             <span className="lp-trust-pill reveal delay-2"><FileCheck size={14} /> Versioned and Audited</span>
             <span className="lp-trust-pill reveal delay-3"><Workflow size={14} /> Role Based Dashboards</span>

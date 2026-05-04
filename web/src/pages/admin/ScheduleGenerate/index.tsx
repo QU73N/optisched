@@ -125,7 +125,7 @@ const ScheduleGenerate: React.FC = () => {
                     scheduleVersionService.initialize(supabase, user.id);
                 }
                 
-                const [sub, t, r, sec, sch, prefs, prof] = await Promise.all([
+                const [sub, t, r, sec, sch, prefs, prof, sr] = await Promise.all([
                     supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id, teacher_eligibility_pool, sessions_per_week, weight, priority_note'),
                     supabase.from('teachers').select('id, max_hours, weight, priority_note, profile_id'),
                     supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available, weight, priority_note'),
@@ -133,6 +133,7 @@ const ScheduleGenerate: React.FC = () => {
                     supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at, batch_id'),
                     supabase.from('teacher_preferences').select('teacher_id, preferred_days, preferred_time_start, preferred_time_end, max_classes_per_day, max_consecutive_classes, availability'),
                     supabase.from('profiles').select('id, full_name'),
+                    supabase.from('subject_rooms').select('subject_id, room_id, priority'),
                 ]);
 
                 if (t.error) {
@@ -182,7 +183,20 @@ const ScheduleGenerate: React.FC = () => {
                 profileById.set(p.id, p);
             }
 
-            setSubjects((sub.data as unknown as Subject[]) || []);
+            // Populate compatible_rooms from subject_rooms data
+            const subjectRoomsMap = new Map<string, Array<{ room_id: string; priority: number }>>();
+            for (const row of (sr.data as unknown as { subject_id: string; room_id: string; priority: number }[]) || []) {
+                const existing = subjectRoomsMap.get(row.subject_id) || [];
+                existing.push({ room_id: row.room_id, priority: row.priority });
+                subjectRoomsMap.set(row.subject_id, existing);
+            }
+
+            setSubjects(
+                ((sub.data as unknown as Subject[]) || []).map(s => ({
+                    ...s,
+                    compatible_rooms: subjectRoomsMap.get(s.id) || [],
+                }))
+            );
             setTeachers(
                 ((t.data as unknown as { id: string; max_hours: number | null; weight: number; priority_note: string | null; profile_id: string | null }[]) || [])
                     .map(x => {
@@ -1914,12 +1928,13 @@ const ResultsStage: React.FC<{ result: GenerationResult; onOptimize: () => void;
     const perfect = result.placed === result.total && result.errors.length === 0;
     const scoreRounded = result.score.toFixed(2);
     const unplacedCount = result.total - result.placed;
+    const noSessionsPlaced = result.placed === 0;
 
     return (
         <div>
             <StageHeader
-                icon={perfect ? <CheckCircle size={16} /> : <Layers size={16} />}
-                title={perfect ? 'Schedule ready' : 'Partial schedule'}
+                icon={perfect ? <CheckCircle size={16} /> : noSessionsPlaced ? <XCircle size={16} /> : <Layers size={16} />}
+                title={perfect ? 'Schedule ready' : noSessionsPlaced ? 'Generation failed' : 'Partial schedule'}
                 desc={`${result.placed} of ${result.total} sessions placed. Soft score ${scoreRounded} out of 100.${!perfect && unplacedCount > 0 ? ` ${unplacedCount} session${unplacedCount === 1 ? '' : 's'} could not be placed.` : ''}`}
             />
 
@@ -2440,24 +2455,43 @@ const PrioritiesStage: React.FC<{
             const counts = sized.map(s => s.student_count || 0).sort((a, b) => a - b);
             const qHigh = counts[Math.floor(counts.length * 0.75)] ?? counts[counts.length - 1];
             const qLow  = counts[Math.floor(counts.length * 0.25)] ?? counts[0];
+            const hasVariance = counts[0] !== counts[counts.length - 1]; // Check if there's actual variance
             for (const s of sections) {
                 const n = s.student_count ?? -1;
-                if ((s.load_category === 'heavy' || (n >= qHigh && n > 0))) sectionPriorities[s.id] = PRIORITY_VALUES.high;
-                else if (s.load_category === 'light' || (n > 0 && n <= qLow)) sectionPriorities[s.id] = PRIORITY_VALUES.low;
+                // Only use quartile logic if there's actual variance in student counts
+                if (s.load_category === 'heavy' || (hasVariance && n >= qHigh && n > 0)) {
+                    sectionPriorities[s.id] = PRIORITY_VALUES.high;
+                } else if (s.load_category === 'light' || (hasVariance && n > 0 && n <= qLow)) {
+                    sectionPriorities[s.id] = PRIORITY_VALUES.low;
+                }
             }
         }
 
         // Configure subjects priorities
         const subjectPriorities: Record<string, number> = {};
+
+        // First, check if all subjects have the same teacher pool size (e.g., all 0)
+        const teacherPools = subjects.map(s => {
+            const pool = (s.teacher_eligibility_pool && typeof s.teacher_eligibility_pool === 'object')
+                ? Object.keys(s.teacher_eligibility_pool as Record<string, unknown>).length
+                : 0;
+            return pool;
+        });
+        const hasTeacherVariance = new Set(teacherPools).size > 1;
+
         for (const s of subjects) {
             const teacherPool = (s.teacher_eligibility_pool && typeof s.teacher_eligibility_pool === 'object')
                 ? Object.keys(s.teacher_eligibility_pool as Record<string, unknown>).length
                 : 0;
-            const scarceTeachers = teacherPool <= 2 || (s.teacher_id ? false : teacherPool === 0);
+            // Only consider teachers scarce if there's variance in teacher pools
+            const scarceTeachers = hasTeacherVariance && (teacherPool <= 2 || (s.teacher_id ? false : teacherPool === 0));
             const needsLab = s.requires_lab;
 
-            if (needsLab || scarceTeachers) subjectPriorities[s.id] = PRIORITY_VALUES.high;
-            else if (!s.program) subjectPriorities[s.id] = PRIORITY_VALUES.low;
+            if (needsLab || scarceTeachers) {
+                subjectPriorities[s.id] = PRIORITY_VALUES.high;
+            } else if (!s.program) {
+                subjectPriorities[s.id] = PRIORITY_VALUES.low;
+            }
         }
 
         // Update both sections and subjects priorities simultaneously

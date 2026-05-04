@@ -1,67 +1,76 @@
 // ApprovalsPage - Schedule Admin / Power Admin approval queue.
-// Lists schedules with status='submitted' and lets approvers approve, reject,
-// or request changes. Inline preview of conflicts attached to each schedule.
+// Lists schedule versions with change_type='submitted' and lets approvers approve, reject,
+// or request changes. Inline preview of conflicts attached to each version.
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { logAudit } from '../../hooks/useActivityLogger';
+import { scheduleVersionService } from '../../services/scheduleVersionService';
 import {
     CheckCircle, XCircle, Clock, AlertTriangle, Loader2, Lock,
-    Inbox, MessageSquare, RefreshCw, Filter
+    Inbox, MessageSquare, RefreshCw
 } from 'lucide-react';
 import './Dashboard.css';
 
-interface SubmittedSchedule {
+interface SubmittedVersion {
     id: string;
-    submitted_at: string | null;
-    created_by: string | null;
-    section_id: string | null;
+    version_number: number;
+    change_type: string;
+    changed_at: string;
+    changed_by: string | null;
+    batch_id: string | null;
     semester: string;
     academic_year: string;
-    section?: { name: string } | { name: string }[] | null;
+    conflict_count: number;
     creator?: { full_name: string } | { full_name: string }[] | null;
 }
-interface ConflictLite { id: string; type: string; severity: string; title: string; }
 
 const ApprovalsPage: React.FC = () => {
-    const { profile } = useAuth();
+    const { user } = useAuth();
     const perms = usePermissions();
     const [loading, setLoading] = useState(true);
     const [acting, setActing] = useState<string | null>(null);
-    const [items, setItems] = useState<SubmittedSchedule[]>([]);
-    const [conflictsBySched, setConflictsBySched] = useState<Record<string, ConflictLite[]>>({});
+    const [items, setItems] = useState<SubmittedVersion[]>([]);
     const [filter, setFilter] = useState<'all' | 'with-conflicts' | 'no-conflicts'>('all');
     const [showRejectFor, setShowRejectFor] = useState<string | null>(null);
     const [rejectReason, setRejectReason] = useState('');
 
+    // Initialize scheduleVersionService
+    useEffect(() => {
+        if (user && supabase) {
+            scheduleVersionService.initialize(supabase, user.id);
+        }
+    }, [user]);
+
     const load = async () => {
         setLoading(true);
         try {
-            const { data } = await supabase
+            // First, find all batches that have submitted schedules
+            const { data: submittedSchedules } = await supabase
                 .from('schedules')
-                .select('id, submitted_at, created_by, section_id, semester, academic_year, section:sections(name), creator:profiles!schedules_created_by_fkey(full_name)')
+                .select('batch_id')
                 .eq('status', 'submitted')
-                .order('submitted_at', { ascending: true });
-            const list = ((data || []) as unknown) as SubmittedSchedule[];
-            setItems(list);
-
-            if (list.length) {
-                const ids = list.map(s => s.id);
-                const { data: confs } = await supabase
-                    .from('conflicts')
-                    .select('id, type, severity, title, schedule_a_id')
-                    .eq('is_resolved', false)
-                    .in('schedule_a_id', ids);
-                const map: Record<string, ConflictLite[]> = {};
-                (confs || []).forEach((c: { schedule_a_id: string; id: string; type: string; severity: string; title: string }) => {
-                    const key = c.schedule_a_id;
-                    if (!map[key]) map[key] = [];
-                    map[key].push({ id: c.id, type: c.type, severity: c.severity, title: c.title });
-                });
-                setConflictsBySched(map);
+                .not('batch_id', 'is', null);
+            
+            if (!submittedSchedules || submittedSchedules.length === 0) {
+                setItems([]);
+                setLoading(false);
+                return;
             }
+            
+            const batchIds = [...new Set(submittedSchedules.map(s => s.batch_id))];
+            
+            // Then fetch the versions for those batches with change_type='status_change'
+            const { data } = await supabase
+                .from('schedule_versions')
+                .select('id, version_number, change_type, changed_at, changed_by, batch_id, semester, academic_year, conflict_count, creator:profiles!schedule_versions_changed_by_fkey(full_name)')
+                .in('batch_id', batchIds)
+                .eq('change_type', 'status_change')
+                .order('changed_at', { ascending: true });
+            const list = ((data || []) as unknown) as SubmittedVersion[];
+            setItems(list);
         } catch (err) {
             console.error('[Approvals] load failed', err);
         } finally {
@@ -71,12 +80,7 @@ const ApprovalsPage: React.FC = () => {
 
     useEffect(() => { if (perms.canApproveSchedules) load(); }, [perms.canApproveSchedules]);
 
-    const sectionName = (s: SubmittedSchedule['section']): string => {
-        if (!s) return 'Schedule';
-        if (Array.isArray(s)) return s[0]?.name || 'Schedule';
-        return s.name;
-    };
-    const creatorName = (s: SubmittedSchedule['creator']): string => {
+    const creatorName = (s: SubmittedVersion['creator']): string => {
         if (!s) return 'Unknown';
         if (Array.isArray(s)) return s[0]?.full_name || 'Unknown';
         return s.full_name;
@@ -84,26 +88,25 @@ const ApprovalsPage: React.FC = () => {
 
     const filtered = useMemo(() => {
         return items.filter(i => {
-            const has = (conflictsBySched[i.id] || []).length > 0;
+            const has = (i.conflict_count || 0) > 0;
             if (filter === 'with-conflicts') return has;
             if (filter === 'no-conflicts') return !has;
             return true;
         });
-    }, [items, conflictsBySched, filter]);
+    }, [items, filter]);
 
     const approve = async (id: string) => {
+        const batchId = items.find(i => i.id === id)?.batch_id;
+        if (!batchId) return;
         setActing(id);
         try {
-            const { error } = await supabase
-                .from('schedules')
-                .update({
-                    status: 'published',
-                    approved_by: profile?.id,
-                    approved_at: new Date().toISOString(),
-                })
-                .eq('id', id);
-            if (error) throw error;
-            await logAudit('schedule.approve', 'schedules', id);
+            const res = await (scheduleVersionService as { approveSchedule: (id: string, opts: { changeReason: string }) => Promise<{ success: boolean; message: string }> }).approveSchedule(batchId, { changeReason: 'Approved from approvals page' });
+            if (!res.success) throw new Error(res.message);
+            
+            const pubRes = await (scheduleVersionService as { publishApprovedSchedule: (id: string, opts: { changeReason: string }) => Promise<{ success: boolean; message: string }> }).publishApprovedSchedule(batchId, { changeReason: 'Published from approvals page' });
+            if (!pubRes.success) throw new Error(pubRes.message);
+            
+            await logAudit('schedule.approve', 'schedule_versions', id);
             setItems(prev => prev.filter(i => i.id !== id));
         } catch (err) {
             console.error('[Approvals] approve failed', err);
@@ -120,23 +123,48 @@ const ApprovalsPage: React.FC = () => {
         }
         setActing(id);
         try {
-            const { error } = await supabase
+            const batchId = items.find(i => i.id === id)?.batch_id;
+            if (!batchId) throw new Error('Batch ID not found');
+            
+            // Update schedules to rejected status
+            const { error: scheduleError } = await supabase
                 .from('schedules')
-                .update({
+                .update({ 
                     status: 'rejected',
                     rejection_reason: rejectReason.trim(),
+                    rejected_at: new Date().toISOString(),
+                    rejected_by: user?.id
                 })
-                .eq('id', id);
-            if (error) throw error;
-            await logAudit('schedule.reject', 'schedules', id, { reason: rejectReason.trim() });
+                .eq('batch_id', batchId)
+                .eq('status', 'submitted');
+            
+            if (scheduleError) throw scheduleError;
+            
+            // Create a new version to record the rejection using RPC
+            const { error: versionError } = await supabase
+                .rpc('create_batch_version', {
+                    p_batch_id: batchId,
+                    p_change_type: 'status_change',
+                    p_change_summary: 'Schedule rejected',
+                    p_change_reason: rejectReason.trim(),
+                    p_state_hash: '',
+                    p_soft_score: 0,
+                    p_conflict_count: 0,
+                    p_changed_by: user?.id,
+                    p_previous_version_id: id
+                });
+            
+            if (versionError) throw versionError;
+            
+            await logAudit('schedule.reject', 'schedule_versions', id);
             setItems(prev => prev.filter(i => i.id !== id));
-            setShowRejectFor(null);
-            setRejectReason('');
         } catch (err) {
             console.error('[Approvals] reject failed', err);
             alert('Failed to reject. Check console.');
         } finally {
             setActing(null);
+            setShowRejectFor(null);
+            setRejectReason('');
         }
     };
 
@@ -153,18 +181,50 @@ const ApprovalsPage: React.FC = () => {
             <div className="dashboard-header">
                 <h1 className="dashboard-title"><CheckCircle size={20} /> Approvals</h1>
                 <p className="dashboard-subtitle">
-                    Review submitted schedules. Approving publishes them to teachers and students immediately.
+                    Review submitted schedule versions. Approving publishes them to teachers and students immediately.
                 </p>
             </div>
 
             <div className="audit-toolbar">
-                <div style={{ flex: 1 }} />
-                <div className="audit-time-range">
-                    <button className={`audit-time-pill ${filter === 'all' ? 'audit-time-pill-active' : ''}`} onClick={() => setFilter('all')}><Filter size={11} /> All ({items.length})</button>
-                    <button className={`audit-time-pill ${filter === 'with-conflicts' ? 'audit-time-pill-active' : ''}`} onClick={() => setFilter('with-conflicts')}>With conflicts</button>
-                    <button className={`audit-time-pill ${filter === 'no-conflicts' ? 'audit-time-pill-active' : ''}`} onClick={() => setFilter('no-conflicts')}>Clean</button>
+                <div style={{ flex: 1 }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>
+                        {items.length} version{items.length !== 1 ? 's' : ''} pending approval
+                    </span>
                 </div>
-                <button className="btn btn-secondary" onClick={load} aria-label="Refresh approvals list"><RefreshCw size={14} /></button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div className="audit-time-range">
+                        <button 
+                            className={`audit-time-pill ${filter === 'all' ? 'audit-time-pill-active' : ''}`} 
+                            onClick={() => setFilter('all')}
+                            style={{ padding: '6px 12px', fontSize: 13 }}
+                        >
+                            All ({items.length})
+                        </button>
+                        <button 
+                            className={`audit-time-pill ${filter === 'with-conflicts' ? 'audit-time-pill-active' : ''}`} 
+                            onClick={() => setFilter('with-conflicts')}
+                            style={{ padding: '6px 12px', fontSize: 13 }}
+                        >
+                            <AlertTriangle size={11} style={{ marginRight: 4 }} /> With conflicts
+                        </button>
+                        <button 
+                            className={`audit-time-pill ${filter === 'no-conflicts' ? 'audit-time-pill-active' : ''}`} 
+                            onClick={() => setFilter('no-conflicts')}
+                            style={{ padding: '6px 12px', fontSize: 13 }}
+                        >
+                            <CheckCircle size={11} style={{ marginRight: 4 }} /> Clean
+                        </button>
+                    </div>
+                    <button 
+                        className="btn btn-secondary" 
+                        onClick={load} 
+                        aria-label="Refresh approvals list"
+                        style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                        <RefreshCw size={14} />
+                        <span style={{ fontSize: 13 }}>Refresh</span>
+                    </button>
+                </div>
             </div>
 
             {loading ? (
@@ -174,19 +234,18 @@ const ApprovalsPage: React.FC = () => {
             ) : (
                 <div className="dash-list" style={{ gap: 10 }}>
                     {filtered.map(item => {
-                        const confs = conflictsBySched[item.id] || [];
                         const isRejecting = showRejectFor === item.id;
                         const isActing = acting === item.id;
                         return (
                             <div key={item.id} className="dash-card dash-stagger" style={{ padding: 14 }}>
                                 <div className="dash-card-header" style={{ marginBottom: 10 }}>
                                     <div className="dash-card-title">
-                                        <Clock size={16} /> {sectionName(item.section)}
+                                        <Clock size={16} /> Version {item.version_number}
                                     </div>
-                                    {confs.length > 0 ? (
+                                    {(item.conflict_count || 0) > 0 ? (
                                         <span className="dash-card-badge dash-badge-warning">
                                             <AlertTriangle size={11} style={{ marginRight: 4 }} />
-                                            {confs.length} conflict{confs.length !== 1 ? 's' : ''}
+                                            {item.conflict_count} conflict{item.conflict_count !== 1 ? 's' : ''}
                                         </span>
                                     ) : (
                                         <span className="dash-card-badge dash-badge-success">
@@ -196,22 +255,9 @@ const ApprovalsPage: React.FC = () => {
                                 </div>
                                 <div className="dash-meta-text">
                                     Submitted by <strong>{creatorName(item.creator)}</strong>
-                                    {item.submitted_at && <> · {new Date(item.submitted_at).toLocaleString()}</>}
+                                    {item.changed_at && <> · {new Date(item.changed_at).toLocaleString()}</>}
                                     {' · '}{item.semester} {item.academic_year}
                                 </div>
-
-                                {confs.length > 0 && (
-                                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        {confs.slice(0, 3).map(c => (
-                                            <div key={c.id} style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <AlertTriangle size={11} color={c.severity === 'high' ? '#ef4444' : '#f59e0b'} />
-                                                <code style={{ fontSize: 11 }}>{c.type.replace(/_/g, ' ')}</code>
-                                                <span>{c.title}</span>
-                                            </div>
-                                        ))}
-                                        {confs.length > 3 && <div className="dash-meta-text">…and {confs.length - 3} more</div>}
-                                    </div>
-                                )}
 
                                 {isRejecting ? (
                                     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -237,7 +283,7 @@ const ApprovalsPage: React.FC = () => {
                                         <button className="btn btn-secondary" onClick={() => setShowRejectFor(item.id)} disabled={isActing}>
                                             <XCircle size={14} /> Reject
                                         </button>
-                                        <button className="btn btn-secondary" onClick={() => window.open(`/admin/schedules?id=${item.id}`, '_blank')}>
+                                        <button className="btn btn-secondary" onClick={() => window.open(`/admin/schedules/current?version=${item.id}`, '_blank')}>
                                             <MessageSquare size={14} /> View Detail
                                         </button>
                                     </div>

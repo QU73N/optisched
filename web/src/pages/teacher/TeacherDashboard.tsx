@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSchedules, useAnnouncements, useScheduleChangeRequests, useSections } from '../../hooks/useSupabase';
@@ -6,12 +7,13 @@ import { useCustomEvents } from '../../hooks/useCustomEvents';
 import {
     Calendar, Clock, CheckCircle, BookOpen, Users, MessageSquare,
     AlertTriangle, Plus, Send, X, Megaphone, MapPin, ArrowRightLeft, FileText,
-    XCircle
+    XCircle, Settings
 } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 const TeacherDashboard: React.FC = () => {
     const { profile } = useAuth();
+    const navigate = useNavigate();
 
     // Today's schedule
     const dayIndex = new Date().getDay();
@@ -22,6 +24,49 @@ const TeacherDashboard: React.FC = () => {
     const { requests, submitRequest } = useScheduleChangeRequests();
     const { sections } = useSections();
     const { events: upcomingEvents, createEvent, deleteEvent } = useCustomEvents(undefined, true);
+
+    // Teacher data (max_hours)
+    const [teacherData, setTeacherData] = useState<any>(null);
+    const [weeklySchedules, setWeeklySchedules] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (!profile?.full_name) return;
+        (async () => {
+            // Fetch teacher data
+            const { data: teacher } = await supabase
+                .from('teachers')
+                .select('max_hours, current_load_percentage')
+                .eq('profile_id', profile.id)
+                .single();
+            setTeacherData(teacher);
+
+            // Fetch weekly schedules for this teacher
+            const { data: weekData } = await supabase
+                .from('schedules')
+                .select('day_of_week, start_time, end_time, teacher:teachers(profile_id)')
+                .eq('status', 'published')
+                .eq('is_active', true);
+            
+            const myWeekly = (weekData || []).filter((s: any) => s.teacher?.profile_id === profile.id);
+            setWeeklySchedules(myWeekly);
+        })();
+    }, [profile?.id, profile?.full_name]);
+
+    // Calculate weekly hours
+    const weeklyHours = useMemo(() => {
+        return weeklySchedules.reduce((total: number, s: any) => {
+            const [sh, sm] = (s.start_time || '0:0').split(':').map(Number);
+            const [eh, em] = (s.end_time || '0:0').split(':').map(Number);
+            const duration = Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
+            return total + duration;
+        }, 0);
+    }, [weeklySchedules]);
+
+    // Calculate utilization percentage
+    const utilizationPercentage = useMemo(() => {
+        if (!teacherData?.max_hours || teacherData.max_hours === 0) return 0;
+        return Math.round((weeklyHours / teacherData.max_hours) * 100);
+    }, [weeklyHours, teacherData?.max_hours]);
 
     // Filter schedules for this teacher
     const schedules = useMemo(() => {
@@ -290,24 +335,38 @@ const TeacherDashboard: React.FC = () => {
                 </div>
                 <div className="stat-card dash-stagger">
                     <div className="stat-card-header">
-                        <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.1)' }}><CheckCircle size={16} color="#10b981" /></div>
+                        <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.1)' }}><Clock size={16} color="#10b981" /></div>
                     </div>
-                    <div className="stat-number">{todaySchedule.filter(s => s.status === 'finished').length}</div>
-                    <div className="stat-label">Completed</div>
+                    <div className="stat-number">{weeklyHours.toFixed(1)}h</div>
+                    <div className="stat-label">Weekly Hours</div>
                 </div>
                 <div className="stat-card dash-stagger">
                     <div className="stat-card-header">
-                        <div className="stat-icon" style={{ background: 'rgba(167,139,250,0.1)' }}><Users size={16} color="#a78bfa" /></div>
+                        <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.1)' }}><Users size={16} color="#f59e0b" /></div>
                     </div>
-                    <div className="stat-number">{schedules.length}</div>
-                    <div className="stat-label">Total Entries</div>
+                    <div className="stat-number">{teacherData?.max_hours || 'N/A'}</div>
+                    <div className="stat-label">Max Hours</div>
                 </div>
                 <div className="stat-card dash-stagger">
                     <div className="stat-card-header">
-                        <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.1)' }}><Megaphone size={16} color="#f59e0b" /></div>
+                        <div className="stat-icon" style={{ background: 'rgba(139,92,246,0.1)' }}><CheckCircle size={16} color="#a78bfa" /></div>
+                    </div>
+                    <div className="stat-number">{utilizationPercentage}%</div>
+                    <div className="stat-label">Utilization</div>
+                </div>
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(167,139,250,0.1)' }}><Megaphone size={16} color="#a78bfa" /></div>
                     </div>
                     <div className="stat-number">{announcements.length}</div>
                     <div className="stat-label">Announcements</div>
+                </div>
+                <div className="stat-card dash-stagger">
+                    <div className="stat-card-header">
+                        <div className="stat-icon" style={{ background: 'rgba(239,68,68,0.1)' }}><AlertTriangle size={16} color="#ef4444" /></div>
+                    </div>
+                    <div className="stat-number">{requests.filter(r => r.status === 'pending').length}</div>
+                    <div className="stat-label">Pending Requests</div>
                 </div>
             </div>
 
@@ -452,6 +511,10 @@ const TeacherDashboard: React.FC = () => {
                             <button className="dash-action-btn" onClick={() => setShowEventModal(true)}>
                                 <div className="dash-action-icon" style={{ background: 'rgba(16,185,129,0.1)' }}><Plus size={16} color="#34d399" /></div>
                                 Create Event
+                            </button>
+                            <button className="dash-action-btn" onClick={() => navigate('/settings')}>
+                                <div className="dash-action-icon" style={{ background: 'rgba(139,92,246,0.1)' }}><Settings size={16} color="#a78bfa" /></div>
+                                View Preferences
                             </button>
                         </div>
                     </div>

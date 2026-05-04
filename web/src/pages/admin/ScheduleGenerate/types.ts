@@ -27,6 +27,8 @@ export interface Subject {
     teacher_eligibility_pool?: Record<string, unknown>; // which teachers can teach this
     // For split sessions: number of sessions per week (calculated from duration_hours / session_minutes if not set)
     sessions_per_week?: number | null;
+    // Compatible rooms from subject_rooms junction table (array of room IDs with priority)
+    compatible_rooms?: Array<{ room_id: string; priority: number }>;
 }
 
 export interface Teacher {

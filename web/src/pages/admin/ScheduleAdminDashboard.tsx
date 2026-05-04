@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     CheckCircle, XCircle, Clock, AlertTriangle, CalendarDays,
-    Inbox, ArrowRightLeft, Loader2, TrendingUp, BarChart3
+    Inbox, ArrowRightLeft, Loader2, TrendingUp, BarChart3, Edit, Megaphone, Check
 } from 'lucide-react';
 import {
     XAxis, YAxis, CartesianGrid,
@@ -175,6 +175,16 @@ const ScheduleAdminDashboard: React.FC = () => {
         } catch (err) { console.error('reject failed:', err); }
     };
 
+    const handleResolveChangeRequest = async (id: string) => {
+        try {
+            await supabase
+                .from('schedule_change_requests')
+                .update({ status: 'resolved' })
+                .eq('id', id);
+            setPendingChangeRequests(prev => prev.filter(p => p.id !== id));
+        } catch (err) { console.error('resolve failed:', err); }
+    };
+
     if (loading) {
         return (
             <div className="dashboard">
@@ -216,6 +226,14 @@ const ScheduleAdminDashboard: React.FC = () => {
                 </div>
             </div>
 
+            {/* Quick Actions */}
+            <div className="dash-quick-actions" style={{ marginBottom: 24 }}>
+                <a href="/admin/announcements" className="dash-action-btn">
+                    <div className="dash-action-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><Megaphone size={16} color="#60a5fa" /></div>
+                    Post Announcement
+                </a>
+            </div>
+
             <div className="admin-dash-grid">
                 <div className="admin-dash-left">
                     {/* Approval queue */}
@@ -240,6 +258,9 @@ const ScheduleAdminDashboard: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="dash-icon-group" style={{ gap: 6 }}>
+                                            <a href={`/admin/schedules/${s.id}`} className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11 }}>
+                                                <Edit size={12} /> Edit
+                                            </a>
                                             <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleApprove(s.id)}>
                                                 <CheckCircle size={12} /> Approve
                                             </button>
@@ -249,7 +270,7 @@ const ScheduleAdminDashboard: React.FC = () => {
                                         </div>
                                     </div>
                                 ))}
-                                <a href="/admin/schedules" className="btn btn-secondary dash-view-all-link">View All</a>
+                                <a href="/admin/schedules/versions" className="btn btn-secondary dash-view-all-link">View All</a>
                             </div>
                         )}
                     </div>
@@ -274,6 +295,11 @@ const ScheduleAdminDashboard: React.FC = () => {
                                             <div className="dash-list-item-desc">
                                                 {r.reason?.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.MESSAGE_TRUNCATION) || '—'}
                                             </div>
+                                        </div>
+                                        <div className="dash-icon-group" style={{ gap: 6 }}>
+                                            <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => handleResolveChangeRequest(r.id)}>
+                                                <Check size={12} /> Resolve
+                                            </button>
                                         </div>
                                     </div>
                                 ))}

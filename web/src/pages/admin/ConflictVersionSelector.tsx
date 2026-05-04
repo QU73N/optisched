@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { History, Search, Clock, Layers, AlertTriangle, ArrowRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -10,8 +10,9 @@ interface ScheduleVersion {
     is_active: boolean;
     change_type: string;
     change_summary: string;
-    created_at: string;
-    created_by: string;
+    changed_at: string;
+    changed_by: string;
+    snapshot?: unknown;
     schedule_count?: number;
 }
 
@@ -19,53 +20,37 @@ const ConflictVersionSelector: React.FC = () => {
     const navigate = useNavigate();
     const [versions, setVersions] = useState<ScheduleVersion[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all');
+    const [filter, setFilter] = useState<'all' | 'published' | 'draft' | 'previous'>('all');
     const [searchQuery, setSearchQuery] = useState('');
 
-    useEffect(() => {
-        fetchVersions();
-    }, [filter]);
-
-    const fetchVersions = async () => {
+    const fetchVersions = useCallback(async () => {
         setLoading(true);
         try {
             let query = supabase
                 .from('schedule_versions')
-                .select('*')
-                .order('created_at', { ascending: false })
+                .select('id, version_number, is_active, change_type, change_summary, changed_at, changed_by, snapshot')
+                .order('changed_at', { ascending: false })
                 .limit(50);
 
-            if (filter !== 'all') {
-                // Filter by checking if the associated schedules have the desired status
-                // This is a simplified approach - in production, you'd want a more efficient query
-                const { data: schedules } = await supabase
-                    .from('schedules')
-                    .select('id, status')
-                    .eq('status', filter);
-                
-                if (schedules && schedules.length > 0) {
-                    const scheduleIds = schedules.map(s => s.id);
-                    query = query.in('id', scheduleIds);
-                } else {
-                    setVersions([]);
-                    setLoading(false);
-                    return;
-                }
+            // Filter based on change_type and is_active
+            if (filter === 'published') {
+                query = query.eq('change_type', 'published').eq('is_active', true);
+            } else if (filter === 'draft') {
+                query = query.eq('change_type', 'created');
+            } else if (filter === 'previous') {
+                query = query.eq('is_active', false).neq('change_type', 'created');
             }
 
             const { data, error } = await query;
             if (error) throw error;
             
-            // Add schedule count for each version
-            const versionsWithCounts = await Promise.all(
-                (data || []).map(async (v: ScheduleVersion) => {
-                    const { count } = await supabase
-                        .from('schedule_version_snapshots')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('version_id', v.id);
-                    return { ...v, schedule_count: count || 0 };
-                })
-            );
+            // Add schedule count for each version from the snapshot
+            const versionsWithCounts = (data || []).map((v: ScheduleVersion) => {
+                const snapshot = v.snapshot as unknown[] | undefined;
+                const schedules = Array.isArray(snapshot) ? snapshot : [];
+                const count = schedules.length;
+                return { ...v, schedule_count: count };
+            });
 
             setVersions(versionsWithCounts);
         } catch (err) {
@@ -73,7 +58,11 @@ const ConflictVersionSelector: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [filter]);
+
+    useEffect(() => {
+        fetchVersions();
+    }, [fetchVersions]);
 
     const filteredVersions = versions.filter(v => {
         if (searchQuery) {
@@ -82,7 +71,7 @@ const ConflictVersionSelector: React.FC = () => {
                 v.change_summary?.toLowerCase().includes(query) ||
                 v.change_type?.toLowerCase().includes(query) ||
                 v.version_number.toString().includes(query) ||
-                v.created_by.toLowerCase().includes(query)
+                v.changed_by.toLowerCase().includes(query)
             );
         }
         return true;
@@ -156,6 +145,12 @@ const ConflictVersionSelector: React.FC = () => {
                     >
                         Draft
                     </button>
+                    <button
+                        className={`sg-chip ${filter === 'previous' ? 'sg-chip-active' : ''}`}
+                        onClick={() => setFilter('previous')}
+                    >
+                        Previous
+                    </button>
                 </div>
             </div>
 
@@ -210,7 +205,7 @@ const ConflictVersionSelector: React.FC = () => {
                                             <Layers size={12} /> {v.schedule_count || 0} schedules
                                         </span>
                                         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                            <Clock size={12} /> {formatDate(v.created_at)}
+                                            <Clock size={12} /> {formatDate(v.changed_at)}
                                         </span>
                                     </div>
                                 </div>

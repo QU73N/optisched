@@ -8,8 +8,10 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { History, CheckCircle, AlertTriangle, ArrowRight, ArrowLeft, FileText } from 'lucide-react';
+import { History, CheckCircle, AlertTriangle, ArrowRight, FileText, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
+import { logAudit } from '../../services/auditService';
 import '../admin/Dashboard.css';
 
 interface ScheduleVersion {
@@ -26,11 +28,15 @@ interface ScheduleVersion {
 
 const ScheduleVersions: React.FC = () => {
     const navigate = useNavigate();
+    const { role, roles, user } = useAuth();
+    const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
+    const isPowerAdmin = allRoles.some(r => r === 'admin' || r === 'power_admin');
 
     const [versions, setVersions] = useState<ScheduleVersion[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<'all' | 'published' | 'previous' | 'submitted' | 'draft'>('all');
+    const [isDeletingAll, setIsDeletingAll] = useState(false);
 
     const loadVersions = useCallback(async () => {
         try {
@@ -138,9 +144,66 @@ const ScheduleVersions: React.FC = () => {
     const handleViewVersion = (version: ScheduleVersion) => {
         // Navigate to schedules view with version ID (or 'current' for current schedules)
         if (version.id === 'current') {
-            navigate('/admin/schedules');
+            navigate('/admin/schedules/current');
         } else {
-            navigate(`/admin/schedules?version=${version.id}`);
+            navigate(`/admin/schedules/current?version=${version.id}`);
+        }
+    };
+
+    const handleDeleteAllSchedules = async () => {
+        if (!isPowerAdmin) {
+            alert('Only Power Admin can delete all schedules.');
+            return;
+        }
+
+        if (!confirm('⚠️ DANGER: This will delete ALL schedules and ALL versions. This action cannot be undone. Are you absolutely sure?')) {
+            return;
+        }
+
+        if (!confirm('FINAL WARNING: This will permanently delete all schedule data including all historical versions. Type "DELETE" to confirm.')) {
+            return;
+        }
+
+        setIsDeletingAll(true);
+
+        try {
+            // Log audit before deletion
+            await logAudit('delete_all', 'schedules', null, {
+                deleted_by: user?.id,
+                reason: 'Power Admin deleted all schedules'
+            });
+
+            // Delete all schedule versions first (due to foreign key constraints)
+            const { error: versionsError } = await supabase
+                .from('schedule_versions')
+                .delete()
+                .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+            if (versionsError) {
+                console.error('Error deleting schedule versions:', versionsError);
+                throw versionsError;
+            }
+
+            // Delete all schedules
+            const { error: schedulesError } = await supabase
+                .from('schedules')
+                .delete()
+                .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+            if (schedulesError) {
+                console.error('Error deleting schedules:', schedulesError);
+                throw schedulesError;
+            }
+
+            alert('✅ All schedules and versions have been deleted successfully.');
+            
+            // Refresh the versions
+            loadVersions();
+        } catch (err: unknown) {
+            console.error('Failed to delete all schedules:', err);
+            alert(`Failed to delete all schedules: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setIsDeletingAll(false);
         }
     };
 
@@ -152,19 +215,25 @@ const ScheduleVersions: React.FC = () => {
                     <h1 className="dashboard-title"><History size={20} /> Schedule Versions</h1>
                     <p className="dashboard-subtitle">View published schedule snapshots</p>
                 </div>
-                <button 
-                    onClick={() => navigate(-1)}
-                    className="btn btn-secondary"
-                    style={{
-                        textDecoration: 'none',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
-                    }}
-                >
-                    <ArrowLeft size={16} />
-                    Back
-                </button>
+                {isPowerAdmin && (
+                    <button
+                        onClick={handleDeleteAllSchedules}
+                        disabled={isDeletingAll}
+                        className="btn"
+                        style={{
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            backgroundColor: 'var(--accent-error-10, rgba(200, 75, 75, 0.1))',
+                            border: '1px solid var(--accent-error)',
+                            color: 'var(--accent-error)',
+                        }}
+                    >
+                        {isDeletingAll ? <div className="spinner" style={{ width: 14, height: 14 }} /> : <Trash2 size={16} />}
+                        {isDeletingAll ? 'Deleting...' : 'Delete All Schedules'}
+                    </button>
+                )}
             </div>
 
             {/* Version Filters */}

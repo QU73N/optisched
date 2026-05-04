@@ -639,7 +639,7 @@ const ScheduleManagement: React.FC = () => {
                                 <Trash2 size={16} /> Delete
                             </button>
                             {!(versionStatus?.schedules_status === 'published' && versionStatus?.is_active) && (
-                                <Link to="/admin/schedules" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <Link to="/admin/schedules/current" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                     <ArrowLeft size={16} /> Back to Current
                                 </Link>
                             )}

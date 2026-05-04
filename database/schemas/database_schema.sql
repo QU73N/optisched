@@ -330,8 +330,7 @@ CREATE TABLE public.profiles (
   id_number text,
   student_type text CHECK (student_type = ANY (ARRAY['shs'::text, 'college'::text])),
   access_permissions jsonb DEFAULT '{}'::jsonb,
-  CONSTRAINT profiles_pkey PRIMARY KEY (id),
-  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+  CONSTRAINT profiles_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.rate_limit_buckets (
   action text NOT NULL,
@@ -439,7 +438,7 @@ CREATE TABLE public.schedule_version_sets (
 );
 CREATE TABLE public.schedule_versions (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  schedule_id uuid NOT NULL,
+  schedule_id uuid,
   version_number integer NOT NULL,
   snapshot jsonb NOT NULL,
   change_type text NOT NULL CHECK (change_type = ANY (ARRAY['created'::text, 'updated'::text, 'deleted'::text, 'status_change'::text, 'checkpoint'::text, 'publish'::text, 'overwrite'::text, 'restore'::text])),
@@ -552,6 +551,15 @@ CREATE TABLE public.students (
   CONSTRAINT students_pkey PRIMARY KEY (id),
   CONSTRAINT students_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
   CONSTRAINT students_section_id_fkey FOREIGN KEY (section_id) REFERENCES public.sections(id)
+);
+CREATE TABLE public.subject_rooms (
+  subject_id uuid NOT NULL,
+  room_id uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  priority integer DEFAULT 1,
+  CONSTRAINT subject_rooms_pkey PRIMARY KEY (subject_id, room_id),
+  CONSTRAINT subject_rooms_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id),
+  CONSTRAINT subject_rooms_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id)
 );
 CREATE TABLE public.subject_teachers (
   subject_id uuid NOT NULL,

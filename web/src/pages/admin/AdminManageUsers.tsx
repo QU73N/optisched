@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePermissions } from '../../hooks/usePermissions';
 import { CREATABLE_ROLES, ROLE_DISPLAY_NAMES, POWER_ADMIN_ROLES, SELECTABLE_ROLE_DISPLAY, TEACHER_ADDABLE_ROLES } from '../../types/database';
 import type { UserRole } from '../../types/database';
 import { UserPlus, Trash2, Search, X, Loader2, Edit3 } from 'lucide-react';
@@ -35,8 +36,25 @@ const STUDENT_ROLES = ['student'];
 const TEACHER_ROLES = ['teacher'];
 const ADMIN_VARIANT_ROLES = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'];
 
+// Department options for dropdown
+const DEPARTMENT_OPTIONS = [
+    'Computer Science',
+    'Information Technology',
+    'Hospitality Management',
+    'Business Administration',
+    'Engineering',
+    'Arts and Sciences',
+    'Mathematics',
+    'Science',
+    'Physical Education',
+    'Business',
+    'Research',
+    'General',
+];
+
 const AdminManageUsers: React.FC = () => {
-    const { role: currentRole } = useAuth();
+    const { role: currentRole, user: currentUser } = useAuth();
+    const { canEditUser: canEditUserByRole } = usePermissions();
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -63,7 +81,6 @@ const AdminManageUsers: React.FC = () => {
     const [editError, setEditError] = useState<string | null>(null);
     const [editAdditionalRoles, setEditAdditionalRoles] = useState<string[]>([]);
 
-    const isSuperUser = POWER_ADMIN_ROLES.includes(currentRole as UserRole);
     const creatableRoles = currentRole ? (CREATABLE_ROLES[currentRole] || []) : [];
 
     useEffect(() => { fetchUsers(); fetchSections(); }, []);
@@ -192,6 +209,17 @@ const AdminManageUsers: React.FC = () => {
                 }
                 const { error: profileError } = await supabase.from('profiles').upsert(profileData, { onConflict: 'id' });
                 if (profileError) throw profileError;
+
+                // Create teacher record if role is teacher
+                if (TEACHER_ROLES.includes(newUser.role)) {
+                    const { error: teacherError } = await supabase.from('teachers').insert({
+                        profile_id: userId,
+                        department: newUser.department || 'General',
+                        employment_type: 'full-time',
+                        is_public: true,
+                    });
+                    if (teacherError) throw teacherError;
+                }
             }
 
             setShowCreateModal(false);
@@ -206,7 +234,12 @@ const AdminManageUsers: React.FC = () => {
     };
 
     // ── EDIT ──
-    const openEditModal = (user: UserProfile) => {
+    const openEditModal = async (user: UserProfile) => {
+        // Prevent users from editing their own profile administratively
+        if (user.id === currentUser?.id) {
+            alert('You cannot edit your own profile through the admin interface. Use Settings instead.');
+            return;
+        }
         setEditUser(user);
         setEditForm({
             full_name: user.full_name || '',
@@ -219,8 +252,18 @@ const AdminManageUsers: React.FC = () => {
         });
         setEditError(null);
         setShowEditModal(true);
-        // NOTE: Loading additional_roles requires service role - move to Edge Function
-        setEditAdditionalRoles([]);
+        
+        // Load additional_roles from auth metadata via Edge Function
+        try {
+            const { data, error } = await supabase.functions.invoke('get-additional-roles', {
+                body: { userId: user.id }
+            });
+            if (error) throw error;
+            setEditAdditionalRoles(data?.additional_roles || []);
+        } catch (err) {
+            console.error('Error loading additional roles:', err);
+            setEditAdditionalRoles([]);
+        }
     };
 
     const handleEditSave = async () => {
@@ -228,7 +271,7 @@ const AdminManageUsers: React.FC = () => {
         setEditError(null);
         setEditSaving(true);
         try {
-            // NOTE: Email changes and additional_roles require service role - move to Edge Function
+            // Update profile data
             const updateData: ProfileData = {
                 id: editUser.id,
                 full_name: editForm.full_name,
@@ -241,6 +284,56 @@ const AdminManageUsers: React.FC = () => {
             };
             const { error } = await supabase.from('profiles').update(updateData).eq('id', editUser.id);
             if (error) throw error;
+
+            // Update teachers table department if role is teacher
+            if (editForm.role === 'teacher') {
+                // First check if teacher record exists
+                const { data: teacherRecord } = await supabase
+                    .from('teachers')
+                    .select('id')
+                    .eq('profile_id', editUser.id)
+                    .single();
+                
+                if (teacherRecord) {
+                    // Update existing teacher record
+                    const { error: teacherError } = await supabase
+                        .from('teachers')
+                        .update({ department: editForm.department || null })
+                        .eq('profile_id', editUser.id);
+                    if (teacherError) throw teacherError;
+                } else {
+                    // Create teacher record if it doesn't exist
+                    const { error: createTeacherError } = await supabase
+                        .from('teachers')
+                        .insert({
+                            profile_id: editUser.id,
+                            department: editForm.department || 'General',
+                            employment_type: 'full-time',
+                            is_public: true,
+                        });
+                    if (createTeacherError) throw createTeacherError;
+                }
+            }
+
+            // Update additional_roles via Edge Function (requires service role)
+            if (editForm.role === 'teacher') {
+                const { error: rolesError } = await supabase.functions.invoke('set-additional-roles', {
+                    body: { userId: editUser.id, additionalRoles: editAdditionalRoles }
+                });
+                if (rolesError) {
+                    console.error('Error updating additional roles:', rolesError);
+                    // Don't fail the entire save if additional roles fail, just log it
+                }
+            } else {
+                // Clear additional roles if primary role is not teacher
+                const { error: clearError } = await supabase.functions.invoke('set-additional-roles', {
+                    body: { userId: editUser.id, additionalRoles: [] }
+                });
+                if (clearError) {
+                    console.error('Error clearing additional roles:', clearError);
+                }
+            }
+
             setShowEditModal(false);
             fetchUsers();
         } catch (err: unknown) {
@@ -321,7 +414,17 @@ const AdminManageUsers: React.FC = () => {
             return (
                 <div className="field">
                     <label className="field-label">DEPARTMENT</label>
-                    <input className="input" placeholder="e.g. Computer Science, Information Technology" value={values.department || ''} onChange={e => onChange('department', e.target.value)} />
+                    <select
+                        className="input"
+                        value={values.department || ''}
+                        onChange={e => onChange('department', e.target.value)}
+                        style={{ appearance: 'auto' }}
+                    >
+                        <option value="">Select Department</option>
+                        {DEPARTMENT_OPTIONS.map(dept => (
+                            <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                    </select>
                 </div>
             );
         }
@@ -407,7 +510,7 @@ const AdminManageUsers: React.FC = () => {
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', gap: 4 }}>
-                                            {isSuperUser && (
+                                            {canEditUserByRole(user.role) && user.id !== currentUser?.id && (
                                                 <>
                                                     <button className="btn btn-ghost" style={{ padding: 6 }} aria-label={`Edit user ${user.full_name || user.email}`} onClick={() => openEditModal(user)}>
                                                         <Edit3 size={15} style={{ color: 'var(--accent-primary)' }} />
@@ -602,7 +705,17 @@ const AdminManageUsers: React.FC = () => {
                             {(TEACHER_ROLES.includes(editForm.role) || ADMIN_VARIANT_ROLES.includes(editForm.role)) && (
                                 <div className="field">
                                     <label className="field-label">DEPARTMENT</label>
-                                    <input className="input" placeholder="e.g. Computer Science" value={editForm.department} onChange={e => setEditForm(p => ({ ...p, department: e.target.value }))} />
+                                    <select
+                                        className="input"
+                                        value={editForm.department}
+                                        onChange={e => setEditForm(p => ({ ...p, department: e.target.value }))}
+                                        style={{ appearance: 'auto' }}
+                                    >
+                                        <option value="">Select Department</option>
+                                        {DEPARTMENT_OPTIONS.map(dept => (
+                                            <option key={dept} value={dept}>{dept}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             )}
 

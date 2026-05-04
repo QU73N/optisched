@@ -260,6 +260,7 @@ const SystemAdminDashboard: React.FC = () => {
                             <a className="btn btn-primary" href="/admin/users">Create User</a>
                             <a className="btn btn-secondary" href="/admin/settings">Edit System Rules</a>
                             <a className="btn btn-secondary" href="/admin/messages">View Messages</a>
+                            <a className="btn btn-secondary" href="/admin/announcements">Broadcast Announcement</a>
                         </div>
                     </div>
                 </div>

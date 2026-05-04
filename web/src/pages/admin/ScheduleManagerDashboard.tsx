@@ -39,6 +39,7 @@ const ScheduleManagerDashboard: React.FC = () => {
     const [myApproved7d, setMyApproved7d] = useState(0);
     const [conflictsInDrafts, setConflictsInDrafts] = useState(0);
     const [conflictsInSubmitted, setConflictsInSubmitted] = useState(0);
+    const [recentConflicts, setRecentConflicts] = useState<any[]>([]);
     const [counts, setCounts] = useState({ teachers: 0, rooms: 0, sections: 0, subjects: 0 });
     const [conflictsByType, setConflictsByType] = useState<ConflictTypeBucket[]>([]);
     const [conflictsTrend, setConflictsTrend] = useState<ConflictTrend[]>([]);
@@ -163,6 +164,21 @@ const ScheduleManagerDashboard: React.FC = () => {
                     .sort((a, b) => b.count - a.count)
                     .slice(0, 8);
                 setRoomLoad(loadList);
+
+                // 9. recent conflicts (from my drafts and submitted)
+                const allMyScheduleIds = [...(drafts || []), ...(submitted || [])].map(s => s.id);
+                if (allMyScheduleIds.length > 0) {
+                    const { data: recentConf } = await supabase
+                        .from('conflicts')
+                        .select('id, conflict_type, schedule_a_id, schedule_b_id, created_at, is_resolved')
+                        .in('schedule_a_id', allMyScheduleIds)
+                        .eq('is_resolved', false)
+                        .order('created_at', { ascending: false })
+                        .limit(5);
+                    setRecentConflicts(recentConf || []);
+                } else {
+                    setRecentConflicts([]);
+                }
             } catch (err) {
                 console.error('[ScheduleManagerDashboard] fetch error:', err);
             } finally {
@@ -271,7 +287,7 @@ const ScheduleManagerDashboard: React.FC = () => {
                                         </div>
                                     </div>
                                 ))}
-                                <a href="/admin/schedules" className="btn btn-secondary dash-view-all-link">View All</a>
+                                <a href="/admin/schedules/versions" className="btn btn-secondary dash-view-all-link">View All</a>
                             </div>
                         )}
                     </div>
@@ -297,6 +313,32 @@ const ScheduleManagerDashboard: React.FC = () => {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Recent conflicts */}
+                    <div className="dash-card dash-stagger">
+                        <div className="dash-card-header">
+                            <div className="dash-card-title"><AlertTriangle size={16} /> Recent Conflicts</div>
+                            {recentConflicts.length > 0 && <span className="dash-card-badge dash-badge-warning">{recentConflicts.length}</span>}
+                        </div>
+                        {recentConflicts.length === 0 ? (
+                            <div className="dash-empty"><AlertTriangle size={28} /><div>No conflicts</div></div>
+                        ) : (
+                            <div className="dash-list">
+                                {recentConflicts.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(c => (
+                                    <div key={c.id} className="dash-list-item">
+                                        <div className="dash-list-item-accent dash-accent-warning" />
+                                        <div className="dash-list-item-body dash-list-item-body--compact">
+                                            <div className="dash-list-item-title">{c.conflict_type}</div>
+                                            <div className="dash-list-item-meta">
+                                                {c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                <a href="/admin/conflicts" className="btn btn-secondary dash-view-all-link">View All</a>
                             </div>
                         )}
                     </div>

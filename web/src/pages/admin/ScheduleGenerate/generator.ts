@@ -236,7 +236,16 @@ const roomCompatible = (room: Room, subject: Subject, section: Section): boolean
         return false;
     }
 
-    // If subject requires a lab, ensure room is suitable for the specific lab type
+    // Use subject_rooms junction table for room compatibility (data-driven, not name-based)
+    if (subject.compatible_rooms && subject.compatible_rooms.length > 0) {
+        // Check if this room is in the subject's compatible rooms list
+        const isCompatible = subject.compatible_rooms.some(cr => cr.room_id === room.id);
+        if (!isCompatible) {
+            return false;
+        }
+    }
+
+    // Fallback to name-based logic if compatible_rooms is not available (backward compatibility)
     const requiresLab = inferRequiresLab(subject);
     if (requiresLab) {
         const roomName = (room.name || '').toLowerCase();
@@ -1397,8 +1406,18 @@ const applyRepairs = (
                     // Hard constraint: room compatibility
                     if (!roomCompatible(room, task.subject, task.section)) return { rid, score: -1000 };
 
-                    // Prefer special rooms for lab subjects
-                    if (task.subject.requires_lab && isSpecialRoom(room)) roomScore += 100;
+                    // Use priority from subject_rooms junction table (data-driven)
+                    // Priority 1 = preferred room, Priority 2 = fallback room
+                    if (task.subject.compatible_rooms && task.subject.compatible_rooms.length > 0) {
+                        const roomPriority = task.subject.compatible_rooms.find(cr => cr.room_id === room.id);
+                        if (roomPriority) {
+                            // Higher score for lower priority number (priority 1 gets 100, priority 2 gets 50)
+                            roomScore += (3 - roomPriority.priority) * 50;
+                        }
+                    } else {
+                        // Fallback: prefer special rooms for lab subjects
+                        if (task.subject.requires_lab && isSpecialRoom(room)) roomScore += 100;
+                    }
 
                     // Prefer rooms with good capacity fit
                     if (task.section.student_count && room.capacity) {

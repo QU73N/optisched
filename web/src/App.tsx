@@ -86,22 +86,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   return <>{children}</>;
 };
 
-const RoleRedirect: React.FC = () => {
-  const { role, roles, isLoading, session } = useAuth();
-  if (isLoading) return <div className="loading-screen"><div className="spinner" style={{ width: 40, height: 40 }} /></div>;
-  if (!session) return <Navigate to="/login" replace />;
-
-  // Map all admin sub-roles to /admin
-  const adminRoles = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'];
-  const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
-  const hasAdmin = allRoles.some(r => adminRoles.includes(r));
-  // Primary role determines default redirect; teacher with admin sub-role still starts at /teacher
-  const basePath = role === 'teacher' ? 'teacher' : (hasAdmin ? 'admin' : (role || 'student'));
-  return <Navigate to={`/${basePath}`} replace />;
-};
-
-// Login guard - redirect if already logged in
-const LoginGuard: React.FC = () => {
+// Landing page guard - redirect to dashboard if already logged in
+// Used for both root path (/) and /login route
+const LandingGuard: React.FC = () => {
   const { session, role, roles, isLoading } = useAuth();
   if (isLoading) return <div className="loading-screen"><div className="spinner" style={{ width: 40, height: 40 }} /></div>;
   if (session && role) {
@@ -126,11 +113,9 @@ function App() {
           <ToastProvider>
             <Routes>
           {/* Public */}
-          <Route path="/login" element={<LoginGuard />} />
+          <Route path="/" element={<LandingGuard />} />
+          <Route path="/login" element={<LandingGuard />} />
           <Route path="/pricing" element={<PricingPage />} />
-
-          {/* Root redirect */}
-          <Route path="/" element={<RoleRedirect />} />
 
           {/* Admin routes - accessible by all admin sub-roles */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={adminRoles}><Layout /></ProtectedRoute>}>
@@ -139,7 +124,8 @@ function App() {
             <Route path="broadcasts" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AnnouncementsPage /></Suspense>} />
             <Route path="users" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminManageUsers /></Suspense>} />
             <Route path="users/add" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AddUser /></Suspense>} />
-            <Route path="schedules" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleManagement /></Suspense>} />
+            <Route path="schedules" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><Navigate to="versions" replace /></Suspense>} />
+            <Route path="schedules/current" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleManagement /></Suspense>} />
             <Route path="schedules/versions" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleVersions /></Suspense>} />
             <Route path="data" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
             <Route path="priority" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><PriorityConfiguration /></Suspense>} />
