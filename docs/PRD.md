@@ -3,11 +3,12 @@
 ## Document Information
 
 - **Product Name:** OptiSched
-- **Document Version:** 1.2
-- **Last Updated:** April 28, 2026
+- **Document Version:** 1.3
+- **Last Updated:** May 5, 2026
 - **Status:** Draft (Board Review Ready)
 
 ### Changelog
+- **1.3 (2026-05-05):** Removed Live Activity Feed tab (duplicate of User Activity). Power Admin and System Admin now use User Activity tab exclusively for activity monitoring.
 - **1.2 (2026-04-28):** Finalized comprehensive tab structure per role with grouped sidebar sections. Added role-rank hierarchy enforcement, user activity logging, three-tier permission overrides (global → role → per-user), lockout-proof Power Admin design, and board-defensible rationale for each governance decision.
 - **1.1 (2026-04-28):** Expanded roles from 5 to 6 (split "Administrator" into System Admin and Schedule Admin). Added Permission Rules Engine concept. Added tab matrix and per-role dashboard content specifications. Added role-data-access table.
 
@@ -795,7 +796,6 @@ Sidebar uses **grouped sections** with collapsible headers. Each role sees only 
 
 **Overview**
 - Dashboard
-- Live Activity Feed (real-time stream of system actions)
 
 **Operations**
 - Schedules · Approvals · Generate · Conflicts · Faculty Load · Data

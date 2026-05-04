@@ -31,7 +31,6 @@ export const POWER_ADMIN_NAV: NavGroup[] = [
         label: 'Overview',
         links: [
             { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
-            { to: '/admin/live-feed', icon: Activity, label: 'Live Activity Feed' },
         ],
     },
     {

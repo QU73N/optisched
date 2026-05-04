@@ -120,7 +120,6 @@ function App() {
           {/* Admin routes - accessible by all admin sub-roles */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={adminRoles}><Layout /></ProtectedRoute>}>
             <Route index element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminDashboardDispatcher /></Suspense>} />
-            <Route path="live-feed" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><UserActivityPage /></Suspense>} />
             <Route path="broadcasts" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AnnouncementsPage /></Suspense>} />
             <Route path="users" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminManageUsers /></Suspense>} />
             <Route path="users/add" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AddUser /></Suspense>} />
