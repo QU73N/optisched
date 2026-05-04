@@ -1,28 +1,8 @@
--- Add RPC functions for fetching data with joins
--- These functions bypass RLS join issues by doing joins in SQL
+-- Fix get_schedules_with_details to include draft schedules
+-- The function was only returning published schedules, causing draft schedules to be hidden
 
--- Function to fetch teachers with profiles
-CREATE OR REPLACE FUNCTION get_teachers_with_profiles()
-RETURNS TABLE (
-    id uuid,
-    profile_id uuid,
-    full_name text
-)
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-STABLE
-AS $$
-    SELECT 
-        t.id,
-        t.profile_id,
-        p.full_name
-    FROM public.teachers t
-    LEFT JOIN public.profiles p ON p.id = t.profile_id
-    WHERE t.is_public = true;
-$$;
+DROP FUNCTION IF EXISTS public.get_schedules_with_details CASCADE;
 
--- Function to fetch schedules with all related data
 CREATE OR REPLACE FUNCTION get_schedules_with_details()
 RETURNS TABLE (
     id uuid,
@@ -68,3 +48,7 @@ AS $$
     LEFT JOIN public.sections sec ON sec.id = s.section_id
     WHERE s.status IN ('published', 'draft') AND s.is_active = true;
 $$;
+
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION public.get_schedules_with_details TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_schedules_with_details TO anon;
