@@ -2046,11 +2046,19 @@
 .sg-tooltip-icon {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
     margin-left: 6px;
     color: var(--text-muted);
     cursor: help;
     transition: color var(--transition-fast);
     pointer-events: auto;
+    position: relative;
+}
+
+.sg-tooltip-icon svg {
+    pointer-events: none;
 }
 
 .sg-tooltip-icon:hover {
