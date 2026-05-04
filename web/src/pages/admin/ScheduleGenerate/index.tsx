@@ -1470,6 +1470,7 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
 const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>>; compact?: boolean }> = ({ config, setConfig, compact = false }) => {
     const [hardConstraintsOpen, setHardConstraintsOpen] = useState(false);
     const [policiesOpen, setPoliciesOpen] = useState(false);
+    const [softConstraintsOpen, setSoftConstraintsOpen] = useState(false);
     const updateSoft = (key: keyof GenerationConfig['soft'], val: number) =>
         setConfig(c => ({ ...c, soft: { ...c.soft, [key]: val } }));
 
@@ -1540,16 +1541,28 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
             )}
 
             <div className="sg-subhead" style={{ marginTop: 0 }}><Sliders size={12} /> Soft Optimization Weights</div>
-            <div className="sg-sliders">
-                <SoftSlider label="Balanced Teacher Load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} compact={compact} />
-                <SoftSlider label="Compact Schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} compact={compact} />
-                <SoftSlider label="Minimize Room Switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} compact={compact} />
-                <SoftSlider label="Teacher Preferred Time" desc="Honor each teacher's preferred days and time window." value={config.soft.teacherPreferredTime} onChange={v => updateSoft('teacherPreferredTime', v)} compact={compact} />
-                <SoftSlider label="Daily Load Balance" desc="Even teaching load per teacher per day." value={config.soft.dailyLoadBalance} onChange={v => updateSoft('dailyLoadBalance', v)} compact={compact} />
-                <SoftSlider label="Workload Fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} compact={compact} />
-                <SoftSlider label="Subject Spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} compact={compact} />
-                <SoftSlider label="Room Utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} />
-            </div>
+            <button
+                type="button"
+                className="sg-hard-constraints-btn"
+                onClick={() => setSoftConstraintsOpen(!softConstraintsOpen)}
+                aria-expanded={softConstraintsOpen}
+                style={{ marginBottom: 16 }}
+            >
+                <span>Configure soft constraint weights</span>
+                {softConstraintsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {softConstraintsOpen && (
+                <div className="sg-sliders sg-hard-list-expanded">
+                    <SoftSlider label="Balanced Teacher Load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} compact={compact} />
+                    <SoftSlider label="Compact Schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} compact={compact} />
+                    <SoftSlider label="Minimize Room Switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} compact={compact} />
+                    <SoftSlider label="Teacher Preferred Time" desc="Honor each teacher's preferred days and time window." value={config.soft.teacherPreferredTime} onChange={v => updateSoft('teacherPreferredTime', v)} compact={compact} />
+                    <SoftSlider label="Daily Load Balance" desc="Even teaching load per teacher per day." value={config.soft.dailyLoadBalance} onChange={v => updateSoft('dailyLoadBalance', v)} compact={compact} />
+                    <SoftSlider label="Workload Fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} compact={compact} />
+                    <SoftSlider label="Subject Spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} compact={compact} />
+                    <SoftSlider label="Room Utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} />
+                </div>
+            )}
         </div>
     );
 };
