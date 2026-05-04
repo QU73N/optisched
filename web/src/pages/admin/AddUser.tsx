@@ -42,6 +42,10 @@ interface AvailabilitySlot {
 interface ProfileUpdate {
     id: string;
     full_name: string;
+    last_name: string | null;
+    first_name: string | null;
+    middle_initial: string | null;
+    suffix: string | null;
     role: string;
     email: string;
     id_number?: string | null;
@@ -82,6 +86,22 @@ const getDatabaseDepartmentName = (displayName: string): string => {
     return DEPARTMENT_MAPPING[displayName as keyof typeof DEPARTMENT_MAPPING]?.db_name || displayName;
 };
 
+// Helper function to combine name fields into full_name
+const combineFullName = (lastName: string, firstName: string, middleInitial: string, suffix: string): string => {
+    if (suffix && suffix.trim()) {
+        // Format: "Last Suffix, First Middle"
+        if (middleInitial && middleInitial.trim()) {
+            return `${lastName} ${suffix}, ${firstName} ${middleInitial}`;
+        }
+        return `${lastName} ${suffix}, ${firstName}`;
+    }
+    // Format: "First Middle Last"
+    if (middleInitial && middleInitial.trim()) {
+        return `${firstName} ${middleInitial} ${lastName}`;
+    }
+    return `${firstName} ${lastName}`;
+};
+
 const AddUser: React.FC = () => {
     const navigate = useNavigate();
     const { role: currentRole } = useAuth();
@@ -99,8 +119,11 @@ const AddUser: React.FC = () => {
     
     // Form state
     const [formData, setFormData] = useState({
-        // Basic info
-        fullName: '',
+        // Basic info - Name fields (separate)
+        lastName: '',
+        firstName: '',
+        middleInitial: '',
+        suffix: '',
         email: '',
         password: '',
         confirmPassword: '',
@@ -175,9 +198,8 @@ const AddUser: React.FC = () => {
         }
     };
     
-    const generateEmail = (fullName: string, idNumber: string) => {
-        const nameParts = fullName.trim().split(' ');
-        const surname = nameParts[nameParts.length - 1]?.toLowerCase() || 'user';
+    const generateEmail = (lastName: string, _firstName: string, idNumber: string) => {
+        const surname = lastName.trim().toLowerCase() || 'user';
         const idStr = idNumber?.trim() || Math.random().toString(36).slice(-6);
         const last6 = idStr.slice(-6);
         return `${surname}.${last6}@${EMAIL_DOMAIN}`;
@@ -219,12 +241,12 @@ const AddUser: React.FC = () => {
         setError(null);
         
         // Basic validation
-        if (!formData.fullName || !formData.password) {
+        if (!formData.firstName || !formData.lastName || !formData.password) {
             setError('Please fill in all required fields.');
             return false;
         }
         
-        if (!/^[a-zA-Z\s.-]+$/.test(formData.fullName)) {
+        if (!/^[a-zA-Z\s.-]+$/.test(formData.firstName) || !/^[a-zA-Z\s.-]+$/.test(formData.lastName)) {
             setError('Name can only contain letters, spaces, dots, and hyphens.');
             return false;
         }
@@ -328,8 +350,10 @@ const AddUser: React.FC = () => {
         try {
             let email = formData.email.trim();
             if (!email) {
-                email = generateEmail(formData.fullName, formData.idNumber);
+                email = generateEmail(formData.lastName, formData.firstName, formData.idNumber);
             }
+            
+            const fullName = combineFullName(formData.lastName, formData.firstName, formData.middleInitial, formData.suffix);
             
             // Create auth user
             const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -338,7 +362,7 @@ const AddUser: React.FC = () => {
                 options: {
                     data: {
                         role: formData.role,
-                        full_name: formData.fullName,
+                        full_name: fullName,
                     },
                 },
             });
@@ -351,7 +375,11 @@ const AddUser: React.FC = () => {
             // Retry mechanism for profile update with exponential backoff
             const profileUpdate: ProfileUpdate = {
                 id: userId,
-                full_name: formData.fullName,
+                full_name: fullName,
+                last_name: formData.lastName || null,
+                first_name: formData.firstName || null,
+                middle_initial: formData.middleInitial || null,
+                suffix: formData.suffix || null,
                 role: formData.role,
                 email,
                 id_number: formData.idNumber || null,
@@ -695,15 +723,52 @@ const AddUser: React.FC = () => {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
-                                        FULL NAME *
+                                        LAST NAME *
                                     </label>
                                     <input
                                         type="text"
                                         className="input"
-                                        placeholder="Juan Dela Cruz"
-                                        value={formData.fullName}
-                                        onChange={e => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
+                                        placeholder="Dela Cruz"
+                                        value={formData.lastName}
+                                        onChange={e => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
                                         required
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                                        FIRST NAME *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="Juan"
+                                        value={formData.firstName}
+                                        onChange={e => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                                        MIDDLE INITIAL (optional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="A."
+                                        value={formData.middleInitial}
+                                        onChange={e => setFormData(prev => ({ ...prev, middleInitial: e.target.value }))}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                                        SUFFIX (optional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="Jr., Sr., II, III"
+                                        value={formData.suffix}
+                                        onChange={e => setFormData(prev => ({ ...prev, suffix: e.target.value }))}
                                     />
                                 </div>
                                 <div>
@@ -1247,7 +1312,7 @@ const AddUser: React.FC = () => {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                             <div style={{ padding: 12, borderRadius: 'var(--radius-md)', background: 'var(--bg-surface)' }}>
                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Full Name</div>
-                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{formData.fullName}</div>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{combineFullName(formData.lastName, formData.firstName, formData.middleInitial, formData.suffix)}</div>
                             </div>
                             <div style={{ padding: 12, borderRadius: 'var(--radius-md)', background: 'var(--bg-surface)' }}>
                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Role</div>
@@ -1256,7 +1321,7 @@ const AddUser: React.FC = () => {
                             <div style={{ padding: 12, borderRadius: 'var(--radius-md)', background: 'var(--bg-surface)' }}>
                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Email</div>
                                 <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                    {formData.email || generateEmail(formData.fullName, formData.idNumber)}
+                                    {formData.email || generateEmail(formData.lastName, formData.firstName, formData.idNumber)}
                                 </div>
                             </div>
                             <div style={{ padding: 12, borderRadius: 'var(--radius-md)', background: 'var(--bg-surface)' }}>
