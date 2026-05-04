@@ -23,6 +23,7 @@ const LoginPage: React.FC = () => {
     const [forgotEmail, setForgotEmail] = useState('');
     const [forgotLoading, setForgotLoading] = useState(false);
     const [forgotSent, setForgotSent] = useState(false);
+    const [forgotMode, setForgotMode] = useState<'admin_request' | 'email_link'>('admin_request');
     const [forgotError, setForgotError] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -46,23 +47,42 @@ const LoginPage: React.FC = () => {
 
     const handleForgotPassword = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!forgotEmail) {
+        const normalizedEmail = forgotEmail.trim().toLowerCase();
+        if (!normalizedEmail) {
             setForgotError('Please enter your email');
             return;
         }
         setForgotError(null);
         setForgotLoading(true);
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-                redirectTo: `${window.location.origin}/login`,
+            const { error } = await supabase.from('password_reset_requests').insert({
+                email: normalizedEmail,
+                status: 'pending',
             });
-            if (error) {
-                setForgotError(error.message);
-            } else {
+
+            if (!error) {
                 setForgotSent(true);
+                setForgotMode('admin_request');
+                setForgotEmail(normalizedEmail);
+            } else {
+                const isRlsError = /row-level security|permission denied|violates/i.test(error.message || '');
+                if (!isRlsError) {
+                    setForgotError(error.message);
+                } else {
+                    const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+                        redirectTo: `${window.location.origin}/login`,
+                    });
+                    if (resetError) {
+                        setForgotError(resetError.message);
+                    } else {
+                        setForgotSent(true);
+                        setForgotMode('email_link');
+                        setForgotEmail(normalizedEmail);
+                    }
+                }
             }
         } catch (err: unknown) {
-            setForgotError((err as Error)?.message || 'Failed to send reset email');
+            setForgotError((err as Error)?.message || 'Failed to send reset request');
         }
         setForgotLoading(false);
     };
@@ -91,9 +111,9 @@ const LoginPage: React.FC = () => {
                             }}>
                                 <Mail size={28} style={{ color: '#22c55e' }} />
                             </div>
-                            <h3 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>Check Your Email</h3>
+                            <h3 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>{forgotMode === 'admin_request' ? 'Request Sent' : 'Check Your Email'}</h3>
                             <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6, marginBottom: 24 }}>
-                                We've sent a password reset link to<br />
+                                {forgotMode === 'admin_request' ? 'Your reset request was sent for' : "We've sent a password reset link to"}<br />
                                 <strong style={{ color: 'var(--text-primary)' }}>{forgotEmail}</strong>
                             </p>
                             <button
@@ -131,7 +151,7 @@ const LoginPage: React.FC = () => {
                                 {forgotLoading ? (
                                     <><Loader2 size={18} className="spin" /> Sending...</>
                                 ) : (
-                                    'Send Reset Link'
+                                    'Send Reset Request'
                                 )}
                             </button>
 

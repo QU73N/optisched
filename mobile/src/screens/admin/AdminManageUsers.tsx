@@ -94,7 +94,7 @@ const AdminManageUsers: React.FC = () => {
         }
 
         // Auto-generate email if blank
-        let email = newUser.email.trim();
+        let email = newUser.email.trim().toLowerCase();
         if (!email) {
             const nameParts = newUser.fullName.trim().split(' ');
             const surname = nameParts[nameParts.length - 1]?.toLowerCase() || 'user';
@@ -141,7 +141,18 @@ const AdminManageUsers: React.FC = () => {
                     setCreating(false);
                     return;
                 }
-                userId = authData.user?.id || '';
+                const user = authData.user;
+                if (!user) {
+                    Alert.alert('Error', 'Account was not created. Please try again.');
+                    setCreating(false);
+                    return;
+                }
+                if (Array.isArray(user.identities) && user.identities.length === 0) {
+                    Alert.alert('Error', 'This email is already registered. Use another email or reset its password.');
+                    setCreating(false);
+                    return;
+                }
+                userId = user.id || '';
             }
 
             // Upsert profile — use upsert + delay so the auth trigger has time to create the row
@@ -166,9 +177,11 @@ const AdminManageUsers: React.FC = () => {
 
                 if (profileError) {
                     console.error('[CreateUser] Profile save FAILED:', profileError.message);
-                } else {
-                    console.log('[CreateUser] Profile saved OK — section:', newUser.section, 'program:', newUser.program);
+                    Alert.alert('Error', profileError.message);
+                    setCreating(false);
+                    return;
                 }
+                console.log('[CreateUser] Profile saved OK — section:', newUser.section, 'program:', newUser.program);
 
                 // Create teacher record if teacher role
                 if (newUser.role === 'teacher') {

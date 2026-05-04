@@ -7,7 +7,7 @@ const QUEUE_KEY = '@optisched_offline_messages';
 
 export interface QueuedMessage {
     id: string;
-    table: 'admin_messages' | 'teacher_messages';
+    table: 'admin_messages' | 'teacher_messages' | 'group_chat_messages';
     payload: Record<string, any>;
     timestamp: number;
 }
@@ -23,7 +23,7 @@ export async function getQueuedMessages(): Promise<QueuedMessage[]> {
 }
 
 // Save a message to the offline queue
-export async function queueMessage(table: 'admin_messages' | 'teacher_messages', payload: Record<string, any>): Promise<void> {
+export async function queueMessage(table: 'admin_messages' | 'teacher_messages' | 'group_chat_messages', payload: Record<string, any>): Promise<void> {
     const queue = await getQueuedMessages();
     const msg: QueuedMessage = {
         id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -73,7 +73,7 @@ export async function flushQueue(): Promise<number> {
 
 // Smart send: try online first, queue if offline
 export async function smartSend(
-    table: 'admin_messages' | 'teacher_messages',
+    table: 'admin_messages' | 'teacher_messages' | 'group_chat_messages',
     payload: Record<string, any>
 ): Promise<{ sent: boolean; queued: boolean; error?: string }> {
     const netState = await NetInfo.fetch();

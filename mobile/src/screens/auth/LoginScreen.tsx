@@ -151,19 +151,17 @@ const LoginScreen: React.FC = () => {
         }
         setForgotLoading(true);
         try {
-            const { error: insertError } = await supabase.from('password_reset_requests').insert({
-                email: forgotEmail.trim().toLowerCase(),
-                status: 'pending',
-                requested_at: new Date().toISOString(),
-            });
-            if (insertError) {
-                Alert.alert('Error', insertError.message);
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+                forgotEmail.trim().toLowerCase()
+            );
+            if (resetError) {
+                Alert.alert('Error', resetError.message);
                 setShowForgotModal(false);
-            } else {
-                setForgotSuccess(true);
+                return;
             }
+            setForgotSuccess(true);
         } catch {
-            Alert.alert('Error', 'Failed to send request.');
+            Alert.alert('Error', 'Failed to send reset link.');
             setShowForgotModal(false);
         } finally {
             setForgotLoading(false);
@@ -362,15 +360,14 @@ const LoginScreen: React.FC = () => {
                                 </View>
                                 <Text style={{ fontSize: 20, fontWeight: '700', color: c.modalText, marginBottom: 8 }}>Request Sent!</Text>
                                 <Text style={{ fontSize: 13, color: c.modalSubtext, textAlign: 'center', lineHeight: 20, marginBottom: 8 }}>
-                                    Your password reset request has been sent to the administrator.
+                                    If an account exists for this email, a password reset link has been sent.
                                 </Text>
                                 <View style={{ backgroundColor: c.modalInfoBg, borderRadius: 12, padding: 14, marginBottom: 20, width: '100%' }}>
                                     <Text style={{ fontSize: 12, color: c.modalInfoLabel, fontWeight: '600', marginBottom: 4 }}>What happens next?</Text>
                                     <Text style={{ fontSize: 12, color: c.modalInfoText, lineHeight: 18 }}>
-                                        • Admin will review your request{"\n"}
-                                        • If approved, password resets to:{"\n"}
-                                        {'  '}surname.last6digits of ID{"\n"}
-                                        • Check back or contact admin
+                                        • Check your email inbox and spam folder{"\n"}
+                                        • Open the reset link and set a new password{"\n"}
+                                        • If no email arrives, confirm you entered the correct account email
                                     </Text>
                                 </View>
                                 <AnimatedPressable
@@ -387,7 +384,7 @@ const LoginScreen: React.FC = () => {
                                 </View>
                                 <Text style={{ fontSize: 20, fontWeight: '700', color: c.modalText, marginBottom: 8 }}>Reset Password</Text>
                                 <Text style={{ fontSize: 13, color: c.modalSubtext, textAlign: 'center', lineHeight: 20, marginBottom: 16 }}>
-                                    Enter your email to send a password reset request:
+                                    Enter your email to receive a password reset link:
                                 </Text>
                                 <View style={{ backgroundColor: c.modalInputBg, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 4, marginBottom: 20, width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: c.modalInputBorder }}>
                                     <MaterialIcons name="email" size={18} color={c.modalInfoLabel} />
@@ -408,7 +405,7 @@ const LoginScreen: React.FC = () => {
                                     {forgotLoading ? (
                                         <ActivityIndicator color={Colors.white} />
                                     ) : (
-                                        <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '600' }}>Send Reset Request</Text>
+                                        <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '600' }}>Send Reset Link</Text>
                                     )}
                                 </AnimatedPressable>
                                 <AnimatedPressable

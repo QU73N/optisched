@@ -161,8 +161,7 @@ const GroupChats: React.FC = () => {
                     group_chat_id: selectedChat.id,
                     sender_id: profile.id,
                     message: newMessage.trim(),
-                },
-                'id'
+                }
             );
             setNewMessage('');
         } catch (err) {
@@ -197,16 +196,16 @@ const GroupChats: React.FC = () => {
             style={[styles.chatItem, { backgroundColor: colors.card }]}
             onPress={() => setSelectedChat(item)}
         >
-            <View style={[styles.chatIcon, { backgroundColor: colors.primary }]}>
+            <View style={[styles.chatIcon, { backgroundColor: colors.accentPrimary }]}>
                 <MaterialIcons name={getChatIcon(item.type) as any} size={24} color="white" />
             </View>
             <View style={styles.chatInfo}>
-                <View style={styles.chatHeader}>
-                    <Text style={[styles.chatName, { color: colors.text }]} numberOfLines={1}>
+                <View style={styles.chatItemHeader}>
+                    <Text style={[styles.chatName, { color: colors.textPrimary }]} numberOfLines={1}>
                         {item.name}
                     </Text>
                     {item.unread_count > 0 && (
-                        <View style={[styles.unreadBadge, { backgroundColor: colors.error }]}>
+                        <View style={[styles.unreadBadge, { backgroundColor: Colors.error }]}>
                             <Text style={styles.unreadCount}>{item.unread_count}</Text>
                         </View>
                     )}
@@ -223,7 +222,7 @@ const GroupChats: React.FC = () => {
         return (
             <View style={[styles.messageRow, isOwn ? styles.ownMessage : styles.otherMessage]}>
                 {!isOwn && (
-                    <View style={[styles.avatar, { backgroundColor: colors.info }]}>
+                    <View style={[styles.avatar, { backgroundColor: Colors.info }]}>
                         <Text style={styles.avatarText}>
                             {item.sender?.full_name?.charAt(0) || '?'}
                         </Text>
@@ -237,9 +236,9 @@ const GroupChats: React.FC = () => {
                     )}
                     <View style={[
                         styles.messageBubble,
-                        { backgroundColor: isOwn ? colors.primary : colors.background }
+                        { backgroundColor: isOwn ? colors.accentPrimary : colors.background }
                     ]}>
-                        <Text style={[styles.messageText, { color: isOwn ? 'white' : colors.text }]}>
+                        <Text style={[styles.messageText, { color: isOwn ? 'white' : colors.textPrimary }]}>
                             {item.message}
                         </Text>
                     </View>
@@ -254,7 +253,7 @@ const GroupChats: React.FC = () => {
     if (loading) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-                <ActivityIndicator size="large" color={colors.primary} />
+                <ActivityIndicator size="large" color={colors.accentPrimary} />
             </SafeAreaView>
         );
     }
@@ -264,13 +263,13 @@ const GroupChats: React.FC = () => {
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
                 <View style={[styles.chatHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                     <TouchableOpacity onPress={() => setSelectedChat(null)}>
-                        <MaterialIcons name="arrow-back" size={24} color={colors.text} />
+                        <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
                     </TouchableOpacity>
-                    <View style={[styles.chatHeaderIcon, { backgroundColor: colors.primary }]}>
+                    <View style={[styles.chatHeaderIcon, { backgroundColor: colors.accentPrimary }]}>
                         <MaterialIcons name={getChatIcon(selectedChat.type) as any} size={20} color="white" />
                     </View>
                     <View style={styles.chatHeaderInfo}>
-                        <Text style={[styles.chatHeaderName, { color: colors.text }]}>{selectedChat.name}</Text>
+                        <Text style={[styles.chatHeaderName, { color: colors.textPrimary }]}>{selectedChat.name}</Text>
                         <Text style={[styles.chatHeaderType, { color: colors.textSecondary }]}>
                             {selectedChat.type.replace('_', ' ')}
                         </Text>
@@ -301,7 +300,7 @@ const GroupChats: React.FC = () => {
 
                 <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
                     <TextInput
-                        style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
+                        style={[styles.input, { backgroundColor: colors.background, color: colors.textPrimary }]}
                         value={newMessage}
                         onChangeText={setNewMessage}
                         placeholder="Type a message..."
@@ -309,7 +308,7 @@ const GroupChats: React.FC = () => {
                         multiline
                     />
                     <TouchableOpacity
-                        style={[styles.sendButton, { backgroundColor: colors.primary }]}
+                        style={[styles.sendButton, { backgroundColor: colors.accentPrimary }]}
                         onPress={sendMessage}
                         disabled={sending || !newMessage.trim()}
                     >
@@ -327,7 +326,7 @@ const GroupChats: React.FC = () => {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Group Chats</Text>
+                <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Group Chats</Text>
             </View>
 
             {groupChats.length === 0 ? (
@@ -382,7 +381,7 @@ const styles = StyleSheet.create({
     chatInfo: {
         flex: 1,
     },
-    chatHeader: {
+    chatItemHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',

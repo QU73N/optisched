@@ -15,17 +15,30 @@ const PasswordResetManager: React.FC = () => {
     const { profile } = useAuth();
     const [requests, setRequests] = useState<ResetRequest[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
 
     const fetchRequests = async () => {
         try {
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('password_reset_requests')
                 .select('*')
                 .eq('status', 'pending')
                 .order('requested_at', { ascending: false });
+
+            if (error) {
+                setLoadError(error.message);
+                setRequests([]);
+                return;
+            }
+
+            setLoadError(null);
             setRequests((data || []) as ResetRequest[]);
-        } catch { /* ignore */ }
+        } catch (err: unknown) {
+            const message = (err as Error)?.message || 'Failed to load reset requests.';
+            setLoadError(message);
+            setRequests([]);
+        }
         setLoading(false);
     };
 
@@ -77,6 +90,16 @@ const PasswordResetManager: React.FC = () => {
     };
 
     if (loading) return <div className="pw-loading"><Loader2 size={24} className="spin" /> Loading requests...</div>;
+
+    if (loadError) {
+        return (
+            <div className="pw-empty">
+                <div className="pw-empty-icon" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}><X size={48} /></div>
+                <h3>Unable to Load Requests</h3>
+                <p>{loadError}</p>
+            </div>
+        );
+    }
 
     if (requests.length === 0) {
         return (
