@@ -1885,6 +1885,37 @@ const OutcomeStage: React.FC<{
     const [viewMode, setViewMode] = useState<'section' | 'teacher' | 'room'>('section');
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
+    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const SHORT_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const START_HOUR = 7;
+    const END_HOUR = 19;
+    const SLOT_MINUTES = 30;
+    const TOTAL_SLOTS = ((END_HOUR - START_HOUR) * 60) / SLOT_MINUTES;
+    const EVENT_COLORS = ['c-navy', 'c-core', 'c-bright', 'c-ice'] as const;
+
+    const timeToMinutes = (t: string) => {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+    };
+
+    const slotIndex = (t: string) => {
+        const mins = timeToMinutes(t) - START_HOUR * 60;
+        return Math.max(0, Math.min(TOTAL_SLOTS, Math.round(mins / SLOT_MINUTES)));
+    };
+
+    const formatTime = (t: string) => {
+        if (!t) return '';
+        const [h, m] = t.split(':').map(Number);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    };
+
+    const colorForKey = (key: string) => {
+        let h = 0;
+        for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+        return EVENT_COLORS[Math.abs(h) % EVENT_COLORS.length];
+    };
+
     // Group entries by section, teacher, or room
     const groupedBySection = useMemo(() => {
         const groups: Record<string, typeof result.entries> = {};
@@ -1894,7 +1925,7 @@ const OutcomeStage: React.FC<{
             groups[key].push(entry);
         });
         return groups;
-    }, [result]);
+    }, [result.entries]);
 
     const groupedByTeacher = useMemo(() => {
         const groups: Record<string, typeof result.entries> = {};
@@ -1904,7 +1935,7 @@ const OutcomeStage: React.FC<{
             groups[key].push(entry);
         });
         return groups;
-    }, [result]);
+    }, [result.entries]);
 
     const groupedByRoom = useMemo(() => {
         const groups: Record<string, typeof result.entries> = {};
@@ -1914,13 +1945,23 @@ const OutcomeStage: React.FC<{
             groups[key].push(entry);
         });
         return groups;
-    }, [result]);
+    }, [result.entries]);
 
     const selectedEntries = selectedId
         ? (viewMode === 'section' ? groupedBySection[selectedId]
            : viewMode === 'teacher' ? groupedByTeacher[selectedId]
            : groupedByRoom[selectedId]) || []
         : [];
+
+    // Convert entries to event format for grid display
+    const events = useMemo(() => {
+        return selectedEntries.map(entry => {
+            const dayIdx = dayOrder.indexOf(entry.day);
+            const start = slotIndex(entry.start);
+            const end = slotIndex(entry.end);
+            return { entry, dayIdx, start, span: Math.max(1, end - start) };
+        }).filter(e => e.dayIdx >= 0);
+    }, [selectedEntries]);
 
     return (
         <div>
@@ -1942,7 +1983,7 @@ const OutcomeStage: React.FC<{
                         className={`btn ${viewMode === 'teacher' ? 'btn-primary' : 'btn-secondary'}`}
                         onClick={() => { setViewMode('teacher'); setSelectedId(null); }}
                     >
-                        <MapPin size={14} style={{ marginRight: 8 }} /> Teachers
+                        <Users size={14} style={{ marginRight: 8 }} /> Teachers
                     </button>
                     <button
                         className={`btn ${viewMode === 'room' ? 'btn-primary' : 'btn-secondary'}`}
@@ -1974,7 +2015,7 @@ const OutcomeStage: React.FC<{
                             onClick={() => setSelectedId(teacher.id)}
                             style={{ justifyContent: 'flex-start' }}
                         >
-                            <MapPin size={14} style={{ marginRight: 8 }} />
+                            <Users size={14} style={{ marginRight: 8 }} />
                             {teacher.full_name}
                             <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
                                 {groupedByTeacher[teacher.id]?.length || 0}
@@ -1997,37 +2038,101 @@ const OutcomeStage: React.FC<{
                     ))}
                 </div>
 
-                {selectedId && selectedEntries.length > 0 ? (
+                {selectedId && events.length > 0 ? (
                     <div style={{ background: 'var(--surface-soft)', borderRadius: 8, padding: 16 }}>
-                        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
-                            {viewMode === 'section' ? sections.find(s => s.id === selectedId)?.name
-                             : viewMode === 'teacher' ? teachers.find(t => t.id === selectedId)?.full_name
-                             : rooms.find(r => r.id === selectedId)?.name}
-                        </h3>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                    <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Day</th>
-                                    <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Time</th>
-                                    <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Subject</th>
-                                    {viewMode !== 'teacher' && <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Teacher</th>}
-                                    {viewMode !== 'room' && <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Room</th>}
-                                    {viewMode !== 'section' && <th style={{ padding: '8px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Section</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {selectedEntries.map((entry, idx) => (
-                                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color-alpha)' }}>
-                                        <td style={{ padding: '8px', fontSize: 13 }}>{entry.day}</td>
-                                        <td style={{ padding: '8px', fontSize: 13 }}>{entry.start} - {entry.end}</td>
-                                        <td style={{ padding: '8px', fontSize: 13 }}>{entry.subjectName}</td>
-                                        {viewMode !== 'teacher' && <td style={{ padding: '8px', fontSize: 13 }}>{entry.teacherName}</td>}
-                                        {viewMode !== 'room' && <td style={{ padding: '8px', fontSize: 13 }}>{entry.roomName}</td>}
-                                        {viewMode !== 'section' && <td style={{ padding: '8px', fontSize: 13 }}>{entry.sectionName}</td>}
-                                    </tr>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}>
+                            <div>
+                                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                                    {viewMode === 'section' ? sections.find(s => s.id === selectedId)?.name
+                                     : viewMode === 'teacher' ? teachers.find(t => t.id === selectedId)?.full_name
+                                     : rooms.find(r => r.id === selectedId)?.name}
+                                </div>
+                                <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                                    {events.length} {events.length === 1 ? 'session' : 'sessions'} this week
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="sm-calendar">
+                            <div
+                                className="sm-cal-grid"
+                                style={{ gridTemplateRows: `auto repeat(${TOTAL_SLOTS}, 22px)` }}
+                            >
+                                {/* Header row */}
+                                <div className="sm-cal-head" style={{ gridColumn: 1, gridRow: 1 }} />
+                                {SHORT_DAYS.map((d, i) => (
+                                    <div key={d} className="sm-cal-head" style={{ gridColumn: i + 2, gridRow: 1 }}>{d}</div>
                                 ))}
-                            </tbody>
-                        </table>
+
+                                {/* Time labels (every hour) */}
+                                {Array.from({ length: TOTAL_SLOTS }).map((_, slot) => {
+                                    const hour = START_HOUR + Math.floor(slot / 2);
+                                    const isHour = slot % 2 === 0;
+                                    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+                                    return (
+                                        <div
+                                            key={`time-${slot}`}
+                                            className="sm-cal-time"
+                                            style={{ gridColumn: 1, gridRow: slot + 2 }}
+                                        >
+                                            {isHour ? formatTime(timeStr) : ''}
+                                        </div>
+                                    );
+                                })}
+
+                                {/* Empty day cells (background grid) */}
+                                {Array.from({ length: TOTAL_SLOTS }).flatMap((_, slot) =>
+                                    dayOrder.map((day, di) => (
+                                        <div
+                                            key={`bg-${day}-${slot}`}
+                                            className="sm-cal-cell sm-cal-slot"
+                                            style={{ gridColumn: di + 2, gridRow: slot + 2 }}
+                                        />
+                                    ))
+                                )}
+
+                                {/* Events overlaid with explicit grid placement */}
+                                {events.map(ev => {
+                                    const getFontSize = () => {
+                                        if (ev.span <= 1) return '10px';
+                                        if (ev.span <= 2) return '11px';
+                                        return '12px';
+                                    };
+
+                                    return (
+                                        <div
+                                            key={`${ev.entry.sectionId}-${ev.entry.day}-${ev.entry.start}`}
+                                            className="sm-cal-cell"
+                                            style={{
+                                                gridColumn: ev.dayIdx + 2,
+                                                gridRow: `${ev.start + 2} / span ${ev.span}`,
+                                            }}
+                                        >
+                                            <div
+                                                className={`sm-cal-event ${colorForKey(ev.entry.subjectName || ev.entry.sectionId)}`}
+                                                title={`${ev.entry.subjectName} · ${formatTime(ev.entry.start)}–${formatTime(ev.entry.end)}`}
+                                                style={{ fontSize: getFontSize() }}
+                                            >
+                                                <div className="sm-cal-event-title" style={{ fontSize: getFontSize(), fontWeight: ev.span <= 1 ? 600 : 500 }}>
+                                                    {ev.entry.subjectName}
+                                                </div>
+                                                {ev.span > 1 && (
+                                                    <>
+                                                        <div className="sm-cal-event-sub" style={{ fontSize: getFontSize() }}>
+                                                            {viewMode !== 'teacher' && ev.entry.teacherName}
+                                                            {viewMode !== 'room' && ev.entry.roomName}
+                                                        </div>
+                                                        <div className="sm-cal-event-time" style={{ fontSize: getFontSize() }}>
+                                                            {formatTime(ev.entry.start)}–{formatTime(ev.entry.end)}
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
                 ) : selectedId ? (
                     <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
