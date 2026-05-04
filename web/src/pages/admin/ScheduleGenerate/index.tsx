@@ -2093,15 +2093,41 @@ const OutcomeStage: React.FC<{
 
     // Format teacher name: last name only, or "Last, F." if duplicate last names
     const formatTeacherName = (teacher: Teacher, allTeachers: Teacher[]) => {
-        // Use the new name fields if available, otherwise parse from full_name
-        const lastName = teacher.profile?.last_name || teacher.full_name?.split(' ').pop() || teacher.full_name || '';
-        const firstName = teacher.profile?.first_name || teacher.full_name?.split(' ')[0] || '';
+        // Use the new name fields if available (from profile)
+        let lastName = teacher.profile?.last_name;
+        let firstName = teacher.profile?.first_name;
+        
+        // Fall back to parsing from full_name if profile fields not available
+        if (!lastName || !firstName) {
+            const nameParts = teacher.full_name?.trim().split(' ') || [];
+            if (nameParts.length >= 3) {
+                // Format: "First Middle Last" or "First Middle Last Suffix"
+                // Last name is at index 2 (third word), suffix (if any) is at last index
+                lastName = nameParts[2];
+                firstName = nameParts[0];
+            } else if (nameParts.length === 2) {
+                // Format: "First Last"
+                lastName = nameParts[1];
+                firstName = nameParts[0];
+            } else if (nameParts.length === 1) {
+                lastName = nameParts[0];
+                firstName = '';
+            } else {
+                lastName = teacher.full_name || '';
+                firstName = '';
+            }
+        }
         
         // Check if any other teacher has the same last name
-        const hasDuplicateLastName = allTeachers.some(t => 
-            t.id !== teacher.id && 
-            (t.profile?.last_name || t.full_name?.split(' ').pop() || t.full_name || '') === lastName
-        );
+        const hasDuplicateLastName = allTeachers.some(t => {
+            const tLastName = t.profile?.last_name || (() => {
+                const parts = t.full_name?.trim().split(' ') || [];
+                if (parts.length >= 3) return parts[2];
+                if (parts.length === 2) return parts[1];
+                return parts[0] || t.full_name || '';
+            })();
+            return t.id !== teacher.id && tLastName === lastName;
+        });
         
         if (hasDuplicateLastName && firstName) {
             return `${lastName}, ${firstName.charAt(0)}.`;
