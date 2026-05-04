@@ -1832,6 +1832,12 @@ export const selectBestResult = (
  * Calculate soft constraint score for a schedule.
  * Note: This function is called in runGenerator and the score is used in the final result.
  */
+// Helper function to convert time string (HH:MM) to minutes
+const timeToMinutes = (time: string): number => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+};
+
 const calculateSoftConstraintScore = (
     placed: PlacedEntry[],
     _teachers: Teacher[], // Reserved for future use
@@ -1888,13 +1894,154 @@ const calculateSoftConstraintScore = (
     totalScore += roomSwitchScore * (softWeights.minimizeRoomSwitch / 100);
     maxScore += 100 * (softWeights.minimizeRoomSwitch / 100);
 
-    // Placeholder values for other constraints (not yet fully implemented)
-    breakdown.compactSchedule = 0;
-    breakdown.teacherPreferredTime = 0;
-    breakdown.dailyLoadBalance = 0;
-    breakdown.workloadFairness = 0;
-    breakdown.subjectSpacing = 0;
-    breakdown.roomUtilization = 0;
+    // Compact schedule score (section compactness - fewer gaps)
+    // Group sessions by section, calculate gaps between consecutive sessions
+    const sectionSessions = new Map<string, PlacedEntry[]>();
+    for (const entry of placed) {
+        if (!sectionSessions.has(entry.sectionId)) {
+            sectionSessions.set(entry.sectionId, []);
+        }
+        sectionSessions.get(entry.sectionId)!.push(entry);
+    }
+    let totalGapMinutes = 0;
+    const totalSections = sectionSessions.size;
+    for (const sessions of sectionSessions.values()) {
+        // Sort sessions by day and time
+        const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        sessions.sort((a, b) => {
+            const dayA = dayOrder.indexOf(a.day);
+            const dayB = dayOrder.indexOf(b.day);
+            if (dayA !== dayB) return dayA - dayB;
+            return a.start.localeCompare(b.start);
+        });
+        // Calculate gaps between consecutive sessions
+        for (let i = 0; i < sessions.length - 1; i++) {
+            const current = sessions[i];
+            const next = sessions[i+1];
+            if (current.day === next.day) {
+                // Same day, calculate time gap
+                const currentEnd = timeToMinutes(current.end);
+                const nextStart = timeToMinutes(next.start);
+                const gap = nextStart - currentEnd;
+                if (gap > 0) {
+                    totalGapMinutes += gap;
+                }
+            }
+        }
+    }
+    // Score: fewer gaps = higher score (0-100)
+    const avgGapPerSection = totalSections > 0 ? totalGapMinutes / totalSections : 0;
+    const compactScore = Math.max(0, 100 - avgGapPerSection / 10); // 10 minutes gap = 10 point penalty
+    breakdown.compactSchedule = compactScore;
+    totalScore += compactScore * (softWeights.compactSchedule / 100);
+    maxScore += 100 * (softWeights.compactSchedule / 100);
+
+    // Teacher preferred time score
+    // For now, prefer middle-day times (08:30-14:30) over early/late
+    // In future, use teacher_preferences table for actual preferences
+    let preferredTimeMatches = 0;
+    for (const entry of placed) {
+        const startMin = timeToMinutes(entry.start);
+        // Preferred window: 08:30 (510 min) to 14:30 (870 min)
+        if (startMin >= 510 && startMin <= 870) {
+            preferredTimeMatches++;
+        }
+    }
+    const preferredTimeScore = placed.length > 0 ? (preferredTimeMatches / placed.length) * 100 : 0;
+    breakdown.teacherPreferredTime = preferredTimeScore;
+    totalScore += preferredTimeScore * (softWeights.teacherPreferredTime / 100);
+    maxScore += 100 * (softWeights.teacherPreferredTime / 100);
+
+    // Daily load balance score (teacher daily balance)
+    // Group sessions by teacher and day, calculate variance
+    const teacherDailyLoads = new Map<string, Map<string, number>>();
+    for (const entry of placed) {
+        if (!teacherDailyLoads.has(entry.teacherId)) {
+            teacherDailyLoads.set(entry.teacherId, new Map());
+        }
+        const dailyMap = teacherDailyLoads.get(entry.teacherId)!;
+        dailyMap.set(entry.day, (dailyMap.get(entry.day) || 0) + 1);
+    }
+    let dailyVarianceSum = 0;
+    let dailyVarianceCount = 0;
+    for (const dailyMap of teacherDailyLoads.values()) {
+        const loads = Array.from(dailyMap.values());
+        if (loads.length > 0) {
+            const mean = loads.reduce((a, b) => a + b, 0) / loads.length;
+            const variance = loads.reduce((a, b) => a + (b - mean) ** 2, 0) / loads.length;
+            dailyVarianceSum += variance;
+            dailyVarianceCount++;
+        }
+    }
+    const avgDailyVariance = dailyVarianceCount > 0 ? dailyVarianceSum / dailyVarianceCount : 0;
+    const dailyBalanceScore = Math.max(0, 100 - avgDailyVariance * 30);
+    breakdown.dailyLoadBalance = dailyBalanceScore;
+    totalScore += dailyBalanceScore * (softWeights.dailyLoadBalance / 100);
+    maxScore += 100 * (softWeights.dailyLoadBalance / 100);
+
+    // Workload fairness score
+    // Calculate how close each teacher is to their target load
+    // For now, use mean load as target (balancedLoad already covers variance)
+    // This metric focuses on fairness relative to capacity
+    const fairnessScore = balancedScore; // Reuse balancedLoad as proxy for fairness
+    breakdown.workloadFairness = fairnessScore;
+    totalScore += fairnessScore * (softWeights.workloadFairness / 100);
+    maxScore += 100 * (softWeights.workloadFairness / 100);
+
+    // Subject spacing score
+    // Group sessions by section and subject, check if sessions are evenly spaced
+    const sectionSubjects = new Map<string, Map<string, PlacedEntry[]>>();
+    for (const entry of placed) {
+        if (!sectionSubjects.has(entry.sectionId)) {
+            sectionSubjects.set(entry.sectionId, new Map());
+        }
+        const subjectMap = sectionSubjects.get(entry.sectionId)!;
+        if (!subjectMap.has(entry.subjectId)) {
+            subjectMap.set(entry.subjectId, []);
+        }
+        subjectMap.get(entry.subjectId)!.push(entry);
+    }
+    let spacingScoreSum = 0;
+    let spacingScoreCount = 0;
+    for (const subjectMap of sectionSubjects.values()) {
+        for (const sessions of subjectMap.values()) {
+            if (sessions.length >= 2) {
+                // Sort by day
+                const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                sessions.sort((a, b) => dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day));
+                // Check if sessions are on different days (good) or same/consecutive days (bad)
+                const uniqueDays = new Set(sessions.map(s => s.day)).size;
+                const daySpreadRatio = uniqueDays / sessions.length;
+                spacingScoreSum += daySpreadRatio * 100;
+                spacingScoreCount++;
+            }
+        }
+    }
+    const avgSpacingScore = spacingScoreCount > 0 ? spacingScoreSum / spacingScoreCount : 100;
+    breakdown.subjectSpacing = avgSpacingScore;
+    totalScore += avgSpacingScore * (softWeights.subjectSpacing / 100);
+    maxScore += 100 * (softWeights.subjectSpacing / 100);
+
+    // Room utilization score
+    // Calculate how evenly rooms are utilized
+    const roomUsage = new Map<string, number>();
+    for (const entry of placed) {
+        roomUsage.set(entry.roomId, (roomUsage.get(entry.roomId) || 0) + 1);
+    }
+    const roomUsages = Array.from(roomUsage.values());
+    if (roomUsages.length > 0) {
+        const meanRoomUsage = roomUsages.reduce((a, b) => a + b, 0) / roomUsages.length;
+        const roomVariance = roomUsages.reduce((a, b) => a + (b - meanRoomUsage) ** 2, 0) / roomUsages.length;
+        // Lower variance = more even utilization = higher score
+        const roomUtilizationScore = Math.max(0, 100 - roomVariance * 10);
+        breakdown.roomUtilization = roomUtilizationScore;
+        totalScore += roomUtilizationScore * (softWeights.roomUtilization / 100);
+        maxScore += 100 * (softWeights.roomUtilization / 100);
+    } else {
+        breakdown.roomUtilization = 100; // No sessions = perfect utilization (vacuously true)
+        totalScore += 100 * (softWeights.roomUtilization / 100);
+        maxScore += 100 * (softWeights.roomUtilization / 100);
+    }
 
     const finalScore = maxScore > 0 ? totalScore / maxScore * 100 : 0;
     return { score: finalScore, breakdown };
