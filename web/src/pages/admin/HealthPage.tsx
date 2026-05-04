@@ -25,14 +25,15 @@ const HealthPage: React.FC = () => {
         setRefreshing(true);
         const results: HealthCheck[] = [];
 
-        // DB ping
+        // DB ping - use a simple query to check connectivity
         try {
             const start = Date.now();
-            await supabase.rpc('health_ping'); // Would need to create this RPC
+            await supabase.from('profiles').select('id', { count: 'exact', head: true });
+            const responseTime = Date.now() - start;
             results.push({
                 name: 'Database',
                 status: 'healthy',
-                message: `Response time: ${Date.now() - start}ms`,
+                message: `Response time: ${responseTime}ms`,
                 lastChecked: new Date(),
             });
         } catch {
@@ -44,13 +45,32 @@ const HealthPage: React.FC = () => {
             });
         }
 
-        // Storage bucket check (placeholder - would need real implementation)
-        results.push({
-            name: 'Storage',
-            status: 'healthy',
-            message: 'All buckets accessible',
-            lastChecked: new Date(),
-        });
+        // Storage bucket check - check if we can list buckets
+        try {
+            const { data, error } = await supabase.storage.listBuckets();
+            if (error) {
+                results.push({
+                    name: 'Storage',
+                    status: 'degraded',
+                    message: 'Unable to list buckets',
+                    lastChecked: new Date(),
+                });
+            } else {
+                results.push({
+                    name: 'Storage',
+                    status: 'healthy',
+                    message: `${data.length} bucket${data.length !== 1 ? 's' : ''} accessible`,
+                    lastChecked: new Date(),
+                });
+            }
+        } catch {
+            results.push({
+                name: 'Storage',
+                status: 'unhealthy',
+                message: 'Storage check failed',
+                lastChecked: new Date(),
+            });
+        }
 
         // Recent error count (last 1h)
         try {
@@ -59,10 +79,11 @@ const HealthPage: React.FC = () => {
                 .from('client_error_logs')
                 .select('*', { count: 'exact', head: true })
                 .gte('created_at', oneHourAgo);
+            const errorCount = count || 0;
             results.push({
                 name: 'Error Rate',
-                status: (count || 0) > 50 ? 'degraded' : 'healthy',
-                message: `${count || 0} errors in the last hour`,
+                status: errorCount > 50 ? 'degraded' : 'healthy',
+                message: `${errorCount} error${errorCount !== 1 ? 's' : ''} in the last hour`,
                 lastChecked: new Date(),
             });
         } catch {
@@ -76,26 +97,33 @@ const HealthPage: React.FC = () => {
 
         // Backup age check
         try {
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('backup_jobs')
                 .select('created_at')
                 .eq('status', 'succeeded')
                 .order('created_at', { ascending: false })
                 .limit(1)
-                .single();
-            if (data) {
-                const hoursAgo = (Date.now() - new Date(data.created_at).getTime()) / 3600000;
-                results.push({
-                    name: 'Last Backup',
-                    status: hoursAgo > 48 ? 'degraded' : 'healthy',
-                    message: hoursAgo < 24 ? 'Within 24h' : `${Math.round(hoursAgo)}h ago`,
-                    lastChecked: new Date(),
-                });
-            } else {
+                .maybeSingle();
+            
+            if (error || !data) {
                 results.push({
                     name: 'Last Backup',
                     status: 'degraded',
                     message: 'No successful backup found',
+                    lastChecked: new Date(),
+                });
+            } else {
+                const hoursAgo = (Date.now() - new Date(data.created_at).getTime()) / 3600000;
+                const status = hoursAgo > 48 ? 'degraded' : 'healthy';
+                const message = hoursAgo < 1 
+                    ? 'Less than 1 hour ago' 
+                    : hoursAgo < 24 
+                        ? `${Math.round(hoursAgo)} hour${Math.round(hoursAgo) !== 1 ? 's' : ''} ago` 
+                        : `${Math.round(hoursAgo / 24)} day${Math.round(hoursAgo / 24) !== 1 ? 's' : ''} ago`;
+                results.push({
+                    name: 'Last Backup',
+                    status,
+                    message,
                     lastChecked: new Date(),
                 });
             }
@@ -115,8 +143,8 @@ const HealthPage: React.FC = () => {
 
     useEffect(() => {
         if (isPower) {
-            runHealthChecks();
-            const interval = setInterval(runHealthChecks, 30000); // Refresh every 30s
+            runHealthChecks().catch(console.error);
+            const interval = setInterval(() => runHealthChecks().catch(console.error), 30000);
             return () => clearInterval(interval);
         }
     }, [isPower, runHealthChecks]);
@@ -146,6 +174,10 @@ const HealthPage: React.FC = () => {
         }
     };
 
+    const formatStatus = (status: HealthCheck['status']) => {
+        return status.charAt(0).toUpperCase() + status.slice(1);
+    };
+
     return (
         <div>
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -166,14 +198,14 @@ const HealthPage: React.FC = () => {
                         <div key={check.name} className="stat-card" style={{ borderColor: statusColor(check.status) }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <div>
-                                    <div style={{ fontSize: 13, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>{check.name}</div>
-                                    <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4, color: statusColor(check.status) }}>{check.status}</div>
+                                    <div style={{ fontSize: 13, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 500 }}>{check.name}</div>
+                                    <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6, color: statusColor(check.status) }}>{formatStatus(check.status)}</div>
                                 </div>
                                 {statusIcon(check.status)}
                             </div>
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>{check.message}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <Clock size={10} /> {check.lastChecked.toLocaleTimeString()}
+                            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 10, fontWeight: 500 }}>{check.message}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Clock size={11} /> {check.lastChecked.toLocaleTimeString()}
                             </div>
                         </div>
                     ))}
