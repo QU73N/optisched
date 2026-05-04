@@ -1060,6 +1060,8 @@ const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJum
             {STAGES.map((s, i) => {
                 // Use maxIdx to determine if a stage has been visited (not grayed out)
                 const state = i < idx ? 'done' : i === idx ? 'current' : i <= maxIdx ? 'visited' : 'upcoming';
+                // Button is clickable if: not generating AND stage has been visited (i <= maxIdx)
+                const isClickable = canJump && i <= maxIdx;
                 return (
                     <li key={s.key} className={`sg-step sg-step-${state}`}>
                         <button
@@ -1067,9 +1069,9 @@ const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJum
                             role="tab"
                             data-sg-step={s.key}
                             className="sg-step-btn"
-                            onClick={() => onJump(s.key)}
+                            onClick={() => isClickable && onJump(s.key)}
                             onKeyDown={e => onKey(e, i)}
-                            disabled={!canJump || i > maxIdx}
+                            disabled={!isClickable}
                             aria-current={i === idx ? 'step' : undefined}
                             aria-selected={i === idx}
                             aria-label={`${i + 1} of ${STAGES.length}: ${s.label}. ${s.hint}.`}
