@@ -900,8 +900,6 @@ const ScheduleGenerate: React.FC = () => {
                     {stage === 'results' && result && (
                         <ResultsStage
                             result={result}
-                            onOutcome={() => setStage('outcome')}
-                            onSave={() => setStage('save')}
                         />
                     )}
                     {stage === 'outcome' && result && (
@@ -1803,7 +1801,7 @@ const GenerateStage: React.FC<{
 // Stage 6 — Results
 // ---------------------------------------------------------------------------
 
-const ResultsStage: React.FC<{ result: GenerationResult; onOutcome: () => void; onSave: () => void }> = ({ result, onOutcome, onSave }) => {
+const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
     const perfect = result.placed === result.total && result.errors.length === 0;
     const scoreRounded = result.score.toFixed(2);
     const unplacedCount = result.total - result.placed;
@@ -1870,16 +1868,6 @@ const ResultsStage: React.FC<{ result: GenerationResult; onOutcome: () => void; 
                     </table>
                 </div>
             )}
-
-            {/* Action buttons for outcome or save */}
-            <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                <button className="btn btn-secondary" onClick={onOutcome} disabled={result.entries.length === 0}>
-                    <Layers size={14} /> View Outcome
-                </button>
-                <button className="btn btn-primary" onClick={onSave} disabled={result.entries.length === 0}>
-                    <Save size={14} /> Save Schedule
-                </button>
-            </div>
         </div>
     );
 };
