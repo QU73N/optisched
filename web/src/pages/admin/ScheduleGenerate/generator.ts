@@ -1580,6 +1580,7 @@ const applyRepairs = (
     teacherMap: Map<string, Teacher>,
     roomMap: Map<string, Room>,
     subjectMap: Map<string, Subject>, // IMPROVEMENT: Add subject map for proper compatibility checks
+    sectionMap: Map<string, Section>, // IMPROVEMENT: Add section map for proper compatibility checks
     domains: Map<string, SessionDomain>,
     config: GenerationConfig,
     _classifiedConstraints: ClassifiedConstraints,
@@ -1752,16 +1753,20 @@ const applyRepairs = (
                             const existingSubject = subjectMap.get(existingEntry.subjectId);
                             if (!existingSubject) continue;
                             
+                            // Get the section for the existing entry
+                            const existingSection = sectionMap.get(existingEntry.sectionId);
+                            if (!existingSection) continue;
+                            
                             // Check if the existing session can be moved to a different room
                             // Try to move it to a room that's currently free at this time
-                            const alternativeRooms = domain.validRooms.filter(arid => arid !== rid);
-                            for (const altRid of alternativeRooms) {
+                            // BUG FIX: Check ALL rooms, not just domain.validRooms (which are for the unplaced task)
+                            const alternativeRooms = Array.from(roomMap.values())
+                                .filter(r => r.id !== rid)
+                                .filter(r => roomCompatible(r, existingSubject, existingSection));
+                            
+                            for (const altRoom of alternativeRooms) {
                                 if (placed) break;
-                                const altRoom = roomMap.get(altRid);
-                                if (!altRoom) continue;
-                                
-                                // Check if the alternative room is compatible with the existing session's subject
-                                if (!roomCompatible(altRoom, existingSubject, task.section)) continue;
+                                const altRid = altRoom.id;
                                 
                                 // Check if the alternative room is free at the existing session's time
                                 const existingSMin = toMin(existingEntry.start);
@@ -3598,6 +3603,7 @@ export async function runGenerator(
                 teacherMap,
                 roomMap,
                 subjectMap, // IMPROVEMENT: Pass subject map for proper compatibility checks
+                sectionMap, // IMPROVEMENT: Pass section map for proper compatibility checks
                 repairDomains,
                 config,
                 classifiedConstraints,
