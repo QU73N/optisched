@@ -192,6 +192,7 @@ const ConflictsAlerts: React.FC = () => {
         console.log('[SCAN START] Acquiring lock:', currentLockId);
         setScanResultLock(currentLockId);
         setScanning(true);
+        // Ensure UI immediately resets to 0/14
         setFixProgress({ current: 0, total: 14, currentViolation: 'Initializing scan...', overallProgress: 0 });
         
         try {
@@ -805,13 +806,14 @@ const ConflictsAlerts: React.FC = () => {
     };
 
     const allConflicts = useMemo(() => {
-        // Only use one source: scan results if available, otherwise database
-        if (hasScanResults) {
+        console.log('[UI DATA SOURCE] Recalculating allConflicts', { hasScanResults, scanResultLock, detectedCount: detectedConflicts.length, dbCount: dbConflicts.length });
+        // Only use one source: scan results if available/locked, otherwise database
+        if (hasScanResults || scanResultLock) {
             return detectedConflicts.map(c => ({ ...c, source: 'live' as const, is_resolved: false, created_at: new Date().toISOString() }));
         } else {
             return dbConflicts.map(c => ({ ...c, source: 'db' as const, scheduleIds: [] as string[], day: '' }));
         }
-    }, [detectedConflicts, dbConflicts, hasScanResults]);
+    }, [detectedConflicts, dbConflicts, hasScanResults, scanResultLock]);
 
     const unresolvedCount = useMemo(() => allConflicts.filter(c => !c.is_resolved).length, [allConflicts]);
     
