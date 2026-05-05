@@ -1329,6 +1329,14 @@ const PartialTargetPicker: React.FC<{
     );
 };
 
+// Simple tooltip component for field labels
+const FieldTooltip: React.FC<{ children: string }> = ({ children }) => (
+    <div className="sg-field-tooltip-wrapper">
+        <HelpCircle size={14} style={{ color: 'var(--text-muted)', cursor: 'help' }} />
+        <div className="sg-field-tooltip">{children}</div>
+    </div>
+);
+
 // ---------------------------------------------------------------------------
 // Stage 2 — Structure
 // ---------------------------------------------------------------------------
@@ -1345,7 +1353,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
 
             <div className="sg-fields">
                 <div>
-                    <div className="sg-field-label">Working days</div>
+                    <div className="sg-field-label">
+                        Working days
+                        <FieldTooltip>Select which days of the week classes can be scheduled. At least one day must be selected.</FieldTooltip>
+                    </div>
                     <div className="sg-chip-wrap">
                         {ALL_DAYS.map(d => (
                             <button
@@ -1359,15 +1370,24 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
 
                 <div className="sg-grid-3">
                     <div>
-                        <div className="sg-field-label">Day starts</div>
+                        <div className="sg-field-label">
+                            Day starts
+                            <FieldTooltip>The earliest time classes can begin each day.</FieldTooltip>
+                        </div>
                         <input type="time" className="input" value={config.dayStart} onChange={e => setConfig(c => ({ ...c, dayStart: e.target.value }))} />
                     </div>
                     <div>
-                        <div className="sg-field-label">Day ends</div>
+                        <div className="sg-field-label">
+                            Day ends
+                            <FieldTooltip>The latest time classes can end each day.</FieldTooltip>
+                        </div>
                         <input type="time" className="input" value={config.dayEnd} onChange={e => setConfig(c => ({ ...c, dayEnd: e.target.value }))} />
                     </div>
                     <div>
-                        <div className="sg-field-label">Session length</div>
+                        <div className="sg-field-label">
+                            Session length
+                            <FieldTooltip>Base duration for class sessions. The system will dynamically adjust to fit subject requirements without overflow.</FieldTooltip>
+                        </div>
                         <select className="input" value={config.sessionMinutes} onChange={e => setConfig(c => ({ ...c, sessionMinutes: Number(e.target.value) }))}>
                             <option value={60}>60 minutes</option>
                             <option value={90}>90 minutes</option>
@@ -1378,7 +1398,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
 
                 {/* Section 1: Break Mode */}
                 <div className="sg-break-config-section">
-                    <div className="sg-field-label sg-break-config-label">Break Mode</div>
+                    <div className="sg-field-label sg-break-config-label">
+                        Break Mode
+                        <FieldTooltip>Choose between a fixed break time for everyone, or variable breaks that teachers/sections can customize.</FieldTooltip>
+                    </div>
                     <div className="sg-break-mode-toggle">
                         <button
                             className={`btn ${config.breakMode === 'fixed' ? 'btn-primary' : 'btn-secondary'}`}
@@ -1397,7 +1420,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                     {config.breakMode === 'fixed' && (
                         <div className="sg-grid-3">
                             <div>
-                                <div className="sg-field-label">Label</div>
+                                <div className="sg-field-label">
+                                    Label
+                                    <FieldTooltip>Name for this break period (e.g., Lunch, Recess).</FieldTooltip>
+                                </div>
                                 <input
                                     className="input"
                                     value={config.fixedBreak.label}
@@ -1406,7 +1432,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                                 />
                             </div>
                             <div>
-                                <div className="sg-field-label">Start time</div>
+                                <div className="sg-field-label">
+                                    Start time
+                                    <FieldTooltip>When the break period starts each day.</FieldTooltip>
+                                </div>
                                 <input
                                     type="time"
                                     className="input"
@@ -1415,7 +1444,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                                 />
                             </div>
                             <div>
-                                <div className="sg-field-label">End time</div>
+                                <div className="sg-field-label">
+                                    End time
+                                    <FieldTooltip>When the break period ends each day.</FieldTooltip>
+                                </div>
                                 <input
                                     type="time"
                                     className="input"
@@ -1429,7 +1461,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                     {config.breakMode === 'variable' && (
                         <div className="sg-grid-4">
                             <div>
-                                <div className="sg-field-label">Start time</div>
+                                <div className="sg-field-label">
+                                    Start time
+                                    <FieldTooltip>Earliest time teachers/sections can schedule their break.</FieldTooltip>
+                                </div>
                                 <input
                                     type="time"
                                     className="input"
@@ -1438,7 +1473,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                                 />
                             </div>
                             <div>
-                                <div className="sg-field-label">End time</div>
+                                <div className="sg-field-label">
+                                    End time
+                                    <FieldTooltip>Latest time teachers/sections can schedule their break.</FieldTooltip>
+                                </div>
                                 <input
                                     type="time"
                                     className="input"
@@ -1447,7 +1485,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                                 />
                             </div>
                             <div>
-                                <div className="sg-field-label">Duration (min)</div>
+                                <div className="sg-field-label">
+                                    Duration (min)
+                                    <FieldTooltip>Length of each break period in minutes.</FieldTooltip>
+                                </div>
                                 <input
                                     type="number"
                                     className="input"
@@ -1458,7 +1499,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                                 />
                             </div>
                             <div>
-                                <div className="sg-field-label">Increments (min)</div>
+                                <div className="sg-field-label">
+                                    Increments (min)
+                                    <FieldTooltip>Time granularity for scheduling breaks (e.g., 15 = breaks can start at :00, :15, :30, :45).</FieldTooltip>
+                                </div>
                                 <input
                                     type="number"
                                     className="input"
@@ -1499,7 +1543,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                     {config.commonBreak.enabled && (
                         <div className="sg-grid-3">
                             <div>
-                                <div className="sg-field-label">Day</div>
+                                <div className="sg-field-label">
+                                    Day
+                                    <FieldTooltip>Select which day has the common break.</FieldTooltip>
+                                </div>
                                 <select
                                     className="input"
                                     value={config.commonBreak.day}
@@ -1509,7 +1556,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                                 </select>
                             </div>
                             <div>
-                                <div className="sg-field-label">Time</div>
+                                <div className="sg-field-label">
+                                    Time
+                                    <FieldTooltip>When the common break occurs on the selected day.</FieldTooltip>
+                                </div>
                                 <input
                                     type="time"
                                     className="input"
@@ -1518,7 +1568,10 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                                 />
                             </div>
                             <div>
-                                <div className="sg-field-label">Duration (min)</div>
+                                <div className="sg-field-label">
+                                    Duration (min)
+                                    <FieldTooltip>Length of the common break in minutes.</FieldTooltip>
+                                </div>
                                 <input
                                     type="number"
                                     className="input"
