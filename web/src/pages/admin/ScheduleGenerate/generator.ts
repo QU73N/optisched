@@ -574,6 +574,19 @@ const calculateSessionConfig = (subject: Subject, baseSessionMinutes: number): {
     if (subject.duration_hours != null && subject.duration_hours > 0) {
         const totalMinutes = subject.duration_hours * 60;
         
+        // FIX: Override session length for PE subjects and Work Immersion
+        // These subjects have duration_hours=2 in database, causing 120-minute sessions
+        // This creates conflicts with standard 90-minute sessions
+        // Force them to use baseSessionMinutes (90 minutes) instead
+        const isPESubject = subject.code?.toUpperCase().startsWith('PEH');
+        const isWISubject = subject.code?.toUpperCase() === 'WI';
+        
+        if (isPESubject || isWISubject) {
+            // Calculate count based on base session length
+            const count = totalMinutes / baseSessionMinutes;
+            return { count, sessionLength: baseSessionMinutes };
+        }
+        
         // Calculate optimal session length that fits exactly
         const optimalSessionLength = calculateOptimalSessionLength(totalMinutes, baseSessionMinutes);
         const count = totalMinutes / optimalSessionLength;
