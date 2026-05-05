@@ -290,11 +290,10 @@ const ConflictsAlerts: React.FC = () => {
             console.log('Set detected conflicts from scan:', conflicts.length);
             
             // Then sync with database (for persistence)
-            // Fetch existing unresolved conflicts
+            // Fetch ALL conflicts (not just unresolved) because conflict_original_id is unique across the table
             const { data: existingConflicts } = await supabase
                 .from('conflicts')
-                .select('id, conflict_original_id')
-                .eq('is_resolved', false);
+                .select('id, conflict_original_id');
             
             const existingIds = new Set((existingConflicts || []).map((c: { conflict_original_id?: string }) => c.conflict_original_id).filter((id): id is string => id !== undefined));
             const detectedIds = new Set(result.hardViolations.map((v: HardConstraintViolation) => v.id));
@@ -302,8 +301,14 @@ const ConflictsAlerts: React.FC = () => {
             console.log('Existing conflicts in DB:', existingIds.size);
             console.log('Detected conflicts in scan:', detectedIds.size);
             
-            // Mark conflicts as resolved if they're no longer detected
-            const resolvedIds = [...existingIds].filter(id => !detectedIds.has(id));
+            // Mark unresolved conflicts as resolved if they're no longer detected
+            const { data: unresolvedConflicts } = await supabase
+                .from('conflicts')
+                .select('id, conflict_original_id')
+                .eq('is_resolved', false);
+            
+            const unresolvedIds = new Set((unresolvedConflicts || []).map((c: { conflict_original_id?: string }) => c.conflict_original_id).filter((id): id is string => id !== undefined));
+            const resolvedIds = [...unresolvedIds].filter(id => !detectedIds.has(id));
             if (resolvedIds.length > 0) {
                 console.log('Marking as resolved:', resolvedIds.length);
                 await supabase
