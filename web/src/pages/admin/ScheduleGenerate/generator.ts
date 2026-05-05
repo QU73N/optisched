@@ -1458,10 +1458,9 @@ const applyRepairs = (
     teacherMap: Map<string, Teacher>,
     roomMap: Map<string, Room>,
     domains: Map<string, SessionDomain>,
-    _config: GenerationConfig,
+    config: GenerationConfig,
     _classifiedConstraints: ClassifiedConstraints,
 ): PlacedEntry[] => {
-    void _config;
     void _classifiedConstraints;
 
     const repairedEntries = [...entries];
@@ -1473,6 +1472,13 @@ const applyRepairs = (
         startMin: toMin(e.start),
         endMin: toMin(e.end),
     }));
+
+    // Pre-calculate session configs for all subjects in unplaced tasks
+    const subjectSessionConfig = new Map<string, { count: number; sessionLength: number }>();
+    for (const task of unplacedTasks) {
+        const sessionConfig = calculateSessionConfig(task.subject, config.sessionMinutes);
+        subjectSessionConfig.set(task.subject.id, sessionConfig);
+    }
 
     // Strategy 1: Direct placement attempt using domain
     let placed = false;
@@ -1489,7 +1495,11 @@ const applyRepairs = (
             if (placed) break;
             const d = slot.day;
             const sMin = toMin(slot.start);
-            const eMin = toMin(slot.end);
+            
+            // Calculate actual end time based on subject's session length (FIX: was using slot.end)
+            const sessionConfig = subjectSessionConfig.get(task.subject.id);
+            const sessionLength = sessionConfig?.sessionLength || config.sessionMinutes;
+            const eMin = sMin + sessionLength;
 
             for (const tid of domain.validTeachers) {
                 if (placed) break;
@@ -1552,7 +1562,7 @@ const applyRepairs = (
                         sectionName: task.section.name,
                         day: d,
                         start: slot.start,
-                        end: slot.end,
+                        end: toHHMM(eMin), // FIX: Use calculated eMin instead of slot.end
                     };
                     const newBusy = {
                         teacherId: tid,
