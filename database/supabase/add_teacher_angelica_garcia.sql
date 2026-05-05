@@ -1,5 +1,11 @@
--- Add Angelica Marie R. Garcia with same capabilities as Reneil P. Arnado
+-- Add Angelica Marie R. Garcia as new teacher with same capabilities as Reneil P. Arnado
 -- This script creates a complete teacher record with all data needed for generation
+
+-- Name breakdown:
+-- First name: Angelica Marie
+-- Middle initial: R.
+-- Last name: Garcia
+-- Full name: Angelica Marie R. Garcia
 
 -- Step 0: Create auth user for Angelica (for login)
 -- Note: This requires admin privileges. If this fails, create the user manually in Supabase Dashboard
