@@ -14,90 +14,111 @@
 -- The profile will be linked to this auth user via email
 
 -- Step 1: Create profile for Angelica Marie R. Garcia
-INSERT INTO profiles (id, email, full_name, role, avatar_url)
-VALUES (
-    gen_random_uuid(),
-    'angelica.garcia@optisched.sti.edu',
-    'Angelica Marie R. Garcia',
-    'teacher',
-    NULL
-)
-ON CONFLICT (email) DO NOTHING
-RETURNING id as profile_id;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM profiles WHERE email = 'angelica.garcia@optisched.sti.edu') THEN
+        INSERT INTO profiles (id, email, full_name, role, avatar_url)
+        VALUES (
+            gen_random_uuid(),
+            'angelica.garcia@optisched.sti.edu',
+            'Angelica Marie R. Garcia',
+            'teacher',
+            NULL
+        );
+    ELSE
+        -- Profile exists, ensure full_name is correct
+        UPDATE profiles 
+        SET full_name = 'Angelica Marie R. Garcia'
+        WHERE email = 'angelica.garcia@optisched.sti.edu';
+    END IF;
+END $$;
 
--- Store the profile_id for later use (you'll need to replace this with the actual ID from above)
--- For this script, we'll use a variable-like approach with CTE
-
-WITH new_profile AS (
-    SELECT id FROM profiles WHERE email = 'angelica.garcia@optisched.sti.edu'
-),
-new_teacher AS (
-    INSERT INTO teachers (id, profile_id, full_name, email, employment_type, max_hours, max_classes_per_day, is_public, is_available)
-    SELECT 
-        gen_random_uuid(),
-        (SELECT id FROM new_profile),
-        'Angelica Marie R. Garcia',
-        'angelica.garcia@optisched.sti.edu',
-        'full-time',
-        40,
-        8,
-        true,
-        true
-    FROM new_profile
-    ON CONFLICT (email) DO NOTHING
-    RETURNING id as teacher_id
-)
--- Step 2: Create teacher preferences (same as Reneil - all days, all time slots)
-INSERT INTO teacher_preferences (teacher_id, preferred_days, preferred_time_start, preferred_time_end)
-SELECT 
-    (SELECT id FROM new_teacher),
-    ARRAY['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']::text[],
-    '07:00',
-    '17:30'
-FROM new_teacher
-ON CONFLICT (teacher_id) DO NOTHING;
+-- Step 2: Create teacher record
+DO $$
+DECLARE
+    v_profile_id uuid;
+    v_teacher_id uuid;
+BEGIN
+    -- Get the profile ID
+    SELECT id INTO v_profile_id FROM profiles WHERE email = 'angelica.garcia@optisched.sti.edu';
+    
+    -- Check if teacher already exists (using profile_id since teachers table doesn't have email column)
+    IF NOT EXISTS (SELECT 1 FROM teachers WHERE profile_id = v_profile_id) THEN
+        -- Create teacher record (using correct column names)
+        INSERT INTO teachers (id, profile_id, department, employment_type, max_hours, is_public, is_active)
+        VALUES (
+            gen_random_uuid(),
+            v_profile_id,
+            'Business',
+            'full-time',
+            40,
+            true,
+            true
+        )
+        RETURNING id INTO v_teacher_id;
+        
+        -- Create teacher preferences
+        INSERT INTO teacher_preferences (teacher_id, preferred_days, preferred_time_start, preferred_time_end)
+        VALUES (
+            v_teacher_id,
+            ARRAY['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']::text[],
+            '07:00',
+            '17:30'
+        );
+    END IF;
+END $$;
 
 -- Step 3: Assign Angelica the same subjects as Reneil P. Arnado
 -- Business subjects
-INSERT INTO subject_teachers (subject_id, teacher_id)
-SELECT 
-    s.id, 
-    (SELECT id FROM new_teacher)
-FROM subjects s
-WHERE s.name IN (
-    'Accountancy & Business Management',
-    'Business Ethics & Social Responsibility',
-    'Entrepreneurship',
-    'Applied Economics'
-)
-ON CONFLICT (subject_id, teacher_id) DO NOTHING;
-
--- Remaining subjects (Electronics, Robotics, Media Information Literacy, Understanding Culture, Society, and Politics)
-INSERT INTO subject_teachers (subject_id, teacher_id)
-SELECT 
-    s.id, 
-    (SELECT id FROM new_teacher)
-FROM subjects s
-WHERE s.name IN (
-    'Electronics',
-    'Robotics',
-    'Media Information Literacy',
-    'Understanding Culture, Society, and Politics'
-)
-ON CONFLICT (subject_id, teacher_id) DO NOTHING;
+DO $$
+DECLARE
+    v_teacher_id uuid;
+BEGIN
+    -- Get teacher ID via profile
+    SELECT t.id INTO v_teacher_id 
+    FROM teachers t 
+    JOIN profiles p ON t.profile_id = p.id 
+    WHERE p.email = 'angelica.garcia@optisched.sti.edu';
+    
+    IF v_teacher_id IS NOT NULL THEN
+        INSERT INTO subject_teachers (subject_id, teacher_id)
+        SELECT s.id, v_teacher_id
+        FROM subjects s
+        WHERE s.name IN (
+            'Accountancy & Business Management',
+            'Business Ethics & Social Responsibility',
+            'Entrepreneurship',
+            'Applied Economics'
+        )
+        ON CONFLICT DO NOTHING;
+        
+        -- Remaining subjects (Electronics, Robotics, Media Information Literacy, Understanding Culture, Society, and Politics)
+        INSERT INTO subject_teachers (subject_id, teacher_id)
+        SELECT s.id, v_teacher_id
+        FROM subjects s
+        WHERE s.name IN (
+            'Electronics',
+            'Robotics',
+            'Media Information Literacy',
+            'Understanding Culture, Society, and Politics'
+        )
+        ON CONFLICT DO NOTHING;
+    END IF;
+END $$;
 
 -- Verification: Show the created teacher and their subjects
 SELECT 
     t.id as teacher_id,
-    t.full_name,
-    t.email,
+    p.full_name,
+    p.email,
+    t.department,
     t.employment_type,
     t.max_hours,
-    t.max_classes_per_day,
     t.is_public,
-    t.is_available
+    t.is_active
 FROM teachers t
-WHERE t.email = 'angelica.garcia@optisched.sti.edu';
+JOIN profiles p ON t.profile_id = p.id
+WHERE p.email = 'angelica.garcia@optisched.sti.edu';
 
 -- Show assigned subjects
 SELECT 
@@ -108,16 +129,22 @@ SELECT
     s.duration_hours
 FROM subject_teachers st
 JOIN subjects s ON st.subject_id = s.id
-WHERE st.teacher_id = (SELECT id FROM teachers WHERE email = 'angelica.garcia@optisched.sti.edu')
+WHERE st.teacher_id = (
+    SELECT t.id 
+    FROM teachers t 
+    JOIN profiles p ON t.profile_id = p.id 
+    WHERE p.email = 'angelica.garcia@optisched.sti.edu'
+)
 ORDER BY s.code;
 
 -- Show teacher preferences
 SELECT 
     tp.teacher_id,
-    t.full_name,
+    p.full_name,
     tp.preferred_days,
     tp.preferred_time_start,
     tp.preferred_time_end
 FROM teacher_preferences tp
 JOIN teachers t ON tp.teacher_id = t.id
-WHERE t.email = 'angelica.garcia@optisched.sti.edu';
+JOIN profiles p ON t.profile_id = p.id
+WHERE p.email = 'angelica.garcia@optisched.sti.edu';
