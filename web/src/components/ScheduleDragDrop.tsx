@@ -50,14 +50,22 @@ const formatTeacherName = (teacherName: string, allTeachers: Teacher[]): string 
         return tLastName.toLowerCase() === lastName.toLowerCase();
     }).length;
     
-    // If multiple teachers have the same last name, add initial
+    // If multiple teachers with same last name, add initial
     if (sameLastNameCount > 1 && parts.length > 1) {
-        const firstName = parts[0];
-        const initial = firstName.charAt(0).toUpperCase();
+        const initial = parts[0][0];
         return `${lastName}, ${initial}.`;
     }
     
     return lastName;
+};
+
+// Helper function to format time in AM/PM format
+const formatTimeAMPM = (time: string): string => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12; // Convert 0 to 12
+    const displayMinutes = minutes.toString().padStart(2, '0');
+    return `${displayHours}:${displayMinutes} ${period}`;
 };
 
 export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
@@ -467,7 +475,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                         >
                             <div
                                 className={`sm-cal-event ${colorForKey(ev.entry.subjectName || ev.entry.sectionId)}`}
-                                title={`${ev.entry.subjectName}\n${formatTeacherName(ev.entry.teacherName, teachers)}\n${ev.entry.roomName}\n${formatTime(ev.entry.start)}–${formatTime(ev.entry.end)}`}
+                                title={`${ev.entry.subjectName}\n${viewMode === 'section' ? `${formatTeacherName(ev.entry.teacherName, teachers)} - ${ev.entry.roomName}` : viewMode === 'teacher' ? `${ev.entry.sectionName} - ${ev.entry.roomName}` : `${ev.entry.sectionName} - ${formatTeacherName(ev.entry.teacherName, teachers)}`}\n${formatTimeAMPM(ev.entry.start)} - ${formatTimeAMPM(ev.entry.end)}`}
                                 style={{ fontSize: getFontSize() }}
                             >
                                 <div className="sm-cal-event-title" style={{ fontSize: getFontSize(), fontWeight: ev.span <= 1 ? 600 : 500 }}>
@@ -476,11 +484,24 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                                 {ev.span > 1 && (
                                     <>
                                         <div className="sm-cal-event-sub" style={{ fontSize: getFontSize() }}>
-                                            {viewMode !== 'teacher' && formatTeacherName(ev.entry.teacherName, teachers)}
-                                            {viewMode !== 'room' && ev.entry.roomName}
+                                            {viewMode === 'section' && (
+                                                <>
+                                                    {formatTeacherName(ev.entry.teacherName, teachers)} - {ev.entry.roomName}
+                                                </>
+                                            )}
+                                            {viewMode === 'teacher' && (
+                                                <>
+                                                    {ev.entry.sectionName} - {ev.entry.roomName}
+                                                </>
+                                            )}
+                                            {viewMode === 'room' && (
+                                                <>
+                                                    {ev.entry.sectionName} - {formatTeacherName(ev.entry.teacherName, teachers)}
+                                                </>
+                                            )}
                                         </div>
                                         <div className="sm-cal-event-time" style={{ fontSize: getFontSize() }}>
-                                            {formatTime(ev.entry.start)}–{formatTime(ev.entry.end)}
+                                            {formatTimeAMPM(ev.entry.start)} - {formatTimeAMPM(ev.entry.end)}
                                         </div>
                                     </>
                                 )}
