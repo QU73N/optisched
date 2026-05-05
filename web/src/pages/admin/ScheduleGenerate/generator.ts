@@ -1579,6 +1579,7 @@ const applyRepairs = (
     unplacedTasks: Array<{ subject: Subject; section: Section; sessionIndex: number }>,
     teacherMap: Map<string, Teacher>,
     roomMap: Map<string, Room>,
+    subjectMap: Map<string, Subject>, // IMPROVEMENT: Add subject map for proper compatibility checks
     domains: Map<string, SessionDomain>,
     config: GenerationConfig,
     _classifiedConstraints: ClassifiedConstraints,
@@ -1747,6 +1748,10 @@ const applyRepairs = (
                             const existingRoom = roomMap.get(existingEntry.roomId);
                             if (!existingRoom) continue;
                             
+                            // Get the subject for the existing entry
+                            const existingSubject = subjectMap.get(existingEntry.subjectId);
+                            if (!existingSubject) continue;
+                            
                             // Check if the existing session can be moved to a different room
                             // Try to move it to a room that's currently free at this time
                             const alternativeRooms = domain.validRooms.filter(arid => arid !== rid);
@@ -1756,8 +1761,7 @@ const applyRepairs = (
                                 if (!altRoom) continue;
                                 
                                 // Check if the alternative room is compatible with the existing session's subject
-                                // Use the current task's subject for compatibility check as a fallback
-                                if (!roomCompatible(altRoom, task.subject, task.section)) continue;
+                                if (!roomCompatible(altRoom, existingSubject, task.section)) continue;
                                 
                                 // Check if the alternative room is free at the existing session's time
                                 const existingSMin = toMin(existingEntry.start);
@@ -3593,6 +3597,7 @@ export async function runGenerator(
                 unplacedTasks,
                 teacherMap,
                 roomMap,
+                subjectMap, // IMPROVEMENT: Pass subject map for proper compatibility checks
                 repairDomains,
                 config,
                 classifiedConstraints,
