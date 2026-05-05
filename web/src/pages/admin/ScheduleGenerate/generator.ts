@@ -3583,16 +3583,21 @@ export async function runGenerator(
         }
 
         // Reconstruct domains for repair
+        // CRITICAL FIX: Pass empty domain maps to avoid using stale initial state
+        // The teacherDomainMap and roomDomainMap are constructed at the beginning
+        // and don't account for already-placed sessions. Using them in repair
+        // would cause the repair engine to think there are valid options when
+        // rooms/teachers are actually fully booked in the current schedule.
         const repairDomains = constructDomains(
             unplacedTasks,
             teacherMap,
             roomMap,
-            teacherDomainMap,
-            roomDomainMap,
-            sectionDomainMap,
+            new Map(), // Empty teacher domain map - don't use stale initial state
+            new Map(), // Empty room domain map - don't use stale initial state
+            sectionDomainMap, // Section domain map is less critical for repair
             days,
             slotsByDay,
-            config, // IMPROVEMENT: Pass config for break window checking
+            config,
         );
 
         // Apply repairs to try to place unplaced tasks
