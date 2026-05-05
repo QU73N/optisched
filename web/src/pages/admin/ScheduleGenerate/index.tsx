@@ -1599,7 +1599,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
         <div>
             <StageHeader icon={<Sliders size={16} />} title="Constraints" desc="Hard rules are always enforced. Tune soft weights to guide optimization." compact={compact} />
 
-            <div className="sg-subhead"><ShieldCheck size={12} /> Institutional Policies</div>
+            <div className="sg-subhead"><ShieldCheck size={12} /> Policies</div>
             <button
                 type="button"
                 className="sg-hard-constraints-btn"
@@ -1607,7 +1607,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 aria-expanded={policiesOpen}
                 style={{ marginBottom: 16 }}
             >
-                <span>Configure institutional policies</span>
+                <span>Configure policies</span>
                 {policiesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {policiesOpen && (
