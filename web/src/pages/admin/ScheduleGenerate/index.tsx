@@ -28,7 +28,6 @@ import { scheduleVersionService } from '../../../services/scheduleVersionService
 // Temporarily disabled audit logging - log_audit RPC function doesn't exist
 // import { scheduleAudit } from '../../../services/auditService';
 import { detectConflicts } from '../../../services/conflictDetector';
-import { PublishOverwriteConfirm } from '../../../components/PublishOverwriteConfirm';
 import { ScheduleDragDrop } from '../../../components/ScheduleDragDrop';
 
 // ---------------------------------------------------------------------------
@@ -106,16 +105,6 @@ const ScheduleGenerate: React.FC = () => {
         approveSchedule: (batchId: string, options: { changeReason: string }) => Promise<{ success: boolean; message?: string }>;
         publishApprovedSchedule: (batchId: string, options: { changeReason: string }) => Promise<{ success: boolean; message?: string; active_version_id?: string | null }>;
     };
-
-    // Version control state
-    const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
-    const [currentScheduleSummary, setCurrentScheduleSummary] = useState<{
-        exists: boolean;
-        version?: string;
-        timestamp?: string;
-        sessionCount?: number;
-        score?: number;
-    } | null>(null);
 
     const refreshExisting = async () => {
         // Query generation_runs table to count actual schedules (not individual sessions)
@@ -770,65 +759,6 @@ const ScheduleGenerate: React.FC = () => {
         }
     };
 
-    const handleOverwriteConfirm = async () => {
-        if (!result) return;
-        
-        setShowOverwriteConfirm(false);
-        
-        // Initialize version service
-        scheduleVersionService.initialize(supabase, user?.id || '');
-        
-        // Use version service to publish with overwrite
-        const schedules = result.entries.map(e => ({
-            id: crypto.randomUUID(),
-            subject_id: e.subjectId,
-            teacher_id: e.teacherId,
-            room_id: e.roomId,
-            section_id: e.sectionId,
-            day_of_week: e.day as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday',
-            start_time: e.start,
-            end_time: e.end,
-            status: 'published' as const,
-            semester: '1st Semester',
-            academic_year: '2025-2026',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            created_by: user?.id || null,
-            submitted_at: null,
-            approved_by: null,
-            approved_at: null,
-            rejected_by: null,
-            rejected_at: null,
-            rejection_reason: null,
-            deleted_at: null,
-            deleted_by: null,
-            is_locked: false,
-            locked_by: null,
-            locked_at: null,
-            lock_reason: null,
-        }));
-
-        const publishResult = await scheduleVersionService.publishSchedule(schedules, {
-            academic_year: '2025-2026',
-            semester: '1st Semester',
-            score: result.score,
-            conflictCount: 0,
-            changeReason: 'Published from Generate tab',
-            force: true,
-        });
-
-        if (publishResult.success) {
-            setSavedId('published');
-            await refreshExisting();
-        } else {
-            setSaveError(publishResult.message);
-        }
-    };
-
-    const handleOverwriteCancel = () => {
-        setShowOverwriteConfirm(false);
-        setCurrentScheduleSummary(null);
-    };
     const saveDraft = () => saveAs('draft');
     const saveAndSubmit = () => saveAs('submitted');
 
@@ -940,69 +870,6 @@ const ScheduleGenerate: React.FC = () => {
                     )}
                     {stage === 'save' && result && (
                         <>
-                            {/* Publish Status Card */}
-                            {currentScheduleSummary && currentScheduleSummary.exists && (
-                                <div style={{
-                                    marginBottom: 24,
-                                    padding: 20,
-                                    backgroundColor: 'var(--surface-soft)',
-                                    border: '1px solid var(--border-light)',
-                                    borderRadius: 'var(--radius-md)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 16
-                                }}>
-                                    <div style={{
-                                        width: 48,
-                                        height: 48,
-                                        borderRadius: 'var(--radius-md)',
-                                        backgroundColor: 'var(--accent-warning-10, rgba(211, 139, 32, 0.1))',
-                                        border: '2px solid var(--accent-warning)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <AlertTriangle size={24} style={{ color: 'var(--accent-warning)' }} />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-                                            Active Schedule Published
-                                        </div>
-                                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                                            {currentScheduleSummary.version && `Version ${currentScheduleSummary.version} • `}
-                                            {currentScheduleSummary.timestamp && new Date(currentScheduleSummary.timestamp).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}
-                                        </div>
-                                        {currentScheduleSummary.sessionCount !== undefined && currentScheduleSummary.score !== undefined && (
-                                            <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
-                                                <span style={{ color: 'var(--text-muted)' }}>
-                                                    <strong style={{ color: 'var(--text-primary)' }}>{currentScheduleSummary.sessionCount}</strong> sessions
-                                                </span>
-                                                <span style={{ color: 'var(--text-muted)' }}>
-                                                    Score: <strong style={{ color: 'var(--text-primary)' }}>{currentScheduleSummary.score.toFixed(0)}</strong>
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div style={{
-                                        padding: '8px 16px',
-                                        backgroundColor: 'var(--accent-warning)',
-                                        borderRadius: 'var(--radius-sm)',
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        color: 'white',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.5px'
-                                    }}>
-                                        Overwrite Required
-                                    </div>
-                                </div>
-                            )}
                             <SaveStage
                                 result={result}
                                 saving={saving}
@@ -1041,20 +908,6 @@ const ScheduleGenerate: React.FC = () => {
                         </button>
                     )}
                 </div>
-            )}
-            
-            {/* Overwrite Confirmation Modal */}
-            {showOverwriteConfirm && currentScheduleSummary && result && (
-                <PublishOverwriteConfirm
-                    isOpen={showOverwriteConfirm}
-                    currentSchedule={currentScheduleSummary}
-                    newSchedule={{
-                        sessionCount: result.placed,
-                        score: result.score,
-                    }}
-                    onConfirm={handleOverwriteConfirm}
-                    onCancel={handleOverwriteCancel}
-                />
             )}
         </div>
     );
