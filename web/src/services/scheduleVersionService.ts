@@ -666,6 +666,13 @@ class ScheduleVersionService {
                 throw new Error(`Version creation failed: ${versionError.message}. Status has been reverted.`);
             }
 
+            // Deactivate the old version before activating the new one
+            await this.supabase
+                .from('schedule_versions')
+                .update({ is_active: false })
+                .eq('batch_id', batchId)
+                .eq('is_active', true);
+
             // Activate the new version
             await this.supabase
                 .rpc('activate_batch_version', { p_version_id: newVersion });
@@ -742,6 +749,13 @@ class ScheduleVersionService {
                 await this.supabase.from('schedules').update({ status: 'submitted', approved_at: null, approved_by: null }).eq('batch_id', batchId).eq('is_active', true);
                 throw versionError;
             }
+
+            // Deactivate the old version before activating the new one
+            await this.supabase
+                .from('schedule_versions')
+                .update({ is_active: false })
+                .eq('batch_id', batchId)
+                .eq('is_active', true);
 
             await this.supabase.rpc('activate_batch_version', { p_version_id: newVersion });
             scheduleLogger.system.workflowCompleted('Schedule approve', Date.now(), true);
