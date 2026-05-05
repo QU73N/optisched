@@ -938,7 +938,9 @@ const ConflictsAlerts: React.FC = () => {
                     <h1 className="dashboard-title"><AlertTriangle size={20} /> Conflicts & Alerts</h1>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
                         <p className="dashboard-subtitle" style={{ margin: 0 }}>
-                            {unresolvedCount > 0
+                            {hasScanResults
+                                ? `${detectedConflicts.length} conflict${detectedConflicts.length > 1 ? 's' : ''} found in scan`
+                                : unresolvedCount > 0
                                 ? `${unresolvedCount} active conflict${unresolvedCount > 1 ? 's' : ''} detected`
                                 : 'No active conflicts'}
                         </p>
@@ -971,11 +973,11 @@ const ConflictsAlerts: React.FC = () => {
             {/* Stats */}
             <div className="stats-grid" style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
                 <div className="stat-card">
-                    <div className="stat-number">{allConflicts.length}</div>
+                    <div className="stat-number">{hasScanResults ? detectedConflicts.length : allConflicts.length}</div>
                     <div className="stat-label">Total</div>
                 </div>
                 <div className="stat-card">
-                    <div className="stat-number" style={{ color: unresolvedCount > 0 ? '#C84B4B' : undefined }}>{unresolvedCount}</div>
+                    <div className="stat-number" style={{ color: (hasScanResults ? detectedConflicts.length : unresolvedCount) > 0 ? '#C84B4B' : undefined }}>{hasScanResults ? detectedConflicts.length : unresolvedCount}</div>
                     <div className="stat-label">Active</div>
                 </div>
                 <div className="stat-card">
