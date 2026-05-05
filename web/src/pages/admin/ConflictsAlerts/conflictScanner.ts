@@ -110,7 +110,7 @@ export const scanAllConstraints = async (
     const seen = new Set<string>();
     
     // Define scanning phases for progress tracking
-    const totalPhases = 13;
+    const totalPhases = 14;
     let currentPhase = 0;
 
     const reportProgress = (phaseName: string) => {

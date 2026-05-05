@@ -67,17 +67,18 @@ const ConflictsAlerts: React.FC = () => {
     const [confirmDialogViolationCount, setConfirmDialogViolationCount] = useState(0);
     const isMountedRef = useRef(true);
     const [hasScanResults, setHasScanResults] = useState(false);
+    const [scanResultLock, setScanResultLock] = useState<string | null>(null);
 
     // Track when hasScanResults changes
     useEffect(() => {
-        console.log('[STATE CHANGE] hasScanResults changed to:', hasScanResults);
-    }, [hasScanResults]);
+        console.log('[STATE CHANGE] hasScanResults changed to:', hasScanResults, 'lock:', scanResultLock);
+    }, [hasScanResults, scanResultLock]);
 
     // Fetch from conflicts table and populate detected conflicts
     const fetchDbConflicts = useCallback(async () => {
-        // If we have scan results, don't overwrite them with database data
-        if (hasScanResults) {
-            console.log('[FETCH DB] Skipping - has scan results');
+        // CRITICAL: If we have a scan lock or results, NEVER overwrite with DB data
+        if (hasScanResults || scanResultLock) {
+            console.log('[FETCH DB] BLOCKED - scan state protected by lock', { hasScanResults, scanResultLock });
             return;
         }
         
@@ -153,7 +154,8 @@ const ConflictsAlerts: React.FC = () => {
         } else {
             console.log('Skipping DB fetch - using scan results');
         }
-    }, [selectedVersion, versionId, hasScanResults]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedVersion, versionId, hasScanResults, scanResultLock]);
 
     // Load last scan result from database
     const fetchLastScanResult = useCallback(async () => {
@@ -185,6 +187,10 @@ const ConflictsAlerts: React.FC = () => {
     // Comprehensive scan using the new conflict scanner
     const runComprehensiveScan = useCallback(async () => {
         const scanStartTime = Date.now();
+        const currentLockId = crypto.randomUUID();
+        
+        console.log('[SCAN START] Acquiring lock:', currentLockId);
+        setScanResultLock(currentLockId);
         setScanning(true);
         setFixProgress({ current: 0, total: 14, currentViolation: 'Initializing scan...', overallProgress: 0 });
         
@@ -371,7 +377,8 @@ const ConflictsAlerts: React.FC = () => {
             
             // Only refresh db conflicts if insert succeeded, otherwise keep scan results
             if (insertSuccess) {
-                await fetchDbConflicts();
+                console.log('[SCAN SYNC] Sync succeeded, keeping scan results as source of truth');
+                // We DO NOT call fetchDbConflicts() here anymore
             } else {
                 console.log('Skipping DB fetch due to insert failure - keeping scan results');
             }
@@ -386,6 +393,9 @@ const ConflictsAlerts: React.FC = () => {
                 });
             }
             
+            // Set success state before toast to ensure UI updates source
+            setHasScanResults(true);
+            
             showToast({
                 type: 'success',
                 title: 'Scan Complete',
@@ -394,6 +404,7 @@ const ConflictsAlerts: React.FC = () => {
             
         } catch (error) {
             console.error('Scan failed:', error);
+            setScanResultLock(null); // Release lock on failure
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             showToast({
                 type: 'error',
@@ -401,10 +412,12 @@ const ConflictsAlerts: React.FC = () => {
                 message: `Unable to complete scan: ${errorMessage}. Please try again.`,
             });
         } finally {
-            setScanning(false);
-            setFixProgress({ current: 0, total: 0, currentViolation: '', overallProgress: 0 });
+            if (isMountedRef.current) {
+                setScanning(false);
+                setFixProgress({ current: 0, total: 0, currentViolation: '', overallProgress: 0 });
+            }
         }
-    }, [showToast, fetchDbConflicts, saveScanResult, selectedVersion, versionId]);
+    }, [versionId, selectedVersion, profile?.id, saveScanResult, showToast]);
 
     // Handle autonomous fixing
     const handleAutonomousFix = useCallback(async () => {
@@ -894,6 +907,7 @@ const ConflictsAlerts: React.FC = () => {
                             className={selectedVersion === 'published' ? 'btn btn-primary' : 'btn btn-secondary'}
                             onClick={() => {
                                 console.log('[VERSION BUTTON] User clicked Published');
+                                setScanResultLock(null); // Release lock to allow DB fetch
                                 setSelectedVersion('published');
                                 setShowVersionSelector(false);
                                 setScanResult(null);
@@ -914,6 +928,7 @@ const ConflictsAlerts: React.FC = () => {
                             className={selectedVersion === 'draft' ? 'btn btn-primary' : 'btn btn-secondary'}
                             onClick={() => {
                                 console.log('[VERSION BUTTON] User clicked Draft');
+                                setScanResultLock(null); // Release lock to allow DB fetch
                                 setSelectedVersion('draft');
                                 setShowVersionSelector(false);
                                 setScanResult(null);
@@ -934,6 +949,7 @@ const ConflictsAlerts: React.FC = () => {
                             className={selectedVersion === 'all' ? 'btn btn-primary' : 'btn btn-secondary'}
                             onClick={() => {
                                 console.log('[VERSION BUTTON] User clicked All');
+                                setScanResultLock(null); // Release lock to allow DB fetch
                                 setSelectedVersion('all');
                                 setShowVersionSelector(false);
                                 setScanResult(null);
@@ -1003,11 +1019,15 @@ const ConflictsAlerts: React.FC = () => {
             {/* Stats */}
             <div className="stats-grid" style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
                 <div className="stat-card">
-                    <div className="stat-number">{hasScanResults ? detectedConflicts.length : allConflicts.length}</div>
+                    <div className="stat-number">
+                        {hasScanResults || scanResultLock ? detectedConflicts.length : dbConflicts.filter(c => !c.is_resolved).length}
+                    </div>
                     <div className="stat-label">Total</div>
                 </div>
                 <div className="stat-card">
-                    <div className="stat-number" style={{ color: (hasScanResults ? detectedConflicts.length : unresolvedCount) > 0 ? '#C84B4B' : undefined }}>{hasScanResults ? detectedConflicts.length : unresolvedCount}</div>
+                    <div className="stat-number" style={{ color: (hasScanResults || scanResultLock ? detectedConflicts.length : unresolvedCount) > 0 ? '#C84B4B' : undefined }}>
+                        {hasScanResults || scanResultLock ? detectedConflicts.length : unresolvedCount}
+                    </div>
                     <div className="stat-label">Active</div>
                 </div>
                 <div className="stat-card">
