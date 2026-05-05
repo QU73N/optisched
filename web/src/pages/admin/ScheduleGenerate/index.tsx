@@ -20,7 +20,7 @@ import {
     type PlacedEntry, type PriorityTier, type Room, type Section, type StageKey,
     type Subject, type Teacher, type VersionSummary, type WorkflowState,
 } from './types';
-import { runGenerator } from './generator';
+import { useGeneratorWorker } from './useGeneratorWorker';
 import { getRulesAsRecord, notifyStudentsOfScheduleChanges } from '../../../services/generationService';
 import { scheduleStateManager } from '../../../services/scheduleStateManager';
 import { scheduleLogger } from '../../../services/scheduleLogger';
@@ -64,6 +64,34 @@ const ScheduleGenerate: React.FC = () => {
     const [workflowNote, setWorkflowNote] = useState<string | null>(null);
     const [workflowError, setWorkflowError] = useState<string | null>(null);
     const cancelRef = useRef(false);
+
+    // Use Web Worker for generation (runs in background even when tabbed out)
+    const {
+        isGenerating: workerGenerating,
+        progress: workerProgress,
+        result: workerResult,
+        error: workerError,
+        startGeneration: workerStartGeneration,
+        cancelGeneration: workerCancelGeneration,
+    } = useGeneratorWorker();
+
+    // Sync worker state with component state
+    useEffect(() => {
+        if (workerGenerating) {
+            setGenerating(true);
+            setProgress(workerProgress);
+        }
+        if (workerResult && !workerGenerating) {
+            setResult(workerResult);
+            setGenerating(false);
+            setStage('results'); // Auto-transition to results stage
+            setMaxStageReached('results');
+        }
+        if (workerError) {
+            console.error('[GENERATION] Worker error:', workerError);
+            setGenerating(false);
+        }
+    }, [workerGenerating, workerProgress, workerResult, workerError]);
 
     type DetectedConflict = {
         type: string;
@@ -424,14 +452,18 @@ const ScheduleGenerate: React.FC = () => {
                 // Generation continues with empty policies (defaults)
             }
 
-            const res = await runGenerator(
-                { subjects, teachers, rooms, sections, existing, config, institutionalPolicies },
-                p => setProgress(p),
-            );
-            if (cancelRef.current) return;
-            setResult(res);
-            setStage('results');
-        } finally {
+            // Use Web Worker for generation (runs in background even when tabbed out)
+            workerStartGeneration({
+                subjects,
+                teachers,
+                rooms,
+                sections,
+                existing,
+                config,
+                institutionalPolicies,
+            });
+        } catch (error) {
+            console.error('[GENERATION] Failed to start worker:', error);
             setGenerating(false);
             setGenerationStartTime(null);
         }
@@ -439,6 +471,7 @@ const ScheduleGenerate: React.FC = () => {
 
     const cancelGeneration = () => {
         cancelRef.current = true;
+        workerCancelGeneration(); // Also cancel the worker
         setGenerating(false);
         setGenerationStartTime(null);
         setProgress(p => ({ ...p, subStage: 'idle', message: 'Cancelled' }));
