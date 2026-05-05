@@ -603,7 +603,7 @@ const rankSubjects = (
 
     const scored = subjects.map(sub => {
         const matchSec = sections.find(
-            s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
+            s => (sub.program === 'ALL' || s.program === sub.program) && sub.year_level === s.year_level,
         );
         const secScore = matchSec ? priorityOf(sectionP, matchSec.id) : 50;
         const subScore = priorityOf(subjectP, sub.id);
@@ -613,6 +613,10 @@ const rankSubjects = (
         // Increased from 30 to 50 to ensure special subjects get priority
         const labPriority = sub.type === 'special' ? 50 : 0;
 
+        // Additional boost for special subjects with specific room requirements
+        // This ensures subjects that need specific special rooms get placed even earlier
+        const specialRoomBoost = (sub.type === 'special' && sub.compatible_room_ids && sub.compatible_room_ids.length > 0) ? 20 : 0;
+
         // Add scarcity factor - subjects with higher demand get priority
         const scarcity = subjectScarcity.get(sub.id) || 0;
         const scarcityBonus = scarcity * 15;
@@ -620,7 +624,7 @@ const rankSubjects = (
         // Add duration factor - longer subjects are harder to place
         const durationBonus = (sub.duration_hours || 0) * 2;
 
-        const base = subScore * 0.5 + secScore * 0.3 + labPriority + scarcityBonus + durationBonus;
+        const base = subScore * 0.5 + secScore * 0.3 + labPriority + specialRoomBoost + scarcityBonus + durationBonus;
         const noise = (Math.random() - 0.5) * jitter;
         const final = Math.max(0, Math.min(100, Math.round(base + noise)));
         return { sub, score: final };
@@ -3172,12 +3176,21 @@ export async function runGenerator(
             }
             if (!placed) {
                 // Provide concise error message based on room type requirements
-                if (sub.compatible_room_ids && sub.compatible_room_ids.length > 0) {
-                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No compatible special rooms available at compatible times.`);
-                } else if (sub.type === 'special') {
-                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No compatible special rooms available.`);
+                if (sub.type === 'special') {
+                    if (sub.compatible_room_ids && sub.compatible_room_ids.length > 0) {
+                        errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No compatible special rooms available at compatible times.`);
+                    } else {
+                        errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No compatible special rooms available.`);
+                    }
                 } else {
-                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: All slots conflict with constraints.`);
+                    // Common subjects - check if they have specific compatible rooms
+                    if (sub.compatible_room_ids && sub.compatible_room_ids.length > 0) {
+                        // Common subject with specific room requirements (rare case)
+                        errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No compatible rooms available at compatible times.`);
+                    } else {
+                        // Common subject with general room compatibility
+                        errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: All slots conflict with constraints.`);
+                    }
                 }
             }
         }
