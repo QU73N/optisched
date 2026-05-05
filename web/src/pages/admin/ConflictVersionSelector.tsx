@@ -18,6 +18,7 @@ interface ScheduleVersion {
 
 const ConflictVersionSelector: React.FC = () => {
     const navigate = useNavigate();
+    const [allVersions, setAllVersions] = useState<ScheduleVersion[]>([]);
     const [versions, setVersions] = useState<ScheduleVersion[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'published' | 'draft' | 'previous'>('all');
@@ -60,9 +61,35 @@ const ConflictVersionSelector: React.FC = () => {
         }
     }, [filter]);
 
+    // Fetch all versions for stats (without filter)
+    const fetchAllVersions = useCallback(async () => {
+        try {
+            const { data, error } = await supabase
+                .from('schedule_versions')
+                .select('id, version_number, is_active, change_type, change_summary, changed_at, changed_by, snapshot')
+                .order('changed_at', { ascending: false })
+                .limit(50);
+
+            if (error) throw error;
+            
+            // Add schedule count for each version from the snapshot
+            const versionsWithCounts = (data || []).map((v: ScheduleVersion) => {
+                const snapshot = v.snapshot as unknown[] | undefined;
+                const schedules = Array.isArray(snapshot) ? snapshot : [];
+                const count = schedules.length;
+                return { ...v, schedule_count: count };
+            });
+
+            setAllVersions(versionsWithCounts);
+        } catch (err) {
+            console.error('Failed to fetch all versions:', err);
+        }
+    }, []);
+
     useEffect(() => {
         fetchVersions();
-    }, [fetchVersions]);
+        fetchAllVersions();
+    }, [fetchVersions, fetchAllVersions]);
 
     const filteredVersions = versions.filter(v => {
         if (searchQuery) {
@@ -102,12 +129,12 @@ const ConflictVersionSelector: React.FC = () => {
             <div className="stats-grid" style={{ marginBottom: 24 }}>
                 <div className="stat-card">
                     <div className="stat-icon"><Layers size={20} /></div>
-                    <div className="stat-number">{versions.length}</div>
+                    <div className="stat-number">{allVersions.length}</div>
                     <div className="stat-label">Total Versions</div>
                 </div>
                 <div className="stat-card">
                     <div className="stat-icon"><AlertTriangle size={20} /></div>
-                    <div className="stat-number">{versions.filter(v => v.is_active).length}</div>
+                    <div className="stat-number">{allVersions.filter(v => v.is_active).length}</div>
                     <div className="stat-label">Active Versions</div>
                 </div>
             </div>
