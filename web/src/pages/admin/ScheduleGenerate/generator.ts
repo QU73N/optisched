@@ -3277,6 +3277,13 @@ export async function runGenerator(
                         const slotsNeeded = sessionLength / 30; // 30-minute granularity
                         const eMin = sMin + sessionLength; // Actual end time based on session length
 
+                        // Hard: Ensure session doesn't extend beyond configured dayEnd
+                        const dayEnd = toMin(config.dayEnd);
+                        if (eMin > dayEnd) {
+                            // Session would extend beyond operating hours, skip this slot
+                            continue;
+                        }
+
                         // Check if we have enough consecutive slots
                         const slotIndex = validSlotsForDay.indexOf(slot);
                         const hasEnoughSlots = slotIndex + slotsNeeded <= validSlotsForDay.length;
