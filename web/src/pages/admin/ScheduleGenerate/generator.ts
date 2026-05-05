@@ -562,7 +562,8 @@ const calculateOptimalSessionLength = (totalMinutes: number, baseSessionMinutes:
 
 /**
  * Calculate both the session count and optimal session length for a subject.
- * This returns the configuration that minimizes overflow while staying close to base session length.
+ * This returns the configuration that fits the exact hour requirements.
+ * Rule: Round UP session length to fit exact requirements when needed.
  */
 const calculateSessionConfig = (subject: Subject, baseSessionMinutes: number): { count: number; sessionLength: number } => {
     // If explicitly set, use that with base session length
@@ -574,16 +575,26 @@ const calculateSessionConfig = (subject: Subject, baseSessionMinutes: number): {
     if (subject.duration_hours != null && subject.duration_hours > 0) {
         const totalMinutes = subject.duration_hours * 60;
         
-        // FIX: Round to nearest integer to avoid fractional sessions
-        // PE and Work Immersion have duration_hours=2, which gives 120/90=1.33 sessions
-        // Round to 1 session (under) or 2 sessions (over) - choose the closer one
-        const exactCount = totalMinutes / baseSessionMinutes;
-        const roundedCount = Math.round(exactCount);
+        // Try to fit into base session length (90 minutes) first
+        // If totalMinutes is a multiple of baseSessionMinutes, use it
+        if (totalMinutes % baseSessionMinutes === 0) {
+            const count = totalMinutes / baseSessionMinutes;
+            return { count, sessionLength: baseSessionMinutes };
+        }
         
-        // Ensure at least 1 session
-        const count = Math.max(1, roundedCount);
+        // Otherwise, round UP session length to fit exact requirement
+        // Find the smallest session length (in 30-min increments) that divides totalMinutes evenly
+        // Start from baseSessionMinutes and go up
+        for (let sessionLength = baseSessionMinutes; sessionLength <= 180; sessionLength += 30) {
+            if (totalMinutes % sessionLength === 0) {
+                const count = totalMinutes / sessionLength;
+                return { count, sessionLength };
+            }
+        }
         
-        return { count, sessionLength: baseSessionMinutes };
+        // Fallback: use base session length with rounded count
+        const count = Math.round(totalMinutes / baseSessionMinutes);
+        return { count: Math.max(1, count), sessionLength: baseSessionMinutes };
     }
     
     // Default to 1 session with base length
