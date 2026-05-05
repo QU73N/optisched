@@ -1161,6 +1161,7 @@ const constructDomains = (
     _sectionDomainMap: Map<string, SectionDomain>,
     days: string[],
     slotsByDay: Map<string, { start: string; end: string }[]>,
+    config: GenerationConfig, // IMPROVEMENT: Add config for break window checking
 ): Map<string, SessionDomain> => {
     const domains = new Map<string, SessionDomain>();
 
@@ -1239,18 +1240,61 @@ const constructDomains = (
                     // Higher score = less constraining = better choice
                     let lcvScore = 0;
 
+                    // IMPROVEMENT: Check actual teacher availability at this slot
+                    // Calculate percentage of teachers available at this time
+                    const availableTeacherCount = validTeachers.filter(tid => {
+                        const teacher = teachers.get(tid);
+                        return teacher && teacherAvailable(teacher, day, slot.start);
+                    }).length;
+                    const teacherAvailabilityRatio = availableTeacherCount / Math.max(1, validTeachers.length);
+                    lcvScore += teacherAvailabilityRatio * 40; // Higher weight for teacher availability
+
                     // Prefer time slots that are less crowded
                     const slotUsage = validRooms.length * validTeachers.length;
-                    lcvScore += (1 / Math.max(1, slotUsage)) * 30;
+                    lcvScore += (1 / Math.max(1, slotUsage)) * 20;
 
-                    // Prefer slots that leave more options for other sessions
-                    // This is a heuristic - in a full implementation, we'd check actual impact
-                    lcvScore += 20;
+                    // IMPROVEMENT: Penalize slots that overlap with break windows
+                    const slotStart = toMin(slot.start);
+                    // Check if this slot is within the variable break window (11:00 AM to 1:00 PM)
+                    if (config.breakMode === 'variable') {
+                        const breakWindowStart = toMin(config.variableBreak.startTime);
+                        const breakWindowEnd = toMin(config.variableBreak.endTime);
+                        if (slotStart >= breakWindowStart && slotStart < breakWindowEnd) {
+                            lcvScore -= 30; // Penalize slots during break window
+                        }
+                    }
 
-                    // Prefer morning slots for core subjects (heuristic)
+                    // IMPROVEMENT: Better time-of-day scoring based on subject type
                     const slotHour = parseInt(slot.start.split(':')[0]);
-                    if (slotHour >= 8 && slotHour <= 11) {
-                        lcvScore += 10;
+                    if (sub.type === 'special') {
+                        // Special subjects prefer morning slots (8 AM - 11 AM)
+                        if (slotHour >= 8 && slotHour <= 11) {
+                            lcvScore += 15;
+                        } else if (slotHour >= 13 && slotHour <= 15) {
+                            lcvScore += 10; // Afternoon also acceptable
+                        }
+                    } else {
+                        // Common subjects prefer morning slots
+                        if (slotHour >= 8 && slotHour <= 11) {
+                            lcvScore += 12;
+                        } else if (slotHour >= 14 && slotHour <= 16) {
+                            lcvScore += 8; // Late afternoon acceptable
+                        }
+                    }
+
+                    // IMPROVEMENT: Add day preference for special room subjects
+                    // Prefer weekdays for special room subjects to balance load
+                    if (sub.type === 'special' && sub.compatible_room_ids && sub.compatible_room_ids.length > 0) {
+                        if (day !== 'Saturday') {
+                            lcvScore += 10; // Boost weekday placement for special subjects
+                        }
+                    }
+
+                    // IMPROVEMENT: Add slot position bonus
+                    // Prefer slots that are not at the very end of the day
+                    const lastSlot = daySlots[daySlots.length - 1];
+                    if (slot.start !== lastSlot.start) {
+                        lcvScore += 5;
                     }
 
                     validSlots.push({ ...slot, day, score: lcvScore });
@@ -2931,6 +2975,7 @@ export async function runGenerator(
             sectionDomainMap,
             days,
             slotsByDay,
+            config, // IMPROVEMENT: Pass config for break window checking
         );
 
         // Phase 4: Improved Ranking - Re-rank tasks by scarcity (MRV heuristic)
@@ -3033,11 +3078,29 @@ export async function runGenerator(
                 if (t) teachersToTry.push(t);
             }
             
-            // Prefer days not yet used for this subject-section pair (spread sessions across days)
+            // IMPROVEMENT: Sort teachers by current load to balance workload
+            // Prefer teachers with fewer assigned sessions
+            teachersToTry.sort((a, b) => {
+                const aLoad = entries.filter(e => e.teacherId === a.id).length;
+                const bLoad = entries.filter(e => e.teacherId === b.id).length;
+                return aLoad - bLoad; // Prefer teachers with lower load
+            });
+            
+            // IMPROVEMENT: Prefer days not yet used for this subject-section pair (spread sessions across days)
+            // Track session count per day for better balancing
+            const dayUsageCount = new Map<string, number>();
+            usedDays.forEach(day => dayUsageCount.set(day, (dayUsageCount.get(day) || 0) + 1));
+            
             const availableDays = domain.validDays.slice().sort((a, b) => {
                 const aUsed = usedDays.has(a) ? 1 : 0;
                 const bUsed = usedDays.has(b) ? 1 : 0;
-                return aUsed - bUsed;
+                // Primary sort: prefer unused days
+                if (aUsed !== bUsed) return aUsed - bUsed;
+                
+                // Secondary sort: prefer days with fewer sessions already placed
+                const aCount = dayUsageCount.get(a) || 0;
+                const bCount = dayUsageCount.get(b) || 0;
+                return aCount - bCount;
             });
 
             for (const currentTeacher of teachersToTry) {
@@ -3387,6 +3450,7 @@ export async function runGenerator(
             sectionDomainMap,
             days,
             slotsByDay,
+            config, // IMPROVEMENT: Pass config for break window checking
         );
 
         // Apply repairs to try to place unplaced tasks
