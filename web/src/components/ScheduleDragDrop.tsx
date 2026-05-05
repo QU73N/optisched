@@ -35,6 +35,31 @@ interface ScheduleDragDropProps {
     onContextMenu?: (e: React.MouseEvent, entry: ScheduleEntry) => void;
 }
 
+// Helper function to format teacher name (last name only, with initial if duplicate last names)
+const formatTeacherName = (teacherName: string, allTeachers: Teacher[]): string => {
+    if (!teacherName) return '';
+    
+    // Extract last name
+    const parts = teacherName.trim().split(/\s+/);
+    const lastName = parts[parts.length - 1];
+    
+    // Check if there are multiple teachers with the same last name
+    const sameLastNameCount = allTeachers.filter(t => {
+        const tParts = (t.full_name || '').trim().split(/\s+/);
+        const tLastName = tParts[tParts.length - 1];
+        return tLastName.toLowerCase() === lastName.toLowerCase();
+    }).length;
+    
+    // If multiple teachers have the same last name, add initial
+    if (sameLastNameCount > 1 && parts.length > 1) {
+        const firstName = parts[0];
+        const initial = firstName.charAt(0).toUpperCase();
+        return `${lastName}, ${initial}.`;
+    }
+    
+    return lastName;
+};
+
 export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
     entries,
     rooms,
@@ -442,7 +467,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                         >
                             <div
                                 className={`sm-cal-event ${colorForKey(ev.entry.subjectName || ev.entry.sectionId)}`}
-                                title={`${ev.entry.subjectName} · ${formatTime(ev.entry.start)}–${formatTime(ev.entry.end)}`}
+                                title={`${ev.entry.subjectName}\n${formatTeacherName(ev.entry.teacherName, teachers)}\n${ev.entry.roomName}\n${formatTime(ev.entry.start)}–${formatTime(ev.entry.end)}`}
                                 style={{ fontSize: getFontSize() }}
                             >
                                 <div className="sm-cal-event-title" style={{ fontSize: getFontSize(), fontWeight: ev.span <= 1 ? 600 : 500 }}>
@@ -451,7 +476,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                                 {ev.span > 1 && (
                                     <>
                                         <div className="sm-cal-event-sub" style={{ fontSize: getFontSize() }}>
-                                            {viewMode !== 'teacher' && ev.entry.teacherName}
+                                            {viewMode !== 'teacher' && formatTeacherName(ev.entry.teacherName, teachers)}
                                             {viewMode !== 'room' && ev.entry.roomName}
                                         </div>
                                         <div className="sm-cal-event-time" style={{ fontSize: getFontSize() }}>
@@ -462,7 +487,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                             </div>
                         </div>
                     );
-                })}
+            })}
             </div>
 
             {/* Conflict Warning Modal */}
