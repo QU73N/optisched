@@ -12,5 +12,5 @@ SELECT id, code, name, teacher_id
 FROM subjects 
 WHERE code = 'GC2';
 
--- Also verify Mark Gerald Doblon's record
-SELECT id, full_name FROM teachers WHERE id = 'bc211fd8-9917-4114-af3c-6b4694a9cc1c';
+-- Also verify Mark Gerald Doblon's record (join with profiles to get full_name)
+SELECT t.id, p.full_name FROM teachers t JOIN profiles p ON t.profile_id = p.id WHERE t.id = 'bc211fd8-9917-4114-af3c-6b4694a9cc1c';
