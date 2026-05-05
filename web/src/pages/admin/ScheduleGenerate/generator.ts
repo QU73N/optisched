@@ -1628,6 +1628,13 @@ const applyRepairs = (
             const sessionLength = sessionConfig?.sessionLength || config.sessionMinutes;
             const eMin = sMin + sessionLength;
 
+            // Hard: Ensure session doesn't extend beyond configured dayEnd
+            const dayEnd = toMin(config.dayEnd);
+            if (eMin > dayEnd) {
+                // Session would extend beyond operating hours, skip this slot
+                continue;
+            }
+
             for (const tid of domain.validTeachers) {
                 if (placed) break;
                 const teacher = teacherMap.get(tid);
