@@ -318,6 +318,8 @@ const checkForwardConstraints = (
     teacherMap: Map<string, Teacher>,
     roomMap: Map<string, Room>,
     domains: Map<string, SessionDomain>,
+    subjectSessionConfig: Map<string, { count: number; sessionLength: number }>,
+    config: GenerationConfig,
 ): boolean => {
     // Simulate the placement in a temporary busy array
     const tempBusy = [...busy, { teacherId, roomId, sectionId, day, startMin, endMin }];
@@ -332,6 +334,11 @@ const checkForwardConstraints = (
             continue;
         }
 
+        // Get the session length for this task's subject
+        const sessionConfig = subjectSessionConfig.get(task.subject.id);
+        const sessionLength = sessionConfig?.sessionLength || config.sessionMinutes;
+        const slotsNeeded = sessionLength / 30; // 30-minute granularity
+
         // Check if task still has valid teacher options
         let hasValidTeacher = false;
         for (const tid of domain.validTeachers) {
@@ -341,13 +348,33 @@ const checkForwardConstraints = (
             // Check if this teacher still has any available slots
             let teacherHasSlot = false;
             for (const d of domain.validDays) {
-                for (const slot of domain.validSlots) {
-                    if (slot.day !== d) continue;
-                    const sMin = toMin(slot.start);
-                    const eMin = toMin(slot.end);
+                const daySlots = domain.validSlots.filter(s => s.day === d);
+                
+                // Check if we have enough consecutive slots for the session
+                for (let slotIdx = 0; slotIdx <= daySlots.length - slotsNeeded; slotIdx++) {
+                    const firstSlot = daySlots[slotIdx];
+                    const sMin = toMin(firstSlot.start);
+                    const eMin = sMin + sessionLength; // FIX: Use actual session length
+
+                    // Verify all required slots are consecutive
+                    let slotsConsecutive = true;
+                    for (let i = 0; i < slotsNeeded; i++) {
+                        if (slotIdx + i >= daySlots.length) {
+                            slotsConsecutive = false;
+                            break;
+                        }
+                        const checkSlot = daySlots[slotIdx + i];
+                        const checkSMin = toMin(checkSlot.start);
+                        const expectedSMin = sMin + (i * 30);
+                        if (checkSMin !== expectedSMin) {
+                            slotsConsecutive = false;
+                            break;
+                        }
+                    }
+                    if (!slotsConsecutive) continue;
 
                     // Check if teacher is available and free at this slot
-                    if (teacherAvailable(teacher, d, slot.start) && 
+                    if (teacherAvailable(teacher, d, firstSlot.start) && 
                         isFree(tempBusy, 'teacher', tid, d, sMin, eMin)) {
                         teacherHasSlot = true;
                         break;
@@ -376,10 +403,30 @@ const checkForwardConstraints = (
             // Check if this room still has any available slots
             let roomHasSlot = false;
             for (const d of domain.validDays) {
-                for (const slot of domain.validSlots) {
-                    if (slot.day !== d) continue;
-                    const sMin = toMin(slot.start);
-                    const eMin = toMin(slot.end);
+                const daySlots = domain.validSlots.filter(s => s.day === d);
+                
+                // Check if we have enough consecutive slots for the session
+                for (let slotIdx = 0; slotIdx <= daySlots.length - slotsNeeded; slotIdx++) {
+                    const firstSlot = daySlots[slotIdx];
+                    const sMin = toMin(firstSlot.start);
+                    const eMin = sMin + sessionLength; // FIX: Use actual session length
+
+                    // Verify all required slots are consecutive
+                    let slotsConsecutive = true;
+                    for (let i = 0; i < slotsNeeded; i++) {
+                        if (slotIdx + i >= daySlots.length) {
+                            slotsConsecutive = false;
+                            break;
+                        }
+                        const checkSlot = daySlots[slotIdx + i];
+                        const checkSMin = toMin(checkSlot.start);
+                        const expectedSMin = sMin + (i * 30);
+                        if (checkSMin !== expectedSMin) {
+                            slotsConsecutive = false;
+                            break;
+                        }
+                    }
+                    if (!slotsConsecutive) continue;
 
                     if (isFree(tempBusy, 'room', rid, d, sMin, eMin)) {
                         roomHasSlot = true;
@@ -403,10 +450,30 @@ const checkForwardConstraints = (
         // Check if task still has valid section options
         let hasValidSection = false;
         for (const d of domain.validDays) {
-            for (const slot of domain.validSlots) {
-                if (slot.day !== d) continue;
-                const sMin = toMin(slot.start);
-                const eMin = toMin(slot.end);
+            const daySlots = domain.validSlots.filter(s => s.day === d);
+            
+            // Check if we have enough consecutive slots for the session
+            for (let slotIdx = 0; slotIdx <= daySlots.length - slotsNeeded; slotIdx++) {
+                const firstSlot = daySlots[slotIdx];
+                const sMin = toMin(firstSlot.start);
+                const eMin = sMin + sessionLength; // FIX: Use actual session length
+
+                // Verify all required slots are consecutive
+                let slotsConsecutive = true;
+                for (let i = 0; i < slotsNeeded; i++) {
+                    if (slotIdx + i >= daySlots.length) {
+                        slotsConsecutive = false;
+                        break;
+                    }
+                    const checkSlot = daySlots[slotIdx + i];
+                    const checkSMin = toMin(checkSlot.start);
+                    const expectedSMin = sMin + (i * 30);
+                    if (checkSMin !== expectedSMin) {
+                        slotsConsecutive = false;
+                        break;
+                    }
+                }
+                if (!slotsConsecutive) continue;
 
                 if (isFree(tempBusy, 'section', task.section.id, d, sMin, eMin)) {
                     hasValidSection = true;
@@ -1134,16 +1201,12 @@ const constructDomains = (
             .map(r => r.id);
 
         // Pre-filter valid days
-        const validDays = days.filter(day => {
-            // For each valid teacher, check if day is preferred
-            return validTeachers.some(tid => {
-                const teacher = teachers.get(tid);
-                if (!teacher) return false;
-                if (!dayIsPreferred(teacher, day)) return false;
-                const domain = teacherDomainMap.get(tid);
-                return !domain || domain.valid_days.includes(day);
-            });
-        });
+        // FIX: Remove overly restrictive day filtering from domain construction
+        // Previously used .some() which checked if ANY teacher prefers the day
+        // But the assigned teacher might not prefer that day, causing placement failures
+        // Now we include all days and let placement logic handle teacher-day compatibility
+        // The placement loop already checks teacher availability with teacherAvailable()
+        const validDays = days;
 
         // Pre-filter and rank valid slots with LCV scoring
         const validSlots: Array<{ start: string; end: string; day: string; score: number }> = [];
@@ -2356,7 +2419,12 @@ const buildDomains = (
 } => {
     const teacherDomains: TeacherDomain[] = teachers.map(t => ({
         teacher_id: t.id,
-        valid_days: t.preferred_days && t.preferred_days.length > 0 ? t.preferred_days : days,
+        // FIX: Remove hard constraint on preferred_days
+        // Previously: valid_days: t.preferred_days && t.preferred_days.length > 0 ? t.preferred_days : days
+        // This treated preferred_days as a hard constraint, preventing teachers from using other days
+        // Now: Always allow all days, let placement logic handle teacher-day compatibility
+        // The placement loop checks teacher availability with teacherAvailable() which respects the availability map
+        valid_days: days,
         valid_time_slots: slots, // TODO: Filter by availability map
     }));
 
@@ -3146,6 +3214,8 @@ export async function runGenerator(
                                     teacherMap,
                                     roomMap,
                                     domains,
+                                    subjectSessionConfig,
+                                    config,
                                 )) {
                                     continue; // Skip this placement as it would make remaining tasks impossible
                                 }
