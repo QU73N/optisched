@@ -116,7 +116,9 @@ const buildSlots = (
     const slots: { start: string; end: string }[] = [];
     const dayStart = toMin(cfg.dayStart);
     const dayEnd = toMin(cfg.dayEnd);
-    const step = cfg.sessionMinutes;
+    // Use 30-minute granularity to support variable session lengths
+    // This allows sessions of 60, 90, 120, 150, 180 minutes etc.
+    const step = 30;
     for (let s = dayStart; s + step <= dayEnd; s += step) {
         const e = s + step;
         // For variable mode, we don't filter slots during buildSlots
@@ -557,19 +559,58 @@ const shuffle = <T>(arr: T[]): T[] => {
 const priorityOf = (map: Record<string, number>, id: string) =>
     typeof map[id] === 'number' ? map[id] : 50;
 
-/** Calculate how many sessions a subject needs based on duration_hours and session length. */
-const sessionsNeeded = (subject: Subject, sessionMinutes: number): number => {
-    // If explicitly set, use that
-    if (subject.sessions_per_week != null && subject.sessions_per_week > 0) {
-        return subject.sessions_per_week;
+/**
+ * Calculate the optimal session length for a subject to minimize overflow.
+ * Returns a session length that divides the total required time evenly,
+ * preferring lengths close to the base session length.
+ */
+const calculateOptimalSessionLength = (totalMinutes: number, baseSessionMinutes: number): number => {
+    // Find divisors of totalMinutes that are >= baseSessionMinutes
+    // We want to minimize overflow, so we look for divisors that fit exactly
+    const divisors: number[] = [];
+    for (let i = baseSessionMinutes; i <= totalMinutes; i += 30) { // 30-minute granularity
+        if (totalMinutes % i === 0) {
+            divisors.push(i);
+        }
     }
+    
+    // If no exact divisor found, use the base session length (will have overflow)
+    if (divisors.length === 0) {
+        return baseSessionMinutes;
+    }
+    
+    // Choose the divisor closest to the base session length
+    // This keeps sessions as close to the standard length as possible
+    const closest = divisors.reduce((prev, curr) => {
+        return Math.abs(curr - baseSessionMinutes) < Math.abs(prev - baseSessionMinutes) ? curr : prev;
+    });
+    
+    return closest;
+};
+
+/**
+ * Calculate both the session count and optimal session length for a subject.
+ * This returns the configuration that minimizes overflow while staying close to base session length.
+ */
+const calculateSessionConfig = (subject: Subject, baseSessionMinutes: number): { count: number; sessionLength: number } => {
+    // If explicitly set, use that with base session length
+    if (subject.sessions_per_week != null && subject.sessions_per_week > 0) {
+        return { count: subject.sessions_per_week, sessionLength: baseSessionMinutes };
+    }
+    
     // Otherwise calculate from duration_hours
     if (subject.duration_hours != null && subject.duration_hours > 0) {
         const totalMinutes = subject.duration_hours * 60;
-        return Math.max(1, Math.ceil(totalMinutes / sessionMinutes));
+        
+        // Calculate optimal session length that fits exactly
+        const optimalSessionLength = calculateOptimalSessionLength(totalMinutes, baseSessionMinutes);
+        const count = totalMinutes / optimalSessionLength;
+        
+        return { count, sessionLength: optimalSessionLength };
     }
-    // Default to 1 session
-    return 1;
+    
+    // Default to 1 session with base length
+    return { count: 1, sessionLength: baseSessionMinutes };
 };
 
 const isSpecialRoom = (room: Room) => {
@@ -1304,8 +1345,9 @@ const detectImpossibleSchedule = (
             (subject.program === 'ALL' || s.program === subject.program) && 
             s.year_level === subject.year_level
         );
-        const sessionsPerSubject = sessionsNeeded(subject, sessionMinutes);
-        totalRequiredMinutes += subjectSections.length * sessionsPerSubject * sessionMinutes;
+        const sessionConfig = calculateSessionConfig(subject, sessionMinutes);
+        const sessionsPerSubject = sessionConfig.count;
+        totalRequiredMinutes += subjectSections.length * sessionsPerSubject * sessionConfig.sessionLength;
     }
     const totalRequiredHours = totalRequiredMinutes / 60;
     const totalTeacherCapacity = teachers.reduce((sum, t) => sum + (t.max_hours || 40), 0);
@@ -2581,7 +2623,8 @@ export async function runGenerator(
             const matchSections = scopedSections.filter(
                 sec => (s.program === 'ALL' || s.program === sec.program) && s.year_level === sec.year_level,
             );
-            return sum + sessionsNeeded(s, config.sessionMinutes) * matchSections.length;
+            const sessionConfig = calculateSessionConfig(s, config.sessionMinutes);
+            return sum + sessionConfig.count * matchSections.length;
         }, 0);
         // Calculate high priority task count for early return
         let highPriorityTaskCount = 0;
@@ -2593,7 +2636,8 @@ export async function runGenerator(
             for (const sec of matchSections) {
                 const secScore = priorityOf(sectionP, sec.id);
                 if (subScore >= 70 || secScore >= 70) {
-                    highPriorityTaskCount += sessionsNeeded(s, config.sessionMinutes);
+                    const sessionConfig = calculateSessionConfig(s, config.sessionMinutes);
+                    highPriorityTaskCount += sessionConfig.count;
                 }
             }
         }
@@ -2802,9 +2846,17 @@ export async function runGenerator(
         const matchSections = scopedSections.filter(
             s => (sub.program === 'ALL' || s.program === sub.program) && s.year_level === sub.year_level,
         );
-        const sessionsPerSubject = sessionsNeeded(sub, config.sessionMinutes);
+        const sessionConfig = calculateSessionConfig(sub, config.sessionMinutes);
+        const sessionsPerSubject = sessionConfig.count;
         // Multiply by number of matching sections
         totalTasks += sessionsPerSubject * matchSections.length;
+    }
+
+    // Calculate optimal session length for each subject to minimize overflow
+    const subjectSessionConfig = new Map<string, { count: number; sessionLength: number }>();
+    for (const sub of scopedSubjects) {
+        const sessionConfig = calculateSessionConfig(sub, config.sessionMinutes);
+        subjectSessionConfig.set(sub.id, sessionConfig);
     }
 
     onProgress({
@@ -2892,7 +2944,8 @@ export async function runGenerator(
             // If no matching sections, skip this subject
             if (matchSections.length === 0) continue;
 
-            const needed = sessionsNeeded(sub, config.sessionMinutes);
+            const sessionConfig = calculateSessionConfig(sub, config.sessionMinutes);
+            const needed = sessionConfig.count;
             // Create tasks for ALL matching sections, not just the first one
             for (const section of matchSections) {
                 for (let i = 0; i < needed; i++) {
@@ -3054,7 +3107,34 @@ export async function runGenerator(
                     for (const slot of validSlotsForDay) {
                         if (placed) break;
                         const sMin = toMin(slot.start);
-                        const eMin = toMin(slot.end);
+                        
+                        // Get the optimal session length for this subject
+                        const sessionConfig = subjectSessionConfig.get(sub.id);
+                        const sessionLength = sessionConfig?.sessionLength || config.sessionMinutes;
+                        const slotsNeeded = sessionLength / 30; // 30-minute granularity
+                        const eMin = sMin + sessionLength; // Actual end time based on session length
+
+                        // Check if we have enough consecutive slots
+                        const slotIndex = validSlotsForDay.indexOf(slot);
+                        const hasEnoughSlots = slotIndex + slotsNeeded <= validSlotsForDay.length;
+                        if (!hasEnoughSlots) continue;
+
+                        // Verify all required slots are consecutive and available
+                        let slotsConsecutive = true;
+                        for (let i = 0; i < slotsNeeded; i++) {
+                            if (slotIndex + i >= validSlotsForDay.length) {
+                                slotsConsecutive = false;
+                                break;
+                            }
+                            const checkSlot = validSlotsForDay[slotIndex + i];
+                            const checkSMin = toMin(checkSlot.start);
+                            const expectedSMin = sMin + (i * 30);
+                            if (checkSMin !== expectedSMin) {
+                                slotsConsecutive = false;
+                                break;
+                            }
+                        }
+                        if (!slotsConsecutive) continue;
 
                         // Hard: respect teacher's explicit per-slot availability map.
                         if (!teacherAvailable(currentTeacher, day, slot.start)) continue;
@@ -3067,7 +3147,7 @@ export async function runGenerator(
                             toMin(e.end) > sMin
                         );
                         if (teacherAlreadyBooked) {
-                            console.log(`[PLACEMENT] Teacher already booked: ${currentTeacher.full_name} at ${day} ${slot.start}-${slot.end}`);
+                            console.log(`[PLACEMENT] Teacher already booked: ${currentTeacher.full_name} at ${day} ${slot.start}-${toHHMM(eMin)}`);
                             continue;
                         }
                         
@@ -3079,23 +3159,23 @@ export async function runGenerator(
                             toMin(e.end) > sMin
                         );
                         if (sectionAlreadyBooked) {
-                            console.log(`[PLACEMENT] Section already booked: ${section.name} at ${day} ${slot.start}-${slot.end}`);
+                            console.log(`[PLACEMENT] Section already booked: ${section.name} at ${day} ${slot.start}-${toHHMM(eMin)}`);
                             continue;
                         }
                         
                         const teacherFree = isFree(busy, 'teacher', currentTeacher.id, day, sMin, eMin);
                         if (!teacherFree) {
-                            console.log(`[PLACEMENT] BLOCKING: Teacher conflict detected - SKIPPING placement for ${currentTeacher.full_name} at ${day} ${slot.start}-${slot.end}`);
+                            console.log(`[PLACEMENT] BLOCKING: Teacher conflict detected - SKIPPING placement for ${currentTeacher.full_name} at ${day} ${slot.start}-${toHHMM(eMin)}`);
                             continue;
                         }
                         
                         const sectionFree = isFree(busy, 'section', section.id, day, sMin, eMin);
                         if (!sectionFree) {
-                            console.log(`[PLACEMENT] BLOCKING: Section conflict detected - SKIPPING placement for ${section.name} at ${day} ${slot.start}-${slot.end}`);
+                            console.log(`[PLACEMENT] BLOCKING: Section conflict detected - SKIPPING placement for ${section.name} at ${day} ${slot.start}-${toHHMM(eMin)}`);
                             continue;
                         }
                         // Hard: check max_hours constraint
-                        if (wouldExceedMaxHours(currentTeacher.id, entries, currentTeacher, config.sessionMinutes)) continue;
+                        if (wouldExceedMaxHours(currentTeacher.id, entries, currentTeacher, sessionLength)) continue;
 
                         // Phase 6: Multi-factor scoring for room selection
                         // Evaluate each candidate room using multiple factors
@@ -3154,13 +3234,13 @@ export async function runGenerator(
                                 toMin(e.end) > sMin
                             );
                             if (roomAlreadyBooked) {
-                                console.log(`[PLACEMENT] Room already booked: ${room.name} at ${day} ${slot.start}-${slot.end}`);
+                                console.log(`[PLACEMENT] Room already booked: ${room.name} at ${day} ${slot.start}-${toHHMM(eMin)}`);
                                 continue;
                             }
                             
                             const roomFree = isFree(busy, 'room', room.id, day, sMin, eMin);
                             if (!roomFree) {
-                                console.log(`[PLACEMENT] BLOCKING: Room conflict detected - SKIPPING placement for ${room.name} at ${day} ${slot.start}-${slot.end}`);
+                                console.log(`[PLACEMENT] BLOCKING: Room conflict detected - SKIPPING placement for ${room.name} at ${day} ${slot.start}-${toHHMM(eMin)}`);
                                 continue;
                             }
 
@@ -3170,7 +3250,7 @@ export async function runGenerator(
                             // Hard: check break conflicts for variable mode
                             if (config.breakMode === 'variable') {
                                 if (overlapsBreak(sMin, eMin, config, day, sectionBreaks, teacherBreaks, section.id, currentTeacher.id)) {
-                                    console.log(`[PLACEMENT] BLOCKING: Break conflict detected for ${section.name} with ${currentTeacher.full_name} at ${day} ${slot.start}-${slot.end}`);
+                                    console.log(`[PLACEMENT] BLOCKING: Break conflict detected for ${section.name} with ${currentTeacher.full_name} at ${day} ${slot.start}-${toHHMM(eMin)}`);
                                     continue;
                                 }
                             }
@@ -3209,7 +3289,7 @@ export async function runGenerator(
                                 sectionName: section.name,
                                 day,
                                 start: slot.start,
-                                end: slot.end,
+                                end: toHHMM(eMin), // Use dynamic end time based on session length
                             });
                             const newBusy = {
                                 teacherId: currentTeacher.id,
@@ -3220,7 +3300,7 @@ export async function runGenerator(
                                 endMin: eMin,
                             };
                             busy.push(newBusy);
-                            console.log(`[PLACEMENT] SUCCESS: Placed ${sub.name} for ${section.name} with ${currentTeacher.full_name} in ${room.name} at ${day} ${slot.start}-${slot.end}`);
+                            console.log(`[PLACEMENT] SUCCESS: Placed ${sub.name} for ${section.name} with ${currentTeacher.full_name} in ${room.name} at ${day} ${slot.start}-${toHHMM(eMin)}`);
                             console.log(`[PLACEMENT] Busy array size: ${busy.length}`);
                             usedDays.add(day);
                             usedDaysByTask.set(taskKey, usedDays);
@@ -3332,7 +3412,8 @@ export async function runGenerator(
             // If no matching sections, skip this subject
             if (matchSections.length === 0) continue;
 
-            const neededCount = sessionsNeeded(sub, config.sessionMinutes);
+            const sessionConfig = calculateSessionConfig(sub, config.sessionMinutes);
+            const neededCount = sessionConfig.count;
             
             // Check placement for ALL matching sections
             for (const section of matchSections) {
