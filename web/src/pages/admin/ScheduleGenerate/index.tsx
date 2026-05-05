@@ -1615,7 +1615,11 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                     <div>
                         <div className="sg-field-label">
                             Overflow Policy
-                            <FieldTooltip>Controls how the generator handles sections that exceed room capacity. Fail stops generation, Relax soft reduces constraint weights, Expand scope searches more aggressively, Partial only applies to partial regeneration.</FieldTooltip>
+                            <FieldTooltip>Controls how the generator handles sections that exceed room capacity:
+• Fail stops generation immediately
+• Relax soft reduces constraint weights temporarily
+• Expand scope searches more aggressively
+• Partial only applies to partial regeneration mode</FieldTooltip>
                         </div>
                         <select
                             className="input"
