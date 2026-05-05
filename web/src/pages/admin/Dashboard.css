@@ -2045,8 +2045,10 @@
 
 .sg-break-tooltip-wrapper {
     position: relative;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     margin-left: 6px;
+    vertical-align: middle;
 }
 
 .sg-break-tooltip {
@@ -2098,8 +2100,10 @@
 
 .sg-field-tooltip-wrapper {
     position: relative;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     margin-left: 6px;
+    vertical-align: middle;
 }
 
 .sg-field-tooltip {
