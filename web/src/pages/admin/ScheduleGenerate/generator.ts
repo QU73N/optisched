@@ -1704,8 +1704,131 @@ const applyRepairs = (
         }
         if (placed) break;
     }
+    
+    // Strategy 2: Room swap - try to swap with an already-placed session
+    // If direct placement fails, try to find a session that can be moved to free up a room
     if (!placed) {
-        // Could not place this task even with repair
+        for (const task of unplacedTasks) {
+            const taskId = `${task.subject.id}|${task.section.id}|${task.sessionIndex}`;
+            const domain = domains.get(taskId);
+            
+            if (!domain) continue;
+            
+            // Try to find a swap candidate
+            for (const slot of domain.validSlots) {
+                if (placed) break;
+                const d = slot.day;
+                const sMin = toMin(slot.start);
+                
+                const sessionConfig = subjectSessionConfig.get(task.subject.id);
+                const sessionLength = sessionConfig?.sessionLength || config.sessionMinutes;
+                const eMin = sMin + sessionLength;
+                
+                for (const tid of domain.validTeachers) {
+                    if (placed) break;
+                    const teacher = teacherMap.get(tid);
+                    if (!teacher) continue;
+                    
+                    if (!teacherAvailable(teacher, d, slot.start)) continue;
+                    if (!isFree(busy, 'teacher', tid, d, sMin, eMin)) continue;
+                    if (!isFree(busy, 'section', task.section.id, d, sMin, eMin)) continue;
+                    
+                    // Find a swap candidate - an already-placed session in a compatible room
+                    for (const rid of domain.validRooms) {
+                        if (placed) break;
+                        const room = roomMap.get(rid);
+                        if (!room) continue;
+                        if (!roomCompatible(room, task.subject, task.section)) continue;
+                        if (!isFree(busy, 'room', rid, d, sMin, eMin)) continue;
+                        
+                        // Find a session that could be moved to a different room/time
+                        for (let i = 0; i < repairedEntries.length; i++) {
+                            const existingEntry = repairedEntries[i];
+                            const existingRoom = roomMap.get(existingEntry.roomId);
+                            if (!existingRoom) continue;
+                            
+                            // Check if the existing session can be moved to a different room
+                            // Try to move it to a room that's currently free at this time
+                            const alternativeRooms = domain.validRooms.filter(arid => arid !== rid);
+                            for (const altRid of alternativeRooms) {
+                                if (placed) break;
+                                const altRoom = roomMap.get(altRid);
+                                if (!altRoom) continue;
+                                
+                                // Check if the alternative room is compatible with the existing session's subject
+                                // Use the current task's subject for compatibility check as a fallback
+                                if (!roomCompatible(altRoom, task.subject, task.section)) continue;
+                                
+                                // Check if the alternative room is free at the existing session's time
+                                const existingSMin = toMin(existingEntry.start);
+                                const existingEMin = toMin(existingEntry.end);
+                                if (!isFree(busy, 'room', altRid, existingEntry.day, existingSMin, existingEMin)) continue;
+                                
+                                // Perform the swap
+                                // Move existing session to alternative room
+                                const updatedEntry = { ...existingEntry, roomId: altRid, roomName: altRoom.name };
+                                repairedEntries[i] = updatedEntry;
+                                
+                                // Update busy array for the swap
+                                const existingBusyIdx = busy.findIndex(b => 
+                                    b.teacherId === existingEntry.teacherId &&
+                                    b.sectionId === existingEntry.sectionId &&
+                                    b.day === existingEntry.day &&
+                                    b.startMin === existingSMin
+                                );
+                                if (existingBusyIdx >= 0) {
+                                    busy[existingBusyIdx] = {
+                                        teacherId: existingEntry.teacherId,
+                                        roomId: altRid,
+                                        sectionId: existingEntry.sectionId,
+                                        day: existingEntry.day,
+                                        startMin: existingSMin,
+                                        endMin: existingEMin,
+                                    };
+                                }
+                                
+                                // Place the new task in the freed room
+                                const newEntry: PlacedEntry = {
+                                    subjectId: task.subject.id,
+                                    subjectCode: task.subject.code,
+                                    subjectName: task.subject.name,
+                                    teacherId: tid,
+                                    teacherName: teacher.full_name,
+                                    roomId: rid,
+                                    roomName: room.name,
+                                    sectionId: task.section.id,
+                                    sectionName: task.section.name,
+                                    day: d,
+                                    start: slot.start,
+                                    end: toHHMM(eMin),
+                                };
+                                const newBusy = {
+                                    teacherId: tid,
+                                    roomId: rid,
+                                    sectionId: task.section.id,
+                                    day: d,
+                                    startMin: sMin,
+                                    endMin: eMin,
+                                };
+                                busy.push(newBusy);
+                                repairedEntries.push(newEntry);
+                                placed = true;
+                                break;
+                            }
+                            if (placed) break;
+                        }
+                        if (placed) break;
+                    }
+                    if (placed) break;
+                }
+                if (placed) break;
+            }
+            if (placed) break;
+        }
+    }
+    
+    if (!placed) {
+        // Could not place this task even with repair and swap
     }
 
     return repairedEntries;
