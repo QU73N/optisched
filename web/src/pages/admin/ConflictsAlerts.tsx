@@ -51,8 +51,7 @@ const ConflictsAlerts: React.FC = () => {
     const [expandedConflicts, setExpandedConflicts] = useState<Set<string>>(new Set());
     
     // Version selection state - only used if no versionId is provided
-    const [selectedVersion, setSelectedVersion] = useState<'published' | 'draft' | 'all'>('all');
-    const [showVersionSelector, setShowVersionSelector] = useState(!versionId); // Auto-hide if versionId is provided
+    const [selectedVersion] = useState<'published' | 'draft' | 'all'>('all');
     
     // New state for comprehensive scanning and fixing
     const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -69,92 +68,66 @@ const ConflictsAlerts: React.FC = () => {
     const [hasScanResults, setHasScanResults] = useState(false);
     const [scanResultLock, setScanResultLock] = useState<string | null>(null);
 
-    // Track when hasScanResults changes
+    // Track state changes
     useEffect(() => {
-        console.log('[STATE CHANGE] hasScanResults changed to:', hasScanResults, 'lock:', scanResultLock);
+        console.log('[STATE CHANGE] hasScanResults:', hasScanResults, 'lock:', scanResultLock);
     }, [hasScanResults, scanResultLock]);
 
     // Fetch from conflicts table and populate detected conflicts
     const fetchDbConflicts = useCallback(async () => {
-        // CRITICAL: If we have a scan lock or results, NEVER overwrite with DB data
+        // CRITICAL: Block overwrite if scan results are active or locked
         if (hasScanResults || scanResultLock) {
-            console.log('[FETCH DB] BLOCKED - scan state protected by lock', { hasScanResults, scanResultLock });
+            console.log('[FETCH DB] BLOCKED - scan state protected', { hasScanResults, scanResultLock });
             return;
         }
-        
-        // If versionId is provided, fetch schedules for that specific version
+
         let scheduleIds: Set<string> = new Set();
         
         if (versionId) {
-            // Fetch the version's snapshot data
-            const { data: version } = await supabase
+            const { data: versionData } = await supabase
                 .from('schedule_versions')
                 .select('snapshot')
                 .eq('id', versionId)
                 .single();
             
-            if (version && version.snapshot) {
-                const snapshot = version.snapshot as { id: string }[] | { id: string };
+            if (versionData?.snapshot) {
+                const snapshot = versionData.snapshot as { id: string }[] | { id: string };
                 const schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
-                scheduleIds = new Set(schedules.map((s) => s.id).filter((id): id is string => !!id));
+                scheduleIds = new Set(schedules.map(s => s.id).filter((id): id is string => !!id));
             }
         } else {
-            // Build status filter based on selected version (legacy behavior)
-            const statusFilter = selectedVersion === 'all' 
-                ? ['published', 'draft'] 
-                : [selectedVersion];
-            
-            // First, fetch schedule IDs for the selected version
-            const { data: schedules } = await supabase
-                .from('schedules')
-                .select('id')
-                .in('status', statusFilter);
-            
-            scheduleIds = new Set((schedules || []).map((s: { id: string }) => s.id));
+            const statusFilter = selectedVersion === 'all' ? ['published', 'draft'] : [selectedVersion];
+            const { data: schedules } = await supabase.from('schedules').select('id').in('status', statusFilter);
+            scheduleIds = new Set((schedules || []).map(s => s.id));
         }
         
-        console.log('Schedule IDs for scan:', scheduleIds.size);
-        
-        // Then fetch conflicts that involve schedules from the selected version
-        let query = supabase.from('conflicts').select('*');
-        
-        // Filter conflicts by schedule_a_id or schedule_b_id being in the selected schedules
-        if (scheduleIds.size > 0) {
-            query = query.or(`schedule_a_id.in.(${Array.from(scheduleIds).join(',')}),schedule_b_id.in.(${Array.from(scheduleIds).join(',')})`);
-        } else {
-            // If no schedules match, return empty
+        if (scheduleIds.size === 0) {
             setDbConflicts([]);
             setDetectedConflicts([]);
             return;
         }
         
-        const { data } = await query
+        const { data } = await supabase.from('conflicts')
+            .select('*')
+            .or(`schedule_a_id.in.(${Array.from(scheduleIds).join(',')}),schedule_b_id.in.(${Array.from(scheduleIds).join(',')})`)
             .order('is_resolved')
             .order('created_at', { ascending: false });
+            
         setDbConflicts(data || []);
         
-        console.log('Fetched conflicts from DB:', data?.length || 0, 'for version:', versionId || selectedVersion);
-        
-        // Only populate detected conflicts from database if we don't have recent scan results
-        // This ensures scan results take priority over database
         if (!hasScanResults) {
             const unresolved = (data || []).filter((c: ConflictRow) => !c.is_resolved);
-            console.log('Unresolved conflicts:', unresolved.length);
             const conflicts: DetectedConflict[] = unresolved.map((c: ConflictRow) => ({
-                id: c.conflict_original_id || c.id, // Use original composite ID if available
-                type: c.type as 'room_conflict' | 'teacher_overlap' | 'section_overlap',
-                severity: c.severity as 'high' | 'medium',
+                id: c.conflict_original_id || c.id,
+                type: c.type as any,
+                severity: c.severity as any,
                 title: c.title,
                 description: c.description,
                 day: 'Multiple',
                 scheduleIds: c.schedule_a_id ? [c.schedule_a_id] : [],
             }));
             setDetectedConflicts(conflicts);
-            console.log('Set detected conflicts from DB:', conflicts.length);
-        } else {
-            console.log('Skipping DB fetch - using scan results');
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedVersion, versionId, hasScanResults, scanResultLock]);
 
     // Load last scan result from database
@@ -171,19 +144,6 @@ const ConflictsAlerts: React.FC = () => {
         }
     }, []);
 
-    // Save scan result to database
-    const saveScanResult = useCallback(async (result: ScanResult, scanDuration: number) => {
-        await supabase.from('scan_results').insert({
-            scanned_at: result.scannedAt,
-            scanned_by: profile?.id,
-            total_conflicts: result.hardViolations.length,
-            hard_violations_count: result.hardViolations.length,
-            soft_violations_count: 0,
-            soft_score: result.softScore.totalScore,
-            scan_duration_ms: scanDuration,
-        });
-    }, [profile?.id]);
-
     // Comprehensive scan using the new conflict scanner
     const runComprehensiveScan = useCallback(async () => {
         const scanStartTime = Date.now();
@@ -192,44 +152,28 @@ const ConflictsAlerts: React.FC = () => {
         console.log('[SCAN START] Acquiring lock:', currentLockId);
         setScanResultLock(currentLockId);
         setScanning(true);
-        // Ensure UI immediately resets to 0/14
         setFixProgress({ current: 0, total: 14, currentViolation: 'Initializing scan...', overallProgress: 0 });
         
         try {
             let schedules: any[] = [];
             
-            // If versionId is provided, fetch schedules from that version's snapshot
             if (versionId) {
-                console.log('Scanning version:', versionId);
-                const { data: version } = await supabase
+                const { data: versionData } = await supabase
                     .from('schedule_versions')
                     .select('snapshot')
                     .eq('id', versionId)
                     .single();
                 
-                if (version && version.snapshot) {
-                    const snapshot = version.snapshot as any[] | any;
+                if (versionData?.snapshot) {
+                    const snapshot = versionData.snapshot as any[] | any;
                     schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
-                    console.log('Scanning', schedules.length, 'schedules from version snapshot');
                 }
             } else {
-                // Build status filter based on selected version (legacy behavior)
-                const statusFilter = selectedVersion === 'all' 
-                    ? ['published', 'draft'] 
-                    : [selectedVersion];
-                
-                console.log('Scanning schedules with status:', statusFilter);
-                
-                // Fetch schedules by status
-                const { data: schedulesData } = await supabase
-                    .from('schedules')
-                    .select('*')
-                    .in('status', statusFilter);
-                
+                const statusFilter = selectedVersion === 'all' ? ['published', 'draft'] : [selectedVersion];
+                const { data: schedulesData } = await supabase.from('schedules').select('*').in('status', statusFilter);
                 schedules = schedulesData || [];
             }
             
-            // Fetch all necessary data
             const [teachersData, roomsData, sectionsData, subjectsData, breaksData] = await Promise.all([
                 supabase.from('teachers').select('*, profile:profiles(*)').eq('is_active', true),
                 supabase.from('rooms').select('*').eq('is_available', true),
@@ -238,116 +182,62 @@ const ConflictsAlerts: React.FC = () => {
                 supabase.from('institution_breaks').select('*'),
             ]);
 
-            const teachers = teachersData.data || [];
-            const rooms = roomsData.data || [];
-            const sections = sectionsData.data || [];
-            const subjects = subjectsData.data || [];
-            const breaks = breaksData.data || [];
-
-            // Default constraint config
-            const constraintConfig = {
-                maxConsecutiveHours: 4,
-                maxDailyHours: 8,
-                maxDailyClasses: 6,
-                maxWeeklyHours: 40,
-                breakWindows: breaks.map(b => ({ start: b.start_time, end: b.end_time })),
-            };
-
-            // Run comprehensive scan with progress tracking
             const result = await scanAllConstraints(
-                schedules as any, 
-                teachers, 
-                rooms, 
-                sections, 
-                subjects, 
-                constraintConfig,
+                schedules, 
+                teachersData.data || [], 
+                roomsData.data || [], 
+                sectionsData.data || [], 
+                subjectsData.data || [], 
+                {
+                    maxConsecutiveHours: 4,
+                    maxDailyHours: 8,
+                    maxDailyClasses: 6,
+                    maxWeeklyHours: 40,
+                    breakWindows: (breaksData.data || []).map(b => ({ start: b.start_time, end: b.end_time })),
+                },
                 (progress) => {
                     if (isMountedRef.current) {
                         setFixProgress({
                             current: progress.current,
                             total: progress.total,
                             currentViolation: progress.currentPhase,
-                            overallProgress: (progress.current / progress.total) * 10, // Scanning is 10% of total
+                            overallProgress: (progress.current / progress.total) * 100,
                         });
                     }
                 }
             );
+
             setScanResult(result);
             
-            // Update canonical state manager with current schedules and scan results
-            const version = await scheduleStateManager.updateState(
-                schedules as any,
-                'conflicts',
-                {
-                    conflictCount: result.hardViolations.length,
-                    softScore: result.softScore.totalScore,
-                    changeDescription: 'Deep conflict scan completed',
-                }
-            );
-            scheduleLogger.conflicts.scanCompleted(
-                version.version,
-                result.hardViolations.length,
-                result.softScore.totalScore,
-                Date.now() - scanStartTime
-            );
-            scheduleLogger.conflicts.stateUpdated(version.version, version.hash);
-            
-            // First, set detected conflicts from the scan result (immediate UI update)
-            const conflicts: DetectedConflict[] = result.hardViolations.map((v: HardConstraintViolation) => ({
+            const scanConflicts: DetectedConflict[] = result.hardViolations.map((v: HardConstraintViolation) => ({
                 id: v.id,
-                type: v.type as 'room_conflict' | 'teacher_overlap' | 'section_overlap',
-                severity: v.severity as 'high' | 'medium',
+                type: v.type as any,
+                severity: v.severity as any,
                 title: v.title,
                 description: v.description,
                 day: v.day || 'Multiple',
                 scheduleIds: v.scheduleIds,
             }));
-            setDetectedConflicts(conflicts);
-            setHasScanResults(true);
             
-            console.log('[SCAN COMPLETE] Set hasScanResults to true, conflicts:', conflicts.length);
-            console.log('[SCAN COMPLETE] Stats should now show scan results instead of database');
+            setDetectedConflicts(scanConflicts);
+
+            const { data: dbExisting } = await supabase.from('conflicts').select('id, conflict_original_id');
+            const existingIds = new Set((dbExisting || []).map(c => c.conflict_original_id).filter((id): id is string => !!id));
+            const detectedIds = new Set(result.hardViolations.map(v => v.id));
             
-            console.log('Set detected conflicts from scan:', conflicts.length);
-            
-            // Then sync with database (for persistence)
-            // Fetch ALL conflicts (not just unresolved) because conflict_original_id is unique across the table
-            const { data: existingConflicts } = await supabase
-                .from('conflicts')
-                .select('id, conflict_original_id');
-            
-            const existingIds = new Set((existingConflicts || []).map((c: { conflict_original_id?: string }) => c.conflict_original_id).filter((id): id is string => id !== undefined));
-            const detectedIds = new Set(result.hardViolations.map((v: HardConstraintViolation) => v.id));
-            
-            console.log('Existing conflicts in DB:', existingIds.size);
-            console.log('Detected conflicts in scan:', detectedIds.size);
-            
-            // Mark unresolved conflicts as resolved if they're no longer detected
-            const { data: unresolvedConflicts } = await supabase
-                .from('conflicts')
-                .select('id, conflict_original_id')
-                .eq('is_resolved', false);
-            
-            const unresolvedIds = new Set((unresolvedConflicts || []).map((c: { conflict_original_id?: string }) => c.conflict_original_id).filter((id): id is string => id !== undefined));
+            const { data: dbUnresolved } = await supabase.from('conflicts').select('id, conflict_original_id').eq('is_resolved', false);
+            const unresolvedIds = new Set((dbUnresolved || []).map(c => c.conflict_original_id).filter((id): id is string => id !== undefined));
             const resolvedIds = [...unresolvedIds].filter(id => !detectedIds.has(id));
+            
             if (resolvedIds.length > 0) {
-                console.log('Marking as resolved:', resolvedIds.length);
-                await supabase
-                    .from('conflicts')
-                    .update({ is_resolved: true, resolved_at: new Date().toISOString() })
-                    .in('conflict_original_id', resolvedIds);
+                await supabase.from('conflicts').update({ is_resolved: true, resolved_at: new Date().toISOString() }).in('conflict_original_id', resolvedIds);
             }
             
-            // Insert only new conflicts (not already in database)
-            const newConflicts = result.hardViolations.filter((v: HardConstraintViolation) => !existingIds.has(v.id));
-            console.log('New conflicts to insert:', newConflicts.length);
-            let insertSuccess = false;
+            const newConflicts = result.hardViolations.filter(v => !existingIds.has(v.id));
             if (newConflicts.length > 0) {
-                console.log('Sample conflict ID:', newConflicts[0].id);
-                console.log('Sample conflict scheduleIds:', newConflicts[0].scheduleIds);
-                const conflictInserts = newConflicts.map((v: HardConstraintViolation) => ({
-                    id: crypto.randomUUID(), // Generate proper UUID for database
-                    conflict_original_id: v.id, // Store scanner's composite ID
+                const conflictInserts = newConflicts.map(v => ({
+                    id: crypto.randomUUID(),
+                    conflict_original_id: v.id,
                     type: v.type,
                     severity: v.severity,
                     title: v.title,
@@ -357,61 +247,22 @@ const ConflictsAlerts: React.FC = () => {
                     is_resolved: false,
                     created_at: new Date().toISOString(),
                 }));
-                
-                console.log('Attempting to insert', conflictInserts.length, 'conflicts');
-                const { error: insertError } = await supabase.from('conflicts').insert(conflictInserts);
-                if (insertError) {
-                    console.error('Error inserting conflicts:', insertError);
-                    console.error('Error details:', JSON.stringify(insertError, null, 2));
-                    console.error('First conflict being inserted:', conflictInserts[0]);
-                } else {
-                    console.log('Successfully inserted conflicts');
-                    insertSuccess = true;
-                }
-            } else {
-                insertSuccess = true; // No conflicts to insert = success
+                await supabase.from('conflicts').insert(conflictInserts);
             }
             
-            // Save scan result to database for tracking
-            const scanDuration = Date.now() - scanStartTime;
-            await saveScanResult(result, scanDuration);
-            
-            // Only refresh db conflicts if insert succeeded, otherwise keep scan results
-            if (insertSuccess) {
-                console.log('[SCAN SYNC] Sync succeeded, keeping scan results as source of truth');
-                // We DO NOT call fetchDbConflicts() here anymore
-            } else {
-                console.log('Skipping DB fetch due to insert failure - keeping scan results');
-            }
-            
-            // Create conflict alert notification if conflicts found
-            if (result.hardViolations.length > 0) {
-                const highSeverityCount = result.hardViolations.filter(v => v.severity === 'high').length;
-                const severity = highSeverityCount > 0 ? 'high' : highSeverityCount > result.hardViolations.length / 2 ? 'medium' : 'low';
-                await createConflictAlert(result.hardViolations.length, severity, {
-                    soft_score: result.softScore.totalScore,
-                    scan_timestamp: result.scannedAt,
-                });
-            }
-            
-            // Set success state before toast to ensure UI updates source
+            await saveScanResult(result, Date.now() - scanStartTime);
             setHasScanResults(true);
             
             showToast({
                 type: 'success',
                 title: 'Scan Complete',
-                message: `Found ${result.hardViolations.length} conflicts. Soft score: ${result.softScore.totalScore}`,
+                message: `Found ${result.hardViolations.length} conflicts.`,
             });
             
         } catch (error) {
             console.error('Scan failed:', error);
-            setScanResultLock(null); // Release lock on failure
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            showToast({
-                type: 'error',
-                title: 'Scan Failed',
-                message: `Unable to complete scan: ${errorMessage}. Please try again.`,
-            });
+            setScanResultLock(null);
+            showToast({ type: 'error', title: 'Scan Failed', message: 'Unable to complete scan.' });
         } finally {
             if (isMountedRef.current) {
                 setScanning(false);
@@ -564,219 +415,42 @@ const ConflictsAlerts: React.FC = () => {
         });
     }, [showToast, runComprehensiveScan, scanResult]);
 
-    // Handle fix mode selection
-    const handleStartFixing = useCallback((mode: FixMode) => {
-        setFixMode(mode);
-        setFixOptions([]);
-        setSelectedViolation(null);
-        if (mode === 'autonomous' && scanResult) {
-            handleAutonomousFix();
-        } else {
-            showToast({
-                type: 'info',
-                title: 'Manual Fix Mode',
-                message: 'Click on a conflict to see fix options.',
-            });
-        }
-    }, [scanResult, handleAutonomousFix, showToast]);
-
-    // Handle interactive fix option selection
-    const handleSelectViolation = useCallback(async (violation: HardConstraintViolation) => {
-        setSelectedViolation(violation);
-        
-        try {
-            const [schedulesData, teachersData, roomsData, sectionsData, subjectsData] = await Promise.all([
-                supabase.from('schedules').select('*'),
-                supabase.from('teachers').select('*, profile:profiles(*)'),
-                supabase.from('rooms').select('*'),
-                supabase.from('sections').select('*'),
-                supabase.from('subjects').select('*'),
-            ]);
-
-            const options = await generateFixOptions(
-                violation,
-                schedulesData.data || [],
-                teachersData.data || [],
-                roomsData.data || [],
-                sectionsData.data || [],
-                subjectsData.data || []
-            );
-            
-            setFixOptions(options);
-            showToast({
-                type: 'success',
-                title: 'Fix Options Loaded',
-                message: `Found ${options.length} fix options for ${violation.title}.`,
-            });
-        } catch (error) {
-            console.error('Failed to load fix options:', error);
-            showToast({
-                type: 'error',
-                title: 'Failed to Load Fix Options',
-                message: 'Please try again.',
-            });
-        }
-    }, [showToast]);
-
-    // Helper to safely convert ConflictRow to HardConstraintViolation for interactive mode
-    const convertToHardConstraintViolation = (conflict: ConflictRow | DetectedConflict): HardConstraintViolation => {
-        // For live conflicts (from scanner), they already have the right structure
-        if ('source' in conflict && conflict.source === 'live') {
-            return conflict as unknown as HardConstraintViolation;
-        }
-        
-        // For DB conflicts, create a minimal HardConstraintViolation structure
-        return {
-            id: conflict.id,
-            type: (conflict.type || 'room_overlap') as HardConstraintViolation['type'],
-            severity: (conflict.severity || 'high') as HardConstraintViolation['severity'],
-            title: conflict.title,
-            description: conflict.description,
-            day: ('day' in conflict) ? conflict.day : undefined,
-            scheduleIds: ('scheduleIds' in conflict) ? conflict.scheduleIds : [],
-            affectedEntities: [],
-        };
-    };
-
-    // Apply selected fix
-    const handleApplyFix = useCallback(async (fix: FixOption) => {
-        setFixing(true);
-        
-        try {
-            // Capture before state for verification
-            const beforeSchedules = await supabase.from('schedules').select('*').in('status', ['published', 'draft']);
-            const beforeData = beforeSchedules.data || [];
-            const beforeHash = scheduleValidation.computeStateHash(beforeData);
-            const beforeConflictCount = scanResult?.hardViolations.length || 0;
-            const beforeSoftScore = scanResult?.softScore.totalScore || 0;
-            
-            console.log('[FIX VERIFICATION] Before state:', {
-                hash: beforeHash,
-                conflictCount: beforeConflictCount,
-                softScore: beforeSoftScore,
-                scheduleCount: beforeData.length,
-            });
-            
-            const schedulesData = await supabase.from('schedules').select('*');
-            const result = await applyFix(fix, schedulesData.data || [], supabase);
-            
-            if (result.success) {
-                // Capture after state for verification
-                const afterSchedules = await supabase.from('schedules').select('*').in('status', ['published', 'draft']);
-                const afterData = afterSchedules.data || [];
-                const afterHash = scheduleValidation.computeStateHash(afterData);
-                const diff = scheduleValidation.computeStateDiff(beforeData, afterData);
-                const fixVerification = scheduleValidation.verifyFixApplied(beforeData, afterData);
-                
-                console.log('[FIX VERIFICATION] After state:', {
-                    hash: afterHash,
-                    scheduleCount: afterData.length,
-                    diff,
-                    fixVerification,
-                });
-                
-                // Verify the fix actually changed the state
-                if (!fixVerification.success) {
-                    console.warn('[FIX VERIFICATION] Fix claimed success but state did not change:', fixVerification.reason);
-                    scheduleLogger.system.error('conflicts', 'repair', 'Fix claimed success but state did not change', fixVerification.reason);
-                }
-                
-                // Log the state change
-                scheduleLogger.conflicts.fixApplied(
-                    scheduleStateManager.getVersion()?.version || 0,
-                    fix.title,
-                    beforeConflictCount,
-                    scanResult?.hardViolations.length || 0 // Will be updated after rescan
-                );
-            }
-            
-            if (isMountedRef.current) {
-                showToast({
-                    type: result.success ? 'success' : 'error',
-                    title: result.success ? 'Fix Applied' : 'Fix Failed',
-                    message: result.message,
-                });
-                
-                // Auto-rescan after applying fix to update UI with latest state
-                if (result.success) {
-                    await runComprehensiveScan();
-                }
-            }
-        } catch (error) {
-            if (isMountedRef.current) {
-                console.error('Fix application failed:', error);
-                scheduleLogger.system.error('conflicts', 'repair', 'Fix application failed', error);
-                showToast({
-                    type: 'error',
-                    title: 'Fix Application Failed',
-                    message: 'Please try again.',
-                });
-            }
-        } finally {
-            if (isMountedRef.current) {
-                setFixing(false);
-            }
-        }
-    }, [showToast, runComprehensiveScan, scanResult]);
-
     useEffect(() => {
         isMountedRef.current = true;
-        setHasScanResults(false); // Reset on mount to load from database
-        console.log('[MOUNT] Set hasScanResults to false (mount)');
+        setHasScanResults(false);
+        setScanResultLock(null);
         
-        // Initialize state manager and logger
         scheduleStateManager.initialize(supabase);
-        scheduleLogger.system.workflowStarted('Conflicts tab initialization');
-        
-        // Subscribe to state changes from Generate tab
         const unsubscribe = scheduleStateManager.subscribe((event) => {
             if (event.source === 'generate' && event.type === 'schedule_updated') {
-                console.log('[CONFLICT ENGINE] State updated by Generate tab, triggering rescan');
-                scheduleLogger.system.cacheInvalidated('generate');
-                // Invalidate local state and trigger rescan
                 setScanResult(null);
                 setHasScanResults(false);
-                console.log('[CONFLICT ENGINE] Set hasScanResults to false (Generate update)');
-                // Auto-rescan when Generate tab updates to ensure fresh state
-                runComprehensiveScan().catch(err => {
-                    console.error('[CONFLICT ENGINE] Auto-rescan after Generate save failed:', err);
-                    scheduleLogger.system.error('conflicts', 'rescan', 'Auto-rescan after Generate save failed', err);
-                });
+                setScanResultLock(null);
+                runComprehensiveScan().catch(() => {});
             }
         });
         
         const init = async () => {
             setLoading(true);
-            // Only fetch DB conflicts on mount, don't auto-scan
             await fetchDbConflicts();
             await fetchLastScanResult();
-            setLoading(false);
+            if (isMountedRef.current) setLoading(false);
         };
         
         init();
-        
         return () => {
-            unsubscribe(); // Unsubscribe from state manager
+            unsubscribe();
             isMountedRef.current = false;
         };
-    }, [fetchDbConflicts, fetchLastScanResult, runComprehensiveScan]); // Run once on mount
+    }, [fetchDbConflicts, fetchLastScanResult, runComprehensiveScan]);
 
     // Refetch conflicts when version changes
     useEffect(() => {
-        console.log('[VERSION CHANGE] useEffect triggered, showVersionSelector:', showVersionSelector, 'hasScanResults:', hasScanResults);
-        if (!showVersionSelector) {
-            // Only refetch if version selector is closed (user has made a selection)
-            // Don't reset hasScanResults if we have scan results - let them persist
-            if (!hasScanResults) {
-                console.log('[VERSION CHANGE] No scan results, fetching from DB');
-                setScanResult(null);
-                fetchDbConflicts();
-            } else {
-                console.log('[VERSION CHANGE] Scan results exist - keeping scan results');
-            }
+        if (!hasScanResults && !scanResultLock) {
+            setScanResult(null);
+            fetchDbConflicts();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedVersion, showVersionSelector, fetchDbConflicts]);
+    }, [versionId, fetchDbConflicts, hasScanResults, scanResultLock]);
 
     const handleResolveDb = async (id: string) => {
         try {
@@ -785,34 +459,21 @@ const ConflictsAlerts: React.FC = () => {
                 resolved_at: new Date().toISOString(),
             }).eq('id', id);
             
-            if (error) {
-                throw error;
-            }
+            if (error) throw error;
             
             fetchDbConflicts();
-            showToast({
-                type: 'success',
-                title: 'Conflict Resolved',
-                message: 'The conflict has been marked as resolved.',
-            });
+            showToast({ type: 'success', title: 'Conflict Resolved', message: 'The conflict has been marked as resolved.' });
         } catch (error) {
             console.error('Failed to resolve conflict:', error);
-            showToast({
-                type: 'error',
-                title: 'Failed to Resolve Conflict',
-                message: error instanceof Error ? error.message : 'An unknown error occurred.',
-            });
+            showToast({ type: 'error', title: 'Failed to Resolve Conflict', message: 'Please try again.' });
         }
     };
 
     const allConflicts = useMemo(() => {
-        console.log('[UI DATA SOURCE] Recalculating allConflicts', { hasScanResults, scanResultLock, detectedCount: detectedConflicts.length, dbCount: dbConflicts.length });
-        // Only use one source: scan results if available/locked, otherwise database
         if (hasScanResults || scanResultLock) {
             return detectedConflicts.map(c => ({ ...c, source: 'live' as const, is_resolved: false, created_at: new Date().toISOString() }));
-        } else {
-            return dbConflicts.map(c => ({ ...c, source: 'db' as const, scheduleIds: [] as string[], day: '' }));
         }
+        return dbConflicts.map(c => ({ ...c, source: 'db' as const, scheduleIds: [] as string[], day: '' }));
     }, [detectedConflicts, dbConflicts, hasScanResults, scanResultLock]);
 
     const unresolvedCount = useMemo(() => allConflicts.filter(c => !c.is_resolved).length, [allConflicts]);
@@ -881,97 +542,6 @@ const ConflictsAlerts: React.FC = () => {
 
     return (
         <div className="dashboard fade-in">
-            {/* Version Selector - Inline Card */}
-            {showVersionSelector && (
-                <div className="card" style={{ padding: 24, maxWidth: 800, margin: '0 auto 24px auto' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <h3 style={{ color: 'var(--text-primary)', margin: 0, fontSize: 18 }}>
-                            Select Schedule Version to Scan
-                        </h3>
-                        <button
-                            onClick={() => setShowVersionSelector(false)}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--text-secondary)',
-                                cursor: 'pointer',
-                                fontSize: 20,
-                            }}
-                        >
-                            ×
-                        </button>
-                    </div>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.5 }}>
-                        Choose which schedule version you want to check for conflicts. The scan will only examine schedules in the selected status.
-                    </p>
-                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                        <button
-                            className={selectedVersion === 'published' ? 'btn btn-primary' : 'btn btn-secondary'}
-                            onClick={() => {
-                                console.log('[VERSION BUTTON] User clicked Published');
-                                setScanResultLock(null); // Release lock to allow DB fetch
-                                setSelectedVersion('published');
-                                setShowVersionSelector(false);
-                                setScanResult(null);
-                                setHasScanResults(false);
-                                console.log('[VERSION BUTTON] Set hasScanResults to false (user clicked Published)');
-                                fetchDbConflicts();
-                            }}
-                            style={{ flex: 1, minWidth: 200, justifyContent: 'flex-start', padding: '12px 16px' }}
-                        >
-                            <div style={{ flex: 1, textAlign: 'left' }}>
-                                <div style={{ fontWeight: 600, marginBottom: 4 }}>Published Schedules</div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                    Scan only published schedules (active schedule)
-                                </div>
-                            </div>
-                        </button>
-                        <button
-                            className={selectedVersion === 'draft' ? 'btn btn-primary' : 'btn btn-secondary'}
-                            onClick={() => {
-                                console.log('[VERSION BUTTON] User clicked Draft');
-                                setScanResultLock(null); // Release lock to allow DB fetch
-                                setSelectedVersion('draft');
-                                setShowVersionSelector(false);
-                                setScanResult(null);
-                                setHasScanResults(false);
-                                console.log('[VERSION BUTTON] Set hasScanResults to false (user clicked Draft)');
-                                fetchDbConflicts();
-                            }}
-                            style={{ flex: 1, minWidth: 200, justifyContent: 'flex-start', padding: '12px 16px' }}
-                        >
-                            <div style={{ flex: 1, textAlign: 'left' }}>
-                                <div style={{ fontWeight: 600, marginBottom: 4 }}>Draft Schedules</div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                    Scan only draft schedules (work in progress)
-                                </div>
-                            </div>
-                        </button>
-                        <button
-                            className={selectedVersion === 'all' ? 'btn btn-primary' : 'btn btn-secondary'}
-                            onClick={() => {
-                                console.log('[VERSION BUTTON] User clicked All');
-                                setScanResultLock(null); // Release lock to allow DB fetch
-                                setSelectedVersion('all');
-                                setShowVersionSelector(false);
-                                setScanResult(null);
-                                setHasScanResults(false);
-                                console.log('[VERSION BUTTON] Set hasScanResults to false (user clicked All)');
-                                fetchDbConflicts();
-                            }}
-                            style={{ flex: 1, minWidth: 200, justifyContent: 'flex-start', padding: '12px 16px' }}
-                        >
-                            <div style={{ flex: 1, textAlign: 'left' }}>
-                                <div style={{ fontWeight: 600, marginBottom: 4 }}>All Schedules</div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                    Scan both published and draft schedules
-                                </div>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-            )}
-
             <div className="dashboard-header" style={{ margin: '12px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     {versionId && (
@@ -986,28 +556,17 @@ const ConflictsAlerts: React.FC = () => {
                     <h1 className="dashboard-title"><AlertTriangle size={20} /> Conflicts & Alerts</h1>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
                         <p className="dashboard-subtitle" style={{ margin: 0 }}>
-                            {hasScanResults
+                            {hasScanResults || scanResultLock
                                 ? `${detectedConflicts.length} conflict${detectedConflicts.length > 1 ? 's' : ''} found in scan`
                                 : unresolvedCount > 0
                                 ? `${unresolvedCount} active conflict${unresolvedCount > 1 ? 's' : ''} detected`
                                 : 'No active conflicts'}
                         </p>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            ({selectedVersion === 'all' ? 'All schedules' : selectedVersion === 'published' ? 'Published only' : 'Draft only'})
-                        </span>
-                        <button
-                            className="btn btn-secondary"
-                            onClick={() => setShowVersionSelector(true)}
-                            style={{ fontSize: 12, padding: '4px 8px' }}
-                            title="Change version filter"
-                        >
-                            Change
-                        </button>
                     </div>
                 </div>
                 <button
                     className="btn btn-primary"
-                    onClick={() => { runComprehensiveScan(); fetchDbConflicts(); }}
+                    onClick={() => runComprehensiveScan()}
                     disabled={scanning}
                     style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                     aria-label={scanning ? 'Scanning for conflicts' : 'Scan for conflicts'}
