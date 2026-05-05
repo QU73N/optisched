@@ -68,14 +68,14 @@ export const PublishOverwriteConfirm: React.FC<PublishOverwriteConfirmProps> = (
             zIndex: 1000,
         }}>
             <div style={{
-                backgroundColor: 'var(--surface-light)',
-                borderRadius: 'var(--radius-lg)',
+                backgroundColor: '#ffffff',
+                borderRadius: 'var(--radius-lg, 8px)',
                 padding: 24,
                 maxWidth: 520,
                 width: '90%',
                 maxHeight: '90vh',
                 overflowY: 'auto',
-                border: '1px solid var(--border-light)',
+                border: '1px solid #e2e8f0',
                 boxShadow: '0 8px 32px rgba(15, 40, 84, 0.12)',
             }}>
                 {/* Header */}

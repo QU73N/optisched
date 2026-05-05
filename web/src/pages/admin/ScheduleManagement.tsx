@@ -11,6 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import '../admin/Dashboard.css';
 import ScheduleVersionHistory from './ScheduleVersionHistory';
 import { ScheduleDragDrop } from '../../components/ScheduleDragDrop';
+import { PublishOverwriteConfirm } from '../../components/PublishOverwriteConfirm';
 
 type Category = 'sections' | 'teachers' | 'rooms';
 
@@ -101,6 +102,14 @@ const ScheduleManagement: React.FC = () => {
         is_active: boolean;
         schedules_status: string;
         batch_id: string | null;
+    } | null>(null);
+    const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
+    const [currentScheduleSummary, setCurrentScheduleSummary] = useState<{
+        exists: boolean;
+        version?: string;
+        timestamp?: string;
+        sessionCount?: number;
+        score?: number;
     } | null>(null);
 
     // Initialize scheduleVersionService
@@ -294,7 +303,30 @@ const ScheduleManagement: React.FC = () => {
 
     const handleApprovePublishVersion = async () => {
         if (!versionStatus?.batch_id) return;
-        if (!confirm('Approve and publish this submitted schedule? This will become the new active schedule.')) return;
+        
+        // Check for existing active schedule before approving
+        try {
+            const summary = await scheduleVersionService.getActiveScheduleSummary();
+            setCurrentScheduleSummary(summary);
+
+            if (summary && summary.exists) {
+                // Show overwrite confirmation modal
+                setShowOverwriteConfirm(true);
+                return;
+            }
+        } catch (error) {
+            console.error('[APPROVE] Error checking active schedule:', error);
+            // Continue with approval even if check fails
+        }
+
+        // If no existing schedule, proceed directly with approval
+        await performApprovePublish();
+    };
+
+    const performApprovePublish = async () => {
+        if (!versionStatus?.batch_id) return;
+        setShowOverwriteConfirm(false);
+        
         try {
             let res = await (scheduleVersionService as any).approveSchedule(versionStatus.batch_id, { changeReason: 'Approved from schedule management' });
             if (!res.success) throw new Error(res.message);
@@ -310,6 +342,11 @@ const ScheduleManagement: React.FC = () => {
             console.error(err);
             alert(`Failed to approve & publish: ${err instanceof Error ? err.message : String(err)}`);
         }
+    };
+
+    const handleOverwriteCancel = () => {
+        setShowOverwriteConfirm(false);
+        setCurrentScheduleSummary(null);
     };
 
     const handlePublishPreviousVersion = async () => {
@@ -1105,6 +1142,19 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                                 />
                             </div>
                         </div>
+                    )}
+
+                    {/* Overwrite Confirmation Modal */}
+                    {showOverwriteConfirm && currentScheduleSummary && (
+                        <PublishOverwriteConfirm
+                            isOpen={showOverwriteConfirm}
+                            currentSchedule={currentScheduleSummary}
+                            newSchedule={{
+                                sessionCount: schedules.length,
+                            }}
+                            onConfirm={performApprovePublish}
+                            onCancel={handleOverwriteCancel}
+                        />
                     )}
                 </div>
             )}

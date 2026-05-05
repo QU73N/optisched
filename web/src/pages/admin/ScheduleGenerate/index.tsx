@@ -482,24 +482,6 @@ const ScheduleGenerate: React.FC = () => {
 
         console.log('[SAVE AS] Called with initialState:', initialState);
 
-        // If submitting, check for existing active schedule
-        if (initialState === 'submitted') {
-            try {
-                const summary = await scheduleVersionService.getActiveScheduleSummary();
-                setCurrentScheduleSummary(summary);
-
-                if (summary && summary.exists) {
-                    // Show overwrite confirmation modal
-                    console.log('[SAVE AS] Showing overwrite confirmation modal');
-                    setShowOverwriteConfirm(true);
-                    return;
-                }
-            } catch (error) {
-                console.error('[SAVE] Error checking active schedule:', error);
-                // Continue with save even if check fails
-            }
-        }
-
         // Proceed with save
         console.log('[SAVE AS] Proceeding with performSave, initialState:', initialState);
         await performSave(initialState);
