@@ -1,4 +1,0 @@
--- This script is no longer needed
--- The generator now supports variable session lengths
--- PE and Work Immersion remain at 2 hours with 120-minute sessions
--- The system rounds UP session length to fit exact hour requirements
