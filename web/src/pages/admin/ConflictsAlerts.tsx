@@ -142,7 +142,8 @@ const ConflictsAlerts: React.FC = () => {
         } else {
             console.log('Skipping DB fetch - using scan results');
         }
-    }, [selectedVersion, versionId, hasScanResults]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedVersion, versionId]);
 
     // Load last scan result from database
     const fetchLastScanResult = useCallback(async () => {
@@ -286,6 +287,9 @@ const ConflictsAlerts: React.FC = () => {
             }));
             setDetectedConflicts(conflicts);
             setHasScanResults(true);
+            
+            console.log('[SCAN COMPLETE] Set hasScanResults to true, conflicts:', conflicts.length);
+            console.log('[SCAN COMPLETE] Stats should now show scan results instead of database');
             
             console.log('Set detected conflicts from scan:', conflicts.length);
             
@@ -734,11 +738,15 @@ const ConflictsAlerts: React.FC = () => {
     useEffect(() => {
         if (!showVersionSelector) {
             // Only refetch if version selector is closed (user has made a selection)
-            setScanResult(null);
-            setHasScanResults(false);
-            fetchDbConflicts();
+            // Don't reset hasScanResults if we have scan results - let them persist
+            if (!hasScanResults) {
+                setScanResult(null);
+                fetchDbConflicts();
+            } else {
+                console.log('Version changed but scan results exist - keeping scan results');
+            }
         }
-    }, [selectedVersion, showVersionSelector, fetchDbConflicts]);
+    }, [selectedVersion, showVersionSelector, hasScanResults, fetchDbConflicts]);
 
     const handleResolveDb = async (id: string) => {
         try {
