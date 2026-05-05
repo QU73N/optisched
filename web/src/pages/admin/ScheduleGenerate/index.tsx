@@ -1332,7 +1332,7 @@ const PartialTargetPicker: React.FC<{
 // Simple tooltip component for field labels
 const FieldTooltip: React.FC<{ children: string }> = ({ children }) => (
     <div className="sg-field-tooltip-wrapper">
-        <HelpCircle size={14} style={{ color: 'var(--text-muted)', cursor: 'help' }} />
+        <HelpCircle size={14} style={{ color: 'var(--text-muted)', cursor: 'help', marginLeft: 4 }} />
         <div className="sg-field-tooltip">{children}</div>
     </div>
 );
@@ -2736,14 +2736,10 @@ const PrioritiesStage: React.FC<{
                     desc="Flag what matters most. The engine places high priority items first and protects their slots."
                     compact={compact}
                     titleIcon={
-                        <div className="sg-prio-tooltip-wrapper">
-                            <HelpCircle size={16} style={{ color: 'var(--text-muted)', cursor: 'help' }} />
-                            <div className="sg-prio-tooltip">
-                                {PRIORITY_TIERS.map(t => (
-                                    <div key={t.key} className={`sg-prio-tooltip-item sg-prio-tooltip-${t.key}`}>
-                                        <strong>{t.label}:</strong> {t.desc}
-                                    </div>
-                                ))}
+                        <div className="sg-break-tooltip-wrapper">
+                            <HelpCircle size={14} style={{ color: 'var(--text-muted)', cursor: 'help', marginLeft: 4 }} />
+                            <div className="sg-break-tooltip">
+                                Overrides all other breaks on selected day. All classes and teachers have a break at this time.
                             </div>
                         </div>
                     }

@@ -1907,7 +1907,6 @@
     letter-spacing: 0.2px;
     display: flex;
     align-items: center;
-    gap: 6px;
 }
 
 .sg-grid-3 {
@@ -2050,7 +2049,6 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    margin-left: 6px;
     vertical-align: middle;
 }
 
@@ -2105,7 +2103,6 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    margin-left: 6px;
     vertical-align: middle;
 }
 
@@ -2277,7 +2274,6 @@
     color: var(--text-primary);
     display: flex;
     align-items: center;
-    gap: 6px;
 }
 
 .sg-slider-desc {
