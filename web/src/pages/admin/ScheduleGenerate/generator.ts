@@ -1249,9 +1249,11 @@ const constructDomains = (
                     const teacherAvailabilityRatio = availableTeacherCount / Math.max(1, validTeachers.length);
                     lcvScore += teacherAvailabilityRatio * 40; // Higher weight for teacher availability
 
-                    // Prefer time slots that are less crowded
-                    const slotUsage = validRooms.length * validTeachers.length;
-                    lcvScore += (1 / Math.max(1, slotUsage)) * 20;
+                    // IMPROVEMENT: Add room load balancing to LCV scoring
+                    // Prefer less-used rooms to balance room utilization
+                    // Calculate room scarcity (inverse of room usage)
+                    const roomScarcity = 1 / Math.max(1, validRooms.length);
+                    lcvScore += roomScarcity * 15;
 
                     // IMPROVEMENT: Penalize slots that overlap with break windows
                     const slotStart = toMin(slot.start);
@@ -3118,6 +3120,14 @@ export async function runGenerator(
                         if (r) compat.push(r);
                     }
                     if (compat.length === 0) { continue; }
+                    
+                    // IMPROVEMENT: Sort rooms by current load to balance room utilization
+                    // Prefer rooms with fewer assigned sessions
+                    compat.sort((a, b) => {
+                        const aLoad = entries.filter(e => e.roomId === a.id).length;
+                        const bLoad = entries.filter(e => e.roomId === b.id).length;
+                        return aLoad - bLoad; // Prefer rooms with lower load
+                    });
 
                     // Use pre-filtered slots from domain for this day (already sorted by LCV score)
                     const validSlotsForDay = domain.validSlots.filter(s => s.day === day);
