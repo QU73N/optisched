@@ -453,14 +453,12 @@ const DataManagement: React.FC = () => {
                 <div className="modal-overlay" onClick={() => setShowAddRoom(false)}>
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h2>Add Room</h2><button className="btn btn-ghost" onClick={() => setShowAddRoom(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleAddRoom} className="modal-form">
-                            <div className="field"><label className="field-label">ROOM NAME</label><input className="input" required placeholder="e.g. Lab 201" value={newRoom.name} onChange={e => setNewRoom(p => ({ ...p, name: e.target.value }))} /></div>
-                            <div className="field"><label className="field-label">BUILDING</label><input className="input" required placeholder="e.g. Main Building" value={newRoom.building} onChange={e => setNewRoom(p => ({ ...p, building: e.target.value }))} /></div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">FLOOR</label><input className="input" type="number" min={1} value={newRoom.floor} onChange={e => setNewRoom(p => ({ ...p, floor: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">CAPACITY</label><input className="input" type="number" min={1} value={newRoom.capacity} onChange={e => setNewRoom(p => ({ ...p, capacity: parseInt(e.target.value) }))} /></div>
-                            </div>
-                            <div className="field"><label className="field-label">ROOM TYPE</label>
+                        <form onSubmit={handleAddRoom} className="modal-form-grid">
+                            <div className="field"><label className="field-label">Room Name</label><input className="input" required placeholder="e.g. Lab 201" value={newRoom.name} onChange={e => setNewRoom(p => ({ ...p, name: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Building</label><input className="input" required placeholder="e.g. Main Building" value={newRoom.building} onChange={e => setNewRoom(p => ({ ...p, building: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Floor</label><input className="input" type="number" min={1} value={newRoom.floor} onChange={e => setNewRoom(p => ({ ...p, floor: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Capacity</label><input className="input" type="number" min={1} value={newRoom.capacity} onChange={e => setNewRoom(p => ({ ...p, capacity: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Room Type</label>
                                 <select className="input" value={newRoom.room_type} onChange={e => setNewRoom(p => ({ ...p, room_type: e.target.value as RoomType }))}>
                                     <option value="general_classroom">General Classroom</option>
                                     <option value="computer_lab">Computer Lab</option>
@@ -475,9 +473,9 @@ const DataManagement: React.FC = () => {
                                     <option value="other">Other</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={newRoom.weight} onChange={e => setNewRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={newRoom.priority_note} onChange={e => setNewRoom(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Room'}</button>
+                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newRoom.weight} onChange={e => setNewRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={newRoom.priority_note} onChange={e => setNewRoom(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
+                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Room'}</button>
                         </form>
                     </div>
                 </div>
@@ -488,25 +486,19 @@ const DataManagement: React.FC = () => {
                 <div className="modal-overlay" onClick={() => setShowAddSubject(false)}>
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h2>Add Subject</h2><button className="btn btn-ghost" onClick={() => setShowAddSubject(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleAddSubject} className="modal-form">
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">CODE</label><input className="input" required placeholder="e.g. CS101" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value }))} /></div>
-                                <div className="field" style={{ flex: 2 }}><label className="field-label">NAME</label><input className="input" required placeholder="Introduction to Computing" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} /></div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">UNITS</label><input className="input" type="number" min={1} max={6} value={newSubject.units} onChange={e => setNewSubject(p => ({ ...p, units: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">HOURS</label><input className="input" type="number" min={1} max={6} value={newSubject.duration_hours} onChange={e => setNewSubject(p => ({ ...p, duration_hours: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">TYPE</label><select className="input" value={newSubject.type} onChange={e => setNewSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common</option><option value="special">Special</option></select></div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 2 }}><label className="field-label">PROGRAM</label><input className="input" required placeholder="e.g. BSIT" value={newSubject.program} onChange={e => setNewSubject(p => ({ ...p, program: e.target.value }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">YEAR LEVEL</label><input className="input" type="number" min={1} max={12} value={newSubject.year_level} onChange={e => setNewSubject(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
-                            </div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>
+                        <form onSubmit={handleAddSubject} className="modal-form-grid">
+                            <div className="field"><label className="field-label">Code</label><input className="input" required placeholder="e.g. CS101" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Name</label><input className="input" required placeholder="Introduction to Computing" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Units</label><input className="input" type="number" min={1} max={6} value={newSubject.units} onChange={e => setNewSubject(p => ({ ...p, units: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Hours</label><input className="input" type="number" min={1} max={6} value={newSubject.duration_hours} onChange={e => setNewSubject(p => ({ ...p, duration_hours: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Type</label><select className="input" value={newSubject.type} onChange={e => setNewSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common</option><option value="special">Special</option></select></div>
+                            <div className="field"><label className="field-label">Program</label><input className="input" required placeholder="e.g. BSIT" value={newSubject.program} onChange={e => setNewSubject(p => ({ ...p, program: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Year Level</label><input className="input" type="number" min={1} max={12} value={newSubject.year_level} onChange={e => setNewSubject(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
                                 <input type="checkbox" checked={newSubject.requires_lab} onChange={e => setNewSubject(p => ({ ...p, requires_lab: e.target.checked }))} />
-                                Requires Lab Room
-                            </label>
-                            <div className="field"><label className="field-label">REQUIRED ROOM TYPES</label>
+                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Requires Lab Room</label>
+                            </div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Required Room Types (Ctrl+Click to select multiple)</label>
                                 <select className="input" multiple size={3} value={newSubject.required_room_types} onChange={e => {
                                     const selected = Array.from(e.target.selectedOptions).map(opt => opt.value as RoomType);
                                     setNewSubject(p => ({ ...p, required_room_types: selected }));
@@ -524,15 +516,15 @@ const DataManagement: React.FC = () => {
                                     <option value="other">Other</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">TEACHER</label>
+                            <div className="field"><label className="field-label">Teacher</label>
                                 <select className="input" value={newSubject.teacher_id || ''} onChange={e => setNewSubject(p => ({ ...p, teacher_id: e.target.value || null }))}>
                                     <option value="">No teacher assigned</option>
                                     {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={newSubject.weight} onChange={e => setNewSubject(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={newSubject.priority_note} onChange={e => setNewSubject(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Subject'}</button>
+                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newSubject.weight} onChange={e => setNewSubject(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={newSubject.priority_note} onChange={e => setNewSubject(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
+                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Subject'}</button>
                         </form>
                     </div>
                 </div>
@@ -543,20 +535,18 @@ const DataManagement: React.FC = () => {
                 <div className="modal-overlay" onClick={() => setShowAddSection(false)}>
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h2>Add Section</h2><button className="btn btn-ghost" onClick={() => setShowAddSection(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleAddSection} className="modal-form">
-                            <div className="field"><label className="field-label">SECTION NAME</label><input className="input" required placeholder="e.g. BSIT-1A" value={newSection.name} onChange={e => setNewSection(p => ({ ...p, name: e.target.value }))} /></div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 2 }}><label className="field-label">PROGRAM</label><input className="input" required placeholder="e.g. BSIT" value={newSection.program} onChange={e => setNewSection(p => ({ ...p, program: e.target.value }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">YEAR LEVEL</label><input className="input" type="number" min={1} max={12} value={newSection.year_level} onChange={e => setNewSection(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
-                            </div>
-                            <div className="field"><label className="field-label">STUDENT COUNT</label><input className="input" type="number" min={1} value={newSection.student_count} onChange={e => setNewSection(p => ({ ...p, student_count: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">NODE TYPE</label>
+                        <form onSubmit={handleAddSection} className="modal-form-grid">
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Section Name</label><input className="input" required placeholder="e.g. BSIT-1A" value={newSection.name} onChange={e => setNewSection(p => ({ ...p, name: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Program</label><input className="input" required placeholder="e.g. BSIT" value={newSection.program} onChange={e => setNewSection(p => ({ ...p, program: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Year Level</label><input className="input" type="number" min={1} max={12} value={newSection.year_level} onChange={e => setNewSection(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Student Count</label><input className="input" type="number" min={1} value={newSection.student_count} onChange={e => setNewSection(p => ({ ...p, student_count: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Node Type</label>
                                 <select className="input" value={newSection.node_type} onChange={e => setNewSection(p => ({ ...p, node_type: e.target.value as 'group' | 'section' }))}>
                                     <option value="section">Section (actual student group)</option>
                                     <option value="group">Group (folder for organization)</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">PARENT SECTION</label>
+                            <div className="field"><label className="field-label">Parent Section</label>
                                 <select className="input" value={newSection.parent_id || ''} onChange={e => setNewSection(p => ({ ...p, parent_id: e.target.value || null }))}>
                                     <option value="">None (root level)</option>
                                     {sections.filter(s => s.node_type === 'group' || s.node_type === 'section').map(s => (
@@ -564,17 +554,17 @@ const DataManagement: React.FC = () => {
                                     ))}
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">LOAD CATEGORY</label>
+                            <div className="field"><label className="field-label">Load Category</label>
                                 <select className="input" value={newSection.load_category} onChange={e => setNewSection(p => ({ ...p, load_category: e.target.value as 'heavy' | 'normal' | 'light' }))}>
                                     <option value="heavy">Heavy (many difficult subjects)</option>
                                     <option value="normal">Normal (balanced)</option>
                                     <option value="light">Light (fewer/easier subjects)</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={newSection.weight} onChange={e => setNewSection(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">SORT ORDER</label><input className="input" type="number" min={0} value={newSection.sort_order} onChange={e => setNewSection(p => ({ ...p, sort_order: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">DESCRIPTION</label><textarea className="input" rows={2} value={newSection.description} onChange={e => setNewSection(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Section'}</button>
+                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newSection.weight} onChange={e => setNewSection(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Sort Order</label><input className="input" type="number" min={0} value={newSection.sort_order} onChange={e => setNewSection(p => ({ ...p, sort_order: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Description</label><textarea className="input" rows={2} value={newSection.description} onChange={e => setNewSection(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." /></div>
+                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Section'}</button>
                         </form>
                     </div>
                 </div>
@@ -585,14 +575,12 @@ const DataManagement: React.FC = () => {
                 <div className="modal-overlay" onClick={() => setShowEditRoom(false)}>
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h2>Edit Room</h2><button className="btn btn-ghost" onClick={() => setShowEditRoom(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleEditRoom} className="modal-form">
-                            <div className="field"><label className="field-label">ROOM NAME</label><input className="input" required placeholder="e.g. Lab 201" value={editRoom.name} onChange={e => setEditRoom(p => ({ ...p, name: e.target.value }))} /></div>
-                            <div className="field"><label className="field-label">BUILDING</label><input className="input" required placeholder="e.g. Main Building" value={editRoom.building} onChange={e => setEditRoom(p => ({ ...p, building: e.target.value }))} /></div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">FLOOR</label><input className="input" type="number" min={1} value={editRoom.floor} onChange={e => setEditRoom(p => ({ ...p, floor: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">CAPACITY</label><input className="input" type="number" min={1} value={editRoom.capacity} onChange={e => setEditRoom(p => ({ ...p, capacity: parseInt(e.target.value) }))} /></div>
-                            </div>
-                            <div className="field"><label className="field-label">ROOM TYPE</label>
+                        <form onSubmit={handleEditRoom} className="modal-form-grid">
+                            <div className="field"><label className="field-label">Room Name</label><input className="input" required placeholder="e.g. Lab 201" value={editRoom.name} onChange={e => setEditRoom(p => ({ ...p, name: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Building</label><input className="input" required placeholder="e.g. Main Building" value={editRoom.building} onChange={e => setEditRoom(p => ({ ...p, building: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Floor</label><input className="input" type="number" min={1} value={editRoom.floor} onChange={e => setEditRoom(p => ({ ...p, floor: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Capacity</label><input className="input" type="number" min={1} value={editRoom.capacity} onChange={e => setEditRoom(p => ({ ...p, capacity: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Room Type</label>
                                 <select className="input" value={editRoom.room_type} onChange={e => setEditRoom(p => ({ ...p, room_type: e.target.value as RoomType }))}>
                                     <option value="general_classroom">General Classroom</option>
                                     <option value="computer_lab">Computer Lab</option>
@@ -607,9 +595,9 @@ const DataManagement: React.FC = () => {
                                     <option value="other">Other</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={editRoom.weight} onChange={e => setEditRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={editRoom.priority_note} onChange={e => setEditRoom(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
+                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editRoom.weight} onChange={e => setEditRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={editRoom.priority_note} onChange={e => setEditRoom(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
+                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>
                 </div>
@@ -620,25 +608,19 @@ const DataManagement: React.FC = () => {
                 <div className="modal-overlay" onClick={() => setShowEditSubject(false)}>
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h2>Edit Subject</h2><button className="btn btn-ghost" onClick={() => setShowEditSubject(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleEditSubject} className="modal-form">
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">CODE</label><input className="input" required placeholder="e.g. CS101" value={editSubject.code} onChange={e => setEditSubject(p => ({ ...p, code: e.target.value }))} /></div>
-                                <div className="field" style={{ flex: 2 }}><label className="field-label">NAME</label><input className="input" required placeholder="Introduction to Computing" value={editSubject.name} onChange={e => setEditSubject(p => ({ ...p, name: e.target.value }))} /></div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">UNITS</label><input className="input" type="number" min={1} max={6} value={editSubject.units} onChange={e => setEditSubject(p => ({ ...p, units: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">HOURS</label><input className="input" type="number" min={1} max={6} value={editSubject.duration_hours} onChange={e => setEditSubject(p => ({ ...p, duration_hours: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">TYPE</label><select className="input" value={editSubject.type} onChange={e => setEditSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common</option><option value="special">Special</option></select></div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 2 }}><label className="field-label">PROGRAM</label><input className="input" required placeholder="e.g. BSIT" value={editSubject.program} onChange={e => setEditSubject(p => ({ ...p, program: e.target.value }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">YEAR LEVEL</label><input className="input" type="number" min={1} max={12} value={editSubject.year_level} onChange={e => setEditSubject(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
-                            </div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>
+                        <form onSubmit={handleEditSubject} className="modal-form-grid">
+                            <div className="field"><label className="field-label">Code</label><input className="input" required placeholder="e.g. CS101" value={editSubject.code} onChange={e => setEditSubject(p => ({ ...p, code: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Name</label><input className="input" required placeholder="Introduction to Computing" value={editSubject.name} onChange={e => setEditSubject(p => ({ ...p, name: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Units</label><input className="input" type="number" min={1} max={6} value={editSubject.units} onChange={e => setEditSubject(p => ({ ...p, units: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Hours</label><input className="input" type="number" min={1} max={6} value={editSubject.duration_hours} onChange={e => setEditSubject(p => ({ ...p, duration_hours: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Type</label><select className="input" value={editSubject.type} onChange={e => setEditSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common</option><option value="special">Special</option></select></div>
+                            <div className="field"><label className="field-label">Program</label><input className="input" required placeholder="e.g. BSIT" value={editSubject.program} onChange={e => setEditSubject(p => ({ ...p, program: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Year Level</label><input className="input" type="number" min={1} max={12} value={editSubject.year_level} onChange={e => setEditSubject(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
                                 <input type="checkbox" checked={editSubject.requires_lab} onChange={e => setEditSubject(p => ({ ...p, requires_lab: e.target.checked }))} />
-                                Requires Lab Room
-                            </label>
-                            <div className="field"><label className="field-label">REQUIRED ROOM TYPES</label>
+                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Requires Lab Room</label>
+                            </div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Required Room Types (Ctrl+Click to select multiple)</label>
                                 <select className="input" multiple size={3} value={editSubject.required_room_types} onChange={e => {
                                     const selected = Array.from(e.target.selectedOptions).map(opt => opt.value as RoomType);
                                     setEditSubject(p => ({ ...p, required_room_types: selected }));
@@ -656,15 +638,15 @@ const DataManagement: React.FC = () => {
                                     <option value="other">Other</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">TEACHER</label>
+                            <div className="field"><label className="field-label">Teacher</label>
                                 <select className="input" value={editSubject.teacher_id || ''} onChange={e => setEditSubject(p => ({ ...p, teacher_id: e.target.value || null }))}>
                                     <option value="">No teacher assigned</option>
                                     {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={editSubject.weight} onChange={e => setEditSubject(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={editSubject.priority_note} onChange={e => setEditSubject(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
+                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editSubject.weight} onChange={e => setEditSubject(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={editSubject.priority_note} onChange={e => setEditSubject(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
+                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>
                 </div>
@@ -675,20 +657,18 @@ const DataManagement: React.FC = () => {
                 <div className="modal-overlay" onClick={() => setShowEditSection(false)}>
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h2>Edit Section</h2><button className="btn btn-ghost" onClick={() => setShowEditSection(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleEditSection} className="modal-form">
-                            <div className="field"><label className="field-label">SECTION NAME</label><input className="input" required placeholder="e.g. BSIT-1A" value={editSection.name} onChange={e => setEditSection(p => ({ ...p, name: e.target.value }))} /></div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 2 }}><label className="field-label">PROGRAM</label><input className="input" required placeholder="e.g. BSIT" value={editSection.program} onChange={e => setEditSection(p => ({ ...p, program: e.target.value }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">YEAR LEVEL</label><input className="input" type="number" min={1} max={12} value={editSection.year_level} onChange={e => setEditSection(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
-                            </div>
-                            <div className="field"><label className="field-label">STUDENT COUNT</label><input className="input" type="number" min={1} value={editSection.student_count} onChange={e => setEditSection(p => ({ ...p, student_count: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">NODE TYPE</label>
+                        <form onSubmit={handleEditSection} className="modal-form-grid">
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Section Name</label><input className="input" required placeholder="e.g. BSIT-1A" value={editSection.name} onChange={e => setEditSection(p => ({ ...p, name: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Program</label><input className="input" required placeholder="e.g. BSIT" value={editSection.program} onChange={e => setEditSection(p => ({ ...p, program: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Year Level</label><input className="input" type="number" min={1} max={12} value={editSection.year_level} onChange={e => setEditSection(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Student Count</label><input className="input" type="number" min={1} value={editSection.student_count} onChange={e => setEditSection(p => ({ ...p, student_count: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Node Type</label>
                                 <select className="input" value={editSection.node_type} onChange={e => setEditSection(p => ({ ...p, node_type: e.target.value as 'group' | 'section' }))}>
                                     <option value="section">Section (actual student group)</option>
                                     <option value="group">Group (folder for organization)</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">PARENT SECTION</label>
+                            <div className="field"><label className="field-label">Parent Section</label>
                                 <select className="input" value={editSection.parent_id || ''} onChange={e => setEditSection(p => ({ ...p, parent_id: e.target.value || null }))}>
                                     <option value="">None (root level)</option>
                                     {sections.filter(s => s.id !== editingId && (s.node_type === 'group' || s.node_type === 'section')).map(s => (
@@ -696,17 +676,17 @@ const DataManagement: React.FC = () => {
                                     ))}
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">LOAD CATEGORY</label>
+                            <div className="field"><label className="field-label">Load Category</label>
                                 <select className="input" value={editSection.load_category} onChange={e => setEditSection(p => ({ ...p, load_category: e.target.value as 'heavy' | 'normal' | 'light' }))}>
                                     <option value="heavy">Heavy (many difficult subjects)</option>
                                     <option value="normal">Normal (balanced)</option>
                                     <option value="light">Light (fewer/easier subjects)</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">WEIGHT (0-100, higher = scheduled first)</label><input className="input" type="number" min={0} max={100} value={editSection.weight} onChange={e => setEditSection(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">SORT ORDER</label><input className="input" type="number" min={0} value={editSection.sort_order} onChange={e => setEditSection(p => ({ ...p, sort_order: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">DESCRIPTION</label><textarea className="input" rows={2} value={editSection.description} onChange={e => setEditSection(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
+                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editSection.weight} onChange={e => setEditSection(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Sort Order</label><input className="input" type="number" min={0} value={editSection.sort_order} onChange={e => setEditSection(p => ({ ...p, sort_order: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Description</label><textarea className="input" rows={2} value={editSection.description} onChange={e => setEditSection(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." /></div>
+                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>
                 </div>
@@ -717,26 +697,20 @@ const DataManagement: React.FC = () => {
                 <div className="modal-overlay" onClick={() => setShowAddTeacher(false)}>
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h2>Add Teacher</h2><button className="btn btn-ghost" onClick={() => setShowAddTeacher(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleAddTeacher} className="modal-form">
-                            <div className="field"><label className="field-label">FULL NAME</label><input className="input" required placeholder="e.g. John Smith" value={newTeacher.full_name} onChange={e => setNewTeacher(p => ({ ...p, full_name: e.target.value }))} /></div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">MAX HOURS</label><input className="input" type="number" min={1} max={60} value={newTeacher.max_hours} onChange={e => setNewTeacher(p => ({ ...p, max_hours: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">WEIGHT (0-100)</label><input className="input" type="number" min={0} max={100} value={newTeacher.weight} onChange={e => setNewTeacher(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            </div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>
+                        <form onSubmit={handleAddTeacher} className="modal-form-grid">
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Full Name</label><input className="input" required placeholder="e.g. John Smith" value={newTeacher.full_name} onChange={e => setNewTeacher(p => ({ ...p, full_name: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Max Hours</label><input className="input" type="number" min={1} max={60} value={newTeacher.max_hours} onChange={e => setNewTeacher(p => ({ ...p, max_hours: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newTeacher.weight} onChange={e => setNewTeacher(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20, gridColumn: '1 / -1' }}>
                                 <input type="checkbox" checked={newTeacher.shared_assignment} onChange={e => setNewTeacher(p => ({ ...p, shared_assignment: e.target.checked }))} />
-                                Allow Shared Assignment
-                            </label>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">MAX CLASSES PER DAY</label><input className="input" type="number" min={1} max={10} value={newTeacher.max_classes_per_day || ''} onChange={e => setNewTeacher(p => ({ ...p, max_classes_per_day: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">MAX CONSECUTIVE</label><input className="input" type="number" min={1} max={6} value={newTeacher.max_consecutive_classes || ''} onChange={e => setNewTeacher(p => ({ ...p, max_consecutive_classes: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Allow Shared Assignment</label>
                             </div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">PREFERRED START</label><input className="input" type="time" value={newTeacher.preferred_time_start || ''} onChange={e => setNewTeacher(p => ({ ...p, preferred_time_start: e.target.value || null }))} placeholder="Optional" /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">PREFERRED END</label><input className="input" type="time" value={newTeacher.preferred_time_end || ''} onChange={e => setNewTeacher(p => ({ ...p, preferred_time_end: e.target.value || null }))} placeholder="Optional" /></div>
-                            </div>
-                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={newTeacher.priority_note} onChange={e => setNewTeacher(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Teacher'}</button>
+                            <div className="field"><label className="field-label">Max Classes Per Day</label><input className="input" type="number" min={1} max={10} value={newTeacher.max_classes_per_day || ''} onChange={e => setNewTeacher(p => ({ ...p, max_classes_per_day: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Max Consecutive</label><input className="input" type="number" min={1} max={6} value={newTeacher.max_consecutive_classes || ''} onChange={e => setNewTeacher(p => ({ ...p, max_consecutive_classes: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Preferred Start</label><input className="input" type="time" value={newTeacher.preferred_time_start || ''} onChange={e => setNewTeacher(p => ({ ...p, preferred_time_start: e.target.value || null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Preferred End</label><input className="input" type="time" value={newTeacher.preferred_time_end || ''} onChange={e => setNewTeacher(p => ({ ...p, preferred_time_end: e.target.value || null }))} placeholder="Optional" /></div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={newTeacher.priority_note} onChange={e => setNewTeacher(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
+                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Teacher'}</button>
                         </form>
                     </div>
                 </div>
@@ -747,26 +721,20 @@ const DataManagement: React.FC = () => {
                 <div className="modal-overlay" onClick={() => setShowEditTeacher(false)}>
                     <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
                         <div className="modal-header"><h2>Edit Teacher</h2><button className="btn btn-ghost" onClick={() => setShowEditTeacher(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleEditTeacher} className="modal-form">
-                            <div className="field"><label className="field-label">FULL NAME</label><input className="input" required placeholder="e.g. John Smith" value={editTeacher.full_name} onChange={e => setEditTeacher(p => ({ ...p, full_name: e.target.value }))} /></div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">MAX HOURS</label><input className="input" type="number" min={1} max={60} value={editTeacher.max_hours} onChange={e => setEditTeacher(p => ({ ...p, max_hours: parseInt(e.target.value) }))} /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">WEIGHT (0-100)</label><input className="input" type="number" min={0} max={100} value={editTeacher.weight} onChange={e => setEditTeacher(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            </div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>
+                        <form onSubmit={handleEditTeacher} className="modal-form-grid">
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Full Name</label><input className="input" required placeholder="e.g. John Smith" value={editTeacher.full_name} onChange={e => setEditTeacher(p => ({ ...p, full_name: e.target.value }))} /></div>
+                            <div className="field"><label className="field-label">Max Hours</label><input className="input" type="number" min={1} max={60} value={editTeacher.max_hours} onChange={e => setEditTeacher(p => ({ ...p, max_hours: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editTeacher.weight} onChange={e => setEditTeacher(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20, gridColumn: '1 / -1' }}>
                                 <input type="checkbox" checked={editTeacher.shared_assignment} onChange={e => setEditTeacher(p => ({ ...p, shared_assignment: e.target.checked }))} />
-                                Allow Shared Assignment
-                            </label>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">MAX CLASSES PER DAY</label><input className="input" type="number" min={1} max={10} value={editTeacher.max_classes_per_day || ''} onChange={e => setEditTeacher(p => ({ ...p, max_classes_per_day: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">MAX CONSECUTIVE</label><input className="input" type="number" min={1} max={6} value={editTeacher.max_consecutive_classes || ''} onChange={e => setEditTeacher(p => ({ ...p, max_consecutive_classes: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Allow Shared Assignment</label>
                             </div>
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">PREFERRED START</label><input className="input" type="time" value={editTeacher.preferred_time_start || ''} onChange={e => setEditTeacher(p => ({ ...p, preferred_time_start: e.target.value || null }))} placeholder="Optional" /></div>
-                                <div className="field" style={{ flex: 1 }}><label className="field-label">PREFERRED END</label><input className="input" type="time" value={editTeacher.preferred_time_end || ''} onChange={e => setEditTeacher(p => ({ ...p, preferred_time_end: e.target.value || null }))} placeholder="Optional" /></div>
-                            </div>
-                            <div className="field"><label className="field-label">PRIORITY NOTE</label><textarea className="input" rows={2} value={editTeacher.priority_note} onChange={e => setEditTeacher(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
+                            <div className="field"><label className="field-label">Max Classes Per Day</label><input className="input" type="number" min={1} max={10} value={editTeacher.max_classes_per_day || ''} onChange={e => setEditTeacher(p => ({ ...p, max_classes_per_day: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Max Consecutive</label><input className="input" type="number" min={1} max={6} value={editTeacher.max_consecutive_classes || ''} onChange={e => setEditTeacher(p => ({ ...p, max_consecutive_classes: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Preferred Start</label><input className="input" type="time" value={editTeacher.preferred_time_start || ''} onChange={e => setEditTeacher(p => ({ ...p, preferred_time_start: e.target.value || null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Preferred End</label><input className="input" type="time" value={editTeacher.preferred_time_end || ''} onChange={e => setEditTeacher(p => ({ ...p, preferred_time_end: e.target.value || null }))} placeholder="Optional" /></div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={editTeacher.priority_note} onChange={e => setEditTeacher(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
+                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>
                 </div>
@@ -774,10 +742,11 @@ const DataManagement: React.FC = () => {
 
             <style>{`
                 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 24px; }
-                .modal-content { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: 28px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; }
+                .modal-content { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: 28px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
                 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
                 .modal-header h2 { font-size: 20px; font-weight: 700; color: var(--text-primary); }
                 .modal-form { display: flex; flex-direction: column; gap: 16px; }
+                .modal-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
                 .field { display: flex; flex-direction: column; gap: 6px; }
                 .field-label { font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: 1.5px; padding-left: 2px; }
                 .spin { animation: spin 1s linear infinite; }
