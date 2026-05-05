@@ -75,6 +75,12 @@ const ConflictsAlerts: React.FC = () => {
 
     // Fetch from conflicts table and populate detected conflicts
     const fetchDbConflicts = useCallback(async () => {
+        // If we have scan results, don't overwrite them with database data
+        if (hasScanResults) {
+            console.log('[FETCH DB] Skipping - has scan results');
+            return;
+        }
+        
         // If versionId is provided, fetch schedules for that specific version
         let scheduleIds: Set<string> = new Set();
         
@@ -147,8 +153,7 @@ const ConflictsAlerts: React.FC = () => {
         } else {
             console.log('Skipping DB fetch - using scan results');
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedVersion, versionId]);
+    }, [selectedVersion, versionId, hasScanResults]);
 
     // Load last scan result from database
     const fetchLastScanResult = useCallback(async () => {
@@ -181,7 +186,7 @@ const ConflictsAlerts: React.FC = () => {
     const runComprehensiveScan = useCallback(async () => {
         const scanStartTime = Date.now();
         setScanning(true);
-        setFixProgress({ current: 0, total: 13, currentViolation: 'Initializing scan...', overallProgress: 0 });
+        setFixProgress({ current: 0, total: 14, currentViolation: 'Initializing scan...', overallProgress: 0 });
         
         try {
             let schedules: any[] = [];
