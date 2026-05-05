@@ -1,6 +1,19 @@
 // Shared types for the Schedule Generate workspace.
 // Phase 2 adds priorities and special-room bias.
 
+export type RoomType =
+    | 'general_classroom'
+    | 'computer_lab'
+    | 'physics_lab'
+    | 'chemistry_lab'
+    | 'pe_hall'
+    | 'science_lab'
+    | 'art_room'
+    | 'music_room'
+    | 'library'
+    | 'auditorium'
+    | 'other';
+
 export type StageKey =
     | 'scope'
     | 'structure'
@@ -29,6 +42,8 @@ export interface Subject {
     sessions_per_week?: number | null;
     // Compatible rooms from subject_rooms junction table (array of room IDs with priority)
     compatible_rooms?: Array<{ room_id: string; priority: number }>;
+    // Required room types for proper room-subject matching (replaces fragile name-based matching)
+    required_room_types?: RoomType[];
 }
 
 export interface Teacher {
@@ -52,7 +67,8 @@ export interface Room {
     id: string;
     name: string;
     capacity: number | null;
-    type: string | null;
+    type: string | null; // Legacy field, use room_type instead
+    room_type?: RoomType; // New typed field for proper room-subject matching
     building: string | null;
     floor: number | null;
     is_available: boolean | null;

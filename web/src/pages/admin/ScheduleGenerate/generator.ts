@@ -440,7 +440,16 @@ const roomCompatible = (room: Room, subject: Subject, section: Section): boolean
         }
     }
 
-    // Fallback to name-based logic if compatible_rooms is not available (backward compatibility)
+    // Use room_type system for proper type-based matching (replaces fragile name-based matching)
+    if (subject.required_room_types && subject.required_room_types.length > 0 && room.room_type) {
+        // Check if this room's type matches one of the subject's required room types
+        const isTypeCompatible = subject.required_room_types.includes(room.room_type);
+        if (!isTypeCompatible) {
+            return false;
+        }
+    }
+
+    // Fallback to name-based logic if neither compatible_rooms nor required_room_types is available (backward compatibility)
     const requiresLab = inferRequiresLab(subject);
     if (requiresLab) {
         const roomName = (room.name || '').toLowerCase();
@@ -1362,64 +1371,55 @@ const detectImpossibleSchedule = (
         reasons.push('No available rooms - all rooms are marked as unavailable');
     }
 
-    // Check if lab subjects have compatible rooms
-    const labSubjects = subjects.filter(s => s.requires_lab);
+    // Check if lab subjects have compatible rooms using room_type system
+    const labSubjects = subjects.filter(s => s.requires_lab || (s.required_room_types && s.required_room_types.length > 0));
     if (labSubjects.length > 0) {
-        const computerLabSubjects = labSubjects.filter(s => {
-            const name = (s.name || '').toLowerCase();
-            const code = (s.code || '').toLowerCase();
-            return name.includes('computer') || name.includes('programming') || name.includes('mobile') || name.includes('network') || code.includes('cp') || code.includes('cs') || code.includes('it') || code.includes('mp');
-        });
-        const physicsLabSubjects = labSubjects.filter(s => {
-            const name = (s.name || '').toLowerCase();
-            const code = (s.code || '').toLowerCase();
-            return name.includes('physics') || code.includes('phys');
-        });
-        const chemistryLabSubjects = labSubjects.filter(s => {
-            const name = (s.name || '').toLowerCase();
-            const code = (s.code || '').toLowerCase();
-            return name.includes('chemistry') || code.includes('chem');
-        });
-        const peHallSubjects = labSubjects.filter(s => {
-            const name = (s.name || '').toLowerCase();
-            const code = (s.code || '').toLowerCase();
-            return name.includes('physical education') || name.includes('p.e.') || code.includes('pe');
-        });
-
-        if (computerLabSubjects.length > 0) {
-            const computerLabs = availableRooms.filter(r => {
-                const name = (r.name || '').toLowerCase();
-                return name.includes('computer') || name.includes('network');
-            });
-            if (computerLabs.length === 0) {
-                reasons.push(`No computer/network labs available for ${computerLabSubjects.length} computer subject(s). Rooms must have "computer" or "network" in name.`);
+        // Group subjects by required room type
+        const subjectsByRoomType = new Map<string, Subject[]>();
+        
+        for (const subject of labSubjects) {
+            if (subject.required_room_types && subject.required_room_types.length > 0) {
+                for (const roomType of subject.required_room_types) {
+                    const existing = subjectsByRoomType.get(roomType) || [];
+                    existing.push(subject);
+                    subjectsByRoomType.set(roomType, existing);
+                }
             }
         }
-        if (physicsLabSubjects.length > 0) {
-            const physicsLabs = availableRooms.filter(r => {
-                const name = (r.name || '').toLowerCase();
-                return name.includes('physics');
-            });
-            if (physicsLabs.length === 0) {
-                reasons.push(`No physics labs available for ${physicsLabSubjects.length} physics subject(s). Rooms must have "physics" in name.`);
+        
+        // Check if there are enough rooms for each required room type
+        for (const [roomType, typeSubjects] of subjectsByRoomType) {
+            const roomsOfType = availableRooms.filter(r => r.room_type === roomType);
+            if (roomsOfType.length === 0) {
+                reasons.push(`No ${roomType} rooms available for ${typeSubjects.length} subject(s).`);
             }
         }
-        if (chemistryLabSubjects.length > 0) {
-            const chemistryLabs = availableRooms.filter(r => {
-                const name = (r.name || '').toLowerCase();
-                return name.includes('chemistry') || name.includes('chemical');
+        
+        // Fallback: check using name-based logic for subjects without required_room_types
+        const subjectsWithoutTypes = labSubjects.filter(s => !s.required_room_types || s.required_room_types.length === 0);
+        if (subjectsWithoutTypes.length > 0) {
+            const physicsLabSubjects = subjectsWithoutTypes.filter(s => {
+                const name = (s.name || '').toLowerCase();
+                const code = (s.code || '').toLowerCase();
+                return name.includes('physics') || code.includes('phys');
             });
-            if (chemistryLabs.length === 0) {
-                reasons.push(`No chemistry labs available for ${chemistryLabSubjects.length} chemistry subject(s). Rooms must have "chemistry" or "chemical" in name.`);
+            const chemistryLabSubjects = subjectsWithoutTypes.filter(s => {
+                const name = (s.name || '').toLowerCase();
+                const code = (s.code || '').toLowerCase();
+                return name.includes('chemistry') || code.includes('chem');
+            });
+            
+            if (physicsLabSubjects.length > 0) {
+                const physicsLabs = availableRooms.filter(r => r.room_type === 'physics_lab' || (r.name || '').toLowerCase().includes('physics'));
+                if (physicsLabs.length === 0) {
+                    reasons.push(`No physics labs available for ${physicsLabSubjects.length} subject(s).`);
+                }
             }
-        }
-        if (peHallSubjects.length > 0) {
-            const peHalls = availableRooms.filter(r => {
-                const name = (r.name || '').toLowerCase();
-                return name.includes('pe') || name.includes('p.e.') || name.includes('physical education');
-            });
-            if (peHalls.length === 0) {
-                reasons.push(`No PE halls available for ${peHallSubjects.length} PE subject(s). Rooms must have "pe", "p.e.", or "physical education" in name.`);
+            if (chemistryLabSubjects.length > 0) {
+                const chemistryLabs = availableRooms.filter(r => r.room_type === 'chemistry_lab' || (r.name || '').toLowerCase().includes('chemistry') || (r.name || '').toLowerCase().includes('chemical'));
+                if (chemistryLabs.length === 0) {
+                    reasons.push(`No chemistry labs available for ${chemistryLabSubjects.length} subject(s).`);
+                }
             }
         }
     }
@@ -3311,28 +3311,14 @@ export async function runGenerator(
                 }
             }
             if (!placed) {
-                // Provide more specific error message based on subject type
-                if (sub.requires_lab) {
-                    const roomName = (sub.name || '').toLowerCase();
-                    const subjectCode = (sub.code || '').toLowerCase();
-                    const needsComputerLab = roomName.includes('computer') || roomName.includes('programming') || roomName.includes('mobile') || roomName.includes('network') || subjectCode.includes('cp') || subjectCode.includes('cs') || subjectCode.includes('it') || subjectCode.includes('mp');
-                    const needsPhysicsLab = roomName.includes('physics') || subjectCode.includes('phys');
-                    const needsChemistryLab = roomName.includes('chemistry') || subjectCode.includes('chem');
-                    const needsPEHall = roomName.includes('physical education') || roomName.includes('p.e.') || subjectCode.includes('pe');
-
-                    if (needsComputerLab) {
-                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available computer/network labs at compatible times. Requires room with "computer" or "network" in name.`);
-                    } else if (needsPhysicsLab) {
-                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available physics labs at compatible times. Requires room with "physics" in name.`);
-                    } else if (needsChemistryLab) {
-                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available chemistry labs at compatible times. Requires room with "chemistry" or "chemical" in name.`);
-                    } else if (needsPEHall) {
-                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available PE halls at compatible times. Requires room with "pe", "p.e.", or "hall" in name.`);
-                    } else {
-                        errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No available special rooms (labs/halls) at compatible times.`);
-                    }
+                // Provide concise error message based on room type requirements
+                if (sub.required_room_types && sub.required_room_types.length > 0) {
+                    const roomTypes = sub.required_room_types.join(', ');
+                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No ${roomTypes} available at compatible times.`);
+                } else if (sub.requires_lab) {
+                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No compatible labs available.`);
                 } else {
-                    errors.push(`Could not place "${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: All available slots conflict with existing schedules or constraints.`);
+                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: All slots conflict with constraints.`);
                 }
             }
         }
