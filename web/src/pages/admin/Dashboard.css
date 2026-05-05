@@ -1905,6 +1905,9 @@
     color: var(--text-secondary);
     margin-bottom: 6px;
     letter-spacing: 0.2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .sg-grid-3 {
@@ -2272,6 +2275,9 @@
     font-size: 13px;
     font-weight: 700;
     color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .sg-slider-desc {

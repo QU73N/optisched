@@ -1520,12 +1520,7 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                 <div className="sg-break-config-section">
                     <div className="sg-field-label sg-break-config-label">
                         Common Break
-                        <div className="sg-break-tooltip-wrapper">
-                            <HelpCircle size={14} style={{ color: 'var(--text-muted)', cursor: 'help' }} />
-                            <div className="sg-break-tooltip">
-                                Overrides all other breaks on selected day. All classes and teachers have a break at this time.
-                            </div>
-                        </div>
+                        <FieldTooltip>Overrides all other breaks on selected day. All classes and teachers have a break at this time.</FieldTooltip>
                     </div>
                     <div className="sg-common-break-toggle">
                         <label className="sg-toggle-label">
@@ -1618,7 +1613,10 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
             {policiesOpen && (
                 <div className="sg-hard-list-expanded" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
-                        <div className="sg-field-label">Overflow Policy</div>
+                        <div className="sg-field-label">
+                            Overflow Policy
+                            <FieldTooltip>Controls how the generator handles sections that exceed room capacity. Fail stops generation, Relax soft reduces constraint weights, Expand scope searches more aggressively, Partial only applies to partial regeneration.</FieldTooltip>
+                        </div>
                         <select
                             className="input"
                             value={config.overflowPolicy || 'relax_soft'}
@@ -1630,24 +1628,25 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                             <option value="partial_only">Partial Only</option>
                         </select>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        Overflow policy controls how the generator handles sections that exceed room capacity.
-                        "Fail" stops generation, "Relax soft" temporarily reduces soft constraint weights,
-                        "Expand scope" searches more aggressively, and "Partial only" applies only to partial regeneration.
-                    </div>
                 </div>
             )}
 
             <div className="sg-grid-3" style={{ marginTop: 16 }}>
                 <div>
-                    <div className="sg-field-label">Attempts</div>
+                    <div className="sg-field-label">
+                        Attempts
+                        <FieldTooltip>Number of times the generator will try to place all sessions. Higher values take longer but may find better solutions.</FieldTooltip>
+                    </div>
                     <select className="input" value={config.maxAttempts} onChange={e => setConfig(c => ({ ...c, maxAttempts: Number(e.target.value) }))}>
                         {[10, 25, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                 </div>
             </div>
 
-            <div className="sg-subhead" style={{ marginTop: 20 }}><Lock size={12} /> Hard Constraints. Always On.</div>
+            <div className="sg-subhead" style={{ marginTop: 20 }}>
+                <Lock size={12} /> Hard Constraints
+                <FieldTooltip>These rules are always enforced and cannot be violated during schedule generation.</FieldTooltip>
+            </div>
             <button
                 type="button"
                 className="sg-hard-constraints-btn"
@@ -1666,7 +1665,10 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 </ul>
             )}
 
-            <div className="sg-subhead" style={{ marginTop: 0 }}><Sliders size={12} /> Soft Optimization Weights</div>
+            <div className="sg-subhead" style={{ marginTop: 0 }}>
+                <Sliders size={12} /> Soft Constraints
+                <FieldTooltip>These are optimization goals that guide the generator. Higher weights prioritize these objectives during placement.</FieldTooltip>
+            </div>
             <button
                 type="button"
                 className="sg-hard-constraints-btn"
@@ -1674,31 +1676,34 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 aria-expanded={softConstraintsOpen}
                 style={{ marginBottom: 16 }}
             >
-                <span>Configure soft constraint weights</span>
+                <span>Configure Soft Constraints</span>
                 {softConstraintsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {softConstraintsOpen && (
                 <div className="sg-sliders sg-hard-list-expanded">
-                    <SoftSlider label="Balanced Teacher Load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} compact={compact} />
-                    <SoftSlider label="Compact Schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} compact={compact} />
-                    <SoftSlider label="Minimize Room Switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} compact={compact} />
-                    <SoftSlider label="Teacher Preferred Time" desc="Honor each teacher's preferred days and time window." value={config.soft.teacherPreferredTime} onChange={v => updateSoft('teacherPreferredTime', v)} compact={compact} />
-                    <SoftSlider label="Daily Load Balance" desc="Even teaching load per teacher per day." value={config.soft.dailyLoadBalance} onChange={v => updateSoft('dailyLoadBalance', v)} compact={compact} />
-                    <SoftSlider label="Workload Fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} compact={compact} />
-                    <SoftSlider label="Subject Spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} compact={compact} />
-                    <SoftSlider label="Room Utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} />
-                    <SoftSlider label="Special Room Bias" desc="How strongly to reserve labs and studios for subjects that need them." value={config.soft.specialRoomBias} onChange={v => updateSoft('specialRoomBias', v)} compact={compact} />
+                    <SoftSlider label="Balanced Teacher Load" desc="Spread sessions evenly across teachers." value={config.soft.balancedLoad} onChange={v => updateSoft('balancedLoad', v)} compact={compact} tooltip="Distributes teaching workload evenly across all teachers to prevent overloading any single instructor." />
+                    <SoftSlider label="Compact Schedules" desc="Reduce idle gaps inside a day." value={config.soft.compactSchedule} onChange={v => updateSoft('compactSchedule', v)} compact={compact} tooltip="Minimizes gaps between classes to create more compact daily schedules." />
+                    <SoftSlider label="Minimize Room Switching" desc="Keep teachers in fewer rooms." value={config.soft.minimizeRoomSwitch} onChange={v => updateSoft('minimizeRoomSwitch', v)} compact={compact} tooltip="Reduces the number of different rooms teachers need to move between during the day." />
+                    <SoftSlider label="Teacher Preferred Time" desc="Honor each teacher's preferred days and time window." value={config.soft.teacherPreferredTime} onChange={v => updateSoft('teacherPreferredTime', v)} compact={compact} tooltip="Respects teacher-specified preferred days and time windows when scheduling classes." />
+                    <SoftSlider label="Daily Load Balance" desc="Even teaching load per teacher per day." value={config.soft.dailyLoadBalance} onChange={v => updateSoft('dailyLoadBalance', v)} compact={compact} tooltip="Balances teaching hours evenly across the week for each teacher." />
+                    <SoftSlider label="Workload Fairness" desc="Respect max hours and max classes per day." value={config.soft.workloadFairness} onChange={v => updateSoft('workloadFairness', v)} compact={compact} tooltip="Ensures teachers don't exceed their maximum allowed hours or daily class limits." />
+                    <SoftSlider label="Subject Spacing" desc="Avoid stacking the same subject on one day." value={config.soft.subjectSpacing} onChange={v => updateSoft('subjectSpacing', v)} compact={compact} tooltip="Spreads sessions of the same subject across different days instead of clustering them." />
+                    <SoftSlider label="Room Utilization" desc="Reward high utilization of scarce specialty rooms." value={config.soft.roomUtilization} onChange={v => updateSoft('roomUtilization', v)} compact={compact} tooltip="Prioritizes efficient use of scarce specialty rooms like labs and studios." />
+                    <SoftSlider label="Special Room Bias" desc="How strongly to reserve labs and studios for subjects that need them." value={config.soft.specialRoomBias} onChange={v => updateSoft('specialRoomBias', v)} compact={compact} tooltip="Controls how strongly to prioritize reserving special rooms for subjects that specifically require them." />
                 </div>
             )}
         </div>
     );
 };
 
-const SoftSlider: React.FC<{ label: string; desc: string; value: number; onChange: (v: number) => void; compact?: boolean }> = ({ label, desc, value, onChange, compact = false }) => (
+const SoftSlider: React.FC<{ label: string; desc: string; value: number; onChange: (v: number) => void; compact?: boolean; tooltip?: string }> = ({ label, desc, value, onChange, compact = false, tooltip }) => (
     <div className="sg-slider">
         <div className="sg-slider-head">
             <div>
-                <div className="sg-slider-label">{label}</div>
+                <div className="sg-slider-label">
+                    {label}
+                    {tooltip && <FieldTooltip>{tooltip}</FieldTooltip>}
+                </div>
                 {!compact && <div className="sg-slider-desc">{desc}</div>}
             </div>
             <div className="sg-slider-val">{value}</div>
