@@ -756,7 +756,8 @@ const ConflictsAlerts: React.FC = () => {
                 console.log('[VERSION CHANGE] Scan results exist - keeping scan results');
             }
         }
-    }, [selectedVersion, showVersionSelector, hasScanResults, fetchDbConflicts]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedVersion, showVersionSelector, fetchDbConflicts]);
 
     const handleResolveDb = async (id: string) => {
         try {
