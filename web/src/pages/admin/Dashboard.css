@@ -2115,17 +2115,18 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);
     padding: 8px 12px;
-    min-width: 180px;
-    max-width: 280px;
+    min-width: 200px;
+    max-width: 350px;
     box-shadow: var(--shadow-lg);
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.2s ease, visibility 0.2s ease;
     font-size: 11px;
-    line-height: 1.4;
+    line-height: 1.5;
     color: var(--text-secondary);
-    text-align: center;
+    text-align: left;
+    white-space: pre-wrap;
 }
 
 .sg-field-tooltip::before {
