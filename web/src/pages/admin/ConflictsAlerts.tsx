@@ -68,6 +68,11 @@ const ConflictsAlerts: React.FC = () => {
     const isMountedRef = useRef(true);
     const [hasScanResults, setHasScanResults] = useState(false);
 
+    // Track when hasScanResults changes
+    useEffect(() => {
+        console.log('[STATE CHANGE] hasScanResults changed to:', hasScanResults);
+    }, [hasScanResults]);
+
     // Fetch from conflicts table and populate detected conflicts
     const fetchDbConflicts = useCallback(async () => {
         // If versionId is provided, fetch schedules for that specific version
@@ -434,6 +439,7 @@ const ConflictsAlerts: React.FC = () => {
                 console.log('[CONFLICT ENGINE] Invalidating scan result state');
                 setScanResult(null);
                 setHasScanResults(false);
+                console.log('[CONFLICT ENGINE] Set hasScanResults to false (fix mode)');
 
                 const result = await applyAutonomousFixes(
                     scanResult,
@@ -697,6 +703,7 @@ const ConflictsAlerts: React.FC = () => {
     useEffect(() => {
         isMountedRef.current = true;
         setHasScanResults(false); // Reset on mount to load from database
+        console.log('[MOUNT] Set hasScanResults to false (mount)');
         
         // Initialize state manager and logger
         scheduleStateManager.initialize(supabase);
@@ -710,6 +717,7 @@ const ConflictsAlerts: React.FC = () => {
                 // Invalidate local state and trigger rescan
                 setScanResult(null);
                 setHasScanResults(false);
+                console.log('[CONFLICT ENGINE] Set hasScanResults to false (Generate update)');
                 // Auto-rescan when Generate tab updates to ensure fresh state
                 runComprehensiveScan().catch(err => {
                     console.error('[CONFLICT ENGINE] Auto-rescan after Generate save failed:', err);
@@ -736,14 +744,16 @@ const ConflictsAlerts: React.FC = () => {
 
     // Refetch conflicts when version changes
     useEffect(() => {
+        console.log('[VERSION CHANGE] useEffect triggered, showVersionSelector:', showVersionSelector, 'hasScanResults:', hasScanResults);
         if (!showVersionSelector) {
             // Only refetch if version selector is closed (user has made a selection)
             // Don't reset hasScanResults if we have scan results - let them persist
             if (!hasScanResults) {
+                console.log('[VERSION CHANGE] No scan results, fetching from DB');
                 setScanResult(null);
                 fetchDbConflicts();
             } else {
-                console.log('Version changed but scan results exist - keeping scan results');
+                console.log('[VERSION CHANGE] Scan results exist - keeping scan results');
             }
         }
     }, [selectedVersion, showVersionSelector, hasScanResults, fetchDbConflicts]);
@@ -877,10 +887,12 @@ const ConflictsAlerts: React.FC = () => {
                         <button
                             className={selectedVersion === 'published' ? 'btn btn-primary' : 'btn btn-secondary'}
                             onClick={() => {
+                                console.log('[VERSION BUTTON] User clicked Published');
                                 setSelectedVersion('published');
                                 setShowVersionSelector(false);
                                 setScanResult(null);
                                 setHasScanResults(false);
+                                console.log('[VERSION BUTTON] Set hasScanResults to false (user clicked Published)');
                                 fetchDbConflicts();
                             }}
                             style={{ flex: 1, minWidth: 200, justifyContent: 'flex-start', padding: '12px 16px' }}
@@ -895,10 +907,12 @@ const ConflictsAlerts: React.FC = () => {
                         <button
                             className={selectedVersion === 'draft' ? 'btn btn-primary' : 'btn btn-secondary'}
                             onClick={() => {
+                                console.log('[VERSION BUTTON] User clicked Draft');
                                 setSelectedVersion('draft');
                                 setShowVersionSelector(false);
                                 setScanResult(null);
                                 setHasScanResults(false);
+                                console.log('[VERSION BUTTON] Set hasScanResults to false (user clicked Draft)');
                                 fetchDbConflicts();
                             }}
                             style={{ flex: 1, minWidth: 200, justifyContent: 'flex-start', padding: '12px 16px' }}
@@ -913,10 +927,12 @@ const ConflictsAlerts: React.FC = () => {
                         <button
                             className={selectedVersion === 'all' ? 'btn btn-primary' : 'btn btn-secondary'}
                             onClick={() => {
+                                console.log('[VERSION BUTTON] User clicked All');
                                 setSelectedVersion('all');
                                 setShowVersionSelector(false);
                                 setScanResult(null);
                                 setHasScanResults(false);
+                                console.log('[VERSION BUTTON] Set hasScanResults to false (user clicked All)');
                                 fetchDbConflicts();
                             }}
                             style={{ flex: 1, minWidth: 200, justifyContent: 'flex-start', padding: '12px 16px' }}
