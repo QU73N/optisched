@@ -178,16 +178,41 @@ const ConflictsAlerts: React.FC = () => {
         setFixProgress({ current: 0, total: 13, currentViolation: 'Initializing scan...', overallProgress: 0 });
         
         try {
-            // Build status filter based on selected version
-            const statusFilter = selectedVersion === 'all' 
-                ? ['published', 'draft'] 
-                : [selectedVersion];
+            let schedules: any[] = [];
             
-            console.log('Scanning schedules with status:', statusFilter);
+            // If versionId is provided, fetch schedules from that version's snapshot
+            if (versionId) {
+                console.log('Scanning version:', versionId);
+                const { data: version } = await supabase
+                    .from('schedule_versions')
+                    .select('snapshot')
+                    .eq('id', versionId)
+                    .single();
+                
+                if (version && version.snapshot) {
+                    const snapshot = version.snapshot as any[] | any;
+                    schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
+                    console.log('Scanning', schedules.length, 'schedules from version snapshot');
+                }
+            } else {
+                // Build status filter based on selected version (legacy behavior)
+                const statusFilter = selectedVersion === 'all' 
+                    ? ['published', 'draft'] 
+                    : [selectedVersion];
+                
+                console.log('Scanning schedules with status:', statusFilter);
+                
+                // Fetch schedules by status
+                const { data: schedulesData } = await supabase
+                    .from('schedules')
+                    .select('*')
+                    .in('status', statusFilter);
+                
+                schedules = schedulesData || [];
+            }
             
             // Fetch all necessary data
-            const [schedulesData, teachersData, roomsData, sectionsData, subjectsData, breaksData] = await Promise.all([
-                supabase.from('schedules').select('*').in('status', statusFilter),
+            const [teachersData, roomsData, sectionsData, subjectsData, breaksData] = await Promise.all([
                 supabase.from('teachers').select('*, profile:profiles(*)').eq('is_active', true),
                 supabase.from('rooms').select('*').eq('is_available', true),
                 supabase.from('sections').select('*'),
@@ -195,7 +220,6 @@ const ConflictsAlerts: React.FC = () => {
                 supabase.from('institution_breaks').select('*'),
             ]);
 
-            const schedules = schedulesData.data || [];
             const teachers = teachersData.data || [];
             const rooms = roomsData.data || [];
             const sections = sectionsData.data || [];
@@ -213,7 +237,7 @@ const ConflictsAlerts: React.FC = () => {
 
             // Run comprehensive scan with progress tracking
             const result = await scanAllConstraints(
-                schedules, 
+                schedules as any, 
                 teachers, 
                 rooms, 
                 sections, 
@@ -234,7 +258,7 @@ const ConflictsAlerts: React.FC = () => {
             
             // Update canonical state manager with current schedules and scan results
             const version = await scheduleStateManager.updateState(
-                schedules,
+                schedules as any,
                 'conflicts',
                 {
                     conflictCount: result.hardViolations.length,
@@ -361,7 +385,7 @@ const ConflictsAlerts: React.FC = () => {
             setScanning(false);
             setFixProgress({ current: 0, total: 0, currentViolation: '', overallProgress: 0 });
         }
-    }, [showToast, fetchDbConflicts, saveScanResult, selectedVersion]);
+    }, [showToast, fetchDbConflicts, saveScanResult, selectedVersion, versionId]);
 
     // Handle autonomous fixing
     const handleAutonomousFix = useCallback(async () => {
