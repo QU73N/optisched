@@ -574,24 +574,16 @@ const calculateSessionConfig = (subject: Subject, baseSessionMinutes: number): {
     if (subject.duration_hours != null && subject.duration_hours > 0) {
         const totalMinutes = subject.duration_hours * 60;
         
-        // FIX: Override session length for PE subjects and Work Immersion
-        // These subjects have duration_hours=2 in database, causing 120-minute sessions
-        // This creates conflicts with standard 90-minute sessions
-        // Force them to use baseSessionMinutes (90 minutes) instead
-        const isPESubject = subject.code?.toUpperCase().startsWith('PEH');
-        const isWISubject = subject.code?.toUpperCase() === 'WI';
+        // FIX: Round to nearest integer to avoid fractional sessions
+        // PE and Work Immersion have duration_hours=2, which gives 120/90=1.33 sessions
+        // Round to 1 session (under) or 2 sessions (over) - choose the closer one
+        const exactCount = totalMinutes / baseSessionMinutes;
+        const roundedCount = Math.round(exactCount);
         
-        if (isPESubject || isWISubject) {
-            // Calculate count based on base session length
-            const count = totalMinutes / baseSessionMinutes;
-            return { count, sessionLength: baseSessionMinutes };
-        }
+        // Ensure at least 1 session
+        const count = Math.max(1, roundedCount);
         
-        // Calculate optimal session length that fits exactly
-        const optimalSessionLength = calculateOptimalSessionLength(totalMinutes, baseSessionMinutes);
-        const count = totalMinutes / optimalSessionLength;
-        
-        return { count, sessionLength: optimalSessionLength };
+        return { count, sessionLength: baseSessionMinutes };
     }
     
     // Default to 1 session with base length
