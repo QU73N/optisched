@@ -66,8 +66,8 @@ export function hasAnyRole(allRoles: UserRole[], checks: UserRole[]): boolean {
 }
 
 export type EmploymentType = 'full-time' | 'part-time';
-export type RoomType = 'lecture' | 'laboratory' | 'gymnasium' | 'computer_lab';
-export type SubjectType = 'lecture' | 'laboratory';
+export type RoomType = 'common' | 'special';
+export type SubjectType = 'common' | 'special';
 export type DayOfWeek = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
 export type TimeSlot = 'morning' | 'afternoon' | 'evening';
 export type ConflictType = 'room_conflict' | 'teacher_overlap' | 'capacity_exceeded' | 'unassigned';
@@ -124,6 +124,7 @@ export interface Room {
     floor: number;
     equipment: string[];
     is_available: boolean;
+    compatible_subject_ids: string[];
     weight: number;
     priority_note: string | null;
     owner_id: string | null;
@@ -141,7 +142,7 @@ export interface Subject {
     duration_hours: number;
     program: string;
     year_level: number;
-    requires_lab: boolean;
+    compatible_room_ids: string[];
     teacher_id: string | null;
     weight: number;
     priority_note: string | null;

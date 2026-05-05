@@ -15,7 +15,7 @@ DELETE FROM public.rooms;
 DO $$
 BEGIN
     INSERT INTO public.rooms (id, name, type, building, floor, capacity, is_available, is_public, created_at) VALUES
-        -- Common rooms (all floor 2 except P.E. Hall)
+        -- Common rooms (all floor 2, all Main Building)
         (gen_random_uuid(), 'Room 101', 'common', 'Main Building', 2, 30, true, true, NOW()),
         (gen_random_uuid(), 'Room 102', 'common', 'Main Building', 2, 30, true, true, NOW()),
         (gen_random_uuid(), 'Room 103', 'common', 'Main Building', 2, 30, true, true, NOW()),
@@ -25,12 +25,12 @@ BEGIN
         (gen_random_uuid(), 'Room 107', 'common', 'Main Building', 2, 30, true, true, NOW()),
         (gen_random_uuid(), 'Room 108', 'common', 'Main Building', 2, 30, true, true, NOW()),
         (gen_random_uuid(), 'Amphitheater', 'common', 'Main Building', 2, 35, true, true, NOW()),
-        (gen_random_uuid(), 'Network Laboratory', 'common', 'Science Building', 2, 30, true, true, NOW()),
-        -- Special rooms (all floor 2 except P.E. Hall)
-        (gen_random_uuid(), 'Physics Laboratory', 'special', 'Science Building', 2, 30, true, true, NOW()),
-        (gen_random_uuid(), 'Chemical Laboratory', 'special', 'Science Building', 2, 30, true, true, NOW()),
-        (gen_random_uuid(), 'Kitchen', 'special', 'Home Economics Building', 2, 15, true, true, NOW()),
-        (gen_random_uuid(), 'P.E. Hall', 'special', 'Sports Complex', 1, 35, true, true, NOW());
+        (gen_random_uuid(), 'Network Laboratory', 'common', 'Main Building', 2, 30, true, true, NOW()),
+        -- Special rooms (all floor 2, all Main Building)
+        (gen_random_uuid(), 'Physics Laboratory', 'special', 'Main Building', 2, 30, true, true, NOW()),
+        (gen_random_uuid(), 'Chemical Laboratory', 'special', 'Main Building', 2, 30, true, true, NOW()),
+        (gen_random_uuid(), 'Kitchen', 'special', 'Main Building', 2, 15, true, true, NOW()),
+        (gen_random_uuid(), 'P.E. Hall', 'special', 'Main Building', 1, 35, true, true, NOW());
     
     RAISE NOTICE 'Rooms created';
 END $$;

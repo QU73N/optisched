@@ -65,8 +65,8 @@ const AdminDataManagement: React.FC = () => {
         setEditing(item);
         if (activeTab === 'subjects') {
             setSubCode(item.code || ''); setSubName(item.name || ''); setSubUnits(String(item.units || 3));
-            setSubType(item.type || 'lecture'); setSubDuration(String(item.duration_hours || 3));
-            setSubProgram(item.program || ''); setSubYear(String(item.year_level || 1)); setSubLab(item.requires_lab || false);
+            setSubType((item.type as 'lecture' | 'laboratory') || 'lecture'); setSubDuration(String(item.duration_hours || 3));
+            setSubProgram(item.program || ''); setSubYear(String(item.year_level || 1)); setSubLab(item.type === 'laboratory');
             setSubTeacherId(item.teacher_id || '');
         } else if (activeTab === 'rooms') {
             setRoomName(item.name || ''); setRoomCapacity(String(item.capacity || 40));
@@ -103,8 +103,8 @@ const AdminDataManagement: React.FC = () => {
                 if (!subCode.trim() || !subName.trim()) throw new Error('Code and name are required.');
                 const data = {
                     code: subCode.trim(), name: subName.trim(), units: parseInt(subUnits) || 3,
-                    type: (subLab ? 'laboratory' : 'lecture') as 'lecture' | 'laboratory', duration_hours: parseInt(subDuration) || 3,
-                    program: subProgram.trim(), year_level: parseInt(subYear) || 1, requires_lab: subLab,
+                    type: (subLab ? 'special' : 'common') as 'common' | 'special', duration_hours: parseInt(subDuration) || 3,
+                    program: subProgram.trim(), year_level: parseInt(subYear) || 1,
                     teacher_id: subTeacherId || null
                 };
                 if (editing) await updateSubject(editing.id, data);
@@ -177,7 +177,7 @@ const AdminDataManagement: React.FC = () => {
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.itemTitle}>{s.name}</Text>
-                                        <Text style={styles.itemSub}>{s.code} • {s.units} units • {s.duration_hours || 3}h{s.requires_lab ? ' (Lab)' : ''}</Text>
+                                        <Text style={styles.itemSub}>{s.code} • {s.units} units • {s.duration_hours || 3}h{s.type === 'special' ? ' (Special)' : ''}</Text>
                                         <Text style={styles.itemMeta}>{s.program} — Year {s.year_level}</Text>
                                         {(s as any).teacher_id && (
                                             <Text style={[styles.itemMeta, { color: '#34d399' }]}>{teachers.find(t => t.id === (s as any).teacher_id)?.profile?.full_name || 'Assigned'}</Text>

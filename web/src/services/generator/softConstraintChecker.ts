@@ -190,11 +190,17 @@ export function checkCompactSectionSchedules(
 
 /**
  * Calculate the penalty for excessive room movement
+ * Accounts for building movement (higher penalty) and room movement (lower penalty)
  */
 export function checkRoomMovementMinimization(
-  placedSessions: PlacedSession[]
+  placedSessions: PlacedSession[],
+  rooms: { id: string; building: string; floor: number }[] = []
 ): SoftConstraintCheckResult {
   const sectionRoomChanges = new Map<string, number>();
+  const sectionBuildingChanges = new Map<string, number>();
+
+  // Create room lookup map
+  const roomMap = new Map(rooms.map(r => [r.id, r]));
 
   // Group sessions by section and day
   const sessionsBySectionDay = new Map<string, PlacedSession[]>();
@@ -206,34 +212,53 @@ export function checkRoomMovementMinimization(
     sessionsBySectionDay.get(key)!.push(session);
   }
 
-  // Count room changes for each section-day combination
+  // Count room and building changes for each section-day combination
   for (const [key, sessions] of sessionsBySectionDay) {
     sessions.sort((a, b) => a.start_time.localeCompare(b.start_time));
 
     let roomChanges = 0;
+    let buildingChanges = 0;
+
     for (let i = 0; i < sessions.length - 1; i++) {
+      const currentRoom = roomMap.get(sessions[i].room_id);
+      const nextRoom = roomMap.get(sessions[i + 1].room_id);
+
       if (sessions[i].room_id !== sessions[i + 1].room_id) {
         roomChanges++;
+        // Check if it's a building change
+        if (currentRoom && nextRoom && currentRoom.building !== nextRoom.building) {
+          buildingChanges++;
+        }
       }
     }
 
     if (roomChanges > 0) {
       const sectionId = key.split('_')[0];
-      const currentChanges = sectionRoomChanges.get(sectionId) || 0;
-      sectionRoomChanges.set(sectionId, currentChanges + roomChanges);
+      const currentRoomChanges = sectionRoomChanges.get(sectionId) || 0;
+      sectionRoomChanges.set(sectionId, currentRoomChanges + roomChanges);
+    }
+
+    if (buildingChanges > 0) {
+      const sectionId = key.split('_')[0];
+      const currentBuildingChanges = sectionBuildingChanges.get(sectionId) || 0;
+      sectionBuildingChanges.set(sectionId, currentBuildingChanges + buildingChanges);
     }
   }
 
-  // Calculate total penalty
-  const totalChanges = Array.from(sectionRoomChanges.values()).reduce((sum, changes) => sum + changes, 0);
+  // Calculate total penalty (building changes have 3x weight)
+  const totalRoomChanges = Array.from(sectionRoomChanges.values()).reduce((sum, changes) => sum + changes, 0);
+  const totalBuildingChanges = Array.from(sectionBuildingChanges.values()).reduce((sum, changes) => sum + changes, 0);
   const totalSessions = placedSessions.length;
-  const penalty = totalSessions > 0 ? Math.min(100, (totalChanges / totalSessions) * 50) : 0;
+  
+  // Building changes are penalized more heavily (3x weight)
+  const weightedChanges = totalRoomChanges + (totalBuildingChanges * 3);
+  const penalty = totalSessions > 0 ? Math.min(100, (weightedChanges / totalSessions) * 50) : 0;
 
   if (penalty > 20) {
     return {
       penalty,
       violationType: 'room_switching',
-      description: `Excessive room movement (${totalChanges} changes)`,
+      description: `Excessive room movement (${totalRoomChanges} room changes, ${totalBuildingChanges} building changes)`,
       affectedEntities: Array.from(sectionRoomChanges.keys()),
     };
   }
@@ -502,7 +527,7 @@ export function checkAllSoftConstraints(
   }
 
   if (enabledConstraints.room_movement_minimization) {
-    results.push(checkRoomMovementMinimization(placedSessions));
+    results.push(checkRoomMovementMinimization(placedSessions, rooms));
   }
 
   if (enabledConstraints.time_of_day_preference) {

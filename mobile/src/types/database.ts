@@ -68,11 +68,10 @@ export interface Subject {
     code: string;
     name: string;
     units: number;
-    type: SubjectType;
+    type: 'common' | 'special';
     duration_hours: number;
     program: string;
     year_level: number;
-    requires_lab: boolean;
     created_at: string;
 }
 

@@ -2,20 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasAnyRole } from '../../types/database';
-import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit, Folder, Database, User } from 'lucide-react';
+import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit, Folder, Database } from 'lucide-react';
 import '../admin/Dashboard.css';
 
-type Tab = 'rooms' | 'subjects' | 'sections' | 'teachers';
+type Tab = 'rooms' | 'subjects' | 'sections';
 
-type RoomType = 'general_classroom' | 'computer_lab' | 'physics_lab' | 'chemistry_lab' | 'pe_hall' | 'science_lab' | 'art_room' | 'music_room' | 'library' | 'auditorium' | 'other';
+type RoomFacilityType = 'general_classroom' | 'computer_lab' | 'physics_lab' | 'chemistry_lab' | 'pe_hall' | 'science_lab' | 'art_room' | 'music_room' | 'library' | 'auditorium' | 'other';
 
 interface Room {
     id: string;
     name: string;
     building: string;
     floor: number;
-    type: string;
-    room_type?: RoomType;
+    type: string; // 'common' or 'special'
+    room_facility_type?: RoomFacilityType; // Informational facility type
     capacity: number;
     is_available: boolean;
     weight: number;
@@ -23,6 +23,11 @@ interface Room {
     owner_id: string | null;
     is_public: boolean;
     shared_with: string[];
+    // Generation-specific fields
+    is_special_room?: boolean;
+    compatible_subject_ids?: string[]; // IDs of subjects that can be taught in this room
+    equipment_availability?: string[];
+    movement_cost?: number;
 }
 
 interface Subject {
@@ -30,18 +35,25 @@ interface Subject {
     code: string;
     name: string;
     units: number;
-    type: string;
+    type: string; // 'common' or 'special'
     program: string;
     year_level: number;
     duration_hours: number;
-    requires_lab: boolean;
-    required_room_types?: RoomType[];
     teacher_id?: string | null;
     weight: number;
     priority_note: string | null;
     owner_id: string | null;
     is_public: boolean;
     shared_with: string[];
+    // Generation-specific fields
+    required_weekly_hours?: number | null;
+    optional_monthly_hours?: number | null;
+    session_duration_preference?: number;
+    teacher_eligibility_pool?: (string | null)[];
+    compatible_room_ids?: string[]; // IDs of rooms that can accommodate this subject
+    priority_level?: 'high' | 'normal' | 'low';
+    requires_special_room?: boolean;
+    preferred_time_window?: 'early' | 'mid' | 'late' | null;
 }
 
 interface Section {
@@ -62,23 +74,10 @@ interface Section {
     owner_id: string | null;
     is_public: boolean;
     shared_with: string[];
-}
-
-interface Teacher {
-    id: string;
-    full_name: string;
-    max_hours: number | null;
-    weight: number;
-    priority_note: string | null;
-    shared_assignment?: boolean | null;
-    preferred_days?: string[];
-    preferred_time_start?: string | null;
-    preferred_time_end?: string | null;
-    max_classes_per_day?: number | null;
-    max_consecutive_classes?: number | null;
-    owner_id: string | null;
-    is_public: boolean;
-    shared_with: string[];
+    // Generation-specific fields
+    hierarchy_path?: string;
+    hierarchy_weight?: number;
+    priority_weight?: number;
 }
 
 const DataManagement: React.FC = () => {
@@ -89,45 +88,38 @@ const DataManagement: React.FC = () => {
     const [rooms, setRooms] = useState<Room[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [sections, setSections] = useState<Section[]>([]);
-    const [teachers, setTeachers] = useState<Teacher[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Add modals
     const [showAddRoom, setShowAddRoom] = useState(false);
     const [showAddSubject, setShowAddSubject] = useState(false);
     const [showAddSection, setShowAddSection] = useState(false);
-    const [showAddTeacher, setShowAddTeacher] = useState(false);
     const [saving, setSaving] = useState(false);
 
     // Edit modals
     const [showEditRoom, setShowEditRoom] = useState(false);
     const [showEditSubject, setShowEditSubject] = useState(false);
     const [showEditSection, setShowEditSection] = useState(false);
-    const [showEditTeacher, setShowEditTeacher] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
 
     // Form state
-    const [newRoom, setNewRoom] = useState({ name: '', capacity: 40, type: 'common', room_type: 'general_classroom' as RoomType, building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [newSubject, setNewSubject] = useState({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, requires_lab: false, required_room_types: [] as RoomType[], teacher_id: null as string | null, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [newSection, setNewSection] = useState({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null as string | null, weight: 50, node_type: 'section' as 'group' | 'section', description: '', sort_order: 0, load_category: 'normal' as 'heavy' | 'normal' | 'light', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [newTeacher, setNewTeacher] = useState({ full_name: '', max_hours: 40, weight: 50, priority_note: '', shared_assignment: false, preferred_days: [] as string[], preferred_time_start: null as string | null, preferred_time_end: null as string | null, max_classes_per_day: null as number | null, max_consecutive_classes: null as number | null, owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [editRoom, setEditRoom] = useState({ name: '', capacity: 40, type: 'common', room_type: 'general_classroom' as RoomType, building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [editSubject, setEditSubject] = useState({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, requires_lab: false, required_room_types: [] as RoomType[], teacher_id: null as string | null, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [editSection, setEditSection] = useState({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null as string | null, weight: 50, node_type: 'section' as 'group' | 'section', description: '', sort_order: 0, load_category: 'normal' as 'heavy' | 'normal' | 'light', owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
-    const [editTeacher, setEditTeacher] = useState({ full_name: '', max_hours: 40, weight: 50, priority_note: '', shared_assignment: false, preferred_days: [] as string[], preferred_time_start: null as string | null, preferred_time_end: null as string | null, max_classes_per_day: null as number | null, max_consecutive_classes: null as number | null, owner_id: null as string | null, is_public: false, shared_with: [] as string[] });
+    const [newRoom, setNewRoom] = useState({ name: '', capacity: 40, type: 'common', room_facility_type: 'general_classroom' as RoomFacilityType, building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[], is_special_room: false, movement_cost: 50, compatible_subject_ids: [] as string[] });
+    const [newSubject, setNewSubject] = useState({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, teacher_id: null as string | null, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[], required_weekly_hours: null as number | null, optional_monthly_hours: null as number | null, session_duration_preference: 60, priority_level: 'normal' as 'high' | 'normal' | 'low', requires_special_room: false, preferred_time_window: null as 'early' | 'mid' | 'late' | null, compatible_room_ids: [] as string[] });
+    const [newSection, setNewSection] = useState({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null as string | null, weight: 50, node_type: 'section' as 'group' | 'section', description: '', sort_order: 0, load_category: 'normal' as 'heavy' | 'normal' | 'light', owner_id: null as string | null, is_public: false, shared_with: [] as string[], hierarchy_path: '', hierarchy_weight: 50, priority_weight: 50 });
+    const [editRoom, setEditRoom] = useState({ name: '', capacity: 40, type: 'common', room_facility_type: 'general_classroom' as RoomFacilityType, building: '', floor: 1, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[], is_special_room: false, movement_cost: 50, compatible_subject_ids: [] as string[] });
+    const [editSubject, setEditSubject] = useState({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, teacher_id: null as string | null, weight: 50, priority_note: '', owner_id: null as string | null, is_public: false, shared_with: [] as string[], required_weekly_hours: null as number | null, optional_monthly_hours: null as number | null, session_duration_preference: 60, priority_level: 'normal' as 'high' | 'normal' | 'low', requires_special_room: false, preferred_time_window: null as 'early' | 'mid' | 'late' | null, compatible_room_ids: [] as string[] });
+    const [editSection, setEditSection] = useState({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null as string | null, weight: 50, node_type: 'section' as 'group' | 'section', description: '', sort_order: 0, load_category: 'normal' as 'heavy' | 'normal' | 'light', owner_id: null as string | null, is_public: false, shared_with: [] as string[], hierarchy_path: '', hierarchy_weight: 50, priority_weight: 50 });
 
     const fetchAll = async () => {
         setLoading(true);
-        const [r, s, sec, t] = await Promise.all([
+        const [r, s, sec] = await Promise.all([
             supabase.from('rooms').select('*').order('name'),
             supabase.from('subjects').select('*').order('code'),
             supabase.from('sections').select('*').order('program').order('year_level').order('name'),
-            supabase.from('teachers').select('*').order('full_name'),
         ]);
         setRooms(r.data || []);
         setSubjects(s.data || []);
         setSections(sec.data || []);
-        setTeachers(t.data || []);
         setLoading(false);
     };
 
@@ -135,20 +127,90 @@ const DataManagement: React.FC = () => {
 
     const handleAddRoom = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Validation: Special rooms must have at least one compatible subject
+        if (newRoom.type === 'special' && newRoom.compatible_subject_ids.length === 0) {
+            alert('Special rooms must have at least one compatible subject selected.');
+            return;
+        }
+        
         setSaving(true);
-        await supabase.from('rooms').insert({ ...newRoom, is_available: true, equipment: [] });
+        const { data: room } = await supabase.from('rooms').insert({
+            name: newRoom.name,
+            capacity: newRoom.capacity,
+            type: newRoom.type,
+            room_facility_type: newRoom.room_facility_type,
+            building: newRoom.building,
+            floor: newRoom.floor,
+            weight: newRoom.weight,
+            priority_note: newRoom.priority_note,
+            owner_id: newRoom.owner_id,
+            is_public: newRoom.is_public,
+            shared_with: newRoom.shared_with,
+            is_special_room: newRoom.is_special_room,
+            movement_cost: newRoom.movement_cost,
+        }).select().single();
+
+        // Sync subject compatibility if room is special
+        if (room && room.type === 'special' && newRoom.compatible_subject_ids.length > 0) {
+            const subjectRelations = newRoom.compatible_subject_ids.map(subjectId => ({
+                subject_id: subjectId,
+                room_id: room.id,
+                priority: 1
+            }));
+            await supabase.from('subject_rooms').insert(subjectRelations);
+        }
+
         setShowAddRoom(false);
-        setNewRoom({ name: '', capacity: 40, type: 'common', room_type: 'general_classroom', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
+        setNewRoom({ name: '', capacity: 40, type: 'common', room_facility_type: 'general_classroom', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [], is_special_room: false, movement_cost: 50, compatible_subject_ids: [] });
         setSaving(false);
         fetchAll();
     };
 
     const handleAddSubject = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Validation: Special subjects must have at least one compatible room
+        if (newSubject.type === 'special' && newSubject.compatible_room_ids.length === 0) {
+            alert('Special subjects must have at least one compatible room selected.');
+            return;
+        }
+        
         setSaving(true);
-        await supabase.from('subjects').insert(newSubject);
+        const { data: subject } = await supabase.from('subjects').insert({
+            code: newSubject.code,
+            name: newSubject.name,
+            units: newSubject.units,
+            type: newSubject.type,
+            duration_hours: newSubject.duration_hours,
+            program: newSubject.program,
+            year_level: newSubject.year_level,
+            teacher_id: newSubject.teacher_id,
+            weight: newSubject.weight,
+            priority_note: newSubject.priority_note,
+            owner_id: newSubject.owner_id,
+            is_public: newSubject.is_public,
+            shared_with: newSubject.shared_with,
+            required_weekly_hours: newSubject.required_weekly_hours,
+            optional_monthly_hours: newSubject.optional_monthly_hours,
+            session_duration_preference: newSubject.session_duration_preference,
+            priority_level: newSubject.priority_level,
+            requires_special_room: newSubject.requires_special_room,
+            preferred_time_window: newSubject.preferred_time_window,
+        }).select().single();
+
+        // Sync room compatibility if subject is special
+        if (subject && subject.type === 'special' && newSubject.compatible_room_ids.length > 0) {
+            const roomRelations = newSubject.compatible_room_ids.map(roomId => ({
+                subject_id: subject.id,
+                room_id: roomId,
+                priority: 1
+            }));
+            await supabase.from('subject_rooms').insert(roomRelations);
+        }
+
         setShowAddSubject(false);
-        setNewSubject({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, requires_lab: false, required_room_types: [], teacher_id: null, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
+        setNewSubject({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, teacher_id: null, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [], required_weekly_hours: null, optional_monthly_hours: null, session_duration_preference: 60, priority_level: 'normal', requires_special_room: false, preferred_time_window: null, compatible_room_ids: [] });
         setSaving(false);
         fetchAll();
     };
@@ -158,17 +220,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('sections').insert(newSection);
         setShowAddSection(false);
-        setNewSection({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null, weight: 50, node_type: 'section', description: '', sort_order: 0, load_category: 'normal', owner_id: null, is_public: false, shared_with: [] });
-        setSaving(false);
-        fetchAll();
-    };
-
-    const handleAddTeacher = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSaving(true);
-        await supabase.from('teachers').insert(newTeacher);
-        setShowAddTeacher(false);
-        setNewTeacher({ full_name: '', max_hours: 40, weight: 50, priority_note: '', shared_assignment: false, preferred_days: [], preferred_time_start: null, preferred_time_end: null, max_classes_per_day: null, max_consecutive_classes: null, owner_id: null, is_public: false, shared_with: [] });
+        setNewSection({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null, weight: 50, node_type: 'section', description: '', sort_order: 0, load_category: 'normal', owner_id: null, is_public: false, shared_with: [], hierarchy_path: '', hierarchy_weight: 50, priority_weight: 50 });
         setSaving(false);
         fetchAll();
     };
@@ -179,13 +231,44 @@ const DataManagement: React.FC = () => {
         fetchAll();
     };
 
-    const openEditRoom = (room: Room) => {
-        setEditRoom({ name: room.name, capacity: room.capacity, type: room.type, room_type: room.room_type || 'general_classroom', building: room.building, floor: room.floor, weight: room.weight, priority_note: room.priority_note || '', owner_id: room.owner_id, is_public: room.is_public, shared_with: room.shared_with });
+    const openEditRoom = async (room: Room) => {
+        // Fetch compatible subjects for this room
+        const { data: relations } = await supabase
+            .from('subject_rooms')
+            .select('subject_id')
+            .eq('room_id', room.id);
+        
+        const compatibleSubjectIds = relations?.map(r => r.subject_id) || [];
+
+        setEditRoom({ 
+            name: room.name, 
+            capacity: room.capacity, 
+            type: room.type, 
+            room_facility_type: room.room_facility_type || 'general_classroom', 
+            building: room.building, 
+            floor: room.floor, 
+            weight: room.weight, 
+            priority_note: room.priority_note || '', 
+            owner_id: room.owner_id, 
+            is_public: room.is_public, 
+            shared_with: room.shared_with, 
+            is_special_room: room.is_special_room || false, 
+            movement_cost: room.movement_cost || 50,
+            compatible_subject_ids: compatibleSubjectIds
+        });
         setEditingId(room.id);
         setShowEditRoom(true);
     };
 
-    const openEditSubject = (subject: Subject) => {
+    const openEditSubject = async (subject: Subject) => {
+        // Fetch compatible rooms for this subject
+        const { data: relations } = await supabase
+            .from('subject_rooms')
+            .select('room_id')
+            .eq('subject_id', subject.id);
+        
+        const compatibleRoomIds = relations?.map(r => r.room_id) || [];
+
         setEditSubject({
             code: subject.code,
             name: subject.name,
@@ -194,37 +277,72 @@ const DataManagement: React.FC = () => {
             duration_hours: subject.duration_hours,
             program: subject.program,
             year_level: subject.year_level,
-            requires_lab: subject.requires_lab || false,
-            required_room_types: subject.required_room_types || [],
             teacher_id: subject.teacher_id || null,
             weight: subject.weight,
             priority_note: subject.priority_note || '',
             owner_id: subject.owner_id,
             is_public: subject.is_public,
             shared_with: subject.shared_with,
+            required_weekly_hours: subject.required_weekly_hours || null,
+            optional_monthly_hours: subject.optional_monthly_hours || null,
+            session_duration_preference: subject.session_duration_preference || 60,
+            priority_level: subject.priority_level || 'normal',
+            requires_special_room: subject.requires_special_room || false,
+            preferred_time_window: subject.preferred_time_window || null,
+            compatible_room_ids: compatibleRoomIds
         });
         setEditingId(subject.id);
         setShowEditSubject(true);
     };
 
     const openEditSection = (section: Section) => {
-        setEditSection({ name: section.name, program: section.program, year_level: section.year_level, student_count: section.student_count, parent_id: section.parent_id, weight: section.weight, node_type: section.node_type, description: section.description || '', sort_order: section.sort_order, load_category: section.load_category || 'normal', owner_id: section.owner_id, is_public: section.is_public, shared_with: section.shared_with });
+        setEditSection({ name: section.name, program: section.program, year_level: section.year_level, student_count: section.student_count, parent_id: section.parent_id, weight: section.weight, node_type: section.node_type, description: section.description || '', sort_order: section.sort_order, load_category: section.load_category || 'normal', owner_id: section.owner_id, is_public: section.is_public, shared_with: section.shared_with, hierarchy_path: section.hierarchy_path || '', hierarchy_weight: section.hierarchy_weight || 50, priority_weight: section.priority_weight || 50 });
         setEditingId(section.id);
         setShowEditSection(true);
     };
 
-    const openEditTeacher = (teacher: Teacher) => {
-        setEditTeacher({ full_name: teacher.full_name, max_hours: teacher.max_hours || 40, weight: teacher.weight, priority_note: teacher.priority_note || '', shared_assignment: teacher.shared_assignment || false, preferred_days: teacher.preferred_days || [], preferred_time_start: teacher.preferred_time_start || null, preferred_time_end: teacher.preferred_time_end || null, max_classes_per_day: teacher.max_classes_per_day || null, max_consecutive_classes: teacher.max_consecutive_classes || null, owner_id: teacher.owner_id, is_public: teacher.is_public, shared_with: teacher.shared_with });
-        setEditingId(teacher.id);
-        setShowEditTeacher(true);
-    };
-
     const handleEditRoom = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Validation: Special rooms must have at least one compatible subject
+        if (editRoom.type === 'special' && editRoom.compatible_subject_ids.length === 0) {
+            alert('Special rooms must have at least one compatible subject selected.');
+            return;
+        }
+        
         setSaving(true);
-        await supabase.from('rooms').update({ ...editRoom }).eq('id', editingId);
+        
+        // Update room
+        await supabase.from('rooms').update({
+            name: editRoom.name,
+            capacity: editRoom.capacity,
+            type: editRoom.type,
+            room_facility_type: editRoom.room_facility_type,
+            building: editRoom.building,
+            floor: editRoom.floor,
+            weight: editRoom.weight,
+            priority_note: editRoom.priority_note,
+            owner_id: editRoom.owner_id,
+            is_public: editRoom.is_public,
+            shared_with: editRoom.shared_with,
+            is_special_room: editRoom.is_special_room,
+            movement_cost: editRoom.movement_cost,
+        }).eq('id', editingId);
+
+        // Sync subject compatibility - delete old and insert new
+        await supabase.from('subject_rooms').delete().eq('room_id', editingId);
+        
+        if (editRoom.type === 'special' && editRoom.compatible_subject_ids.length > 0) {
+            const subjectRelations = editRoom.compatible_subject_ids.map(subjectId => ({
+                subject_id: subjectId,
+                room_id: editingId,
+                priority: 1
+            }));
+            await supabase.from('subject_rooms').insert(subjectRelations);
+        }
+
         setShowEditRoom(false);
-        setEditRoom({ name: '', capacity: 40, type: 'lecture', room_type: 'general_classroom', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
+        setEditRoom({ name: '', capacity: 40, type: 'common', room_facility_type: 'general_classroom', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [], is_special_room: false, movement_cost: 50, compatible_subject_ids: [] });
         setEditingId(null);
         setSaving(false);
         fetchAll();
@@ -232,10 +350,52 @@ const DataManagement: React.FC = () => {
 
     const handleEditSubject = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Validation: Special subjects must have at least one compatible room
+        if (editSubject.type === 'special' && editSubject.compatible_room_ids.length === 0) {
+            alert('Special subjects must have at least one compatible room selected.');
+            return;
+        }
+        
         setSaving(true);
-        await supabase.from('subjects').update(editSubject).eq('id', editingId);
+
+        // Update subject
+        await supabase.from('subjects').update({
+            code: editSubject.code,
+            name: editSubject.name,
+            units: editSubject.units,
+            type: editSubject.type,
+            duration_hours: editSubject.duration_hours,
+            program: editSubject.program,
+            year_level: editSubject.year_level,
+            teacher_id: editSubject.teacher_id,
+            weight: editSubject.weight,
+            priority_note: editSubject.priority_note,
+            owner_id: editSubject.owner_id,
+            is_public: editSubject.is_public,
+            shared_with: editSubject.shared_with,
+            required_weekly_hours: editSubject.required_weekly_hours,
+            optional_monthly_hours: editSubject.optional_monthly_hours,
+            session_duration_preference: editSubject.session_duration_preference,
+            priority_level: editSubject.priority_level,
+            requires_special_room: editSubject.requires_special_room,
+            preferred_time_window: editSubject.preferred_time_window,
+        }).eq('id', editingId);
+
+        // Sync room compatibility - delete old and insert new
+        await supabase.from('subject_rooms').delete().eq('subject_id', editingId);
+        
+        if (editSubject.type === 'special' && editSubject.compatible_room_ids.length > 0) {
+            const roomRelations = editSubject.compatible_room_ids.map(roomId => ({
+                subject_id: editingId,
+                room_id: roomId,
+                priority: 1
+            }));
+            await supabase.from('subject_rooms').insert(roomRelations);
+        }
+
         setShowEditSubject(false);
-        setEditSubject({ code: '', name: '', units: 3, type: 'lecture', duration_hours: 1, program: '', year_level: 1, requires_lab: false, required_room_types: [], teacher_id: null, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [] });
+        setEditSubject({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, teacher_id: null, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [], required_weekly_hours: null, optional_monthly_hours: null, session_duration_preference: 60, priority_level: 'normal', requires_special_room: false, preferred_time_window: null, compatible_room_ids: [] });
         setEditingId(null);
         setSaving(false);
         fetchAll();
@@ -246,18 +406,7 @@ const DataManagement: React.FC = () => {
         setSaving(true);
         await supabase.from('sections').update(editSection).eq('id', editingId);
         setShowEditSection(false);
-        setEditSection({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null, weight: 50, node_type: 'section', description: '', sort_order: 0, load_category: 'normal', owner_id: null, is_public: false, shared_with: [] });
-        setEditingId(null);
-        setSaving(false);
-        fetchAll();
-    };
-
-    const handleEditTeacher = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSaving(true);
-        await supabase.from('teachers').update(editTeacher).eq('id', editingId);
-        setShowEditTeacher(false);
-        setEditTeacher({ full_name: '', max_hours: 40, weight: 50, priority_note: '', shared_assignment: false, preferred_days: [], preferred_time_start: null, preferred_time_end: null, max_classes_per_day: null, max_consecutive_classes: null, owner_id: null, is_public: false, shared_with: [] });
+        setEditSection({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null, weight: 50, node_type: 'section', description: '', sort_order: 0, load_category: 'normal', owner_id: null, is_public: false, shared_with: [], hierarchy_path: '', hierarchy_weight: 50, priority_weight: 50 });
         setEditingId(null);
         setSaving(false);
         fetchAll();
@@ -267,14 +416,13 @@ const DataManagement: React.FC = () => {
         { key: 'rooms', label: 'Rooms', icon: MapPin, count: rooms.length },
         { key: 'subjects', label: 'Subjects', icon: BookOpen, count: subjects.length },
         { key: 'sections', label: 'Sections', icon: Layers, count: sections.length },
-        { key: 'teachers', label: 'Teachers', icon: User, count: teachers.length },
     ];
 
     const getAddAction = () => {
         if (tab === 'rooms') return () => setShowAddRoom(true);
         if (tab === 'subjects') return () => setShowAddSubject(true);
         if (tab === 'sections') return () => setShowAddSection(true);
-        return () => setShowAddTeacher(true);
+        return () => {};
     };
 
     return (
@@ -289,7 +437,7 @@ const DataManagement: React.FC = () => {
                 {canEdit && (
                     <button className="btn btn-primary" onClick={getAddAction()}>
                         <Plus size={16} />
-                        Add {tab === 'rooms' ? 'Room' : tab === 'subjects' ? 'Subject' : tab === 'sections' ? 'Section' : 'Teacher'}
+                        Add {tab === 'rooms' ? 'Room' : tab === 'subjects' ? 'Subject' : 'Section'}
                     </button>
                 )}
             </div>
@@ -415,36 +563,6 @@ const DataManagement: React.FC = () => {
                             </table>
                         </div>
                     )}
-
-                    {/* Teachers Table */}
-                    {tab === 'teachers' && (
-                        <div className="table-container">
-                            <table>
-                                <thead><tr><th>Name</th><th>Max Hours</th><th>Weight</th><th>Shared Assignment</th><th style={{ width: 60 }}></th></tr></thead>
-                                <tbody>
-                                    {teachers.map(t => (
-                                        <tr key={t.id}>
-                                            <td style={{ fontWeight: 600 }}>{t.full_name}</td>
-                                            <td>{t.max_hours || '-'}</td>
-                                            <td>{t.weight}</td>
-                                            <td><span className="badge" style={{ background: t.shared_assignment ? 'rgba(16,185,129,0.15)' : 'rgba(107,114,128,0.15)', color: t.shared_assignment ? '#34d399' : '#9ca3af' }}>{t.shared_assignment ? 'YES' : 'NO'}</span></td>
-                                            <td>
-                                                {canEdit ? (
-                                                    <div style={{ display: 'flex', gap: 4 }}>
-                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => openEditTeacher(t)}><Edit size={15} style={{ color: 'var(--text-secondary)' }} /></button>
-                                                        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => handleDelete('teachers', t.id, t.full_name)}><Trash2 size={15} style={{ color: 'var(--accent-error)' }} /></button>
-                                                    </div>
-                                                ) : (
-                                                    <Lock size={15} style={{ color: 'var(--text-muted)' }} />
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {teachers.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No teachers added yet.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
                 </>
             )}
 
@@ -459,7 +577,13 @@ const DataManagement: React.FC = () => {
                             <div className="field"><label className="field-label">Floor</label><input className="input" type="number" min={1} value={newRoom.floor} onChange={e => setNewRoom(p => ({ ...p, floor: parseInt(e.target.value) }))} /></div>
                             <div className="field"><label className="field-label">Capacity</label><input className="input" type="number" min={1} value={newRoom.capacity} onChange={e => setNewRoom(p => ({ ...p, capacity: parseInt(e.target.value) }))} /></div>
                             <div className="field"><label className="field-label">Room Type</label>
-                                <select className="input" value={newRoom.room_type} onChange={e => setNewRoom(p => ({ ...p, room_type: e.target.value as RoomType }))}>
+                                <select className="input" value={newRoom.type} onChange={e => setNewRoom(p => ({ ...p, type: e.target.value }))}>
+                                    <option value="common">Common (can teach any subject)</option>
+                                    <option value="special">Special (selected subjects only)</option>
+                                </select>
+                            </div>
+                            <div className="field"><label className="field-label">Facility Type</label>
+                                <select className="input" value={newRoom.room_facility_type} onChange={e => setNewRoom(p => ({ ...p, room_facility_type: e.target.value as RoomFacilityType }))}>
                                     <option value="general_classroom">General Classroom</option>
                                     <option value="computer_lab">Computer Lab</option>
                                     <option value="physics_lab">Physics Lab</option>
@@ -473,7 +597,19 @@ const DataManagement: React.FC = () => {
                                     <option value="other">Other</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newRoom.weight} onChange={e => setNewRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Movement Cost (0-100)</label><input className="input" type="number" min={0} max={100} value={newRoom.movement_cost} onChange={e => setNewRoom(p => ({ ...p, movement_cost: parseInt(e.target.value) }))} placeholder="Cost of moving to/from this room" /></div>
+                            {newRoom.type === 'special' && (
+                                <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Compatible Subjects (Ctrl+Click to select multiple)</label>
+                                    <select className="input" multiple size={3} value={newRoom.compatible_subject_ids} onChange={e => {
+                                        const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+                                        setNewRoom(p => ({ ...p, compatible_subject_ids: selected }));
+                                    }}>
+                                        {subjects.map(s => (
+                                            <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={newRoom.priority_note} onChange={e => setNewRoom(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
                             <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Room'}</button>
                         </form>
@@ -491,39 +627,52 @@ const DataManagement: React.FC = () => {
                             <div className="field"><label className="field-label">Name</label><input className="input" required placeholder="Introduction to Computing" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} /></div>
                             <div className="field"><label className="field-label">Units</label><input className="input" type="number" min={1} max={6} value={newSubject.units} onChange={e => setNewSubject(p => ({ ...p, units: parseInt(e.target.value) }))} /></div>
                             <div className="field"><label className="field-label">Hours</label><input className="input" type="number" min={1} max={6} value={newSubject.duration_hours} onChange={e => setNewSubject(p => ({ ...p, duration_hours: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">Type</label><select className="input" value={newSubject.type} onChange={e => setNewSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common</option><option value="special">Special</option></select></div>
+                            <div className="field"><label className="field-label">Type</label><select className="input" value={newSubject.type} onChange={e => setNewSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common (can be taught anywhere)</option><option value="special">Special (needs specific rooms)</option></select></div>
                             <div className="field"><label className="field-label">Program</label><input className="input" required placeholder="e.g. BSIT" value={newSubject.program} onChange={e => setNewSubject(p => ({ ...p, program: e.target.value }))} /></div>
                             <div className="field"><label className="field-label">Year Level</label><input className="input" type="number" min={1} max={12} value={newSubject.year_level} onChange={e => setNewSubject(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
-                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
-                                <input type="checkbox" checked={newSubject.requires_lab} onChange={e => setNewSubject(p => ({ ...p, requires_lab: e.target.checked }))} />
-                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Requires Lab Room</label>
-                            </div>
-                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Required Room Types (Ctrl+Click to select multiple)</label>
-                                <select className="input" multiple size={3} value={newSubject.required_room_types} onChange={e => {
-                                    const selected = Array.from(e.target.selectedOptions).map(opt => opt.value as RoomType);
-                                    setNewSubject(p => ({ ...p, required_room_types: selected }));
-                                }}>
-                                    <option value="general_classroom">General Classroom</option>
-                                    <option value="computer_lab">Computer Lab</option>
-                                    <option value="physics_lab">Physics Lab</option>
-                                    <option value="chemistry_lab">Chemistry Lab</option>
-                                    <option value="pe_hall">PE Hall</option>
-                                    <option value="science_lab">Science Lab</option>
-                                    <option value="art_room">Art Room</option>
-                                    <option value="music_room">Music Room</option>
-                                    <option value="library">Library</option>
-                                    <option value="auditorium">Auditorium</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                            <div className="field"><label className="field-label">Teacher</label>
-                                <select className="input" value={newSubject.teacher_id || ''} onChange={e => setNewSubject(p => ({ ...p, teacher_id: e.target.value || null }))}>
-                                    <option value="">No teacher assigned</option>
-                                    {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-                                </select>
-                            </div>
+                            {newSubject.type === 'special' && (
+                                <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Compatible Rooms (Ctrl+Click to select multiple)</label>
+                                    <select className="input" multiple size={3} value={newSubject.compatible_room_ids} onChange={e => {
+                                        const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+                                        setNewSubject(p => ({ ...p, compatible_room_ids: selected }));
+                                    }}>
+                                        {rooms.filter(r => r.type === 'special').map(r => (
+                                            <option key={r.id} value={r.id}>{r.name} ({r.building})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newSubject.weight} onChange={e => setNewSubject(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
                             <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={newSubject.priority_note} onChange={e => setNewSubject(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
+
+                            {/* Generation-specific fields */}
+                            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border-default)', paddingTop: 16, marginTop: 8 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>SCHEDULING CONFIGURATION</div>
+                            </div>
+
+                            <div className="field"><label className="field-label">Required Weekly Hours</label><input className="input" type="number" min={1} max={40} value={newSubject.required_weekly_hours || ''} onChange={e => setNewSubject(p => ({ ...p, required_weekly_hours: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Optional Monthly Hours</label><input className="input" type="number" min={0} max={20} value={newSubject.optional_monthly_hours || ''} onChange={e => setNewSubject(p => ({ ...p, optional_monthly_hours: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Session Duration (min)</label><input className="input" type="number" min={15} max={180} step={15} value={newSubject.session_duration_preference} onChange={e => setNewSubject(p => ({ ...p, session_duration_preference: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Priority Level</label>
+                                <select className="input" value={newSubject.priority_level} onChange={e => setNewSubject(p => ({ ...p, priority_level: e.target.value as 'high' | 'normal' | 'low' }))}>
+                                    <option value="low">Low</option>
+                                    <option value="normal">Normal</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                            <div className="field"><label className="field-label">Preferred Time Window</label>
+                                <select className="input" value={newSubject.preferred_time_window || ''} onChange={e => setNewSubject(p => ({ ...p, preferred_time_window: e.target.value as 'early' | 'mid' | 'late' | null || null }))}>
+                                    <option value="">No preference</option>
+                                    <option value="early">Morning (7am-12pm)</option>
+                                    <option value="mid">Afternoon (12pm-5pm)</option>
+                                    <option value="late">Evening (5pm-9pm)</option>
+                                </select>
+                            </div>
+                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
+                                <input type="checkbox" checked={newSubject.requires_special_room} onChange={e => setNewSubject(p => ({ ...p, requires_special_room: e.target.checked }))} />
+                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Requires Special Room (lab, studio, etc.)</label>
+                            </div>
+
                             <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Subject'}</button>
                         </form>
                     </div>
@@ -564,6 +713,16 @@ const DataManagement: React.FC = () => {
                             <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newSection.weight} onChange={e => setNewSection(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
                             <div className="field"><label className="field-label">Sort Order</label><input className="input" type="number" min={0} value={newSection.sort_order} onChange={e => setNewSection(p => ({ ...p, sort_order: parseInt(e.target.value) }))} /></div>
                             <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Description</label><textarea className="input" rows={2} value={newSection.description} onChange={e => setNewSection(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." /></div>
+
+                            {/* Generation-specific fields */}
+                            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border-default)', paddingTop: 16, marginTop: 8 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>SCHEDULING CONFIGURATION</div>
+                            </div>
+
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Hierarchy Path</label><input className="input" value={newSection.hierarchy_path} onChange={e => setNewSection(p => ({ ...p, hierarchy_path: e.target.value }))} placeholder="e.g. /BSIT/Year1/SectionA" /></div>
+                            <div className="field"><label className="field-label">Hierarchy Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newSection.hierarchy_weight} onChange={e => setNewSection(p => ({ ...p, hierarchy_weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Priority Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newSection.priority_weight} onChange={e => setNewSection(p => ({ ...p, priority_weight: parseInt(e.target.value) }))} /></div>
+
                             <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Section'}</button>
                         </form>
                     </div>
@@ -581,7 +740,13 @@ const DataManagement: React.FC = () => {
                             <div className="field"><label className="field-label">Floor</label><input className="input" type="number" min={1} value={editRoom.floor} onChange={e => setEditRoom(p => ({ ...p, floor: parseInt(e.target.value) }))} /></div>
                             <div className="field"><label className="field-label">Capacity</label><input className="input" type="number" min={1} value={editRoom.capacity} onChange={e => setEditRoom(p => ({ ...p, capacity: parseInt(e.target.value) }))} /></div>
                             <div className="field"><label className="field-label">Room Type</label>
-                                <select className="input" value={editRoom.room_type} onChange={e => setEditRoom(p => ({ ...p, room_type: e.target.value as RoomType }))}>
+                                <select className="input" value={editRoom.type} onChange={e => setEditRoom(p => ({ ...p, type: e.target.value }))}>
+                                    <option value="common">Common (can teach any subject)</option>
+                                    <option value="special">Special (selected subjects only)</option>
+                                </select>
+                            </div>
+                            <div className="field"><label className="field-label">Facility Type</label>
+                                <select className="input" value={editRoom.room_facility_type} onChange={e => setEditRoom(p => ({ ...p, room_facility_type: e.target.value as RoomFacilityType }))}>
                                     <option value="general_classroom">General Classroom</option>
                                     <option value="computer_lab">Computer Lab</option>
                                     <option value="physics_lab">Physics Lab</option>
@@ -595,7 +760,19 @@ const DataManagement: React.FC = () => {
                                     <option value="other">Other</option>
                                 </select>
                             </div>
-                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editRoom.weight} onChange={e => setEditRoom(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Movement Cost (0-100)</label><input className="input" type="number" min={0} max={100} value={editRoom.movement_cost} onChange={e => setEditRoom(p => ({ ...p, movement_cost: parseInt(e.target.value) }))} placeholder="Cost of moving to/from this room" /></div>
+                            {editRoom.type === 'special' && (
+                                <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Compatible Subjects (Ctrl+Click to select multiple)</label>
+                                    <select className="input" multiple size={3} value={editRoom.compatible_subject_ids} onChange={e => {
+                                        const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+                                        setEditRoom(p => ({ ...p, compatible_subject_ids: selected }));
+                                    }}>
+                                        {subjects.map(s => (
+                                            <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={editRoom.priority_note} onChange={e => setEditRoom(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
                             <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
@@ -613,39 +790,52 @@ const DataManagement: React.FC = () => {
                             <div className="field"><label className="field-label">Name</label><input className="input" required placeholder="Introduction to Computing" value={editSubject.name} onChange={e => setEditSubject(p => ({ ...p, name: e.target.value }))} /></div>
                             <div className="field"><label className="field-label">Units</label><input className="input" type="number" min={1} max={6} value={editSubject.units} onChange={e => setEditSubject(p => ({ ...p, units: parseInt(e.target.value) }))} /></div>
                             <div className="field"><label className="field-label">Hours</label><input className="input" type="number" min={1} max={6} value={editSubject.duration_hours} onChange={e => setEditSubject(p => ({ ...p, duration_hours: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">Type</label><select className="input" value={editSubject.type} onChange={e => setEditSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common</option><option value="special">Special</option></select></div>
+                            <div className="field"><label className="field-label">Type</label><select className="input" value={editSubject.type} onChange={e => setEditSubject(p => ({ ...p, type: e.target.value }))}><option value="common">Common (can be taught anywhere)</option><option value="special">Special (needs specific rooms)</option></select></div>
                             <div className="field"><label className="field-label">Program</label><input className="input" required placeholder="e.g. BSIT" value={editSubject.program} onChange={e => setEditSubject(p => ({ ...p, program: e.target.value }))} /></div>
                             <div className="field"><label className="field-label">Year Level</label><input className="input" type="number" min={1} max={12} value={editSubject.year_level} onChange={e => setEditSubject(p => ({ ...p, year_level: parseInt(e.target.value) }))} /></div>
-                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
-                                <input type="checkbox" checked={editSubject.requires_lab} onChange={e => setEditSubject(p => ({ ...p, requires_lab: e.target.checked }))} />
-                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Requires Lab Room</label>
-                            </div>
-                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Required Room Types (Ctrl+Click to select multiple)</label>
-                                <select className="input" multiple size={3} value={editSubject.required_room_types} onChange={e => {
-                                    const selected = Array.from(e.target.selectedOptions).map(opt => opt.value as RoomType);
-                                    setEditSubject(p => ({ ...p, required_room_types: selected }));
-                                }}>
-                                    <option value="general_classroom">General Classroom</option>
-                                    <option value="computer_lab">Computer Lab</option>
-                                    <option value="physics_lab">Physics Lab</option>
-                                    <option value="chemistry_lab">Chemistry Lab</option>
-                                    <option value="pe_hall">PE Hall</option>
-                                    <option value="science_lab">Science Lab</option>
-                                    <option value="art_room">Art Room</option>
-                                    <option value="music_room">Music Room</option>
-                                    <option value="library">Library</option>
-                                    <option value="auditorium">Auditorium</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                            <div className="field"><label className="field-label">Teacher</label>
-                                <select className="input" value={editSubject.teacher_id || ''} onChange={e => setEditSubject(p => ({ ...p, teacher_id: e.target.value || null }))}>
-                                    <option value="">No teacher assigned</option>
-                                    {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-                                </select>
-                            </div>
+                            {editSubject.type === 'special' && (
+                                <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Compatible Rooms (Ctrl+Click to select multiple)</label>
+                                    <select className="input" multiple size={3} value={editSubject.compatible_room_ids} onChange={e => {
+                                        const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+                                        setEditSubject(p => ({ ...p, compatible_room_ids: selected }));
+                                    }}>
+                                        {rooms.filter(r => r.type === 'special').map(r => (
+                                            <option key={r.id} value={r.id}>{r.name} ({r.building})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editSubject.weight} onChange={e => setEditSubject(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
                             <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={editSubject.priority_note} onChange={e => setEditSubject(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
+
+                            {/* Generation-specific fields */}
+                            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border-default)', paddingTop: 16, marginTop: 8 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>SCHEDULING CONFIGURATION</div>
+                            </div>
+
+                            <div className="field"><label className="field-label">Required Weekly Hours</label><input className="input" type="number" min={1} max={40} value={editSubject.required_weekly_hours || ''} onChange={e => setEditSubject(p => ({ ...p, required_weekly_hours: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Optional Monthly Hours</label><input className="input" type="number" min={0} max={20} value={editSubject.optional_monthly_hours || ''} onChange={e => setEditSubject(p => ({ ...p, optional_monthly_hours: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
+                            <div className="field"><label className="field-label">Session Duration (min)</label><input className="input" type="number" min={15} max={180} step={15} value={editSubject.session_duration_preference} onChange={e => setEditSubject(p => ({ ...p, session_duration_preference: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Priority Level</label>
+                                <select className="input" value={editSubject.priority_level} onChange={e => setEditSubject(p => ({ ...p, priority_level: e.target.value as 'high' | 'normal' | 'low' }))}>
+                                    <option value="low">Low</option>
+                                    <option value="normal">Normal</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                            <div className="field"><label className="field-label">Preferred Time Window</label>
+                                <select className="input" value={editSubject.preferred_time_window || ''} onChange={e => setEditSubject(p => ({ ...p, preferred_time_window: e.target.value as 'early' | 'mid' | 'late' | null || null }))}>
+                                    <option value="">No preference</option>
+                                    <option value="early">Morning (7am-12pm)</option>
+                                    <option value="mid">Afternoon (12pm-5pm)</option>
+                                    <option value="late">Evening (5pm-9pm)</option>
+                                </select>
+                            </div>
+                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
+                                <input type="checkbox" checked={editSubject.requires_special_room} onChange={e => setEditSubject(p => ({ ...p, requires_special_room: e.target.checked }))} />
+                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Requires Special Room (lab, studio, etc.)</label>
+                            </div>
+
                             <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>
@@ -686,54 +876,16 @@ const DataManagement: React.FC = () => {
                             <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editSection.weight} onChange={e => setEditSection(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
                             <div className="field"><label className="field-label">Sort Order</label><input className="input" type="number" min={0} value={editSection.sort_order} onChange={e => setEditSection(p => ({ ...p, sort_order: parseInt(e.target.value) }))} /></div>
                             <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Description</label><textarea className="input" rows={2} value={editSection.description} onChange={e => setEditSection(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
-                        </form>
-                    </div>
-                </div>
-            )}
 
-            {/* Add Teacher Modal */}
-            {showAddTeacher && (
-                <div className="modal-overlay" onClick={() => setShowAddTeacher(false)}>
-                    <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header"><h2>Add Teacher</h2><button className="btn btn-ghost" onClick={() => setShowAddTeacher(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleAddTeacher} className="modal-form-grid">
-                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Full Name</label><input className="input" required placeholder="e.g. John Smith" value={newTeacher.full_name} onChange={e => setNewTeacher(p => ({ ...p, full_name: e.target.value }))} /></div>
-                            <div className="field"><label className="field-label">Max Hours</label><input className="input" type="number" min={1} max={60} value={newTeacher.max_hours} onChange={e => setNewTeacher(p => ({ ...p, max_hours: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={newTeacher.weight} onChange={e => setNewTeacher(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20, gridColumn: '1 / -1' }}>
-                                <input type="checkbox" checked={newTeacher.shared_assignment} onChange={e => setNewTeacher(p => ({ ...p, shared_assignment: e.target.checked }))} />
-                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Allow Shared Assignment</label>
+                            {/* Generation-specific fields */}
+                            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border-default)', paddingTop: 16, marginTop: 8 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>SCHEDULING CONFIGURATION</div>
                             </div>
-                            <div className="field"><label className="field-label">Max Classes Per Day</label><input className="input" type="number" min={1} max={10} value={newTeacher.max_classes_per_day || ''} onChange={e => setNewTeacher(p => ({ ...p, max_classes_per_day: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
-                            <div className="field"><label className="field-label">Max Consecutive</label><input className="input" type="number" min={1} max={6} value={newTeacher.max_consecutive_classes || ''} onChange={e => setNewTeacher(p => ({ ...p, max_consecutive_classes: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
-                            <div className="field"><label className="field-label">Preferred Start</label><input className="input" type="time" value={newTeacher.preferred_time_start || ''} onChange={e => setNewTeacher(p => ({ ...p, preferred_time_start: e.target.value || null }))} placeholder="Optional" /></div>
-                            <div className="field"><label className="field-label">Preferred End</label><input className="input" type="time" value={newTeacher.preferred_time_end || ''} onChange={e => setNewTeacher(p => ({ ...p, preferred_time_end: e.target.value || null }))} placeholder="Optional" /></div>
-                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={newTeacher.priority_note} onChange={e => setNewTeacher(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
-                            <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Add Teacher'}</button>
-                        </form>
-                    </div>
-                </div>
-            )}
 
-            {/* Edit Teacher Modal */}
-            {showEditTeacher && (
-                <div className="modal-overlay" onClick={() => setShowEditTeacher(false)}>
-                    <div className="modal-content slide-up" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header"><h2>Edit Teacher</h2><button className="btn btn-ghost" onClick={() => setShowEditTeacher(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleEditTeacher} className="modal-form-grid">
-                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Full Name</label><input className="input" required placeholder="e.g. John Smith" value={editTeacher.full_name} onChange={e => setEditTeacher(p => ({ ...p, full_name: e.target.value }))} /></div>
-                            <div className="field"><label className="field-label">Max Hours</label><input className="input" type="number" min={1} max={60} value={editTeacher.max_hours} onChange={e => setEditTeacher(p => ({ ...p, max_hours: parseInt(e.target.value) }))} /></div>
-                            <div className="field"><label className="field-label">Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editTeacher.weight} onChange={e => setEditTeacher(p => ({ ...p, weight: parseInt(e.target.value) }))} /></div>
-                            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20, gridColumn: '1 / -1' }}>
-                                <input type="checkbox" checked={editTeacher.shared_assignment} onChange={e => setEditTeacher(p => ({ ...p, shared_assignment: e.target.checked }))} />
-                                <label style={{ color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>Allow Shared Assignment</label>
-                            </div>
-                            <div className="field"><label className="field-label">Max Classes Per Day</label><input className="input" type="number" min={1} max={10} value={editTeacher.max_classes_per_day || ''} onChange={e => setEditTeacher(p => ({ ...p, max_classes_per_day: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
-                            <div className="field"><label className="field-label">Max Consecutive</label><input className="input" type="number" min={1} max={6} value={editTeacher.max_consecutive_classes || ''} onChange={e => setEditTeacher(p => ({ ...p, max_consecutive_classes: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" /></div>
-                            <div className="field"><label className="field-label">Preferred Start</label><input className="input" type="time" value={editTeacher.preferred_time_start || ''} onChange={e => setEditTeacher(p => ({ ...p, preferred_time_start: e.target.value || null }))} placeholder="Optional" /></div>
-                            <div className="field"><label className="field-label">Preferred End</label><input className="input" type="time" value={editTeacher.preferred_time_end || ''} onChange={e => setEditTeacher(p => ({ ...p, preferred_time_end: e.target.value || null }))} placeholder="Optional" /></div>
-                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Priority Note</label><textarea className="input" rows={2} value={editTeacher.priority_note} onChange={e => setEditTeacher(p => ({ ...p, priority_note: e.target.value }))} placeholder="Optional priority reason..." /></div>
+                            <div className="field" style={{ gridColumn: '1 / -1' }}><label className="field-label">Hierarchy Path</label><input className="input" value={editSection.hierarchy_path} onChange={e => setEditSection(p => ({ ...p, hierarchy_path: e.target.value }))} placeholder="e.g. /BSIT/Year1/SectionA" /></div>
+                            <div className="field"><label className="field-label">Hierarchy Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editSection.hierarchy_weight} onChange={e => setEditSection(p => ({ ...p, hierarchy_weight: parseInt(e.target.value) }))} /></div>
+                            <div className="field"><label className="field-label">Priority Weight (0-100)</label><input className="input" type="number" min={0} max={100} value={editSection.priority_weight} onChange={e => setEditSection(p => ({ ...p, priority_weight: parseInt(e.target.value) }))} /></div>
+
                             <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1', marginTop: 8 }} disabled={saving}>{saving ? <Loader2 size={16} className="spin" /> : 'Save Changes'}</button>
                         </form>
                     </div>

@@ -61,6 +61,9 @@ import type {
 import {
   checkAllHardConstraints,
 } from './hardConstraintChecker';
+import {
+  checkAllSoftConstraints,
+} from './softConstraintChecker';
 
 /**
  * Progress callback type for long-running generation
@@ -341,7 +344,7 @@ export class ScheduleGenerator {
       is_special_room: r.type !== 'regular' ? true : false,
       subject_compatibility: {} as Record<string, boolean>,
       equipment_availability: [],
-      movement_cost: 50,
+      movement_cost: 5, // Base cost for same building (all rooms are now in Main Building)
     }));
 
     const normalizedSections: NormalizedSection[] = this.rawData.sections.map(s => ({
@@ -373,8 +376,7 @@ export class ScheduleGenerator {
       teacher_eligibility_pool: [s.teacher_id],
       room_compatibility_rules: [],
       priority_level: s.weight || 50,
-      requires_lab: s.requires_lab || false,
-      requires_special_room: s.requires_lab || false,
+      type: (s.type as 'common' | 'special' | null) || 'common',
       preferred_time_window: null,
       preferred_sequencing: {
         before_subjects: [],
@@ -461,7 +463,7 @@ export class ScheduleGenerator {
             t => t.qualified_subjects.includes(subject.id)
           );
           const compatibleRooms = this.normalizedData.rooms.filter(
-            r => !subject.requires_lab || r.type === 'special'
+            r => subject.type !== 'special' || r.type === 'special'
           );
 
           const session: RankedSession = {
@@ -472,7 +474,7 @@ export class ScheduleGenerator {
             legal_slot_count: 50,
             qualified_teacher_count: qualifiedTeachers.length,
             compatible_room_count: compatibleRooms.length,
-            special_room_dependency: subject.requires_special_room ? true : false,
+            special_room_dependency: subject.type === 'special' ? true : false,
             session_duration_rigidity: 50,
             split_session_complexity: 0,
             section_priority: section.priority_weight,
@@ -752,21 +754,63 @@ export class ScheduleGenerator {
    * Optimize for multiple soft constraints
    */
   private phase10_MultiObjectiveOptimization(schedule: RepairedSchedule): OptimizedSchedule {
+    if (!this.normalizedData) {
+      throw new Error('Normalized data not available');
+    }
+
+    // Prepare unplaced sessions for soft constraint checking
+    const unplacedSessions = schedule.unplaced_sessions.map(us => ({
+      subject_id: us.subject_id,
+      section_id: us.section_id,
+      reason: us.reason,
+    }));
+
+    // Calculate max daily load from config
+    const maxDailyLoad = this.config.institutional_options.max_daily_load || 8;
+
+    // Run all soft constraint checks with all constraints enabled
+    const softConstraintResults = checkAllSoftConstraints(
+      schedule.placed_sessions,
+      unplacedSessions,
+      this.normalizedData.rooms,
+      this.normalizedData.sections,
+      this.normalizedData.subjects,
+      {
+        balanced_weekly_load: true,
+        reduced_idle_gaps: true,
+        compact_section_schedules: true,
+        room_movement_minimization: true,
+        time_of_day_preference: true,
+        room_utilization_efficiency: true,
+        schedule_compactness: true,
+        fairness_between_teachers: true,
+        priority_weighting: true,
+      },
+      maxDailyLoad
+    );
+
+    // Map soft constraint results to score breakdown
+    const scoreBreakdown = {
+      teacher_balance: 100 - (softConstraintResults.find(r => r.violationType === 'teacher_load_imbalance')?.penalty || 0),
+      teacher_daily_balance: 100 - (softConstraintResults.find(r => r.violationType === 'daily_load_imbalance')?.penalty || 0),
+      section_compactness: 100 - (softConstraintResults.find(r => r.violationType === 'section_not_compact')?.penalty || 0),
+      room_movement: 100 - (softConstraintResults.find(r => r.violationType === 'room_switching')?.penalty || 0),
+      special_room_allocation: 100 - (softConstraintResults.find(r => r.violationType === 'special_room_misallocation')?.penalty || 0),
+      subject_spacing: 100 - (softConstraintResults.find(r => r.violationType === 'subject_spacing')?.penalty || 0),
+      time_preference: 100 - (softConstraintResults.find(r => r.violationType === 'time_preference')?.penalty || 0),
+      hierarchy_fairness: 100 - (softConstraintResults.find(r => r.violationType === 'hierarchy_fairness')?.penalty || 0),
+    };
+
+    // Calculate overall soft constraint score (average of all components)
+    const scoreValues = Object.values(scoreBreakdown);
+    const averageScore = scoreValues.reduce((sum, score) => sum + score, 0) / scoreValues.length;
+
     const optimizationReport: OptimizationReport = {
       initial_score: schedule.score,
-      final_score: schedule.score,
-      score_improvement: 0,
-      score_breakdown: {
-        teacher_balance: 50,
-        teacher_daily_balance: 50,
-        section_compactness: 50,
-        room_movement: 50,
-        special_room_allocation: 50,
-        subject_spacing: 50,
-        time_preference: 50,
-        hierarchy_fairness: 50,
-      },
-      iterations: 0,
+      final_score: averageScore,
+      score_improvement: averageScore - schedule.score,
+      score_breakdown: scoreBreakdown,
+      iterations: 1,
       accepted_moves: 0,
       rejected_moves: 0,
       moves_by_type: {},

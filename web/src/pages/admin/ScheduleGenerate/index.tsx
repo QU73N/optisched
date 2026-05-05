@@ -6,10 +6,10 @@ import { useUserPreferences } from '../../../contexts/UserPreferencesContext';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
 import type { Schedule } from '../../../types/database';
 import {
-    AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
+    AlertTriangle, ArrowLeft, ArrowRight, Book, Check, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
     Flag, GitBranch, HelpCircle, Inbox, Layers, Lightbulb, ListChecks, Lock, MapPin, Play, Plus,
     RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, ShieldCheck, Sliders, Sparkles, Upload,
-    Users, X, XCircle,
+    UserCheck, Users, X, XCircle,
 } from 'lucide-react';
 import '../Dashboard.css';
 import {
@@ -122,10 +122,10 @@ const ScheduleGenerate: React.FC = () => {
                 }
                 
                 const [sub, t, r, sec, sch, prefs, prof, sr] = await Promise.all([
-                    supabase.from('subjects').select('id, name, code, duration_hours, requires_lab, program, year_level, teacher_id, teacher_eligibility_pool, sessions_per_week, weight, priority_note'),
+                    supabase.from('subjects').select('id, name, code, duration_hours, type, program, year_level, teacher_id, teacher_eligibility_pool, sessions_per_week, weight, priority_note, required_weekly_hours, optional_monthly_hours, session_duration_preference, priority_level, requires_special_room, preferred_time_window'),
                     supabase.from('teachers').select('id, max_hours, weight, priority_note, profile_id'),
-                    supabase.from('rooms').select('id, name, capacity, type, building, floor, is_available, weight, priority_note'),
-                    supabase.from('sections').select('id, name, program, year_level, student_count, parent_id, weight, path, node_type, is_active, description, metadata, sort_order, load_category, special_scheduling_rules'),
+                    supabase.from('rooms').select('id, name, capacity, type, room_facility_type, building, floor, is_available, weight, priority_note, is_special_room, movement_cost'),
+                    supabase.from('sections').select('id, name, program, year_level, student_count, parent_id, weight, path, node_type, is_active, description, metadata, sort_order, load_category, special_scheduling_rules, hierarchy_path, hierarchy_weight, priority_weight'),
                     supabase.from('schedules').select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at, batch_id'),
                     supabase.from('teacher_preferences').select('teacher_id, preferred_days, preferred_time_start, preferred_time_end, max_classes_per_day, max_consecutive_classes, availability'),
                     supabase.from('profiles').select('id, full_name'),
@@ -179,18 +179,25 @@ const ScheduleGenerate: React.FC = () => {
                 profileById.set(p.id, p);
             }
 
-            // Populate compatible_rooms from subject_rooms data
-            const subjectRoomsMap = new Map<string, Array<{ room_id: string; priority: number }>>();
+            // Populate compatibility data from subject_rooms junction table (bidirectional)
+            const subjectRoomsMap = new Map<string, string[]>(); // subject_id -> room_ids[]
+            const roomSubjectsMap = new Map<string, string[]>(); // room_id -> subject_ids[]
             for (const row of (sr.data as unknown as { subject_id: string; room_id: string; priority: number }[]) || []) {
-                const existing = subjectRoomsMap.get(row.subject_id) || [];
-                existing.push({ room_id: row.room_id, priority: row.priority });
-                subjectRoomsMap.set(row.subject_id, existing);
+                // Subject -> Rooms mapping
+                const existingSubjectRooms = subjectRoomsMap.get(row.subject_id) || [];
+                existingSubjectRooms.push(row.room_id);
+                subjectRoomsMap.set(row.subject_id, existingSubjectRooms);
+                
+                // Room -> Subjects mapping
+                const existingRoomSubjects = roomSubjectsMap.get(row.room_id) || [];
+                existingRoomSubjects.push(row.subject_id);
+                roomSubjectsMap.set(row.room_id, existingRoomSubjects);
             }
 
             setSubjects(
                 ((sub.data as unknown as Subject[]) || []).map(s => ({
                     ...s,
-                    compatible_rooms: subjectRoomsMap.get(s.id) || [],
+                    compatible_room_ids: subjectRoomsMap.get(s.id) || [],
                 }))
             );
             setTeachers(
@@ -213,7 +220,12 @@ const ScheduleGenerate: React.FC = () => {
                         };
                     }),
             );
-            setRooms((r.data as unknown as Room[]) || []);
+            setRooms(
+                ((r.data as unknown as Room[]) || []).map(rm => ({
+                    ...rm,
+                    compatible_subject_ids: roomSubjectsMap.get(rm.id) || [],
+                }))
+            );
             setSections((sec.data as unknown as Section[]) || []);
             setExisting((sch.data as unknown as ExistingSchedule[]) || []);
             setDataLoading(false);
@@ -1101,90 +1113,7 @@ const ScopeStage: React.FC<{
     subjects: Subject[];
     compact?: boolean;
 }> = ({ config, setConfig, sections, teachers, rooms, subjects, compact = false }) => {
-    const allSelected = config.sectionIds.length === 0;
-    const [studentFilter, setStudentFilter] = useState<'all' | 'large' | 'small'>('all');
-    
-    const toggle = (id: string) => {
-        setConfig(c => {
-            const set = new Set(c.sectionIds);
-            if (set.has(id)) set.delete(id); else set.add(id);
-            return { ...c, sectionIds: Array.from(set) };
-        });
-    };
-    
-    const toggleGroup = (groupSections: Section[]) => {
-        const allSelected = groupSections.every(s => config.sectionIds.includes(s.id));
-        if (allSelected) {
-            // Deselect all in group
-            setConfig(c => ({
-                ...c,
-                sectionIds: c.sectionIds.filter(id => !groupSections.some(s => s.id === id)),
-            }));
-        } else {
-            // Select all in group
-            setConfig(c => ({
-                ...c,
-                sectionIds: [...new Set([...c.sectionIds, ...groupSections.map(s => s.id)])],
-            }));
-        }
-    };
-    
-    const grouped = useMemo(() => {
-        const m = new Map<string, Section[]>();
-        for (const s of sections) {
-            const k = `${s.program || 'Unassigned'} · Year ${s.year_level ?? '?'}`;
-            const arr = m.get(k) || [];
-            arr.push(s);
-            m.set(k, arr);
-        }
-        return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
-    }, [sections]);
-
-    const filteredGrouped = useMemo(() => {
-        if (studentFilter === 'all') return grouped;
-        return grouped.map(([group, list]) => {
-            const filtered = list.filter(s => {
-                if (studentFilter === 'large') return (s.student_count || 0) >= 30;
-                if (studentFilter === 'small') return (s.student_count || 0) > 0 && (s.student_count || 0) < 30;
-                return true;
-            });
-            return [group, filtered] as [string, Section[]];
-        }).filter(([, list]) => list.length > 0);
-    }, [grouped, studentFilter]);
-
-    // Get default institutional policies for each mode
-    const getModePolicies = (mode: GenerationConfig['mode']) => {
-        switch (mode) {
-            case 'full':
-                // Full generation: prioritize getting everything scheduled
-                return {
-                    overflowPolicy: 'relax_soft' as const,
-                    maxCapacity: 100,
-                    overflowPercent: 15,
-                };
-            case 'partial':
-                // Partial regeneration: conservative to avoid disrupting existing schedules
-                return {
-                    overflowPolicy: 'partial_only' as const,
-                    maxCapacity: 100,
-                    overflowPercent: 10,
-                };
-            default:
-                return {
-                    overflowPolicy: 'fail' as const,
-                    maxCapacity: 100,
-                    overflowPercent: 0,
-                };
-        }
-    };
-
-    const setMode = (mode: GenerationConfig['mode']) =>
-        setConfig(c => ({
-            ...c,
-            mode,
-            partialTarget: mode === 'full' ? null : c.partialTarget,
-            ...getModePolicies(mode),
-        }));
+    const setMode = (mode: GenerationMode) => setConfig(c => ({ ...c, mode, sectionIds: [] }));
 
     const setPartialKind = (kind: PartialKind) =>
         setConfig(c => ({ ...c, partialTarget: { kind, id: '' } }));
@@ -1232,51 +1161,7 @@ const ScopeStage: React.FC<{
                 ))}
             </div>
 
-            {config.mode === 'full' ? (
-                <>
-                    <div className="sg-row">
-                        <button className={`sg-chip ${allSelected ? 'sg-chip-active' : ''}`} onClick={() => setConfig(c => ({ ...c, sectionIds: [] }))}>All sections</button>
-                        <button className={`sg-chip ${!allSelected ? 'sg-chip-active' : ''}`} onClick={() => { if (allSelected && sections[0]) setConfig(c => ({ ...c, sectionIds: [sections[0].id] })); }}>Custom selection</button>
-                    </div>
-
-                    {!allSelected && (
-                        <>
-                            <div className="sg-row" style={{ marginBottom: 12 }}>
-                                <span className="sg-field-label">Filter by size</span>
-                                <div className="sg-chip-wrap">
-                                    <button className={`sg-chip ${studentFilter === 'all' ? 'sg-chip-active' : ''}`} onClick={() => setStudentFilter('all')}>All</button>
-                                    <button className={`sg-chip ${studentFilter === 'large' ? 'sg-chip-active' : ''}`} onClick={() => setStudentFilter('large')}>30+ students</button>
-                                    <button className={`sg-chip ${studentFilter === 'small' ? 'sg-chip-active' : ''}`} onClick={() => setStudentFilter('small')}>Under 30</button>
-                                </div>
-                            </div>
-                            <div className="sg-scroll">
-                                {filteredGrouped.map(([group, list]) => (
-                                    <div key={group} style={{ marginBottom: 14 }}>
-                                        <div className="sg-group-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span>{group}</span>
-                                            <button className="sg-prio-mini" onClick={() => toggleGroup(list)} title="Select/deselect all in group">
-                                                {list.every(s => config.sectionIds.includes(s.id)) ? 'Deselect all' : 'Select all'}
-                                            </button>
-                                        </div>
-                                        <div className="sg-chip-wrap">
-                                            {list.map(s => (
-                                                <button
-                                                    key={s.id}
-                                                    className={`sg-chip ${config.sectionIds.includes(s.id) ? 'sg-chip-active' : ''}`}
-                                                    onClick={() => toggle(s.id)}
-                                                >
-                                                    {s.name}
-                                                    {s.student_count != null && <span className="sg-chip-sub">· {s.student_count}</span>}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </>
-                    )}
-                </>
-            ) : (
+            {config.mode === 'partial' && (
                 <PartialTargetPicker
                     target={config.partialTarget}
                     options={targetOptions}
@@ -1295,35 +1180,76 @@ const PartialTargetPicker: React.FC<{
     onIdChange: (id: string) => void;
 }> = ({ target, options, onKindChange, onIdChange }) => {
     const kind = target?.kind ?? 'section';
+
+    const kindIcons: Record<PartialKind, React.ReactNode> = {
+        section: <Users size={16} />,
+        teacher: <UserCheck size={16} />,
+        room: <MapPin size={16} />,
+        subject: <Book size={16} />,
+    };
+
     return (
         <div className="sg-partial">
-            <div className="sg-field-label">Target</div>
-            <div className="sg-tabs-mini" style={{ marginBottom: 16 }}>
+            <div className="sg-field-label">
+                Partial Generation Target
+                <FieldTooltip>Select a specific section, teacher, room, or subject to regenerate. Other items remain unchanged.</FieldTooltip>
+            </div>
+
+            <div className="sg-tabs-mini" style={{ marginBottom: 20 }}>
                 {(Object.keys(PARTIAL_KIND_LABELS) as PartialKind[]).map(k => (
                     <button
                         key={k}
+                        type="button"
                         className={`sg-tab-mini ${kind === k ? 'sg-tab-mini-active' : ''}`}
                         onClick={() => onKindChange(k)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' }}
                     >
+                        {kindIcons[k]}
                         {PARTIAL_KIND_LABELS[k]}
                     </button>
                 ))}
             </div>
-            <select
-                className="input"
-                value={target?.id || ''}
-                onChange={e => onIdChange(e.target.value)}
-                style={{ maxWidth: 420 }}
-            >
-                <option value="">Pick a {PARTIAL_KIND_LABELS[kind].toLowerCase()}</option>
-                {options.map(o => (
-                    <option key={o.id} value={o.id}>
-                        {o.label}{o.sub ? ` (${o.sub})` : ''}
-                    </option>
-                ))}
-            </select>
-            <div className="sg-partial-hint">
-                Existing sessions outside this {PARTIAL_KIND_LABELS[kind].toLowerCase()} become locked constraints. Matching sessions get re-solved.
+
+            <div style={{ marginBottom: 20 }}>
+                <select
+                    className="input"
+                    value={target?.id || ''}
+                    onChange={e => onIdChange(e.target.value)}
+                    style={{ 
+                        width: '100%',
+                        maxWidth: 480,
+                        padding: '10px 12px',
+                        fontSize: 14,
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--border-light)',
+                        backgroundColor: 'var(--surface)',
+                        color: 'var(--text-primary)'
+                    }}
+                >
+                    <option value="">Select a {PARTIAL_KIND_LABELS[kind].toLowerCase()}...</option>
+                    {options.map(o => (
+                        <option key={o.id} value={o.id}>
+                            {o.label}{o.sub ? ` — ${o.sub}` : ''}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            <div className="sg-partial-hint" style={{
+                padding: 12,
+                backgroundColor: 'var(--surface-soft)',
+                border: '1px solid var(--border-light)',
+                borderRadius: 'var(--radius-md)',
+                fontSize: 13,
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10
+            }}>
+                <Lightbulb size={16} style={{ color: 'var(--accent-primary)', flexShrink: 0, marginTop: 1 }} />
+                <span>
+                    <strong>Partial regeneration:</strong> Existing sessions outside this {PARTIAL_KIND_LABELS[kind].toLowerCase()} become locked constraints. Only matching sessions will be re-solved.
+                </span>
             </div>
         </div>
     );
@@ -2703,9 +2629,9 @@ const PrioritiesStage: React.FC<{
                 : 0;
             // Only consider teachers scarce if there's variance in teacher pools
             const scarceTeachers = hasTeacherVariance && (teacherPool <= 2 || (s.teacher_id ? false : teacherPool === 0));
-            const needsLab = s.requires_lab;
+            const isSpecial = s.type === 'special';
 
-            if (needsLab || scarceTeachers) {
+            if (isSpecial || scarceTeachers) {
                 subjectPriorities[s.id] = PRIORITY_VALUES.high;
             } else if (!s.program) {
                 subjectPriorities[s.id] = PRIORITY_VALUES.low;

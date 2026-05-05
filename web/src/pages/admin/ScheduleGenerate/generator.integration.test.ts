@@ -19,8 +19,8 @@ const mockSections: Section[] = [
 ];
 
 const mockSubjects: Subject[] = [
-    { id: 'sub1', code: 'CS101', name: 'Intro to CS', program: 'BSIT', year_level: 1, teacher_id: 't1', duration_hours: 3, requires_lab: false, weight: 50, priority_note: null, monthly_hour_targets: null },
-    { id: 'sub2', code: 'CS102', name: 'Data Structures', program: 'BSIT', year_level: 2, teacher_id: 't2', duration_hours: 3, requires_lab: false, weight: 50, priority_note: null, monthly_hour_targets: null },
+    { id: 'sub1', code: 'CS101', name: 'Intro to CS', program: 'BSIT', year_level: 1, teacher_id: 't1', duration_hours: 3, type: 'common', weight: 50, priority_note: null, monthly_hour_targets: null },
+    { id: 'sub2', code: 'CS102', name: 'Data Structures', program: 'BSIT', year_level: 2, teacher_id: 't2', duration_hours: 3, type: 'common', weight: 50, priority_note: null, monthly_hour_targets: null },
 ];
 
 const mockExisting: ExistingSchedule[] = [];
@@ -357,8 +357,8 @@ describe('Generator Integration Tests', () => {
             
             // Create a scenario with limited special rooms that forward checking should handle
             const labSubjects: Subject[] = [
-                { id: 'lab1', code: 'LAB101', name: 'Lab Subject 1', program: 'BSIT', year_level: 1, teacher_id: 't1', duration_hours: 3, requires_lab: true, weight: 50, priority_note: null, monthly_hour_targets: null },
-                { id: 'lab2', code: 'LAB102', name: 'Lab Subject 2', program: 'BSIT', year_level: 2, teacher_id: 't2', duration_hours: 3, requires_lab: true, weight: 50, priority_note: null, monthly_hour_targets: null },
+                { id: 'lab1', code: 'LAB101', name: 'Lab Subject 1', program: 'BSIT', year_level: 1, teacher_id: 't1', duration_hours: 3, type: 'special', weight: 50, priority_note: null, monthly_hour_targets: null },
+                { id: 'lab2', code: 'LAB102', name: 'Lab Subject 2', program: 'BSIT', year_level: 2, teacher_id: 't2', duration_hours: 3, type: 'special', weight: 50, priority_note: null, monthly_hour_targets: null },
             ];
 
             const singleSpecialRoom: Room[] = [

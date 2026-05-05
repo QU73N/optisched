@@ -178,8 +178,7 @@ export interface NormalizedSubject {
   teacher_eligibility_pool: (string | null)[];
   room_compatibility_rules: (string | null)[];
   priority_level: number;
-  requires_lab: boolean;
-  requires_special_room: boolean;
+  type: 'common' | 'special' | null;
   preferred_time_window: 'early' | 'mid' | 'late' | null;
   preferred_sequencing: {
     before_subjects: string[];

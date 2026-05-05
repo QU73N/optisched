@@ -18,7 +18,7 @@ const smallSections: Section[] = [
 ];
 
 const smallSubjects: Subject[] = [
-    { id: 'sub1', code: 'CS101', name: 'Intro to CS', program: 'BSIT', year_level: 1, teacher_id: 't1', duration_hours: 3, requires_lab: false, weight: 50, priority_note: null, monthly_hour_targets: null },
+    { id: 'sub1', code: 'CS101', name: 'Intro to CS', program: 'BSIT', year_level: 1, teacher_id: 't1', duration_hours: 3, type: 'common', weight: 50, priority_note: null, monthly_hour_targets: null },
 ];
 
 const smallExisting: ExistingSchedule[] = [];
@@ -107,7 +107,7 @@ const mediumSubjects: Subject[] = Array.from({ length: 15 }, (_, i) => ({
     year_level: (i % 4) + 1,
     teacher_id: `t${i % 10}`,
     duration_hours: 3,
-    requires_lab: i % 3 === 0,
+    type: i % 3 === 0 ? 'special' : 'common',
     weight: 50,
     priority_note: null,
     monthly_hour_targets: null,

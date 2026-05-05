@@ -406,22 +406,12 @@ export function checkSpecialSubjectRoomPriority(
     };
   }
 
-  // If subject requires a special room, check if the room is special
-  if (subject.requires_special_room && room.type !== 'special') {
+  // If subject is special, check if the room is special
+  if (subject.type === 'special' && room.type !== 'special') {
     return {
       isViolated: true,
       violationType: 'special_room_priority',
       description: `Subject ${subject.code} requires a special room but ${room.name} is not special`,
-      affectedEntities: [subjectId, roomId],
-    };
-  }
-
-  // If subject requires a lab, check if the room is a lab
-  if (subject.requires_lab && room.type !== 'lab') {
-    return {
-      isViolated: true,
-      violationType: 'special_room_priority',
-      description: `Subject ${subject.code} requires a lab but ${room.name} is not a lab`,
       affectedEntities: [subjectId, roomId],
     };
   }

@@ -431,125 +431,21 @@ const roomCompatible = (room: Room, subject: Subject, section: Section): boolean
         return false;
     }
 
-    // Use subject_rooms junction table for room compatibility (data-driven, not name-based)
-    if (subject.compatible_rooms && subject.compatible_rooms.length > 0) {
-        // Check if this room is in the subject's compatible rooms list
-        const isCompatible = subject.compatible_rooms.some(cr => cr.room_id === room.id);
+    // New compatibility system: use compatible_room_ids from junction table
+    if (subject.compatible_room_ids && subject.compatible_room_ids.length > 0) {
+        // Subject has specific room requirements
+        const isCompatible = subject.compatible_room_ids.includes(room.id);
         if (!isCompatible) {
             return false;
         }
+    } else if (subject.type === 'special' && room.type === 'common') {
+        // Special subject cannot be taught in common room unless explicitly compatible
+        return false;
     }
+    // Common subjects can be taught anywhere (common or special rooms)
+    // Special rooms with no specific compatibility can teach any common subject
 
-    // Use room_type system for proper type-based matching (replaces fragile name-based matching)
-    if (subject.required_room_types && subject.required_room_types.length > 0 && room.room_type) {
-        // Check if this room's type matches one of the subject's required room types
-        const isTypeCompatible = subject.required_room_types.includes(room.room_type);
-        if (!isTypeCompatible) {
-            return false;
-        }
-    }
-
-    // Fallback to name-based logic if neither compatible_rooms nor required_room_types is available (backward compatibility)
-    const requiresLab = inferRequiresLab(subject);
-    if (requiresLab) {
-        const roomName = (room.name || '').toLowerCase();
-        const subjectName = (subject.name || '').toLowerCase();
-        const subjectCode = (subject.code || '').toLowerCase();
-
-        // Determine what type of lab the subject needs based on name/code
-        const needsComputerLab = subjectName.includes('computer') ||
-                                 subjectName.includes('programming') ||
-                                 subjectName.includes('mobile') ||
-                                 subjectName.includes('network') ||
-                                 subjectCode.includes('cp') ||
-                                 subjectCode.includes('cs') ||
-                                 subjectCode.includes('it') ||
-                                 subjectCode.includes('mp');
-        const needsPhysicsLab = subjectName.includes('physics') ||
-                                subjectCode.includes('phys');
-        const needsChemistryLab = subjectName.includes('chemistry') ||
-                                   subjectCode.includes('chem');
-        const needsPEHall = subjectName.includes('physical education') ||
-                           subjectName.includes('p.e.') ||
-                           subjectCode.includes('pe');
-
-        // Check if room is suitable for the specific lab type
-        if (needsComputerLab) {
-            // Computer subjects should only go to computer labs (Computer Lab A, Computer Lab B, Network Lab, etc.)
-            if (!roomName.includes('computer') && !roomName.includes('network')) {
-                return false;
-            }
-            // Explicitly reject physics/chemistry/PE labs for computer subjects
-            if (roomName.includes('physics') || roomName.includes('chemistry') || roomName.includes('chemical') || roomName.includes('pe') || roomName.includes('p.e.')) {
-                return false;
-            }
-        }
-        if (needsPhysicsLab) {
-            // Physics subjects should only go to physics labs
-            if (!roomName.includes('physics')) {
-                return false;
-            }
-            // Explicitly reject other lab types for physics subjects
-            if (roomName.includes('computer') || roomName.includes('network') || roomName.includes('chemistry') || roomName.includes('chemical') || roomName.includes('pe') || roomName.includes('p.e.')) {
-                return false;
-            }
-        }
-        if (needsChemistryLab) {
-            // Chemistry subjects should only go to chemistry labs
-            if (!roomName.includes('chemistry') && !roomName.includes('chemical')) {
-                return false;
-            }
-            // Explicitly reject other lab types for chemistry subjects
-            if (roomName.includes('computer') || roomName.includes('network') || roomName.includes('physics') || roomName.includes('pe') || roomName.includes('p.e.')) {
-                return false;
-            }
-        }
-        if (needsPEHall) {
-            // PE subjects should only go to PE halls
-            if (!roomName.includes('pe') && !roomName.includes('p.e.') && !roomName.includes('physical education') && !roomName.includes('hall')) {
-                return false;
-            }
-            // Explicitly reject other lab types for PE subjects
-            if (roomName.includes('computer') || roomName.includes('network') || roomName.includes('physics') || roomName.includes('chemistry') || roomName.includes('chemical')) {
-                return false;
-            }
-        }
-
-        // Fallback: if it's a lab subject but no specific type matched, ensure it's at least a lab
-        if (!needsComputerLab && !needsPhysicsLab && !needsChemistryLab && !needsPEHall) {
-            // For unknown lab subjects, be more permissive but still exclude non-lab rooms
-            if (!isSpecialRoom(room)) {
-                return false;
-            }
-        }
-    }
-
-    return true;
-};
-
-const inferRequiresLab = (subject: Pick<Subject, 'name' | 'code' | 'requires_lab'>): boolean => {
-    if (subject.requires_lab != null) return subject.requires_lab;
-
-    const subjectName = (subject.name || '').toLowerCase();
-    const subjectCode = (subject.code || '').toLowerCase();
-
-    return (
-        subjectName.includes('computer') ||
-        subjectName.includes('programming') ||
-        subjectName.includes('mobile') ||
-        subjectName.includes('network') ||
-        subjectName.includes('physics') ||
-        subjectName.includes('chemistry') ||
-        subjectName.includes('physical education') ||
-        subjectName.includes('p.e.') ||
-        subjectCode.includes('cp') ||
-        subjectCode.includes('cs') ||
-        subjectCode.includes('it') ||
-        subjectCode.includes('mp') ||
-        subjectCode.includes('phys') ||
-        subjectCode.includes('chem') ||
-        subjectCode.includes('pe')
-    );
+    return true; // Compatible
 };
 
 // Fisher-Yates shuffle for seeded randomness. Used for attempt variation.
@@ -712,10 +608,10 @@ const rankSubjects = (
         const secScore = matchSec ? priorityOf(sectionP, matchSec.id) : 50;
         const subScore = priorityOf(subjectP, sub.id);
 
-        // HARDCODED: Give significant priority boost to lab subjects (requires_lab=true)
+        // HARDCODED: Give significant priority boost to special subjects
         // This ensures special subjects are placed first before common subjects
-        // Increased from 30 to 50 to ensure lab subjects get priority
-        const labPriority = inferRequiresLab(sub) ? 50 : 0;
+        // Increased from 30 to 50 to ensure special subjects get priority
+        const labPriority = sub.type === 'special' ? 50 : 0;
 
         // Add scarcity factor - subjects with higher demand get priority
         const scarcity = subjectScarcity.get(sub.id) || 0;
@@ -1371,54 +1267,21 @@ const detectImpossibleSchedule = (
         reasons.push('No available rooms - all rooms are marked as unavailable');
     }
 
-    // Check if lab subjects have compatible rooms using room_type system
-    const labSubjects = subjects.filter(s => s.requires_lab || (s.required_room_types && s.required_room_types.length > 0));
-    if (labSubjects.length > 0) {
-        // Group subjects by required room type
-        const subjectsByRoomType = new Map<string, Subject[]>();
-        
-        for (const subject of labSubjects) {
-            if (subject.required_room_types && subject.required_room_types.length > 0) {
-                for (const roomType of subject.required_room_types) {
-                    const existing = subjectsByRoomType.get(roomType) || [];
-                    existing.push(subject);
-                    subjectsByRoomType.set(roomType, existing);
+    // Check if special subjects have compatible rooms using junction table
+    const specialSubjects = subjects.filter(s => s.type === 'special');
+    if (specialSubjects.length > 0) {
+        // Check if each special subject has compatible rooms
+        for (const subject of specialSubjects) {
+            if (subject.compatible_room_ids && subject.compatible_room_ids.length > 0) {
+                const compatibleRooms = availableRooms.filter(r => subject.compatible_room_ids!.includes(r.id));
+                if (compatibleRooms.length === 0) {
+                    reasons.push(`Subject "${subject.name}" (${subject.code}) has no compatible special rooms available.`);
                 }
-            }
-        }
-        
-        // Check if there are enough rooms for each required room type
-        for (const [roomType, typeSubjects] of subjectsByRoomType) {
-            const roomsOfType = availableRooms.filter(r => r.room_type === roomType);
-            if (roomsOfType.length === 0) {
-                reasons.push(`No ${roomType} rooms available for ${typeSubjects.length} subject(s).`);
-            }
-        }
-        
-        // Fallback: check using name-based logic for subjects without required_room_types
-        const subjectsWithoutTypes = labSubjects.filter(s => !s.required_room_types || s.required_room_types.length === 0);
-        if (subjectsWithoutTypes.length > 0) {
-            const physicsLabSubjects = subjectsWithoutTypes.filter(s => {
-                const name = (s.name || '').toLowerCase();
-                const code = (s.code || '').toLowerCase();
-                return name.includes('physics') || code.includes('phys');
-            });
-            const chemistryLabSubjects = subjectsWithoutTypes.filter(s => {
-                const name = (s.name || '').toLowerCase();
-                const code = (s.code || '').toLowerCase();
-                return name.includes('chemistry') || code.includes('chem');
-            });
-            
-            if (physicsLabSubjects.length > 0) {
-                const physicsLabs = availableRooms.filter(r => r.room_type === 'physics_lab' || (r.name || '').toLowerCase().includes('physics'));
-                if (physicsLabs.length === 0) {
-                    reasons.push(`No physics labs available for ${physicsLabSubjects.length} subject(s).`);
-                }
-            }
-            if (chemistryLabSubjects.length > 0) {
-                const chemistryLabs = availableRooms.filter(r => r.room_type === 'chemistry_lab' || (r.name || '').toLowerCase().includes('chemistry') || (r.name || '').toLowerCase().includes('chemical'));
-                if (chemistryLabs.length === 0) {
-                    reasons.push(`No chemistry labs available for ${chemistryLabSubjects.length} subject(s).`);
+            } else {
+                // Special subject without explicit compatibility - check if any special rooms exist
+                const specialRooms = availableRooms.filter(r => r.type === 'special');
+                if (specialRooms.length === 0) {
+                    reasons.push(`Subject "${subject.name}" (${subject.code}) is special but no special rooms available.`);
                 }
             }
         }
@@ -1644,17 +1507,15 @@ const applyRepairs = (
                     // Hard constraint: room compatibility
                     if (!roomCompatible(room, task.subject, task.section)) return { rid, score: -1000 };
 
-                    // Use priority from subject_rooms junction table (data-driven)
-                    // Priority 1 = preferred room, Priority 2 = fallback room
-                    if (task.subject.compatible_rooms && task.subject.compatible_rooms.length > 0) {
-                        const roomPriority = task.subject.compatible_rooms.find(cr => cr.room_id === room.id);
-                        if (roomPriority) {
-                            // Higher score for lower priority number (priority 1 gets 100, priority 2 gets 50)
-                            roomScore += (3 - roomPriority.priority) * 50;
+                    // Use compatible_room_ids from subject_rooms junction table (data-driven)
+                    if (task.subject.compatible_room_ids && task.subject.compatible_room_ids.length > 0) {
+                        const isCompatible = task.subject.compatible_room_ids.includes(room.id);
+                        if (isCompatible) {
+                            roomScore += 100; // Bonus for explicitly compatible rooms
                         }
-                    } else {
-                        // Fallback: prefer special rooms for lab subjects
-                        if (task.subject.requires_lab && isSpecialRoom(room)) roomScore += 100;
+                    } else if (task.subject.type === 'special' && isSpecialRoom(room)) {
+                        // Fallback: prefer special rooms for special subjects
+                        roomScore += 100;
                     }
 
                     // Prefer rooms with good capacity fit
@@ -1793,13 +1654,12 @@ export const optimizeSchedule = (
                 // Create a minimal subject object for compatibility check
                 const tempSubject = { 
                     id: entry.subjectId, 
-                    name: entry.subjectName, 
-                    code: entry.subjectCode, 
-                    requires_lab: inferRequiresLab({ name: entry.subjectName, code: entry.subjectCode, requires_lab: null }),
+                    name: entry.subjectName,
+                    code: entry.subjectCode,
+                    type: 'common',
                     program: 'ALL',
                     year_level: 1,
                     duration_hours: 1,
-                    sessions_per_week: 1,
                     teacher_id: entry.teacherId,
                     weight: 1,
                     priority_note: '',
@@ -3183,8 +3043,8 @@ export async function runGenerator(
                         const scoredRooms = compat.slice().map(room => {
                             let score = 0;
 
-                            // Factor 1: Special room preference (hard constraint for lab subjects)
-                            if (sub.requires_lab) {
+                            // Factor 1: Special room preference (hard constraint for special subjects)
+                            if (sub.type === 'special') {
                                 if (isSpecialRoom(room)) score += 100;
                                 else score -= 100; // Strong penalty for non-special rooms
                             } else {
@@ -3215,8 +3075,8 @@ export async function runGenerator(
 
                             // Factor 4: Room scarcity (preserve scarce rooms for subjects that need them)
                             const roomScarcity = domain.roomScarcity;
-                            if (roomScarcity < 0.3 && !sub.requires_lab) {
-                                score -= 20; // Penalize using scarce rooms for non-lab subjects
+                            if (roomScarcity < 0.3 && sub.type !== 'special') {
+                                score -= 20; // Penalize using scarce rooms for common subjects
                             }
 
                             return { room, score };
@@ -3312,11 +3172,10 @@ export async function runGenerator(
             }
             if (!placed) {
                 // Provide concise error message based on room type requirements
-                if (sub.required_room_types && sub.required_room_types.length > 0) {
-                    const roomTypes = sub.required_room_types.join(', ');
-                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No ${roomTypes} available at compatible times.`);
-                } else if (sub.requires_lab) {
-                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No compatible labs available.`);
+                if (sub.compatible_room_ids && sub.compatible_room_ids.length > 0) {
+                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No compatible special rooms available at compatible times.`);
+                } else if (sub.type === 'special') {
+                    errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: No compatible special rooms available.`);
                 } else {
                     errors.push(`"${sub.name}" (${section.name}) session ${task.sessionIndex + 1}: All slots conflict with constraints.`);
                 }

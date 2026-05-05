@@ -58,7 +58,7 @@ describe('ScheduleGenerator', () => {
           teacher_id: 'teacher-1',
           duration_hours: 3,
           weight: 50,
-          requires_lab: false,
+          type: 'common',
         } as Subject,
       ],
       existing: [],

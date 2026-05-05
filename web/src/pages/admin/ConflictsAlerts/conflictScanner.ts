@@ -276,8 +276,8 @@ export const scanAllConstraints = async (
         const subject = subjectMap.get(s.subject_id);
 
         if (room && subject) {
-            // Check if room type matches subject type (placeholder check)
-            if (subject.requires_lab && room.type !== 'laboratory') {
+            // Check if room type matches subject type
+            if (subject.type === 'special' && room.type !== 'special') {
                 const key = `room_type_${s.id}`;
                 if (!seen.has(key)) {
                     seen.add(key);
@@ -286,7 +286,7 @@ export const scanAllConstraints = async (
                         type: 'room_subject_incompatible',
                         severity: 'medium',
                         title: `Room Type Mismatch`,
-                        description: `Subject requires lab room but assigned to ${room.name}.`,
+                        description: `Subject requires special room but assigned to ${room.name}.`,
                         day: s.day_of_week,
                         scheduleIds: [s.id],
                         affectedEntities: [

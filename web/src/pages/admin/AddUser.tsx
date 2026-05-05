@@ -87,23 +87,28 @@ const getDatabaseDepartmentName = (displayName: string): string => {
 };
 
 // Helper function to combine name fields into full_name
-// Format: First Middle Last Suffix (e.g., "Egnacio Y. Ello Jr.")
+// Format: Last Name, First Name M.I. Suffix (e.g., "Dela Cruz, Juan A. Jr.")
 const combineFullName = (lastName: string, firstName: string, middleInitial: string, suffix: string): string => {
     const parts = [];
     
-    // Add first name
+    // Add last name first
+    if (lastName && lastName.trim()) {
+        parts.push(lastName.trim());
+    }
+    
+    // Add first name after comma
     if (firstName && firstName.trim()) {
-        parts.push(firstName.trim());
+        if (parts.length > 0) {
+            parts.push(',');
+            parts.push(firstName.trim());
+        } else {
+            parts.push(firstName.trim());
+        }
     }
     
     // Add middle initial if present
     if (middleInitial && middleInitial.trim()) {
-        parts.push(middleInitial.trim());
-    }
-    
-    // Add last name
-    if (lastName && lastName.trim()) {
-        parts.push(lastName.trim());
+        parts.push(middleInitial.trim().toUpperCase() + '.');
     }
     
     // Add suffix if present
@@ -111,7 +116,7 @@ const combineFullName = (lastName: string, firstName: string, middleInitial: str
         parts.push(suffix.trim());
     }
     
-    return parts.join(' ');
+    return parts.join(' ') || 'Unknown';
 };
 
 const AddUser: React.FC = () => {
@@ -136,6 +141,7 @@ const AddUser: React.FC = () => {
         firstName: '',
         middleInitial: '',
         suffix: '',
+        full_name: '', // Auto-generated from name components
         email: '',
         password: '',
         confirmPassword: '',
@@ -365,7 +371,8 @@ const AddUser: React.FC = () => {
                 email = generateEmail(formData.lastName, formData.firstName, formData.idNumber);
             }
             
-            const fullName = combineFullName(formData.lastName, formData.firstName, formData.middleInitial, formData.suffix);
+            // Use the pre-computed full_name from formData
+            const fullName = formData.full_name || combineFullName(formData.lastName, formData.firstName, formData.middleInitial, formData.suffix);
             
             // Create auth user
             const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -742,7 +749,11 @@ const AddUser: React.FC = () => {
                                         className="input"
                                         placeholder="Dela Cruz"
                                         value={formData.lastName}
-                                        onChange={e => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                                        onChange={e => setFormData(prev => ({ 
+                                            ...prev, 
+                                            lastName: e.target.value,
+                                            full_name: combineFullName(e.target.value, prev.firstName, prev.middleInitial, prev.suffix)
+                                        }))}
                                         required
                                     />
                                 </div>
@@ -755,7 +766,11 @@ const AddUser: React.FC = () => {
                                         className="input"
                                         placeholder="Juan"
                                         value={formData.firstName}
-                                        onChange={e => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                                        onChange={e => setFormData(prev => ({ 
+                                            ...prev, 
+                                            firstName: e.target.value,
+                                            full_name: combineFullName(prev.lastName, e.target.value, prev.middleInitial, prev.suffix)
+                                        }))}
                                         required
                                     />
                                 </div>
@@ -768,7 +783,11 @@ const AddUser: React.FC = () => {
                                         className="input"
                                         placeholder="A."
                                         value={formData.middleInitial}
-                                        onChange={e => setFormData(prev => ({ ...prev, middleInitial: e.target.value }))}
+                                        onChange={e => setFormData(prev => ({ 
+                                            ...prev, 
+                                            middleInitial: e.target.value,
+                                            full_name: combineFullName(prev.lastName, prev.firstName, e.target.value, prev.suffix)
+                                        }))}
                                     />
                                 </div>
                                 <div>
@@ -780,7 +799,11 @@ const AddUser: React.FC = () => {
                                         className="input"
                                         placeholder="Jr., Sr., II, III"
                                         value={formData.suffix}
-                                        onChange={e => setFormData(prev => ({ ...prev, suffix: e.target.value }))}
+                                        onChange={e => setFormData(prev => ({ 
+                                            ...prev, 
+                                            suffix: e.target.value,
+                                            full_name: combineFullName(prev.lastName, prev.firstName, prev.middleInitial, e.target.value)
+                                        }))}
                                     />
                                 </div>
                                 <div style={{ gridColumn: '1 / -1' }}>
@@ -796,7 +819,7 @@ const AddUser: React.FC = () => {
                                         color: 'var(--text-primary)',
                                         fontStyle: 'italic'
                                     }}>
-                                        {combineFullName(formData.lastName, formData.firstName, formData.middleInitial, formData.suffix) || 'Enter name components to see preview'}
+                                        {formData.full_name || 'Enter name components to see preview'}
                                     </div>
                                 </div>
                                 <div>

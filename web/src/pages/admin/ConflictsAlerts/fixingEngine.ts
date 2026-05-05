@@ -480,8 +480,8 @@ const generateCompatibilityFixes = (
 
     // Find compatible rooms
     const compatibleRooms = rooms.filter(r => {
-        if (subject?.requires_lab && !r.equipment.includes('lab')) return false;
-        if (subject?.type && r.type !== subject.type) return false;
+        if (subject?.type === 'special' && r.type !== 'special') return false;
+        if (subject?.compatible_room_ids && !subject.compatible_room_ids.includes(r.id)) return false;
         return r.id !== sched.room_id;
     });
 

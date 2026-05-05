@@ -11,6 +11,10 @@ interface UserProfile {
     id: string;
     email: string;
     full_name: string;
+    last_name: string | null;
+    first_name: string | null;
+    middle_initial: string | null;
+    suffix: string | null;
     role: string;
     department: string | null;
     department_id?: string | null;
@@ -23,6 +27,10 @@ interface UserProfile {
 interface ProfileData {
     id: string;
     full_name: string;
+    last_name: string | null;
+    first_name: string | null;
+    middle_initial: string | null;
+    suffix: string | null;
     role: string;
     email: string;
     section?: string | null;
@@ -30,6 +38,39 @@ interface ProfileData {
     year_level?: number | null;
     department?: string | null;
 }
+
+// Helper function to combine name fields into full_name
+// Format: Last Name, First Name M.I. Suffix (e.g., "Dela Cruz, Juan A. Jr.")
+const combineFullName = (lastName: string, firstName: string, middleInitial: string, suffix: string): string => {
+    const parts = [];
+    
+    // Add last name first
+    if (lastName && lastName.trim()) {
+        parts.push(lastName.trim());
+    }
+    
+    // Add first name after comma
+    if (firstName && firstName.trim()) {
+        if (parts.length > 0) {
+            parts.push(',');
+            parts.push(firstName.trim());
+        } else {
+            parts.push(firstName.trim());
+        }
+    }
+    
+    // Add middle initial if present
+    if (middleInitial && middleInitial.trim()) {
+        parts.push(middleInitial.trim().toUpperCase() + '.');
+    }
+    
+    // Add suffix if present
+    if (suffix && suffix.trim()) {
+        parts.push(suffix.trim());
+    }
+    
+    return parts.join(' ') || 'Unknown';
+};
 
 const EMAIL_DOMAIN = 'meycauayan.sti.edu.ph';
 const STUDENT_ROLES = ['student'];
@@ -65,8 +106,17 @@ const AdminManageUsers: React.FC = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [creating, setCreating] = useState(false);
     const [newUser, setNewUser] = useState({
-        fullName: '', email: '', password: '', role: 'student' as string, studentId: '',
+        lastName: '', firstName: '', middleInitial: '', suffix: '', fullName: '', email: '', password: '', role: 'student' as string, studentId: '',
         section: '', program: '', yearLevel: '', department: '',
+        // Teacher-specific fields for generation
+        max_hours: 40,
+        max_consecutive_classes: null as number | null,
+        max_daily_load: null as number | null,
+        preferred_days: [] as string[],
+        preferred_time_start: null as string | null,
+        preferred_time_end: null as string | null,
+        is_shared: false,
+        priority_flag: 50,
     });
     const [formError, setFormError] = useState<string | null>(null);
 
@@ -74,8 +124,17 @@ const AdminManageUsers: React.FC = () => {
     const [editUser, setEditUser] = useState<UserProfile | null>(null);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        full_name: '', email: '', role: '', department: '', program: '',
+        last_name: '', first_name: '', middle_initial: '', suffix: '', full_name: '', email: '', role: '', department: '', program: '',
         year_level: '', section: '',
+        // Teacher-specific fields for generation
+        max_hours: 40,
+        max_consecutive_classes: null as number | null,
+        max_daily_load: null as number | null,
+        preferred_days: [] as string[],
+        preferred_time_start: null as string | null,
+        preferred_time_end: null as string | null,
+        is_shared: false,
+        priority_flag: 50,
     });
     const [editSaving, setEditSaving] = useState(false);
     const [editError, setEditError] = useState<string | null>(null);
@@ -97,7 +156,7 @@ const AdminManageUsers: React.FC = () => {
         setLoading(true);
         const { data } = await supabase
             .from('profiles')
-            .select('id, email, full_name, role, department, program, year_level, section, avatar_url')
+            .select('id, email, full_name, last_name, first_name, middle_initial, suffix, role, department, program, year_level, section, avatar_url')
             .order('created_at', { ascending: false });
         setUsers(data || []);
         setLoading(false);
@@ -193,7 +252,14 @@ const AdminManageUsers: React.FC = () => {
             if (userId) {
                 await new Promise(r => setTimeout(r, 500));
                 const profileData: ProfileData = {
-                    id: userId, full_name: newUser.fullName, role: newUser.role, email,
+                    id: userId,
+                    last_name: newUser.lastName || null,
+                    first_name: newUser.firstName || null,
+                    middle_initial: newUser.middleInitial || null,
+                    suffix: newUser.suffix || null,
+                    full_name: newUser.fullName,
+                    role: newUser.role,
+                    email,
                 };
                 // Add role-specific fields
                 if (STUDENT_ROLES.includes(newUser.role)) {
@@ -217,13 +283,48 @@ const AdminManageUsers: React.FC = () => {
                         department: newUser.department || 'General',
                         employment_type: 'full-time',
                         is_public: true,
+                        max_hours: newUser.max_hours,
+                        weight: newUser.priority_flag,
+                        shared_assignment: newUser.is_shared,
+                        preferred_days: newUser.preferred_days,
+                        preferred_time_start: newUser.preferred_time_start,
+                        preferred_time_end: newUser.preferred_time_end,
+                        max_classes_per_day: newUser.max_daily_load,
+                        max_consecutive_classes: newUser.max_consecutive_classes,
                     });
                     if (teacherError) throw teacherError;
+                    
+                    // Create teacher preferences record
+                    const { error: prefError } = await supabase.from('teacher_preferences').insert({
+                        teacher_id: userId,
+                        max_hours: newUser.max_hours,
+                        weight: newUser.priority_flag,
+                        shared_assignment: newUser.is_shared,
+                        preferred_days: newUser.preferred_days,
+                        preferred_time_start: newUser.preferred_time_start,
+                        preferred_time_end: newUser.preferred_time_end,
+                        max_classes_per_day: newUser.max_daily_load,
+                        max_consecutive_classes: newUser.max_consecutive_classes,
+                        max_daily_load: newUser.max_daily_load,
+                    });
+                    if (prefError) throw prefError;
                 }
             }
 
             setShowCreateModal(false);
-            setNewUser({ fullName: '', email: '', password: '', role: 'student', studentId: '', section: '', program: '', yearLevel: '', department: '' });
+            setNewUser({ 
+                lastName: '', firstName: '', middleInitial: '', suffix: '', fullName: '', email: '', password: '', role: 'student', studentId: '', 
+                section: '', program: '', yearLevel: '', department: '',
+                // Teacher-specific fields for generation
+                max_hours: 40,
+                max_consecutive_classes: null,
+                max_daily_load: null,
+                preferred_days: [],
+                preferred_time_start: null,
+                preferred_time_end: null,
+                is_shared: false,
+                priority_flag: 50,
+            });
             fetchUsers();
         } catch (err: unknown) {
             console.error('Create user error:', err);
@@ -242,6 +343,10 @@ const AdminManageUsers: React.FC = () => {
         }
         setEditUser(user);
         setEditForm({
+            last_name: user.last_name || '',
+            first_name: user.first_name || '',
+            middle_initial: user.middle_initial || '',
+            suffix: user.suffix || '',
             full_name: user.full_name || '',
             email: user.email || '',
             role: user.role || 'student',
@@ -249,6 +354,15 @@ const AdminManageUsers: React.FC = () => {
             program: user.program || '',
             year_level: user.year_level?.toString() || '',
             section: user.section || '',
+            // Teacher-specific fields for generation (will be loaded from teacher_preferences)
+            max_hours: 40,
+            max_consecutive_classes: null,
+            max_daily_load: null,
+            preferred_days: [],
+            preferred_time_start: null,
+            preferred_time_end: null,
+            is_shared: false,
+            priority_flag: 50,
         });
         setEditError(null);
         setShowEditModal(true);
@@ -264,6 +378,32 @@ const AdminManageUsers: React.FC = () => {
             console.error('Error loading additional roles:', err);
             setEditAdditionalRoles([]);
         }
+        
+        // Load teacher preferences if role is teacher
+        if (TEACHER_ROLES.includes(user.role || '')) {
+            try {
+                const { data: teacherPref } = await supabase
+                    .from('teacher_preferences')
+                    .select('*')
+                    .eq('teacher_id', user.id)
+                    .single();
+                if (teacherPref) {
+                    setEditForm(prev => ({
+                        ...prev,
+                        max_hours: teacherPref.max_hours || 40,
+                        max_consecutive_classes: teacherPref.max_consecutive_classes || null,
+                        max_daily_load: teacherPref.max_daily_load || null,
+                        preferred_days: teacherPref.preferred_days || [],
+                        preferred_time_start: teacherPref.preferred_time_start || null,
+                        preferred_time_end: teacherPref.preferred_time_end || null,
+                        is_shared: teacherPref.shared_assignment || false,
+                        priority_flag: teacherPref.weight || 50,
+                    }));
+                }
+            } catch (err) {
+                console.error('Error loading teacher preferences:', err);
+            }
+        }
     };
 
     const handleEditSave = async () => {
@@ -274,6 +414,10 @@ const AdminManageUsers: React.FC = () => {
             // Update profile data
             const updateData: ProfileData = {
                 id: editUser.id,
+                last_name: editForm.last_name || null,
+                first_name: editForm.first_name || null,
+                middle_initial: editForm.middle_initial || null,
+                suffix: editForm.suffix || null,
                 full_name: editForm.full_name,
                 role: editForm.role,
                 email: editForm.email,
@@ -295,10 +439,20 @@ const AdminManageUsers: React.FC = () => {
                     .single();
                 
                 if (teacherRecord) {
-                    // Update existing teacher record
+                    // Update existing teacher record with all generation fields
                     const { error: teacherError } = await supabase
                         .from('teachers')
-                        .update({ department: editForm.department || null })
+                        .update({ 
+                            department: editForm.department || null,
+                            max_hours: editForm.max_hours,
+                            weight: editForm.priority_flag,
+                            shared_assignment: editForm.is_shared,
+                            preferred_days: editForm.preferred_days,
+                            preferred_time_start: editForm.preferred_time_start,
+                            preferred_time_end: editForm.preferred_time_end,
+                            max_classes_per_day: editForm.max_daily_load,
+                            max_consecutive_classes: editForm.max_consecutive_classes,
+                        })
                         .eq('profile_id', editUser.id);
                     if (teacherError) throw teacherError;
                 } else {
@@ -310,8 +464,57 @@ const AdminManageUsers: React.FC = () => {
                             department: editForm.department || 'General',
                             employment_type: 'full-time',
                             is_public: true,
+                            max_hours: editForm.max_hours,
+                            weight: editForm.priority_flag,
+                            shared_assignment: editForm.is_shared,
+                            preferred_days: editForm.preferred_days,
+                            preferred_time_start: editForm.preferred_time_start,
+                            preferred_time_end: editForm.preferred_time_end,
+                            max_classes_per_day: editForm.max_daily_load,
+                            max_consecutive_classes: editForm.max_consecutive_classes,
                         });
                     if (createTeacherError) throw createTeacherError;
+                }
+                
+                // Update teacher preferences record
+                const { data: prefRecord } = await supabase
+                    .from('teacher_preferences')
+                    .select('id')
+                    .eq('teacher_id', editUser.id)
+                    .single();
+                
+                if (prefRecord) {
+                    const { error: prefError } = await supabase
+                        .from('teacher_preferences')
+                        .update({
+                            max_hours: editForm.max_hours,
+                            weight: editForm.priority_flag,
+                            shared_assignment: editForm.is_shared,
+                            preferred_days: editForm.preferred_days,
+                            preferred_time_start: editForm.preferred_time_start,
+                            preferred_time_end: editForm.preferred_time_end,
+                            max_classes_per_day: editForm.max_daily_load,
+                            max_consecutive_classes: editForm.max_consecutive_classes,
+                            max_daily_load: editForm.max_daily_load,
+                        })
+                        .eq('teacher_id', editUser.id);
+                    if (prefError) throw prefError;
+                } else {
+                    const { error: createPrefError } = await supabase
+                        .from('teacher_preferences')
+                        .insert({
+                            teacher_id: editUser.id,
+                            max_hours: editForm.max_hours,
+                            weight: editForm.priority_flag,
+                            shared_assignment: editForm.is_shared,
+                            preferred_days: editForm.preferred_days,
+                            preferred_time_start: editForm.preferred_time_start,
+                            preferred_time_end: editForm.preferred_time_end,
+                            max_classes_per_day: editForm.max_daily_load,
+                            max_consecutive_classes: editForm.max_consecutive_classes,
+                            max_daily_load: editForm.max_daily_load,
+                        });
+                    if (createPrefError) throw createPrefError;
                 }
             }
 
@@ -555,9 +758,53 @@ const AdminManageUsers: React.FC = () => {
                                     ))}
                                 </div>
                             </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                                <div className="field">
+                                    <label className="field-label">LAST NAME</label>
+                                    <input className="input" placeholder="e.g. Dela Cruz" value={newUser.lastName} onChange={e => setNewUser(p => ({
+                                        ...p,
+                                        lastName: e.target.value,
+                                        fullName: combineFullName(e.target.value, p.firstName, p.middleInitial, p.suffix)
+                                    }))} required />
+                                </div>
+                                <div className="field">
+                                    <label className="field-label">FIRST NAME</label>
+                                    <input className="input" placeholder="e.g. Juan" value={newUser.firstName} onChange={e => setNewUser(p => ({
+                                        ...p,
+                                        firstName: e.target.value,
+                                        fullName: combineFullName(p.lastName, e.target.value, p.middleInitial, p.suffix)
+                                    }))} required />
+                                </div>
+                                <div className="field">
+                                    <label className="field-label">MIDDLE INITIAL (optional)</label>
+                                    <input className="input" placeholder="A" maxLength={1} value={newUser.middleInitial} onChange={e => setNewUser(p => ({
+                                        ...p,
+                                        middleInitial: e.target.value,
+                                        fullName: combineFullName(p.lastName, p.firstName, e.target.value, p.suffix)
+                                    }))} />
+                                </div>
+                                <div className="field">
+                                    <label className="field-label">SUFFIX (optional)</label>
+                                    <input className="input" placeholder="Jr., Sr., II, III" value={newUser.suffix} onChange={e => setNewUser(p => ({
+                                        ...p,
+                                        suffix: e.target.value,
+                                        fullName: combineFullName(p.lastName, p.firstName, p.middleInitial, e.target.value)
+                                    }))} />
+                                </div>
+                            </div>
                             <div className="field">
-                                <label className="field-label">FULL NAME</label>
-                                <input className="input" placeholder="Full Name (Surname Last)" value={newUser.fullName} onChange={e => setNewUser(p => ({ ...p, fullName: e.target.value }))} />
+                                <label className="field-label">FULL NAME (preview)</label>
+                                <div style={{
+                                    padding: '10px 12px',
+                                    borderRadius: 'var(--radius-sm)',
+                                    background: 'var(--bg-surface)',
+                                    border: '1px solid var(--border-default)',
+                                    fontSize: 14,
+                                    color: 'var(--text-primary)',
+                                    fontStyle: 'italic'
+                                }}>
+                                    {newUser.fullName || 'Enter name components to see preview'}
+                                </div>
                             </div>
                             <div className="field">
                                 <label className="field-label">STUDENT / EMPLOYEE ID</label>
@@ -566,6 +813,61 @@ const AdminManageUsers: React.FC = () => {
 
                             {/* Role-specific fields */}
                             {renderRoleFields(newUser.role, newUser, (field, value) => setNewUser(p => ({ ...p, [field]: value })))}
+
+                            {/* Teacher-specific fields for generation */}
+                            {TEACHER_ROLES.includes(newUser.role) && (
+                                <>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginTop: 16 }}>
+                                        <div className="field">
+                                            <label className="field-label">MAX HOURS</label>
+                                            <input className="input" type="number" min={1} max={60} value={newUser.max_hours} onChange={e => setNewUser(p => ({ ...p, max_hours: parseInt(e.target.value) || 40 }))} />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">PRIORITY (0-100)</label>
+                                            <input className="input" type="number" min={0} max={100} value={newUser.priority_flag} onChange={e => setNewUser(p => ({ ...p, priority_flag: parseInt(e.target.value) || 50 }))} />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">MAX CONSECUTIVE CLASSES</label>
+                                            <input className="input" type="number" min={1} max={6} value={newUser.max_consecutive_classes || ''} onChange={e => setNewUser(p => ({ ...p, max_consecutive_classes: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">MAX DAILY LOAD</label>
+                                            <input className="input" type="number" min={1} max={10} value={newUser.max_daily_load || ''} onChange={e => setNewUser(p => ({ ...p, max_daily_load: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">PREFERRED START TIME</label>
+                                            <input className="input" type="time" value={newUser.preferred_time_start || ''} onChange={e => setNewUser(p => ({ ...p, preferred_time_start: e.target.value || null }))} />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">PREFERRED END TIME</label>
+                                            <input className="input" type="time" value={newUser.preferred_time_end || ''} onChange={e => setNewUser(p => ({ ...p, preferred_time_end: e.target.value || null }))} />
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: 16 }}>
+                                        <label className="field-label">PREFERRED DAYS</label>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
+                                                <label key={day} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+                                                    <input type="checkbox" checked={newUser.preferred_days.includes(day)} onChange={e => {
+                                                        if (e.target.checked) {
+                                                            setNewUser(p => ({ ...p, preferred_days: [...p.preferred_days, day] }));
+                                                        } else {
+                                                            setNewUser(p => ({ ...p, preferred_days: p.preferred_days.filter(d => d !== day) }));
+                                                        }
+                                                    }} />
+                                                    {day}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="field" style={{ marginTop: 16 }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={newUser.is_shared} onChange={e => setNewUser(p => ({ ...p, is_shared: e.target.checked }))} />
+                                            Allow Shared Assignment (teaches across multiple programs)
+                                        </label>
+                                    </div>
+                                </>
+                            )}
 
                             <div className="field">
                                 <label className="field-label">EMAIL (or leave blank for auto-generate)</label>
@@ -663,9 +965,53 @@ const AdminManageUsers: React.FC = () => {
                                     </>
                                 );
                             })()}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                                <div className="field">
+                                    <label className="field-label">LAST NAME</label>
+                                    <input className="input" placeholder="e.g. Dela Cruz" value={editForm.last_name} onChange={e => setEditForm(p => ({
+                                        ...p,
+                                        last_name: e.target.value,
+                                        full_name: combineFullName(e.target.value, p.first_name, p.middle_initial, p.suffix)
+                                    }))} />
+                                </div>
+                                <div className="field">
+                                    <label className="field-label">FIRST NAME</label>
+                                    <input className="input" placeholder="e.g. Juan" value={editForm.first_name} onChange={e => setEditForm(p => ({
+                                        ...p,
+                                        first_name: e.target.value,
+                                        full_name: combineFullName(p.last_name, e.target.value, p.middle_initial, p.suffix)
+                                    }))} />
+                                </div>
+                                <div className="field">
+                                    <label className="field-label">MIDDLE INITIAL (optional)</label>
+                                    <input className="input" placeholder="A" maxLength={1} value={editForm.middle_initial || ''} onChange={e => setEditForm(p => ({
+                                        ...p,
+                                        middle_initial: e.target.value,
+                                        full_name: combineFullName(p.last_name, p.first_name, e.target.value, p.suffix)
+                                    }))} />
+                                </div>
+                                <div className="field">
+                                    <label className="field-label">SUFFIX (optional)</label>
+                                    <input className="input" placeholder="Jr., Sr., II, III" value={editForm.suffix || ''} onChange={e => setEditForm(p => ({
+                                        ...p,
+                                        suffix: e.target.value,
+                                        full_name: combineFullName(p.last_name, p.first_name, p.middle_initial, e.target.value)
+                                    }))} />
+                                </div>
+                            </div>
                             <div className="field">
-                                <label className="field-label">FULL NAME</label>
-                                <input className="input" value={editForm.full_name} onChange={e => setEditForm(p => ({ ...p, full_name: e.target.value }))} />
+                                <label className="field-label">FULL NAME (preview)</label>
+                                <div style={{
+                                    padding: '10px 12px',
+                                    borderRadius: 'var(--radius-sm)',
+                                    background: 'var(--bg-surface)',
+                                    border: '1px solid var(--border-default)',
+                                    fontSize: 14,
+                                    color: 'var(--text-primary)',
+                                    fontStyle: 'italic'
+                                }}>
+                                    {editForm.full_name || 'Enter name components to see preview'}
+                                </div>
                             </div>
                             <div className="field">
                                 <label className="field-label">EMAIL</label>
@@ -717,6 +1063,61 @@ const AdminManageUsers: React.FC = () => {
                                         ))}
                                     </select>
                                 </div>
+                            )}
+
+                            {/* Teacher-specific fields for generation */}
+                            {TEACHER_ROLES.includes(editForm.role) && (
+                                <>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginTop: 16 }}>
+                                        <div className="field">
+                                            <label className="field-label">MAX HOURS</label>
+                                            <input className="input" type="number" min={1} max={60} value={editForm.max_hours} onChange={e => setEditForm(p => ({ ...p, max_hours: parseInt(e.target.value) || 40 }))} />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">PRIORITY (0-100)</label>
+                                            <input className="input" type="number" min={0} max={100} value={editForm.priority_flag} onChange={e => setEditForm(p => ({ ...p, priority_flag: parseInt(e.target.value) || 50 }))} />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">MAX CONSECUTIVE CLASSES</label>
+                                            <input className="input" type="number" min={1} max={6} value={editForm.max_consecutive_classes || ''} onChange={e => setEditForm(p => ({ ...p, max_consecutive_classes: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">MAX DAILY LOAD</label>
+                                            <input className="input" type="number" min={1} max={10} value={editForm.max_daily_load || ''} onChange={e => setEditForm(p => ({ ...p, max_daily_load: e.target.value ? parseInt(e.target.value) : null }))} placeholder="Optional" />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">PREFERRED START TIME</label>
+                                            <input className="input" type="time" value={editForm.preferred_time_start || ''} onChange={e => setEditForm(p => ({ ...p, preferred_time_start: e.target.value || null }))} />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">PREFERRED END TIME</label>
+                                            <input className="input" type="time" value={editForm.preferred_time_end || ''} onChange={e => setEditForm(p => ({ ...p, preferred_time_end: e.target.value || null }))} />
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: 16 }}>
+                                        <label className="field-label">PREFERRED DAYS</label>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
+                                                <label key={day} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+                                                    <input type="checkbox" checked={editForm.preferred_days.includes(day)} onChange={e => {
+                                                        if (e.target.checked) {
+                                                            setEditForm(p => ({ ...p, preferred_days: [...p.preferred_days, day] }));
+                                                        } else {
+                                                            setEditForm(p => ({ ...p, preferred_days: p.preferred_days.filter(d => d !== day) }));
+                                                        }
+                                                    }} />
+                                                    {day}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="field" style={{ marginTop: 16 }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={editForm.is_shared} onChange={e => setEditForm(p => ({ ...p, is_shared: e.target.checked }))} />
+                                            Allow Shared Assignment (teaches across multiple programs)
+                                        </label>
+                                    </div>
+                                </>
                             )}
 
                             {editError && <div className="login-error" role="alert" aria-live="polite">{editError}</div>}

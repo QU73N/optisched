@@ -30,7 +30,7 @@ export interface Subject {
     name: string;
     code: string;
     duration_hours: number | null;
-    requires_lab: boolean | null;
+    type: string | null; // 'common' or 'special'
     program: string | null;
     year_level: number | null;
     teacher_id: string | null;
@@ -41,9 +41,14 @@ export interface Subject {
     // For split sessions: number of sessions per week (calculated from duration_hours / session_minutes if not set)
     sessions_per_week?: number | null;
     // Compatible rooms from subject_rooms junction table (array of room IDs with priority)
-    compatible_rooms?: Array<{ room_id: string; priority: number }>;
-    // Required room types for proper room-subject matching (replaces fragile name-based matching)
-    required_room_types?: RoomType[];
+    compatible_room_ids?: string[];
+    // Generation-specific fields
+    required_weekly_hours?: number | null;
+    optional_monthly_hours?: number | null;
+    session_duration_preference?: number;
+    priority_level?: 'high' | 'normal' | 'low';
+    requires_special_room?: boolean;
+    preferred_time_window?: 'early' | 'mid' | 'late' | null;
 }
 
 export interface Teacher {
@@ -67,14 +72,14 @@ export interface Room {
     id: string;
     name: string;
     capacity: number | null;
-    type: string | null; // Legacy field, use room_type instead
-    room_type?: RoomType; // New typed field for proper room-subject matching
+    type: string | null; // 'common' or 'special'
+    room_facility_type?: string; // Informational facility type
     building: string | null;
     floor: number | null;
     is_available: boolean | null;
     weight: number;
     priority_note: string | null;
-    subject_compatibility?: Record<string, unknown>; // which subjects can use this room
+    compatible_subject_ids?: string[]; // which subjects can use this room (from junction table)
     equipment_available?: Record<string, unknown>; // lab equipment, etc.
     movement_cost?: number | null; // cost to move between buildings/floors
 }

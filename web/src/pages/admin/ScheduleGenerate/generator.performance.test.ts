@@ -62,7 +62,7 @@ describe('Generator Performance Tests', () => {
             year_level: (i % 4) + 1,
             teacher_id: teachers[i % teachers.length].id,
             duration_hours: 3,
-            requires_lab: i % 5 === 0, // 20% of subjects require lab
+            type: i % 5 === 0 ? 'special' : 'common', // 20% of subjects are special
             weight: 50,
             priority_note: null,
             monthly_hour_targets: null,
@@ -198,7 +198,7 @@ describe('Generator Performance Tests', () => {
         const sections = generateSections(10);
         const subjects = generateSubjects(30, teachers).map(s => ({
             ...s,
-            requires_lab: true, // All require lab to stress test forward checking
+            type: 'special', // All are special to stress test forward checking
         }));
         const existing: ExistingSchedule[] = [];
         const progressFn = vi.fn();
