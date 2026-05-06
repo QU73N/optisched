@@ -50,10 +50,11 @@ const FacultyHub: React.FC = () => {
             <div className="page-header">
                 <div>
                     <h1>Faculty Hub</h1>
-                    <p>Manage and monitor faculty workloads and assignments</p>
+                    <p>Manage teachers, preferences, and workload distribution.</p>
                 </div>
             </div>
 
+            <div style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' }}>
             {/* Stats */}
             <div className="fhub-stats">
                 <div className="fhub-stat-card">
@@ -197,6 +198,7 @@ const FacultyHub: React.FC = () => {
                         </div>
                     );
                 })}
+            </div>
             </div>
 
             <style>{`

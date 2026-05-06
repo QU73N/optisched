@@ -168,6 +168,8 @@ const SessionsPage: React.FC = () => {
                 </p>
             </div>
 
+            <div className="scrollable-container">
+
             {/* Enhanced Stats Grid */}
             <div className="stats-grid" style={{ marginBottom: 16 }}>
                 <div className="stat-card">
@@ -531,6 +533,7 @@ const SessionsPage: React.FC = () => {
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 };

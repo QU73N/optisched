@@ -139,6 +139,7 @@ const AdminBackup: React.FC = () => {
                 <button className="btn btn-secondary" onClick={load} aria-label="Refresh backup jobs"><RefreshCw size={14} /></button>
             </div>
 
+            <div style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' }}>
             <div className="card" style={{ marginBottom: 24, borderLeft: '4px solid var(--accent-primary)' }}>
                 <div style={{ marginBottom: 16 }}>
                     <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-primary)' }}>
@@ -212,6 +213,7 @@ const AdminBackup: React.FC = () => {
                         </table>
                     </div>
                 )}
+            </div>
             </div>
         </div>
     );

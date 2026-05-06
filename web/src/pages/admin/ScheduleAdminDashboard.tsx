@@ -202,6 +202,8 @@ const ScheduleAdminDashboard: React.FC = () => {
                 </p>
             </div>
 
+            <div className="scrollable-container">
+
             {/* KPI strip */}
             <div className="stats-grid">
                 <div className={`stat-card ${pendingApprovals.length > 0 ? 'stat-warning' : ''}`}>
@@ -382,6 +384,7 @@ const ScheduleAdminDashboard: React.FC = () => {
                         </div>
                     )}
                 </div>
+            </div>
             </div>
         </div>
     );

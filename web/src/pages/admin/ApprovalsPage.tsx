@@ -186,6 +186,7 @@ const ApprovalsPage: React.FC = () => {
                 </p>
             </div>
 
+            <div className="scrollable-container">
             <div className="audit-toolbar">
                 <div style={{ flex: 1 }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>
@@ -294,6 +295,7 @@ const ApprovalsPage: React.FC = () => {
                     })}
                 </div>
             )}
+            </div>
         </div>
     );
 };

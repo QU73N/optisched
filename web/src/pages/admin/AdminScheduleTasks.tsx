@@ -135,22 +135,16 @@ const AdminScheduleTasks: React.FC = () => {
                 <h1><ClipboardList size={24} /> Admin Tasks</h1>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                     <button className="sort-btn" onClick={cycleSortMode}>
-                        <ArrowUpDown size={14} /> Sort: {sortMode}
+                        {sortMode === 'priority' ? <Flag size={16} /> : <Calendar size={16} />}
+                        {sortMode === 'priority' ? 'Priority' : sortMode === 'deadline' ? 'Deadline' : 'Created'}
                     </button>
-                    <button className="add-btn" onClick={openAdd}>
+                    <button className="create-btn" onClick={() => { setEditingTask(null); setModalTitle(''); setModalDesc(''); setModalPriority('medium'); setShowModal(true); }}>
                         <Plus size={16} /> New Task
                     </button>
                 </div>
             </div>
 
-            {/* Filter chips */}
-            <div className="filter-chips">
-                {filters.map(f => (
-                    <button key={f} className={`filter-chip ${activeFilter === f ? 'active' : ''}`}
-                        onClick={() => setActiveFilter(f)}>{f}</button>
-                ))}
-            </div>
-
+            <div style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' }}>
             {/* Task count */}
             <div className="section-header">
                 <span className="section-title">Active Priority</span>
@@ -224,6 +218,7 @@ const AdminScheduleTasks: React.FC = () => {
                     })}
                 </div>
             )}
+            </div>
 
             {/* Modal */}
             {showModal && (

@@ -272,6 +272,8 @@ const SystemRules: React.FC = () => {
                 </p>
             </div>
 
+            <div className="scrollable-container">
+
             {/* Institution Name Editor */}
             <div className="card" style={{ marginBottom: 20 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -471,6 +473,7 @@ const SystemRules: React.FC = () => {
                         </div>
                     );
                 })}
+            </div>
             </div>
         </div>
     );

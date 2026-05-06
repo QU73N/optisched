@@ -78,6 +78,8 @@ const AnnouncementsPage: React.FC = () => {
                 </p>
             </div>
 
+            <div className="scrollable-container">
+
             <div className="audit-toolbar">
                 <div className="audit-time-range" style={{ marginLeft: 'auto' }}>
                     {(['all', 'important', 'normal'] as const).map(p => (
@@ -113,6 +115,7 @@ const AnnouncementsPage: React.FC = () => {
                     ))}
                 </div>
             )}
+            </div>
         </div>
     );
 };

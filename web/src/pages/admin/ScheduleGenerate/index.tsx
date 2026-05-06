@@ -953,6 +953,7 @@ const ScheduleGenerate: React.FC = () => {
                             <ArrowLeft size={14} /> Back
                         </button>
                     )}
+                    <div style={{ flex: 1 }} />
                     {stage === 'review' ? (
                         <button className="btn btn-primary" onClick={() => { setStage('generate'); setTimeout(startGeneration, 50); }} disabled={blockers.length > 0}>
                             <Sparkles size={14} /> Start generation

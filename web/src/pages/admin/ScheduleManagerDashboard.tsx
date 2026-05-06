@@ -211,6 +211,8 @@ const ScheduleManagerDashboard: React.FC = () => {
                 </p>
             </div>
 
+            <div className="scrollable-container">
+
             {/* KPI strip */}
             <div className="stats-grid">
                 <div className="stat-card">
@@ -446,6 +448,7 @@ const ScheduleManagerDashboard: React.FC = () => {
 
                     {/* Load by day moved to siderail */}
                 </div>
+            </div>
             </div>
         </div>
     );

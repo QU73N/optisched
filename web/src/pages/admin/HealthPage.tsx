@@ -3,8 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     Activity, CheckCircle, AlertTriangle, XCircle, RefreshCw,
-    Clock, Shield, Database, HardDrive, Server, Zap, TrendingUp,
-    TrendingDown, Users, Calendar, BarChart3, ChevronRight
+    Shield, Database, HardDrive, Server, Zap, TrendingUp,
+    TrendingDown, Users, Calendar
 } from 'lucide-react';
 import './Dashboard.css';
 import './AuditLogPage.css';
@@ -17,7 +17,7 @@ interface HealthCheck {
     details?: string;
     lastChecked: Date;
     responseTime?: number;
-    trend?: 'up' | 'down' | 'stable';
+    trend?: 'improving' | 'deteriorating' | 'stable';
     history?: { status: string; timestamp: Date }[];
 }
 
@@ -69,7 +69,7 @@ const HealthPage: React.FC = () => {
                 details: `Query executed successfully in ${responseTime}ms. Thresholds: <200ms (healthy), <500ms (degraded)`,
                 lastChecked: now,
                 responseTime,
-                trend: responseTime < 100 ? 'up' : responseTime > 400 ? 'down' : 'stable',
+                trend: responseTime < 100 ? 'improving' : responseTime > 400 ? 'deteriorating' : 'stable',
             });
         } catch {
             results.push({
@@ -79,7 +79,7 @@ const HealthPage: React.FC = () => {
                 message: 'Connection failed',
                 details: 'Unable to establish connection to the database. Check network and database status.',
                 lastChecked: now,
-                trend: 'down',
+                trend: 'deteriorating',
             });
         }
 
@@ -92,7 +92,7 @@ const HealthPage: React.FC = () => {
                 category: 'database',
                 status: 'healthy',
                 message: `${profileCount} profiles, ${scheduleCount} schedules`,
-                details: `Total records in database: ${profileCount + scheduleCount}`,
+                details: `Total records in database: ${(profileCount || 0) + (scheduleCount || 0)}`,
                 lastChecked: now,
                 trend: 'stable',
             });
@@ -104,7 +104,7 @@ const HealthPage: React.FC = () => {
                 message: 'Unable to count records',
                 details: 'Database query failed. Possible performance issues.',
                 lastChecked: now,
-                trend: 'down',
+                trend: 'deteriorating',
             });
         }
 
@@ -119,7 +119,7 @@ const HealthPage: React.FC = () => {
                     message: 'Unable to list buckets',
                     details: error.message,
                     lastChecked: now,
-                    trend: 'down',
+                    trend: 'deteriorating',
                 });
             } else {
                 results.push({
@@ -140,7 +140,7 @@ const HealthPage: React.FC = () => {
                 message: 'Storage check failed',
                 details: 'Storage service is not responding.',
                 lastChecked: now,
-                trend: 'down',
+                trend: 'deteriorating',
             });
         }
 
@@ -160,7 +160,7 @@ const HealthPage: React.FC = () => {
                 message: `${errorCount} error${errorCount !== 1 ? 's' : ''} in the last hour`,
                 details: `Error threshold: <50/hour (healthy), 50-100/hour (degraded), >100/hour (unhealthy)`,
                 lastChecked: now,
-                trend: errorCount > 25 ? 'down' : 'stable',
+                trend: errorCount > 25 ? 'deteriorating' : 'stable',
             });
         } catch {
             results.push({
@@ -170,7 +170,7 @@ const HealthPage: React.FC = () => {
                 message: 'Unable to query error logs',
                 details: 'Error logs table may not exist or be inaccessible.',
                 lastChecked: now,
-                trend: 'down',
+                trend: 'deteriorating',
             });
         }
 
@@ -199,7 +199,7 @@ const HealthPage: React.FC = () => {
                 message: 'Unable to check sessions',
                 details: 'Activity logs may not be accessible.',
                 lastChecked: now,
-                trend: 'down',
+                trend: 'deteriorating',
             });
         }
 
@@ -221,7 +221,7 @@ const HealthPage: React.FC = () => {
                     message: 'No successful backup found',
                     details: 'No successful backup jobs found in the database.',
                     lastChecked: now,
-                    trend: 'down',
+                    trend: 'deteriorating',
                 });
             } else {
                 const hoursAgo = (Date.now() - new Date(data.created_at).getTime()) / 3600000;
@@ -238,7 +238,7 @@ const HealthPage: React.FC = () => {
                     message,
                     details: `Last successful backup was ${message}. Recommended: Daily backups.`,
                     lastChecked: now,
-                    trend: hoursAgo < 24 ? 'up' : hoursAgo > 48 ? 'down' : 'stable',
+                    trend: hoursAgo < 24 ? 'improving' : hoursAgo > 48 ? 'deteriorating' : 'stable',
                 });
             }
         } catch {
@@ -249,7 +249,7 @@ const HealthPage: React.FC = () => {
                 message: 'Unable to check backup status',
                 details: 'Backup jobs table may not exist or be inaccessible.',
                 lastChecked: now,
-                trend: 'down',
+                trend: 'deteriorating',
             });
         }
 
@@ -273,7 +273,7 @@ const HealthPage: React.FC = () => {
                 message: 'Auth service check failed',
                 details: 'Authentication service may be down or misconfigured.',
                 lastChecked: now,
-                trend: 'down',
+                trend: 'deteriorating',
             });
         }
 
@@ -297,7 +297,7 @@ const HealthPage: React.FC = () => {
                 message: 'RPC check failed',
                 details: 'Some RPC functions may not be available.',
                 lastChecked: now,
-                trend: 'down',
+                trend: 'deteriorating',
             });
         }
 
@@ -407,14 +407,6 @@ const HealthPage: React.FC = () => {
         }
     };
 
-    const trendIcon = (trend?: 'up' | 'down' | 'stable') => {
-        switch (trend) {
-            case 'up': return <TrendingUp size={14} style={{ color: 'var(--accent-success)' }} />;
-            case 'down': return <TrendingDown size={14} style={{ color: 'var(--accent-error)' }} />;
-            case 'stable': return <Activity size={14} style={{ color: 'var(--text-muted)' }} />;
-        }
-    };
-
     const statusColor = (status: HealthCheck['status']) => {
         switch (status) {
             case 'healthy': return 'var(--accent-success)';
@@ -433,79 +425,71 @@ const HealthPage: React.FC = () => {
 
     return (
         <div className="dashboard">
-            <div className="dashboard-header">
-                <h1 className="dashboard-title"><Activity size={20} /> System Health</h1>
-                <p className="dashboard-subtitle">
-                    Real-time system monitoring and diagnostics. Auto-refreshes every 30 seconds.
+            <div className="dashboard-header" style={{ marginBottom: 12 }}>
+                <h1 className="dashboard-title"><Activity size={18} /> System Health</h1>
+                <p className="dashboard-subtitle" style={{ fontSize: 12 }}>
+                    Real-time system monitoring. Auto-refreshes every 30s.
                 </p>
             </div>
 
             {/* Overall Health Score */}
             {overallHealth && (
-                <div className="card" style={{ marginBottom: 16, padding: '20px', display: 'flex', alignItems: 'center', gap: 20, background: statusBg(overallHealth.status), border: `1px solid ${statusColor(overallHealth.status)}` }}>
+                <div className="card" style={{ marginBottom: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, background: statusBg(overallHealth.status), border: `1px solid ${statusColor(overallHealth.status)}` }}>
                     <div style={{ 
-                        width: 80, height: 80, borderRadius: '50%', 
+                        width: 56, height: 56, borderRadius: '50%', 
                         background: statusColor(overallHealth.status),
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'white', fontSize: 28, fontWeight: 700
+                        color: 'white', fontSize: 22, fontWeight: 700
                     }}>
                         {overallHealth.score}
                     </div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 500 }}>Overall Health Score</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: statusColor(overallHealth.status), marginTop: 4 }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>Overall Health Score</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: statusColor(overallHealth.status), marginTop: 2 }}>
                             {overallHealth.status.charAt(0).toUpperCase() + overallHealth.status.slice(1)}
                         </div>
-                        <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>{overallHealth.message}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{overallHealth.message}</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Last checked</div>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>{new Date().toLocaleTimeString()}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Last checked</div>
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>{new Date().toLocaleTimeString()}</div>
                     </div>
                 </div>
             )}
 
             {/* System Metrics */}
             {metrics && (
-                <div className="stats-grid" style={{ marginBottom: 16 }}>
-                    <div className="stat-card">
-                        <div className="stat-icon"><Users size={20} /></div>
-                        <div className="stat-number">{metrics.totalUsers}</div>
-                        <div className="stat-label">Total Users</div>
+                <div className="stats-grid" style={{ marginBottom: 12, gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                    <div className="stat-card" style={{ padding: '10px 12px' }}>
+                        <div className="stat-icon" style={{ width: 32, height: 32 }}><Users size={16} /></div>
+                        <div className="stat-number" style={{ fontSize: 18 }}>{metrics.totalUsers}</div>
+                        <div className="stat-label" style={{ fontSize: 11 }}>Total Users</div>
                     </div>
-                    <div className="stat-card">
-                        <div className="stat-icon"><Activity size={20} /></div>
-                        <div className="stat-number">{metrics.activeUsers}</div>
-                        <div className="stat-label">Active (1h)</div>
+                    <div className="stat-card" style={{ padding: '10px 12px' }}>
+                        <div className="stat-icon" style={{ width: 32, height: 32 }}><Activity size={16} /></div>
+                        <div className="stat-number" style={{ fontSize: 18 }}>{metrics.activeUsers}</div>
+                        <div className="stat-label" style={{ fontSize: 11 }}>Active (1h)</div>
                     </div>
-                    <div className="stat-card">
-                        <div className="stat-icon"><Calendar size={20} /></div>
-                        <div className="stat-number">{metrics.totalSchedules}</div>
-                        <div className="stat-label">Total Schedules</div>
+                    <div className="stat-card" style={{ padding: '10px 12px' }}>
+                        <div className="stat-icon" style={{ width: 32, height: 32 }}><Calendar size={16} /></div>
+                        <div className="stat-number" style={{ fontSize: 18 }}>{metrics.totalSchedules}</div>
+                        <div className="stat-label" style={{ fontSize: 11 }}>Total Schedules</div>
                     </div>
-                    <div className="stat-card">
-                        <div className="stat-icon"><Zap size={20} /></div>
-                        <div className="stat-number">{metrics.recentActivity}</div>
-                        <div className="stat-label">Recent Events (1h)</div>
+                    <div className="stat-card" style={{ padding: '10px 12px' }}>
+                        <div className="stat-icon" style={{ width: 32, height: 32 }}><Zap size={16} /></div>
+                        <div className="stat-number" style={{ fontSize: 18 }}>{metrics.recentActivity}</div>
+                        <div className="stat-label" style={{ fontSize: 11 }}>Recent Events (1h)</div>
                     </div>
                 </div>
             )}
 
             {/* Toolbar */}
-            <div className="audit-toolbar">
+            <div className="audit-toolbar" style={{ marginBottom: 12, padding: '8px 12px' }}>
                 <div style={{ display: 'flex', gap: 8, flex: 1 }}>
                     <select
                         value={timeRange}
                         onChange={(e) => setTimeRange(Number(e.target.value))}
-                        style={{
-                            padding: '8px 12px',
-                            background: 'var(--bg-surface)',
-                            border: '1px solid var(--border-default)',
-                            borderRadius: 'var(--radius-sm)',
-                            color: 'var(--text-primary)',
-                            fontSize: '13px',
-                            cursor: 'pointer'
-                        }}
+                        style={{ padding: '6px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: '12px', cursor: 'pointer' }}
                     >
                         <option value={15}>Last 15 min</option>
                         <option value={30}>Last 30 min</option>
@@ -514,16 +498,11 @@ const HealthPage: React.FC = () => {
                     </select>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button 
-                        className={`btn ${autoRefresh ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => setAutoRefresh(!autoRefresh)}
-                        title="Auto-refresh every 30 seconds"
-                    >
-                        <RefreshCw size={14} className={autoRefresh ? 'spin' : ''} />
-                        Auto
+                    <button className={`btn ${autoRefresh ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setAutoRefresh(!autoRefresh)} title="Auto-refresh every 30 seconds" style={{ padding: '6px 12px', fontSize: '12px' }}>
+                        <RefreshCw size={12} className={autoRefresh ? 'spin' : ''} /> Auto
                     </button>
-                    <button className="btn btn-secondary" onClick={runHealthChecks} disabled={refreshing}>
-                        <RefreshCw size={14} className={refreshing ? 'spin' : ''} /> Refresh
+                    <button className="btn btn-secondary" onClick={runHealthChecks} disabled={refreshing} style={{ padding: '6px 12px', fontSize: '12px' }}>
+                        <RefreshCw size={12} className={refreshing ? 'spin' : ''} /> Refresh
                     </button>
                 </div>
             </div>
@@ -531,56 +510,52 @@ const HealthPage: React.FC = () => {
             {loading ? (
                 <div className="dash-loading-center"><RefreshCw className="spin" size={28} /></div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {/* Health Checks by Category */}
                     {Object.entries(categoryGroups).map(([category, categoryChecks]) => (
-                        <div key={category} className="card" style={{ padding: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                        <div key={category} className="card" style={{ padding: '10px 12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                                 {categoryIcon(category as HealthCheck['category'])}
-                                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
                                     {category}
                                 </span>
-                                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                                     ({categoryChecks.filter(c => c.status === 'healthy').length}/{categoryChecks.length} healthy)
                                 </span>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 6 }}>
                                 {categoryChecks.map(check => (
                                     <div
                                         key={check.name}
-                                        onClick={() => setSelectedSession(check)}
+                                        onClick={() => setSelectedCheck(check)}
                                         style={{
-                                            padding: '16px',
+                                            padding: '8px 10px',
                                             background: statusBg(check.status),
                                             border: `1px solid ${statusColor(check.status)}`,
                                             borderRadius: 'var(--radius-sm)',
                                             cursor: 'pointer',
                                             transition: 'all var(--transition-fast)'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
                                         onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                                     >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <div style={{ color: statusColor(check.status) }}>
                                                     {statusIcon(check.status)}
                                                 </div>
-                                                <div>
-                                                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{check.name}</div>
-                                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                                                        {check.responseTime && `Response: ${check.responseTime}ms`}
-                                                    </div>
+                                                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{check.name}</span>
+                                            </div>
+                                            {check.trend && (
+                                                <div style={{ color: check.trend === 'improving' ? 'var(--accent-success)' : check.trend === 'deteriorating' ? 'var(--accent-error)' : 'var(--text-muted)' }}>
+                                                    {check.trend === 'improving' ? <TrendingUp size={12} /> : check.trend === 'deteriorating' ? <TrendingDown size={12} /> : <Activity size={12} />}
                                                 </div>
-                                            </div>
-                                            {trendIcon(check.trend)}
+                                            )}
                                         </div>
-                                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>{check.message}</div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <Clock size={11} /> {check.lastChecked.toLocaleTimeString()}
-                                            </div>
-                                            <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
-                                        </div>
+                                        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>{check.message}</div>
+                                        {check.responseTime && (
+                                            <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{check.responseTime}ms</div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -588,72 +563,65 @@ const HealthPage: React.FC = () => {
                     ))}
 
                     {/* Historical Trends */}
-                    {historicalData.length > 0 && (
-                        <div className="card" style={{ padding: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                                <BarChart3 size={16} style={{ color: 'var(--accent-primary)' }} />
-                                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                    Historical Trends (Last 20 checks)
-                                </span>
+                    <div className="card" style={{ padding: '10px 12px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Historical Trends</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                            <div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>DB Response Time</div>
+                                <div style={{ display: 'flex', gap: 1, height: 40, alignItems: 'flex-end' }}>
+                                    {historicalData.map((d: any, i: number) => (
+                                        <div
+                                            key={i}
+                                            style={{
+                                                flex: 1,
+                                                background: d.dbResponseTime < 200 ? 'var(--accent-success)' : d.dbResponseTime < 500 ? 'var(--accent-warning)' : 'var(--accent-error)',
+                                                height: `${Math.min((d.dbResponseTime / 1000) * 100, 100)}%`,
+                                                borderRadius: 1,
+                                                transition: 'height 0.3s ease'
+                                            }}
+                                            title={`${d.dbResponseTime}ms`}
+                                        />
+                                    ))}
+                                </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 16 }}>
-                                <div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Database Response Time</div>
-                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 60 }}>
-                                        {historicalData.map((d, i) => (
-                                            <div
-                                                key={i}
-                                                style={{
-                                                    flex: 1,
-                                                    background: d.dbResponseTime < 200 ? 'var(--accent-success)' : d.dbResponseTime < 500 ? 'var(--accent-warning)' : 'var(--accent-error)',
-                                                    borderRadius: '2px',
-                                                    height: `${Math.min(100, (d.dbResponseTime / 1000) * 100)}%`,
-                                                    opacity: 0.8
-                                                }}
-                                                title={`${d.dbResponseTime}ms at ${d.timestamp.toLocaleTimeString()}`}
-                                            />
-                                        ))}
-                                    </div>
+                            <div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>Error Count</div>
+                                <div style={{ display: 'flex', gap: 1, height: 40, alignItems: 'flex-end' }}>
+                                    {historicalData.map((d: any, i: number) => (
+                                        <div
+                                            key={i}
+                                            style={{
+                                                flex: 1,
+                                                background: d.errorCount < 50 ? 'var(--accent-success)' : d.errorCount < 100 ? 'var(--accent-warning)' : 'var(--accent-error)',
+                                                height: `${Math.min((d.errorCount / 200) * 100, 100)}%`,
+                                                borderRadius: 1,
+                                                transition: 'height 0.3s ease'
+                                            }}
+                                            title={`${d.errorCount} errors`}
+                                        />
+                                    ))}
                                 </div>
-                                <div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Error Count</div>
-                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 60 }}>
-                                        {historicalData.map((d, i) => (
-                                            <div
-                                                key={i}
-                                                style={{
-                                                    flex: 1,
-                                                    background: d.errorCount < 20 ? 'var(--accent-success)' : d.errorCount < 50 ? 'var(--accent-warning)' : 'var(--accent-error)',
-                                                    borderRadius: '2px',
-                                                    height: `${Math.min(100, (d.errorCount / 100) * 100)}%`,
-                                                    opacity: 0.8
-                                                }}
-                                                title={`${d.errorCount} errors at ${d.timestamp.toLocaleTimeString()}`}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Active Sessions</div>
-                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 60 }}>
-                                        {historicalData.map((d, i) => (
-                                            <div
-                                                key={i}
-                                                style={{
-                                                    flex: 1,
-                                                    background: 'var(--accent-primary)',
-                                                    borderRadius: '2px',
-                                                    height: `${Math.min(100, (d.activeSessions / 50) * 100)}%`,
-                                                    opacity: 0.8
-                                                }}
-                                                title={`${d.activeSessions} sessions at ${d.timestamp.toLocaleTimeString()}`}
-                                            />
-                                        ))}
-                                    </div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>Active Sessions</div>
+                                <div style={{ display: 'flex', gap: 1, height: 40, alignItems: 'flex-end' }}>
+                                    {historicalData.map((d: any, i: number) => (
+                                        <div
+                                            key={i}
+                                            style={{
+                                                flex: 1,
+                                                background: 'var(--accent-primary)',
+                                                height: `${Math.min((d.activeSessions / 100) * 100, 100)}%`,
+                                                borderRadius: 1,
+                                                transition: 'height 0.3s ease'
+                                            }}
+                                            title={`${d.activeSessions} sessions`}
+                                        />
+                                    ))}
                                 </div>
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
             )}
 

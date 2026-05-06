@@ -102,6 +102,12 @@ const ConflictVersionSelector: React.FC = () => {
             );
         }
         return true;
+    }).sort((a, b) => {
+        // Published versions always come first
+        if (a.change_type === 'publish' && b.change_type !== 'publish') return -1;
+        if (a.change_type !== 'publish' && b.change_type === 'publish') return 1;
+        // Then sort by date descending
+        return new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime();
     });
 
     const formatDate = (d: string) => new Date(d).toLocaleString('en-US', {
@@ -111,6 +117,20 @@ const ConflictVersionSelector: React.FC = () => {
         hour: 'numeric',
         minute: '2-digit'
     });
+
+    const getChangeTypeLabel = (changeType: string) => {
+        switch (changeType) {
+            case 'created': return 'Draft';
+            case 'publish': return 'Published';
+            case 'updated': return 'Updated';
+            case 'deleted': return 'Deleted';
+            case 'status_change': return 'Status Change';
+            case 'checkpoint': return 'Checkpoint';
+            case 'overwrite': return 'Overwrite';
+            case 'restore': return 'Restore';
+            default: return changeType;
+        }
+    };
 
     const handleSelectVersion = (versionId: string) => {
         navigate(`/admin/conflicts/version/${versionId}`);
@@ -124,6 +144,8 @@ const ConflictVersionSelector: React.FC = () => {
                     <p className="dashboard-subtitle">Select a schedule version to scan for conflicts</p>
                 </div>
             </div>
+
+            <div className="scrollable-container">
 
             {/* Stats */}
             <div className="stats-grid" style={{ marginBottom: 24 }}>
@@ -219,7 +241,7 @@ const ConflictVersionSelector: React.FC = () => {
                                             </span>
                                         )}
                                         <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(59,130,246,0.12)', color: '#60a5fa', fontWeight: 600, textTransform: 'capitalize' }}>
-                                            {v.change_type}
+                                            {getChangeTypeLabel(v.change_type)}
                                         </span>
                                     </div>
                                     {v.change_summary && (
@@ -251,6 +273,7 @@ const ConflictVersionSelector: React.FC = () => {
                     ))}
                 </div>
             )}
+            </div>
         </div>
     );
 };

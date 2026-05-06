@@ -154,9 +154,13 @@ const UserActivityPage: React.FC = () => {
                 <h1 className="dashboard-title"><Activity size={20} /> User Activity</h1>
                 <p className="dashboard-subtitle">
                     Per-user troubleshooting trail. Retained {String(perms.ruleNumber('activity_log_retention_days', 90))} days.
-                    Operational data only - no message content.
                 </p>
             </div>
+
+            <div className="scrollable-container">
+            <p className="dashboard-subtitle">
+                Operational data only - no message content.
+            </p>
 
             {/* User picker */}
             <div className="activity-user-picker">
@@ -275,6 +279,7 @@ const UserActivityPage: React.FC = () => {
                     )}
                 </>
             )}
+            </div>
         </div>
     );
 };

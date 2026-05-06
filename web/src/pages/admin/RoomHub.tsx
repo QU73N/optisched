@@ -51,41 +51,42 @@ const RoomHub: React.FC = () => {
             <div className="page-header">
                 <div>
                     <h1>Room Utilization</h1>
-                    <p>Monitor and analyze room usage and capacity</p>
+                    <p>View room availability, capacity, and scheduling patterns.</p>
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="fhub-stats">
-                <div className="fhub-stat-card">
-                    <div className="fhub-stat-icon" style={{ background: 'var(--accent-primary-subtle)' }}><Building2 size={22} color="var(--accent-primary)" /></div>
-                    <div className="fhub-stat-info">
-                        <span className="fhub-stat-num">{rooms.length}</span>
-                        <span className="fhub-stat-label">Total Rooms</span>
+            <div style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' }}>
+                {/* Stats */}
+                <div className="fhub-stats">
+                    <div className="fhub-stat-card">
+                        <div className="fhub-stat-icon" style={{ background: 'var(--accent-primary-subtle)' }}><Building2 size={22} color="var(--accent-primary)" /></div>
+                        <div className="fhub-stat-info">
+                            <span className="fhub-stat-num">{rooms.length}</span>
+                            <span className="fhub-stat-label">Total Rooms</span>
+                        </div>
+                    </div>
+                    <div className="fhub-stat-card">
+                        <div className="fhub-stat-icon" style={{ background: 'var(--accent-success-subtle)' }}><DoorOpen size={22} color="var(--accent-success)" /></div>
+                        <div className="fhub-stat-info">
+                            <span className="fhub-stat-num">{totalClasses}</span>
+                            <span className="fhub-stat-label">Total Classes</span>
+                        </div>
+                    </div>
+                    <div className="fhub-stat-card">
+                        <div className="fhub-stat-icon" style={{ background: 'var(--accent-primary-subtle)' }}><BarChart3 size={22} color="var(--accent-primary)" /></div>
+                        <div className="fhub-stat-info">
+                            <span className="fhub-stat-num">{avgUtilization}</span>
+                            <span className="fhub-stat-label">Avg Classes/Room</span>
+                        </div>
+                    </div>
+                    <div className="fhub-stat-card">
+                        <div className="fhub-stat-icon" style={{ background: 'var(--accent-primary-subtle)' }}><Clock size={22} color="var(--accent-primary)" /></div>
+                        <div className="fhub-stat-info">
+                            <span className="fhub-stat-num">{totalHours.toFixed(0)}</span>
+                            <span className="fhub-stat-label">Total Hours/Week</span>
+                        </div>
                     </div>
                 </div>
-                <div className="fhub-stat-card">
-                    <div className="fhub-stat-icon" style={{ background: 'var(--accent-success-subtle)' }}><DoorOpen size={22} color="var(--accent-success)" /></div>
-                    <div className="fhub-stat-info">
-                        <span className="fhub-stat-num">{totalClasses}</span>
-                        <span className="fhub-stat-label">Total Classes</span>
-                    </div>
-                </div>
-                <div className="fhub-stat-card">
-                    <div className="fhub-stat-icon" style={{ background: 'var(--accent-primary-subtle)' }}><BarChart3 size={22} color="var(--accent-primary)" /></div>
-                    <div className="fhub-stat-info">
-                        <span className="fhub-stat-num">{avgUtilization}</span>
-                        <span className="fhub-stat-label">Avg Classes/Room</span>
-                    </div>
-                </div>
-                <div className="fhub-stat-card">
-                    <div className="fhub-stat-icon" style={{ background: 'var(--accent-primary-subtle)' }}><Clock size={22} color="var(--accent-primary)" /></div>
-                    <div className="fhub-stat-info">
-                        <span className="fhub-stat-num">{totalHours.toFixed(0)}</span>
-                        <span className="fhub-stat-label">Total Hours/Week</span>
-                    </div>
-                </div>
-            </div>
 
             {/* Search */}
             <div className="fhub-search">
@@ -198,6 +199,7 @@ const RoomHub: React.FC = () => {
                         </div>
                     );
                 })}
+            </div>
             </div>
 
             <style>{`

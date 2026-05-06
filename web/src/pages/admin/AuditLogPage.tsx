@@ -131,6 +131,8 @@ const AuditLogPage: React.FC = () => {
                 </p>
             </div>
 
+            <div className="scrollable-container">
+
             <div className="audit-toolbar">
                 <div className="audit-search">
                     <Search size={14} />
@@ -222,6 +224,7 @@ const AuditLogPage: React.FC = () => {
                     </table>
                 </div>
             )}
+            </div>
         </div>
     );
 };
