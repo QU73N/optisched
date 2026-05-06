@@ -197,9 +197,10 @@ interface AnnouncementItemProps {
     content: string;
     meta: string;
     priority?: 'urgent' | 'important' | 'normal';
+    rightElement?: React.ReactNode;
 }
 
-export const AnnouncementItem: React.FC<AnnouncementItemProps> = ({ title, content, meta, priority = 'normal' }) => {
+export const AnnouncementItem: React.FC<AnnouncementItemProps> = ({ title, content, meta, priority = 'normal', rightElement }) => {
     const { colors } = useTheme();
     const dotColor = priority === 'urgent' ? '#ef4444' : priority === 'important' ? '#f59e0b' : '#22c55e';
 
@@ -214,6 +215,7 @@ export const AnnouncementItem: React.FC<AnnouncementItemProps> = ({ title, conte
                 <Text style={[s.annText, { color: colors.textSecondary }]} numberOfLines={2}>{content}</Text>
                 <Text style={[s.annMeta, { color: colors.textMuted }]}>{meta}</Text>
             </View>
+            {rightElement}
         </View>
     );
 };

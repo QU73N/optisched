@@ -62,11 +62,22 @@ DROP POLICY IF EXISTS "Teachers see own requests" ON public.schedule_change_requ
 DROP POLICY IF EXISTS "Teachers can create requests" ON public.schedule_change_requests;
 DROP POLICY IF EXISTS "Admins can update requests" ON public.schedule_change_requests;
 DROP POLICY IF EXISTS "Admins can delete requests" ON public.schedule_change_requests;
+DROP POLICY IF EXISTS "Admins can view all requests" ON public.schedule_change_requests;
 
 -- Create proper policies using auth.uid() instead of user_metadata
 CREATE POLICY "Teachers see own requests"
 ON public.schedule_change_requests FOR SELECT
 USING (teacher_id = auth.uid());
+
+CREATE POLICY "Admins can view all requests"
+ON public.schedule_change_requests FOR SELECT
+USING (
+    EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE profiles.id = auth.uid()
+        AND profiles.role IN ('admin', 'super_admin', 'power_admin', 'schedule_admin')
+    )
+);
 
 CREATE POLICY "Teachers can create requests"
 ON public.schedule_change_requests FOR INSERT
@@ -78,7 +89,7 @@ USING (
     EXISTS (
         SELECT 1 FROM public.profiles
         WHERE profiles.id = auth.uid()
-        AND profiles.role IN ('admin', 'super_admin')
+        AND profiles.role IN ('admin', 'super_admin', 'power_admin', 'schedule_admin')
     )
 );
 
@@ -88,7 +99,7 @@ USING (
     EXISTS (
         SELECT 1 FROM public.profiles
         WHERE profiles.id = auth.uid()
-        AND profiles.role IN ('admin', 'super_admin')
+        AND profiles.role IN ('admin', 'super_admin', 'power_admin', 'schedule_admin')
     )
 );
 

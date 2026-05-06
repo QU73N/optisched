@@ -10,14 +10,12 @@ import TeacherChatHub from '../screens/teacher/TeacherChatHub';
 import TeacherSchedule from '../screens/teacher/TeacherSchedule';
 import AppSettings from '../screens/shared/AppSettings';
 import OptiBotChat from '../screens/shared/OptiBotChat';
-import GroupChats from '../screens/shared/GroupChats';
 
 export type TeacherTabParamList = {
     Home: undefined;
     Schedule: undefined;
     AI: undefined;
     Messages: undefined;
-    GroupChats: undefined;
     Profile: undefined;
 };
 
@@ -91,16 +89,6 @@ const TeacherTabs: React.FC = () => {
                         <MaterialIcons name="chat" size={size} color={color} />
                     ),
                     tabBarLabel: 'Messages',
-                }}
-            />
-            <Tab.Screen
-                name="GroupChats"
-                component={GroupChats}
-                options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <MaterialIcons name="groups" size={size} color={color} />
-                    ),
-                    tabBarLabel: 'Group Chats',
                 }}
             />
             <Tab.Screen

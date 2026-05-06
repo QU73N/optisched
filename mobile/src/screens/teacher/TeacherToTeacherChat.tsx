@@ -39,9 +39,8 @@ const TeacherToTeacherChat: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const scrollRef = useRef<ScrollView>(null);
-
     // Fetch all teachers except self
-    const fetchTeachers = async () => {
+    const fetchTeachers = async (currentProfileId: string) => {
         try {
             const { data } = await supabase
                 .from('teachers')
@@ -55,12 +54,24 @@ const TeacherToTeacherChat: React.FC = () => {
                         full_name: t.profile?.full_name || 'Teacher',
                         avatar_url: t.profile?.avatar_url || null,
                     }))
-                    .filter((t: Teacher) => t.profile_id !== profile?.id);
+                    .filter((t: Teacher) => t.profile_id !== currentProfileId); // Filter out current user
+                console.log('[TeacherChat] Fetched', mapped.length, 'teachers (current user:', currentProfileId, ')');
                 setTeachers(mapped);
             }
-        } catch { /* ignore */ }
+        } catch (err) {
+            console.error('[TeacherChat] Failed to fetch teachers:', err);
+        }
         setLoading(false);
     };
+
+    useEffect(() => {
+        if (!profile?.id) {
+            setTeachers([]);
+            setLoading(true);
+            return;
+        }
+        fetchTeachers(profile.id);
+    }, [profile?.id]);
 
     // Fetch messages with selected teacher
     const fetchMessages = async (teacherProfileId: string) => {
@@ -74,10 +85,6 @@ const TeacherToTeacherChat: React.FC = () => {
             setMessages((data || []) as Message[]);
         } catch { /* ignore */ }
     };
-
-    useEffect(() => {
-        fetchTeachers();
-    }, []);
 
     // Real-time subscription for messages
     useEffect(() => {
@@ -97,7 +104,7 @@ const TeacherToTeacherChat: React.FC = () => {
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [selectedTeacher?.profile_id]);
+    }, [selectedTeacher?.profile_id, profile?.id]);
 
     useEffect(() => {
         setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);

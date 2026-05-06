@@ -43,7 +43,14 @@ const TeacherRequests: React.FC = () => {
                 .select('*')
                 .eq('teacher_id', profile.id)
                 .order('created_at', { ascending: false });
-            setItems((data || []) as RequestRow[]);
+            // Respect local "clear history" timestamp
+            const cleared = localStorage.getItem('teacher_requests_cleared_at');
+            let rows = (data || []) as RequestRow[];
+            if (cleared) {
+                const clearedDate = new Date(cleared);
+                rows = rows.filter(r => new Date(r.created_at) > clearedDate);
+            }
+            setItems(rows);
         } catch (err) {
             console.error('[TeacherRequests] load failed', err);
         } finally {
@@ -115,6 +122,15 @@ const TeacherRequests: React.FC = () => {
                 {perms.canSubmitChangeRequest && !showForm && (
                     <button className="btn btn-primary" onClick={() => setShowForm(true)}>
                         <Plus size={14} /> New Request
+                    </button>
+                )}
+                {items.length > 0 && (
+                    <button className="btn btn-secondary" style={{ marginLeft: 8 }} onClick={() => {
+                        if (!confirm('Clear your local history of requests? This only hides them locally and does not delete server data.')) return;
+                        localStorage.setItem('teacher_requests_cleared_at', new Date().toISOString());
+                        setItems([]);
+                    }}>
+                        Clear History
                     </button>
                 )}
                 {!perms.canSubmitChangeRequest && (

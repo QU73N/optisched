@@ -1,12 +1,12 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     View, Text, ScrollView, StyleSheet,
     ActivityIndicator, Modal, TextInput, Alert, Pressable
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { useSchedules, useScheduleChangeRequests, useAnnouncements, useSections } from '../../hooks/useSupabase';
+import { useScheduleChangeRequests, useAnnouncements, useSections } from '../../hooks/useSupabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { getGreeting } from '../../utils/helpers';
@@ -18,6 +18,8 @@ import { useToast } from '../../components/CustomToast';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { StaggeredView } from '../../components/StaggeredView';
 import { StatCard, SectionHeader, ClassCard, DayProgressBar, AnnouncementItem, EventItem } from '../../components/DashCard';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 
 const TeacherDashboard: React.FC = () => {
     const greeting = getGreeting();
@@ -29,23 +31,77 @@ const TeacherDashboard: React.FC = () => {
     const dayIndex = new Date().getDay();
     const isOffDay = dayIndex === 0; // Sunday
     const scheduleDayName = isOffDay ? 'Monday' : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
-    const { schedules: allSchedules, loading } = useSchedules({ dayOfWeek: scheduleDayName });
+    
+    // Fetch only THIS teacher's schedules by teacher_id (same as TeacherSchedule.tsx)
+    const [allSchedules, setAllSchedules] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const { submitRequest, requests, deleteRequest } = useScheduleChangeRequests();
-    const { announcements: allAnnouncements } = useAnnouncements();
+    const { announcements: allAnnouncements, refetch: refetchAnnouncements } = useAnnouncements();
     const { sections } = useSections();
 
-    // Filter schedules: teachers only see their own classes
+    // Fetch teacher schedules using profile_id → teacher_id (same as TeacherSchedule)
+    useEffect(() => {
+        if (!profile?.id) return;
+
+        const fetchSchedules = async () => {
+            try {
+                setLoading(true);
+                // Step 1: Get teacher_id from profile_id
+                const { data: teacher } = await supabase
+                    .from('teachers')
+                    .select('id')
+                    .eq('profile_id', profile.id)
+                    .single();
+
+                if (!teacher) {
+                    console.log('[TeacherDashboard] Teacher record not found for profile:', profile.id);
+                    setAllSchedules([]);
+                    setLoading(false);
+                    return;
+                }
+
+                // Step 2: Fetch all schedules for this teacher
+                const { data, error } = await supabase
+                    .from('schedules')
+                    .select('id, day_of_week, start_time, end_time, status, semester, academic_year, subject:subjects(name, code), room:rooms(name, building), section:sections(name, program)')
+                    .eq('teacher_id', teacher.id)
+                    .eq('status', 'published');
+
+                if (error) {
+                    console.error('[TeacherDashboard] Fetch error:', error);
+                    setAllSchedules([]);
+                } else {
+                    setAllSchedules(data || []);
+                }
+            } catch (err) {
+                console.error('[TeacherDashboard] Exception:', err);
+                setAllSchedules([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchSchedules();
+
+        const channel = supabase
+            .channel('dashboard_schedule_realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => {
+                fetchSchedules();
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [profile?.id]);
+
+    // Filter schedules for TODAY only
     const schedules = useMemo(() => {
-        if (!profile?.full_name) return allSchedules;
-        return allSchedules.filter(s => {
-            const teacherName = s.teacher?.profile?.full_name || '';
-            return teacherName.toLowerCase() === profile.full_name!.toLowerCase();
-        });
-    }, [allSchedules, profile?.full_name]);
+        return allSchedules.filter(s => s.day_of_week === scheduleDayName);
+    }, [allSchedules, scheduleDayName]);
 
     // Filter announcements: teachers see global + their assigned sections
     const announcements = useMemo(() => {
         if (!allAnnouncements) return [];
+        const currentTeacherId = profile?.id;
         // Get sections this teacher teaches (from their schedules)
         const teacherSectionIds = new Set<string>();
         const teacherSectionNames = new Set<string>();
@@ -58,6 +114,10 @@ const TeacherDashboard: React.FC = () => {
             }
         });
         return allAnnouncements.filter((a: any) => {
+            // Always show the teacher's own announcements
+            if (currentTeacherId && a.author_id === currentTeacherId) {
+                return true;
+            }
             // Check target_section field first
             if (a.target_section) {
                 const target = a.target_section.toLowerCase().trim();
@@ -74,7 +134,7 @@ const TeacherDashboard: React.FC = () => {
             }
             return true;
         });
-    }, [allAnnouncements, allSchedules, profile?.full_name]);
+    }, [allAnnouncements, allSchedules, profile?.full_name, profile?.id]);
 
     // Schedule change request modal
     const [showRequestModal, setShowRequestModal] = useState(false);
@@ -116,6 +176,23 @@ const TeacherDashboard: React.FC = () => {
     const [eventRoom, setEventRoom] = useState('');
     const [creatingEvent, setCreatingEvent] = useState(false);
     const { rooms } = useRooms();
+    
+    // Export schedule
+    const todayClassesRef = useRef<View>(null);
+    const exportToday = async () => {
+        try {
+            if (!todayClassesRef.current) return;
+            const uri = await captureRef(todayClassesRef.current, {
+                format: 'png',
+                quality: 1,
+            });
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri);
+            }
+        } catch (e) {
+            console.error('Export failed', e);
+        }
+    };
     const { showToast } = useToast();
 
     const handleSubmitRequest = async () => {
@@ -129,10 +206,11 @@ const TeacherDashboard: React.FC = () => {
         }
         setSubmitting(true);
         try {
+            const { data: { user } } = await supabase.auth.getUser();
             // schedule_id is uuid type — only pass valid UUIDs, otherwise omit it
             const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedClassId);
             const requestData: any = {
-                teacher_id: profile.id,
+                teacher_id: user?.id,
                 teacher_name: profile.full_name || 'Teacher',
                 request_type: requestType,
                 reason: `${selectedClassName}: ${requestReason.trim()}`
@@ -173,13 +251,8 @@ const TeacherDashboard: React.FC = () => {
     const todaySchedule = useMemo(() => {
         const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
 
-        // Filter schedules taught by this teacher
-        const teacherSchedules = schedules.filter(s => {
-            const teacherName = s.teacher?.profile?.full_name || '';
-            return !profile?.full_name || teacherName.toLowerCase().includes(profile.full_name.split(',')[0].toLowerCase()) || teacherName.toLowerCase().includes(profile.full_name.split(' ')[0].toLowerCase());
-        });
-
-        return teacherSchedules.map((s, i) => {
+        // schedules is already filtered by this teacher (line 44-49), so use it directly
+        return schedules.map((s, i) => {
             const [startH, startM] = (s.start_time || '00:00').split(':').map(Number);
             const [endH, endM] = (s.end_time || '00:00').split(':').map(Number);
             const startMin = startH * 60 + startM;
@@ -269,8 +342,17 @@ const TeacherDashboard: React.FC = () => {
                 {!isOffDay && <DayProgressBar finished={dayProgress.finished} ongoing={dayProgress.ongoing} upcoming={dayProgress.upcoming} />}
 
                 {/* Today's Schedule — using shared ClassCard */}
-                <SectionHeader title="Today's Classes" icon="event" count={todaySchedule.length > 0 ? todaySchedule.length : undefined} />
-                <View style={[styles.schedulePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <SectionHeader 
+                    title="Today's Classes" 
+                    icon="event" 
+                    count={todaySchedule.length > 0 ? todaySchedule.length : undefined}
+                    rightElement={
+                        <AnimatedPressable onPress={exportToday} style={{ padding: 6, backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 8 }}>
+                            <MaterialIcons name="share" size={18} color={colors.accentPrimary} />
+                        </AnimatedPressable>
+                    }
+                />
+                <View style={[styles.schedulePanel, { backgroundColor: colors.card, borderColor: colors.border }]} ref={todayClassesRef} collapsable={false}>
                 {loading ? (
                     <View style={styles.panelEmpty}><ActivityIndicator size="large" color={colors.accentPrimary} /></View>
                 ) : todaySchedule.length === 0 ? (
@@ -474,6 +556,27 @@ const TeacherDashboard: React.FC = () => {
                             content={ann.content}
                             meta={`${ann.author_name || ''} · ${ann.created_at ? new Date(ann.created_at).toLocaleDateString() : ''}`}
                             priority={ann.priority}
+                            rightElement={ann.author_id === profile?.id ? (
+                                <AnimatedPressable onPress={() => {
+                                    Alert.alert('Delete Announcement', 'Remove this announcement?', [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        {
+                                            text: 'Delete', style: 'destructive', onPress: async () => {
+                                                                try {
+                                                                    const { error } = await supabase.from('announcements').delete().eq('id', ann.id);
+                                                                    if (error) throw error;
+                                                                    await refetchAnnouncements();
+                                                                } catch (err: any) {
+                                                                    Alert.alert('Error', err?.message || 'Failed to remove announcement.');
+                                                                }
+                                            }
+                                        }
+                                    ]);
+                                }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(224,93,93,0.12)', alignSelf: 'center' }}>
+                                    <MaterialIcons name="delete-outline" size={18} color="#E05D5D" />
+                                    <Text style={{ color: '#E05D5D', fontSize: 11, fontWeight: '600' }}>Remove</Text>
+                                </AnimatedPressable>
+                            ) : undefined}
                         />
                     ))
                 )}
@@ -555,7 +658,25 @@ const TeacherDashboard: React.FC = () => {
                                                             <Text style={{ color: pc.color, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>{pc.label}</Text>
                                                         </View>
                                                     </View>
-                                                    <Text style={{ color: colors.textMuted, fontSize: 11 }}>{new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                        <Text style={{ color: colors.textMuted, fontSize: 11 }}>{new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                                                        {ann.author_id === profile?.id && (
+                                                            <AnimatedPressable onPress={() => {
+                                                                Alert.alert('Delete Announcement', 'Remove this announcement?', [
+                                                                    { text: 'Cancel', style: 'cancel' },
+                                                                    {
+                                                                        text: 'Delete', style: 'destructive', onPress: async () => {
+                                                                            await supabase.from('announcements').delete().eq('id', ann.id);
+                                                                            await refetchAnnouncements();
+                                                                        }
+                                                                    }
+                                                                ]);
+                                                            }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(224,93,93,0.12)' }}>
+                                                                <MaterialIcons name="delete-outline" size={18} color="#E05D5D" />
+                                                                <Text style={{ color: '#E05D5D', fontSize: 11, fontWeight: '600' }}>Remove</Text>
+                                                            </AnimatedPressable>
+                                                        )}
+                                                    </View>
                                                 </View>
                                                 <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 }}>{ann.title}</Text>
                                                 <Text style={{ fontSize: 14, color: colors.textMuted, lineHeight: 20 }}>{ann.content}</Text>
@@ -815,6 +936,7 @@ const TeacherDashboard: React.FC = () => {
                                 if (!annTitle.trim() || !annContent.trim() || !annSection) { Alert.alert('Error', 'Please fill in all fields and select a section.'); return; }
                                 setSendingAnn(true);
                                 try {
+                                    const { data: { user } } = await supabase.auth.getUser();
                                     const expiryMap: Record<string, number | null> = { '1h': 1, '6h': 6, '12h': 12, '1d': 24, '3d': 72, '7d': 168, 'never': null };
                                     const hours = expiryMap[annExpiry];
                                     const expiresAt = hours ? new Date(Date.now() + hours * 60 * 60 * 1000).toISOString() : null;
@@ -823,12 +945,14 @@ const TeacherDashboard: React.FC = () => {
                                         content: annContent.trim(),
                                         priority: 'normal',
                                         author_name: profile?.full_name || 'Teacher',
-                                        author_id: profile?.id,
+                                        author_id: user?.id,
                                         expires_at: expiresAt,
                                         target_section: annSection,
                                     });
                                     if (error) throw error;
                                     Alert.alert('Announced \u2705', `Your announcement for section "${annSection}" has been posted.${hours ? ` It will auto-expire in ${annExpiry}.` : ''}`);
+                                    // refresh announcements immediately in addition to realtime
+                                    try { refetchAnnouncements && await refetchAnnouncements(); } catch (e) { /* ignore */ }
                                     setShowTeacherAnnounce(false); setAnnTitle(''); setAnnContent(''); setAnnSection(''); setAnnExpiry('never');
                                 } catch (err: any) {
                                     Alert.alert('Error', err?.message || 'Failed to post announcement.');
@@ -865,12 +989,19 @@ const TeacherDashboard: React.FC = () => {
                                                         { text: 'Cancel', style: 'cancel' },
                                                         {
                                                             text: 'Delete', style: 'destructive', onPress: async () => {
-                                                                await supabase.from('announcements').delete().eq('id', ann.id);
+                                                                try {
+                                                                    const { error } = await supabase.from('announcements').delete().eq('id', ann.id);
+                                                                    if (error) throw error;
+                                                                    await refetchAnnouncements();
+                                                                } catch (err: any) {
+                                                                    Alert.alert('Error', err?.message || 'Failed to remove announcement.');
+                                                                }
                                                             }
                                                         }
                                                     ]);
-                                                }}>
+                                                }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(224,93,93,0.12)' }}>
                                                     <MaterialIcons name="delete-outline" size={20} color="#E05D5D" />
+                                                    <Text style={{ color: '#E05D5D', fontSize: 11, fontWeight: '600' }}>Remove</Text>
                                                 </AnimatedPressable>
                                             </View>
                                         </View>
