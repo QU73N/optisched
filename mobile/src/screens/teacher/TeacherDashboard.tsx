@@ -2,7 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     View, Text, ScrollView, StyleSheet,
-    ActivityIndicator, Modal, TextInput, Alert, Pressable
+    ActivityIndicator, Modal, TextInput, Alert, Pressable, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -594,6 +594,7 @@ const TeacherDashboard: React.FC = () => {
 
             {/* Schedule Change Request Modal */}
             <Modal visible={showRequestModal} animationType="slide" transparent>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowRequestModal(false)}>
                     <View style={{ backgroundColor: colors.elevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -628,6 +629,7 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
                     </View>
                 </Pressable>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Announcements Modal */}
@@ -778,6 +780,7 @@ const TeacherDashboard: React.FC = () => {
 
             {/* Report Room Issue Modal */}
             <Modal visible={showReportRoom} animationType="slide" transparent>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowReportRoom(false)}>
                     <View style={{ backgroundColor: colors.elevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -840,10 +843,12 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
                     </View>
                 </Pressable>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Message Admin Modal */}
             <Modal visible={showMessageAdmin} animationType="slide" transparent>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowMessageAdmin(false)}>
                     <View style={{ backgroundColor: colors.elevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -889,11 +894,14 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
                     </View>
                 </Pressable>
+                </KeyboardAvoidingView>
             </Modal>
             {/* Teacher Announcement Modal */}
             <Modal visible={showTeacherAnnounce} animationType="slide" transparent>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowTeacherAnnounce(false)}>
                     <View style={{ backgroundColor: colors.elevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, maxHeight: '90%' }} onStartShouldSetResponder={() => true}>
+                        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center' }}>
@@ -1016,12 +1024,15 @@ const TeacherDashboard: React.FC = () => {
                                 ))}
                             </View>
                         )}
+                        </ScrollView>
                     </View>
                 </Pressable>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Edit Announcement Modal */}
             <Modal visible={!!editingAnn} animationType="fade" transparent>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', paddingHorizontal: 24 }} onPress={() => setEditingAnn(null)}>
                     <View style={{ backgroundColor: '#263241', borderRadius: 20, padding: 24 }} onStartShouldSetResponder={() => true}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -1054,12 +1065,15 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
                     </View>
                 </Pressable>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Create Event Modal */}
             <Modal visible={showEventModal} animationType="slide" transparent>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} onPress={() => setShowEventModal(false)}>
                     <View style={{ backgroundColor: colors.elevated, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }} onStartShouldSetResponder={() => true}>
+                        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textPrimary }}>Create Event</Text>
                             <AnimatedPressable onPress={() => setShowEventModal(false)}>
@@ -1152,8 +1166,10 @@ const TeacherDashboard: React.FC = () => {
                                 <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '600' }}>Create Event</Text>
                             )}
                         </AnimatedPressable>
+                        </ScrollView>
                     </View>
                 </Pressable>
+                </KeyboardAvoidingView>
             </Modal>
         </SafeAreaView>
     );

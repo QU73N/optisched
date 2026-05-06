@@ -285,7 +285,7 @@ const StudentDashboard: React.FC = () => {
                                     <MaterialIcons name="menu-book" size={18} color="#60a5fa" />
                                 </View>
                                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{loading ? '-' : todaySchedule.length}</Text>
-                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Classes</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Classes Today</Text>
                             </View>
                             <View style={styles.summaryDivider} />
                             <View style={styles.summaryItem}>
@@ -293,7 +293,7 @@ const StudentDashboard: React.FC = () => {
                                     <MaterialIcons name="schedule" size={18} color="#10b981" />
                                 </View>
                                 <Text style={[styles.summaryValue, { color: '#10b981' }]}>{loading ? '-' : todaySchedule.filter(s => s.status === 'ongoing').length}</Text>
-                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Ongoing</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Ongoing Classes</Text>
                             </View>
                             <View style={styles.summaryDivider} />
                             <View style={styles.summaryItem}>
