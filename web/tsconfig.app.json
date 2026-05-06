@@ -25,7 +25,6 @@
     "noUncheckedSideEffectImports": true,
 
     /* Path aliases (shadcn-style) */
-    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
