@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Megaphone, Loader2, AlertTriangle, Info, Bell } from 'lucide-react';
+import { Megaphone, Loader2, Info, Bell } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 interface AnnRow {
@@ -13,7 +13,7 @@ interface AnnRow {
     title: string;
     content: string;
     author_name: string;
-    priority: 'normal' | 'important' | 'urgent';
+    priority: 'normal' | 'important';
     created_at: string;
     expires_at: string | null;
     target_section: string | null;
@@ -23,7 +23,7 @@ const AnnouncementsPage: React.FC = () => {
     const { profile } = useAuth();
     const [loading, setLoading] = useState(true);
     const [items, setItems] = useState<AnnRow[]>([]);
-    const [filter, setFilter] = useState<'all' | 'urgent' | 'important' | 'normal'>('all');
+    const [filter, setFilter] = useState<'all' | 'important' | 'normal'>('all');
 
     useEffect(() => {
         (async () => {
@@ -59,12 +59,10 @@ const AnnouncementsPage: React.FC = () => {
     }, [items, filter, profile?.section]);
 
     const priorityIcon = (p: string) => {
-        if (p === 'urgent') return <AlertTriangle size={14} color="#ef4444" />;
         if (p === 'important') return <Bell size={14} color="#f59e0b" />;
         return <Info size={14} color="var(--text-muted)" />;
     };
     const priorityClass = (p: string) =>
-        p === 'urgent' ? 'dash-accent-warning' :
         p === 'important' ? 'dash-accent-info' : 'dash-accent-success';
 
     if (loading) {
@@ -82,12 +80,12 @@ const AnnouncementsPage: React.FC = () => {
 
             <div className="audit-toolbar">
                 <div className="audit-time-range" style={{ marginLeft: 'auto' }}>
-                    {(['all', 'urgent', 'important', 'normal'] as const).map(p => (
+                    {(['all', 'important', 'normal'] as const).map(p => (
                         <button
                             key={p}
                             className={`audit-time-pill ${filter === p ? 'audit-time-pill-active' : ''}`}
                             onClick={() => setFilter(p)}
-                        >{p}</button>
+                        >{p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}</button>
                     ))}
                 </div>
             </div>

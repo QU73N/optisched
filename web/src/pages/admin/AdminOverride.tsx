@@ -56,8 +56,24 @@ const AdminOverride: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (isPower) load();
-    }, [isPower, load]); // eslint-disable-line react-hooks/exhaustive-deps
+        let isMounted = true;
+        const fetchData = async () => {
+            if (!isPower) return;
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('emergency_overrides')
+                .select('*')
+                .order('activated_at', { ascending: false })
+                .limit(50);
+            if (isMounted) {
+                if (error) setError(error.message);
+                else setRows(data as OverrideRow[] || []);
+                setLoading(false);
+            }
+        };
+        fetchData();
+        return () => { isMounted = false; };
+    }, [isPower]);
 
     const activate = async () => {
         if (!profile?.id) return;
@@ -112,100 +128,117 @@ const AdminOverride: React.FC = () => {
 
     return (
         <div>
-            <div className="page-header">
-                <h1><AlertOctagon size={24} /> Emergency Overrides</h1>
-                <p>Activate temporary system-wide overrides. Every activation and deactivation is recorded in the audit log.</p>
+            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div>
+                    <h1><AlertOctagon size={24} /> Emergency Overrides</h1>
+                    <p>Activate temporary system-wide overrides. All actions are logged for audit purposes.</p>
+                </div>
+                <button className="btn btn-secondary" onClick={load} aria-label="Refresh overrides"><RefreshCw size={14} /></button>
             </div>
 
-            <div className="card" style={{ marginBottom: 20, borderColor: 'var(--accent-warning)' }}>
-                <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-warning)' }}>
-                    <ShieldAlert size={16} /> Activate override
-                </h2>
-                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '220px 1fr 140px auto', alignItems: 'end' }}>
+            <div className="card" style={{ marginBottom: 24, borderColor: 'var(--accent-warning)', borderLeftWidth: 4 }}>
+                <div style={{ marginBottom: 16 }}>
+                    <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-warning)' }}>
+                        <ShieldAlert size={16} /> New Override
+                    </h2>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Configure and activate a system override</div>
+                </div>
+                <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '240px 1fr 120px auto', alignItems: 'end', paddingBottom: 16, borderBottom: '1px solid var(--border-light)' }}>
                     <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Type</label>
-                        <select className="input" value={kind} onChange={e => setKind(e.target.value as OverrideKind)} style={{ marginTop: 6 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6, display: 'block' }}>Override Type</label>
+                        <select className="input" value={kind} onChange={e => setKind(e.target.value as OverrideKind)}>
                             {(Object.keys(KIND_META) as OverrideKind[]).map(k => (
                                 <option key={k} value={k}>{KIND_META[k].label}</option>
                             ))}
                         </select>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{KIND_META[kind].description}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>{KIND_META[kind].description}</div>
                     </div>
                     <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Reason (required)</label>
-                        <input className="input" placeholder="Document why this override is needed" value={reason} onChange={e => setReason(e.target.value)} style={{ marginTop: 6 }} />
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6, display: 'block' }}>Reason <span style={{ color: 'var(--accent-error)' }}>*</span></label>
+                        <input className="input" placeholder="Explain why this override is needed (min 8 chars)" value={reason} onChange={e => setReason(e.target.value)} />
                     </div>
                     <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Expires (h)</label>
-                        <input className="input" type="number" min="0" step="0.5" value={expiresInHours} onChange={e => setExpiresInHours(e.target.value)} style={{ marginTop: 6 }} />
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6, display: 'block' }}>Expires (hours)</label>
+                        <input className="input" type="number" min="0" step="0.5" value={expiresInHours} onChange={e => setExpiresInHours(e.target.value)} placeholder="0 = never" />
                     </div>
-                    <button className="btn btn-danger" onClick={activate} disabled={creating}>
+                    <button className="btn btn-danger" onClick={activate} disabled={creating || !reason.trim()}>
                         {creating ? <><Loader2 size={14} className="spin" /> Activating</> : <><Power size={14} /> Activate</>}
                     </button>
                 </div>
-                {error && <div className="login-error" role="alert" aria-live="polite" style={{ marginTop: 10 }}>{error}</div>}
+                {error && <div className="login-error" role="alert" aria-live="polite" style={{ marginTop: 12 }}>{error}</div>}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h2 style={{ fontSize: 15, fontWeight: 600 }}>Active overrides ({activeRows.length})</h2>
-                <button className="btn btn-secondary" onClick={load} aria-label="Refresh overrides"><RefreshCw size={14} /></button>
-            </div>
-
-            {loading ? (
-                <div className="dash-loading-center"><Loader2 className="spin" size={28} /></div>
-            ) : activeRows.length === 0 ? (
-                <div className="dash-empty" style={{ marginBottom: 24 }}><CheckCircle size={28} /><div>No active overrides. System running normally.</div></div>
-            ) : (
-                <div className="dash-list" style={{ gap: 10, marginBottom: 24 }}>
-                    {activeRows.map(r => (
-                        <div key={r.id} className="card" style={{ borderColor: 'var(--accent-warning)', display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center' }}>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <ShieldAlert size={14} color="var(--accent-warning)" /> {KIND_META[r.kind].label}
+            <div style={{ marginBottom: 16 }}>
+                <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: 'var(--accent-error)', color: 'white', fontSize: 11 }}>{activeRows.length}</span>
+                    Active Overrides
+                </h2>
+                {loading ? (
+                    <div className="dash-loading-center"><Loader2 className="spin" size={28} /></div>
+                ) : activeRows.length === 0 ? (
+                    <div className="card" style={{ padding: 32, textAlign: 'center', borderStyle: 'dashed' }}>
+                        <CheckCircle size={32} style={{ color: 'var(--accent-success)', marginBottom: 12 }} />
+                        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>No active overrides</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>System is running normally with all standard safeguards in place.</div>
+                    </div>
+                ) : (
+                    <div className="dash-list" style={{ gap: 8 }}>
+                        {activeRows.map(r => (
+                            <div key={r.id} className="card" style={{ borderLeft: '4px solid var(--accent-warning)', display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', padding: 12 }}>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                        <ShieldAlert size={14} color="var(--accent-warning)" /> {KIND_META[r.kind].label}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>{r.reason}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 16, alignItems: 'center' }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={10} /> {new Date(r.activated_at).toLocaleString()}</span>
+                                        {r.expires_at && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-warning)' }}><AlertTriangle size={10} /> Expires {new Date(r.expires_at).toLocaleString()}</span>}
+                                    </div>
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{r.reason}</div>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 12 }}>
-                                    <span><Clock size={10} style={{ verticalAlign: 'middle' }} /> Activated {new Date(r.activated_at).toLocaleString()}</span>
-                                    {r.expires_at && <span>Expires {new Date(r.expires_at).toLocaleString()}</span>}
-                                </div>
+                                <button className="btn btn-secondary" onClick={() => deactivate(r)} disabled={busyId === r.id} style={{ padding: '6px 12px', fontSize: 12 }}>
+                                    {busyId === r.id ? <Loader2 size={12} className="spin" /> : <><XCircle size={12} /> Deactivate</>}
+                                </button>
                             </div>
-                            <button className="btn btn-secondary" onClick={() => deactivate(r)} disabled={busyId === r.id}>
-                                {busyId === r.id ? <Loader2 size={14} className="spin" /> : <XCircle size={14} />} Deactivate
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
+                        ))}
+                    </div>
+                )}
+            </div>
 
-            <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>History</h2>
-            {historicalRows.length === 0 ? (
-                <div className="dash-empty"><Clock size={28} /><div>No past overrides.</div></div>
-            ) : (
-                <div className="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Activated</th>
-                                <th>Kind</th>
-                                <th>Reason</th>
-                                <th>Deactivated</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {historicalRows.map(r => (
-                                <tr key={r.id}>
-                                    <td style={{ whiteSpace: 'nowrap' }}>{new Date(r.activated_at).toLocaleString()}</td>
-                                    <td>{KIND_META[r.kind].label}</td>
-                                    <td style={{ color: 'var(--text-secondary)' }}>{r.reason}</td>
-                                    <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
-                                        {r.deactivated_at ? new Date(r.deactivated_at).toLocaleString() : (r.expires_at ? `expired ${new Date(r.expires_at).toLocaleString()}` : 'N/A')}
-                                    </td>
+            <div>
+                <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>History</h2>
+                {historicalRows.length === 0 ? (
+                    <div className="card" style={{ padding: 32, textAlign: 'center', borderStyle: 'dashed' }}>
+                        <Clock size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+                        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>No override history</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Past overrides will appear here once deactivated or expired.</div>
+                    </div>
+                ) : (
+                    <div className="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style={{ width: 180 }}>Activated</th>
+                                    <th style={{ width: 200 }}>Type</th>
+                                    <th>Reason</th>
+                                    <th style={{ width: 180 }}>Deactivated</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                            </thead>
+                            <tbody>
+                                {historicalRows.map(r => (
+                                    <tr key={r.id}>
+                                        <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{new Date(r.activated_at).toLocaleString()}</td>
+                                        <td><span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: 'var(--bg-inset)', fontWeight: 500 }}>{KIND_META[r.kind].label}</span></td>
+                                        <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{r.reason}</td>
+                                        <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 12 }}>
+                                            {r.deactivated_at ? new Date(r.deactivated_at).toLocaleString() : (r.expires_at ? `Expired ${new Date(r.expires_at).toLocaleString()}` : 'N/A')}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

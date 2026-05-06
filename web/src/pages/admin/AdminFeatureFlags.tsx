@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { logAudit } from '../../hooks/useActivityLogger';
 import {
-    ToggleRight, Loader2, RefreshCw, AlertTriangle, Save, Plus, X,
+    ToggleRight, Loader2, RefreshCw, AlertTriangle, Save, Plus, X, Zap,
 } from 'lucide-react';
 
 type Audience = 'all' | 'admin' | 'teacher' | 'student' | 'beta';
@@ -31,6 +31,7 @@ const AdminFeatureFlags: React.FC = () => {
     const [showCreate, setShowCreate] = useState(false);
     const [newFlag, setNewFlag] = useState({ key: '', label: '', description: '', audience: 'all' as Audience });
     const [creating, setCreating] = useState(false);
+    const [seeding, setSeeding] = useState(false);
 
     const isPower = profile?.role === 'power_admin' || profile?.role === 'system_admin';
 
@@ -46,8 +47,22 @@ const AdminFeatureFlags: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        load();
-    }, [load]);
+        let isMounted = true;
+        const fetchData = async () => {
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('feature_flags')
+                .select('*')
+                .order('label', { ascending: true });
+            if (isMounted) {
+                if (error) setError(error.message);
+                else setFlags(data as FeatureFlag[] || []);
+                setLoading(false);
+            }
+        };
+        fetchData();
+        return () => { isMounted = false; };
+    }, []);
 
     const updateFlag = async (key: string, patch: Partial<FeatureFlag>) => {
         setBusyKey(key);
@@ -93,15 +108,154 @@ const AdminFeatureFlags: React.FC = () => {
         setCreating(false);
     };
 
+    const defaultFlags: Array<{ key: string; label: string; description: string; enabled: boolean; rollout_pct: number; audience: Audience }> = [
+        {
+            key: 'partial_generation_enabled',
+            label: 'Partial Generation Mode',
+            description: 'Allows regenerating specific sections, teachers, rooms, or subjects while keeping the rest of the schedule locked.',
+            enabled: true,
+            rollout_pct: 100,
+            audience: 'all'
+        },
+        {
+            key: 'ai_conflict_detection_enabled',
+            label: 'AI Conflict Detection',
+            description: 'Enables AI-powered conflict detection and automatic fixing suggestions.',
+            enabled: true,
+            rollout_pct: 100,
+            audience: 'all'
+        },
+        {
+            key: 'schedule_versioning_enabled',
+            label: 'Schedule Versioning',
+            description: 'Enables schedule versioning, history tracking, and rollback capabilities.',
+            enabled: true,
+            rollout_pct: 100,
+            audience: 'all'
+        },
+        {
+            key: 'workload_balancing_enabled',
+            label: 'Teacher Workload Balancing',
+            description: 'Enables automatic teacher workload balancing based on preferences and constraints.',
+            enabled: true,
+            rollout_pct: 100,
+            audience: 'all'
+        },
+        {
+            key: 'room_compatibility_enabled',
+            label: 'Room Compatibility Matrix',
+            description: 'Enforces room-subject compatibility rules during schedule generation.',
+            enabled: true,
+            rollout_pct: 100,
+            audience: 'all'
+        },
+        {
+            key: 'student_schedule_view_enabled',
+            label: 'Student Schedule View',
+            description: 'Allows students to view their class schedules and upcoming sessions.',
+            enabled: true,
+            rollout_pct: 100,
+            audience: 'all'
+        },
+        {
+            key: 'multi_scenario_generation_enabled',
+            label: 'Multi-Scenario Generation (Beta)',
+            description: 'Allows generating and comparing multiple schedule scenarios simultaneously.',
+            enabled: false,
+            rollout_pct: 0,
+            audience: 'beta'
+        },
+        {
+            key: 'advanced_analytics_enabled',
+            label: 'Advanced Analytics Dashboard',
+            description: 'Provides detailed analytics on schedule efficiency, resource utilization, and historical trends.',
+            enabled: true,
+            rollout_pct: 100,
+            audience: 'admin'
+        },
+        {
+            key: 'emergency_override_enabled',
+            label: 'Emergency Schedule Override',
+            description: 'Allows administrators to quickly override schedules for emergency situations.',
+            enabled: true,
+            rollout_pct: 100,
+            audience: 'admin'
+        },
+        {
+            key: 'teacher_requests_enabled',
+            label: 'Teacher Request System',
+            description: 'Allows teachers to submit schedule change requests for admin approval.',
+            enabled: true,
+            rollout_pct: 100,
+            audience: 'teacher'
+        }
+    ];
+
+    const seedDefaultFlags = async () => {
+        if (!confirm('This will insert default feature flags. Existing flags with the same keys will be updated. Continue?')) {
+            return;
+        }
+        setSeeding(true);
+        setError(null);
+        let inserted = 0;
+        let updated = 0;
+
+        for (const flag of defaultFlags) {
+            const { data: existing } = await supabase
+                .from('feature_flags')
+                .select('key')
+                .eq('key', flag.key)
+                .single();
+
+            if (existing) {
+                const { error } = await supabase
+                    .from('feature_flags')
+                    .update({
+                        label: flag.label,
+                        description: flag.description,
+                        enabled: flag.enabled,
+                        rollout_pct: flag.rollout_pct,
+                        audience: flag.audience,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('key', flag.key);
+                if (!error) updated++;
+            } else {
+                const { error } = await supabase
+                    .from('feature_flags')
+                    .insert({
+                        key: flag.key,
+                        label: flag.label,
+                        description: flag.description,
+                        enabled: flag.enabled,
+                        rollout_pct: flag.rollout_pct,
+                        audience: flag.audience,
+                        updated_at: new Date().toISOString(),
+                        created_at: new Date().toISOString()
+                    });
+                if (!error) inserted++;
+            }
+        }
+
+        await logAudit('feature_flags_seeded', 'feature_flags', 'all', { inserted, updated });
+        setSeeding(false);
+        load();
+    };
+
     return (
         <div>
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                 <div>
                     <h1><ToggleRight size={24} /> Feature Flags</h1>
-                    <p>Roll features out by audience and percentage. Read access is granted to any signed-in user; only Power/System Admins can edit.</p>
+                    <p>Gradually roll out features by audience and percentage. Power/System Admins can edit; all users can view.</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn btn-secondary" onClick={load} aria-label="Refresh feature flags"><RefreshCw size={14} /></button>
+                    {isPower && flags.length === 0 && (
+                        <button className="btn btn-secondary" onClick={seedDefaultFlags} disabled={seeding}>
+                            {seeding ? <><Loader2 size={14} className="spin" /> Seeding...</> : <><Zap size={14} /> Seed defaults</>}
+                        </button>
+                    )}
                     {isPower && (
                         <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={14} /> New flag</button>
                     )}
@@ -119,7 +273,24 @@ const AdminFeatureFlags: React.FC = () => {
             {loading ? (
                 <div className="dash-loading-center"><Loader2 className="spin" size={28} /></div>
             ) : flags.length === 0 ? (
-                <div className="dash-empty"><ToggleRight size={28} /><div>No feature flags defined yet.</div></div>
+                <div className="dash-empty" style={{ textAlign: 'center', padding: 40 }}>
+                    <ToggleRight size={48} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No feature flags defined yet</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, maxWidth: 400, marginLeft: 'auto', marginRight: 'auto' }}>
+                        Feature flags allow you to roll out new features gradually by audience and percentage.
+                        Use the "Seed defaults" button to populate with recommended flags, or create custom flags.
+                    </div>
+                    <div style={{ marginTop: 24, textAlign: 'left', maxWidth: 500, marginLeft: 'auto', marginRight: 'auto' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>Example flags you might need:</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                            <div style={{ marginBottom: 4 }}>• <code style={{ background: 'var(--bg-inset)', padding: '2px 6px', borderRadius: 3 }}>partial_generation_enabled</code> - Enable partial regeneration mode</div>
+                            <div style={{ marginBottom: 4 }}>• <code style={{ background: 'var(--bg-inset)', padding: '2px 6px', borderRadius: 3 }}>ai_conflict_detection_enabled</code> - Enable AI conflict detection</div>
+                            <div style={{ marginBottom: 4 }}>• <code style={{ background: 'var(--bg-inset)', padding: '2px 6px', borderRadius: 3 }}>schedule_versioning_enabled</code> - Enable schedule versioning</div>
+                            <div style={{ marginBottom: 4 }}>• <code style={{ background: 'var(--bg-inset)', padding: '2px 6px', borderRadius: 3 }}>workload_balancing_enabled</code> - Enable teacher workload balancing</div>
+                            <div style={{ marginBottom: 4 }}>• <code style={{ background: 'var(--bg-inset)', padding: '2px 6px', borderRadius: 3 }}>student_schedule_view_enabled</code> - Enable student schedule view</div>
+                        </div>
+                    </div>
+                </div>
             ) : (
                 <div className="dash-list" style={{ gap: 10 }}>
                     {flags.map(f => (

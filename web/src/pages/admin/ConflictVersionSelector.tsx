@@ -134,7 +134,7 @@ const ConflictVersionSelector: React.FC = () => {
                 </div>
                 <div className="stat-card">
                     <div className="stat-icon"><AlertTriangle size={20} /></div>
-                    <div className="stat-number">{allVersions.filter(v => v.is_active).length}</div>
+                    <div className="stat-number">{allVersions.filter(v => v.change_type === 'publish' && v.is_active).length}</div>
                     <div className="stat-label">Active Versions</div>
                 </div>
             </div>
@@ -199,7 +199,7 @@ const ConflictVersionSelector: React.FC = () => {
                             key={v.id}
                             className="card"
                             style={{
-                                borderLeft: `3px solid ${v.is_active ? '#34d399' : 'var(--border-default)'}`,
+                                borderLeft: `3px solid ${v.change_type === 'publish' && v.is_active ? '#34d399' : 'var(--border-default)'}`,
                                 cursor: 'pointer',
                                 transition: 'all 0.2s'
                             }}
@@ -213,7 +213,7 @@ const ConflictVersionSelector: React.FC = () => {
                                         <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
                                             Version {v.version_number}
                                         </span>
-                                        {v.is_active && (
+                                        {v.change_type === 'publish' && v.is_active && (
                                             <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'rgba(34,197,94,0.12)', color: '#34d399', fontWeight: 700 }}>
                                                 ACTIVE
                                             </span>

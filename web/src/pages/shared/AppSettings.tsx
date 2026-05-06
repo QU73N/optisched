@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUserPreferences } from '../../contexts/UserPreferencesContext';
 import { supabase } from '../../lib/supabase';
 import {
     Settings, User, Shield, Moon, Sun, Bell, LogOut,
-    Lock, Mail, Eye, EyeOff, Save, CheckCircle, Loader2, Layers
+    Lock, Mail, Eye, EyeOff, Save, CheckCircle, Loader2, Layers,
+    Camera, Upload, X
 } from 'lucide-react';
 
 const AppSettings: React.FC = () => {
@@ -16,11 +17,18 @@ const AppSettings: React.FC = () => {
     const [fullName, setFullName] = useState(profile?.full_name || '');
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [avatarFile, setAvatarFile] = useState<File | null>(null);
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url || null);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Security
+    const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [changingPassword, setChangingPassword] = useState(false);
 
     const handleSaveProfile = async () => {
@@ -35,7 +43,95 @@ const AppSettings: React.FC = () => {
         } finally { setSaving(false); }
     };
 
+    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            window.alert('Please select an image file');
+            return;
+        }
+        
+        // Validate file size (max 2MB)
+        if (file.size > 2 * 1024 * 1024) {
+            window.alert('Image must be less than 2MB');
+            return;
+        }
+
+        setAvatarFile(file);
+        
+        // Create preview
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setAvatarPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleAvatarUpload = async () => {
+        if (!avatarFile || !profile?.id) return;
+        
+        setUploadingAvatar(true);
+        try {
+            const fileExt = avatarFile.name.split('.').pop();
+            const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
+            const filePath = `avatars/${fileName}`;
+
+            // Upload to Supabase storage
+            const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(filePath, avatarFile);
+
+            if (uploadError) throw uploadError;
+
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(filePath);
+
+            // Update profile with avatar URL
+            const { error: updateError } = await supabase
+                .from('profiles')
+                .update({ avatar_url: publicUrl })
+                .eq('id', profile.id);
+
+            if (updateError) throw updateError;
+
+            setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
+            setAvatarFile(null);
+        } catch (err: unknown) {
+            window.alert('Error uploading avatar: ' + (err instanceof Error ? err.message : 'Unknown error'));
+        } finally {
+            setUploadingAvatar(false);
+        }
+    };
+
+    const handleRemoveAvatar = async () => {
+        if (!profile?.id) return;
+        
+        if (!window.confirm('Are you sure you want to remove your profile picture?')) return;
+        
+        setSaving(true);
+        try {
+            await supabase.from('profiles').update({ avatar_url: null }).eq('id', profile.id);
+            setAvatarPreview(null);
+            setAvatarFile(null);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
+        } catch (err: unknown) {
+            window.alert('Error removing avatar: ' + (err instanceof Error ? err.message : 'Unknown error'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleChangePassword = async () => {
+        if (!currentPassword) {
+            window.alert('Please enter your current password');
+            return;
+        }
         if (newPassword !== confirmPassword) {
             window.alert('Passwords do not match');
             return;
@@ -46,10 +142,26 @@ const AppSettings: React.FC = () => {
         }
         setChangingPassword(true);
         try {
-            const { error } = await supabase.auth.updateUser({ password: newPassword });
-            if (error) throw error;
+            // First verify current password by signing in with it
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: session?.user?.email || '',
+                password: currentPassword,
+            });
+            
+            if (signInError) {
+                window.alert('Current password is incorrect');
+                setChangingPassword(false);
+                return;
+            }
+
+            // Current password verified, now update to new password
+            const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+            if (updateError) throw updateError;
+            
             window.alert('Password updated successfully');
-            setNewPassword(''); setConfirmPassword('');
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
         } catch (err: unknown) {
             window.alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
         } finally { setChangingPassword(false); }
@@ -89,12 +201,40 @@ const AppSettings: React.FC = () => {
                         <div className="settings-section">
                             <h2>Account Information</h2>
                             <div className="profile-card-settings">
-                                <div className="profile-avatar-settings">{profile?.full_name?.charAt(0) || 'U'}</div>
-                                <div>
+                                <div className="profile-avatar-container">
+                                    {avatarPreview ? (
+                                        <img src={avatarPreview} alt="Profile" className="profile-avatar-image" />
+                                    ) : (
+                                        <div className="profile-avatar-settings">{profile?.full_name?.charAt(0) || 'U'}</div>
+                                    )}
+                                    <div className="avatar-overlay" onClick={() => fileInputRef.current?.click()}>
+                                        <Camera size={20} />
+                                    </div>
+                                </div>
+                                <div style={{ flex: 1 }}>
                                     <h3>{profile?.full_name}</h3>
                                     <span className="role-badge-settings">{profile?.role?.toUpperCase()}</span>
                                 </div>
+                                <div className="avatar-actions">
+                                    {avatarPreview && (
+                                        <button className="avatar-btn remove" onClick={handleRemoveAvatar} disabled={saving}>
+                                            <X size={14} /> Remove
+                                        </button>
+                                    )}
+                                    {avatarFile && (
+                                        <button className="avatar-btn upload" onClick={handleAvatarUpload} disabled={uploadingAvatar}>
+                                            {uploadingAvatar ? <><Loader2 size={14} className="spin" /> Uploading...</> : <><Upload size={14} /> Upload</>}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                onChange={handleAvatarChange}
+                            />
                             <div className="s-form-group">
                                 <label>Full Name</label>
                                 <input className="input" value={fullName} onChange={e => setFullName(e.target.value)} />
@@ -152,17 +292,27 @@ const AppSettings: React.FC = () => {
                         <div className="settings-section">
                             <h2>Security Settings</h2>
                             <div className="s-form-group">
+                                <label>Current Password</label>
+                                <div className="password-input-wrap">
+                                    <input className="input" type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Enter current password" />
+                                    <button className="eye-btn" onClick={() => setShowCurrentPassword(!showCurrentPassword)}>{showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                                </div>
+                            </div>
+                            <div className="s-form-group">
                                 <label>New Password</label>
                                 <div className="password-input-wrap">
-                                    <input className="input" type={showPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Enter new password" />
-                                    <button className="eye-btn" onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                                    <input className="input" type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Enter new password" />
+                                    <button className="eye-btn" onClick={() => setShowNewPassword(!showNewPassword)}>{showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
                                 </div>
                             </div>
                             <div className="s-form-group">
                                 <label>Confirm New Password</label>
-                                <input className="input" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm new password" />
+                                <div className="password-input-wrap">
+                                    <input className="input" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm new password" />
+                                    <button className="eye-btn" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>{showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                                </div>
                             </div>
-                            <button className="s-save-btn" onClick={handleChangePassword} disabled={changingPassword || !newPassword || !confirmPassword}>
+                            <button className="s-save-btn" onClick={handleChangePassword} disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}>
                                 {changingPassword ? <><Loader2 size={16} className="spin" /> Updating...</> : <><Lock size={16} /> Update Password</>}
                             </button>
                         </div>
@@ -248,9 +398,9 @@ const AppSettings: React.FC = () => {
             </div>
 
             <style>{`
-                .settings-page { display: flex; flex-direction: column; gap: 1.5rem; }
+                .settings-page { display: flex; flex-direction: column; gap: 1.5rem; max-width: none !important; }
 
-                .settings-layout { display: flex; gap: 20px; min-height: calc(100vh - 220px); }
+                .settings-layout { display: flex; gap: 20px; height: calc(100vh - 220px); }
                 .settings-sidebar { width: 220px; padding: 8px; display: flex; flex-direction: column; flex-shrink: 0; }
                 .settings-tab { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius-md); background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 13px; font-weight: 500; font-family: var(--font-sans); transition: all 120ms ease; width: 100%; text-align: left; }
                 .settings-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
@@ -259,14 +409,28 @@ const AppSettings: React.FC = () => {
                 .settings-tab.danger:hover { background: var(--accent-error-subtle); }
                 .sidebar-spacer { flex: 1; }
 
-                .settings-content { flex: 1; padding: 28px; }
+                .settings-content { flex: 1; padding: 28px; overflow-y: auto; }
                 .settings-section h2 { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-bottom: 6px; letter-spacing: -0.01em; }
                 .section-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
 
-                .profile-card-settings { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding: 18px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); }
-                .profile-avatar-settings { width: 48px; height: 48px; border-radius: var(--radius-md); background: var(--accent-primary); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; flex-shrink: 0; }
-                .profile-card-settings h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
-                .role-badge-settings { background: var(--accent-primary-subtle); color: var(--accent-primary); padding: 2px 10px; border-radius: var(--radius-full); font-size: 10px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; }
+                .profile-card-settings { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; padding: 20px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); }
+                
+                .profile-avatar-container { position: relative; width: 72px; height: 72px; flex-shrink: 0; cursor: pointer; }
+                .profile-avatar-settings { width: 72px; height: 72px; border-radius: var(--radius-lg); background: var(--accent-primary); display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #fff; }
+                .profile-avatar-image { width: 72px; height: 72px; border-radius: var(--radius-lg); object-fit: cover; }
+                .avatar-overlay { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.5); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; color: white; opacity: 0; transition: opacity 200ms ease; }
+                .profile-avatar-container:hover .avatar-overlay { opacity: 1; }
+                
+                .avatar-actions { display: flex; flex-direction: column; gap: 8px; margin-left: auto; }
+                .avatar-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-md); border: none; cursor: pointer; font-size: 12px; font-weight: 600; font-family: var(--font-sans); transition: all 150ms ease; }
+                .avatar-btn.upload { background: var(--accent-primary); color: white; }
+                .avatar-btn.upload:hover:not(:disabled) { background: var(--accent-primary-hover); }
+                .avatar-btn.remove { background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border-default); }
+                .avatar-btn.remove:hover:not(:disabled) { background: var(--accent-error-subtle); color: var(--accent-error); border-color: var(--accent-error); }
+                .avatar-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+                
+                .profile-card-settings h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+                .role-badge-settings { background: var(--accent-primary-subtle); color: var(--accent-primary); padding: 4px 12px; border-radius: var(--radius-full); font-size: 10px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; }
 
                 .s-form-group { margin-bottom: 18px; }
                 .s-form-group label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; display: block; }

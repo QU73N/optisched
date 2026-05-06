@@ -282,28 +282,13 @@ const Layout: React.FC = () => {
                         {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
                     </button>
                     <button 
-                        className="topbar-btn" 
+                        className="topbar-btn notification-btn" 
                         onClick={handleNotificationsClick}
                         aria-label="Notifications"
-                        style={{ position: 'relative' }}
                     >
                         <Bell size={18} />
                         {unreadCount > 0 && (
-                            <span style={{
-                                position: 'absolute',
-                                top: -2,
-                                right: -2,
-                                background: 'var(--accent-error)',
-                                color: 'white',
-                                fontSize: '10px',
-                                width: '16px',
-                                height: '16px',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 'bold'
-                            }}>
+                            <span className="notification-badge">
                                 {unreadCount > 9 ? '9+' : unreadCount}
                             </span>
                         )}
@@ -320,82 +305,61 @@ const Layout: React.FC = () => {
             {/* Notifications Dropdown */}
             {notificationsOpen && (
                 <div 
-                    style={{
-                        position: 'fixed',
-                        top: '60px',
-                        right: '20px',
-                        width: '380px',
-                        maxHeight: '500px',
-                        background: 'var(--card-bg)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: 'var(--radius-md)',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-                        zIndex: 10000,
-                        overflow: 'hidden',
-                    }}
+                    className="notifications-dropdown"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Notifications</h3>
+                    <div className="notifications-header">
+                        <h3>Notifications</h3>
                         {unreadCount > 0 && (
                             <button
                                 onClick={handleMarkAllAsRead}
-                                style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                                className="notifications-mark-all"
                             >
                                 Mark all as read
                             </button>
                         )}
                     </div>
-                    <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+                    <div className="notifications-list">
                         {notifications.length === 0 ? (
-                            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-                                No notifications
+                            <div className="notifications-empty">
+                                <Bell size={28} />
+                                <div>No notifications</div>
                             </div>
                         ) : (
                             notifications.map((notification) => (
                                 <div
                                     key={notification.id}
                                     onClick={() => handleNotificationClick(notification)}
-                                    style={{
-                                        padding: '12px 16px',
-                                        borderBottom: '1px solid var(--border-color)',
-                                        cursor: 'pointer',
-                                        background: notification.is_read ? 'transparent' : 'rgba(73, 136, 196, 0.05)',
-                                        transition: 'background 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = notification.is_read ? 'var(--bg-surface)' : 'rgba(73, 136, 196, 0.1)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = notification.is_read ? 'transparent' : 'rgba(73, 136, 196, 0.05)'}
+                                    className={`notification-item ${notification.is_read ? 'notification-read' : 'notification-unread'}`}
                                 >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '13px', fontWeight: notification.is_read ? 400 : 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-                                                {notification.title}
-                                            </div>
-                                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                                                {notification.message}
-                                            </div>
-                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 6 }}>
-                                                {new Date(notification.created_at).toLocaleString()}
-                                            </div>
+                                    <div className="notification-content">
+                                        <div className="notification-title">
+                                            {notification.title}
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                            {!notification.is_read && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleMarkAsRead(notification.id); }}
-                                                    style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', padding: 4 }}
-                                                    title="Mark as read"
-                                                >
-                                                    <Check size={14} />
-                                                </button>
-                                            )}
+                                        <div className="notification-message">
+                                            {notification.message}
+                                        </div>
+                                        <div className="notification-time">
+                                            {new Date(notification.created_at).toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div className="notification-actions">
+                                        {!notification.is_read && (
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }}
-                                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}
-                                                title="Delete"
+                                                onClick={(e) => { e.stopPropagation(); handleMarkAsRead(notification.id); }}
+                                                className="notification-action-btn"
+                                                title="Mark as read"
                                             >
-                                                <Trash2 size={14} />
+                                                <Check size={14} />
                                             </button>
-                                        </div>
+                                        )}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }}
+                                            className="notification-action-btn"
+                                            title="Delete"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
                                     </div>
                                 </div>
                             ))

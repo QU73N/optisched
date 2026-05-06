@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { CREATABLE_ROLES, ROLE_DISPLAY_NAMES, POWER_ADMIN_ROLES, SELECTABLE_ROLE_DISPLAY, TEACHER_ADDABLE_ROLES } from '../../types/database';
 import type { UserRole } from '../../types/database';
-import { UserPlus, Trash2, Search, X, Loader2, Edit3 } from 'lucide-react';
+import { UserPlus, Trash2, Search, X, Loader2, Edit3, ChevronUp, ChevronDown } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 interface UserProfile {
@@ -101,6 +101,8 @@ const AdminManageUsers: React.FC = () => {
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
     const [dbSections, setDbSections] = useState<{ id: string; name: string; program: string; year_level: number }[]>([]);
+    const [sortColumn, setSortColumn] = useState<string>('full_name');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
     // Create modal
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -164,6 +166,52 @@ const AdminManageUsers: React.FC = () => {
         setLoading(false);
     };
 
+    const handleSort = (column: string) => {
+        if (sortColumn === column) {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortColumn(column);
+            setSortDirection('asc');
+        }
+    };
+
+    const getSortedUsers = (usersToSort: UserProfile[]) => {
+        return [...usersToSort].sort((a, b) => {
+            let aValue: string | number;
+            let bValue: string | number;
+
+            switch (sortColumn) {
+                case 'full_name':
+                    aValue = a.full_name?.toLowerCase() || '';
+                    bValue = b.full_name?.toLowerCase() || '';
+                    break;
+                case 'email':
+                    aValue = a.email?.toLowerCase() || '';
+                    bValue = b.email?.toLowerCase() || '';
+                    break;
+                case 'role':
+                    aValue = ROLE_DISPLAY_NAMES[a.role as UserRole] || a.role;
+                    bValue = ROLE_DISPLAY_NAMES[b.role as UserRole] || b.role;
+                    break;
+                case 'section_dept':
+                    aValue = a.section || a.department || '';
+                    bValue = b.section || b.department || '';
+                    break;
+                case 'program_year':
+                    aValue = a.program ? `${a.program}${a.year_level ? ` • Year ${a.year_level}` : ''}` : '';
+                    bValue = b.program ? `${b.program}${b.year_level ? ` • Year ${b.year_level}` : ''}` : '';
+                    break;
+                default:
+                    aValue = a.full_name?.toLowerCase() || '';
+                    bValue = b.full_name?.toLowerCase() || '';
+            }
+
+            if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+    };
+
     const filtered = users.filter(u => {
         const matchesSearch =
             u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -177,6 +225,8 @@ const AdminManageUsers: React.FC = () => {
             (roleFilter === 'admin_all' && ADMIN_VARIANT_ROLES.includes(u.role));
         return matchesSearch && matchesRole;
     });
+
+    const sortedFiltered = getSortedUsers(filtered);
 
     const generateEmail = (fullName: string, studentId: string) => {
         const nameParts = fullName.trim().split(' ');
@@ -709,16 +759,66 @@ const AdminManageUsers: React.FC = () => {
                     <table>
                         <thead>
                             <tr>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th style={{ verticalAlign: 'middle', textAlign: 'center' }}>Role</th>
-                                <th>Section / Dept</th>
-                                <th>Program / Year</th>
+                                <th>
+                                    <button
+                                        onClick={() => handleSort('full_name')}
+                                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}
+                                    >
+                                        Name
+                                        {sortColumn === 'full_name' && (
+                                            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                                        )}
+                                    </button>
+                                </th>
+                                <th>
+                                    <button
+                                        onClick={() => handleSort('email')}
+                                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}
+                                    >
+                                        Email
+                                        {sortColumn === 'email' && (
+                                            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                                        )}
+                                    </button>
+                                </th>
+                                <th style={{ verticalAlign: 'middle', textAlign: 'center' }}>
+                                    <button
+                                        onClick={() => handleSort('role')}
+                                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit', justifyContent: 'center', width: '100%' }}
+                                    >
+                                        Role
+                                        {sortColumn === 'role' && (
+                                            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                                        )}
+                                    </button>
+                                </th>
+                                <th>
+                                    <button
+                                        onClick={() => handleSort('section_dept')}
+                                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}
+                                    >
+                                        Section / Dept
+                                        {sortColumn === 'section_dept' && (
+                                            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                                        )}
+                                    </button>
+                                </th>
+                                <th>
+                                    <button
+                                        onClick={() => handleSort('program_year')}
+                                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}
+                                    >
+                                        Program / Year
+                                        {sortColumn === 'program_year' && (
+                                            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                                        )}
+                                    </button>
+                                </th>
                                 <th style={{ width: 140 }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.map(user => (
+                            {sortedFiltered.map(user => (
                                 <tr key={user.id}>
                                     <td style={{ fontWeight: 600 }}>{user.full_name || 'Unnamed'}</td>
                                     <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{user.email}</td>
@@ -747,7 +847,7 @@ const AdminManageUsers: React.FC = () => {
                                     </td>
                                 </tr>
                             ))}
-                            {filtered.length === 0 && (
+                            {sortedFiltered.length === 0 && (
                                 <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No users found</td></tr>
                             )}
                         </tbody>

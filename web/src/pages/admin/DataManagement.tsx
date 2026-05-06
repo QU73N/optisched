@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasAnyRole } from '../../types/database';
-import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit, Folder, Database } from 'lucide-react';
+import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit, Folder, Database, ChevronUp, ChevronDown } from 'lucide-react';
 import '../admin/Dashboard.css';
 
 type Tab = 'rooms' | 'subjects' | 'sections';
@@ -89,6 +89,9 @@ const DataManagement: React.FC = () => {
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [sections, setSections] = useState<Section[]>([]);
     const [loading, setLoading] = useState(true);
+    const [sortColumn, setSortColumn] = useState<string>('name');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const defaultSortColumn = useMemo(() => tab === 'rooms' ? 'name' : tab === 'subjects' ? 'code' : 'name', [tab]);
 
     // Add modals
     const [showAddRoom, setShowAddRoom] = useState(false);
@@ -123,7 +126,146 @@ const DataManagement: React.FC = () => {
         setLoading(false);
     };
 
-    useEffect(() => { fetchAll(); }, []);
+    useEffect(() => {
+        let isMounted = true;
+        const fetchData = async () => {
+            if (!isMounted) return;
+            await fetchAll();
+        };
+        fetchData();
+        return () => { isMounted = false; };
+    }, []);
+
+    const handleSort = (column: string) => {
+        if (sortColumn === column) {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortColumn(column);
+            setSortDirection('asc');
+        }
+    };
+
+    const getSortedRooms = () => {
+        return [...rooms].sort((a, b) => {
+            let aValue: string | number;
+            let bValue: string | number;
+            const column = sortColumn || defaultSortColumn;
+
+            switch (column) {
+                case 'name':
+                    aValue = a.name?.toLowerCase() || '';
+                    bValue = b.name?.toLowerCase() || '';
+                    break;
+                case 'building':
+                    aValue = a.building?.toLowerCase() || '';
+                    bValue = b.building?.toLowerCase() || '';
+                    break;
+                case 'floor':
+                    aValue = a.floor || 0;
+                    bValue = b.floor || 0;
+                    break;
+                case 'type':
+                    aValue = a.type?.toLowerCase() || '';
+                    bValue = b.type?.toLowerCase() || '';
+                    break;
+                case 'capacity':
+                    aValue = a.capacity || 0;
+                    bValue = b.capacity || 0;
+                    break;
+                default:
+                    aValue = a.name?.toLowerCase() || '';
+                    bValue = b.name?.toLowerCase() || '';
+            }
+
+            if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+    };
+
+    const getSortedSubjects = () => {
+        return [...subjects].sort((a, b) => {
+            let aValue: string | number;
+            let bValue: string | number;
+            const column = sortColumn || defaultSortColumn;
+
+            switch (column) {
+                case 'code':
+                    aValue = a.code?.toLowerCase() || '';
+                    bValue = b.code?.toLowerCase() || '';
+                    break;
+                case 'name':
+                    aValue = a.name?.toLowerCase() || '';
+                    bValue = b.name?.toLowerCase() || '';
+                    break;
+                case 'units':
+                    aValue = a.units || 0;
+                    bValue = b.units || 0;
+                    break;
+                case 'type':
+                    aValue = a.type?.toLowerCase() || '';
+                    bValue = b.type?.toLowerCase() || '';
+                    break;
+                case 'program':
+                    aValue = a.program?.toLowerCase() || '';
+                    bValue = b.program?.toLowerCase() || '';
+                    break;
+                case 'year_level':
+                    aValue = a.year_level || 0;
+                    bValue = b.year_level || 0;
+                    break;
+                default:
+                    aValue = a.code?.toLowerCase() || '';
+                    bValue = b.code?.toLowerCase() || '';
+            }
+
+            if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+    };
+
+    const getSortedSections = () => {
+        return [...sections].sort((a, b) => {
+            let aValue: string | number;
+            let bValue: string | number;
+            const column = sortColumn || defaultSortColumn;
+
+            switch (column) {
+                case 'name':
+                    aValue = a.name?.toLowerCase() || '';
+                    bValue = b.name?.toLowerCase() || '';
+                    break;
+                case 'type':
+                    aValue = a.node_type?.toLowerCase() || '';
+                    bValue = b.node_type?.toLowerCase() || '';
+                    break;
+                case 'program':
+                    aValue = a.program?.toLowerCase() || '';
+                    bValue = b.program?.toLowerCase() || '';
+                    break;
+                case 'year_level':
+                    aValue = a.year_level || 0;
+                    bValue = b.year_level || 0;
+                    break;
+                case 'student_count':
+                    aValue = a.student_count || 0;
+                    bValue = b.student_count || 0;
+                    break;
+                case 'weight':
+                    aValue = a.weight || 0;
+                    bValue = b.weight || 0;
+                    break;
+                default:
+                    aValue = a.name?.toLowerCase() || '';
+                    bValue = b.name?.toLowerCase() || '';
+            }
+
+            if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+    };
 
     const handleAddRoom = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -425,6 +567,11 @@ const DataManagement: React.FC = () => {
         return () => {};
     };
 
+    // Reset sort when switching tabs
+    useEffect(() => {
+        setSortColumn(defaultSortColumn);
+        setSortDirection('asc');
+    }, [defaultSortColumn]);
     return (
         <div className="dashboard fade-in">
             <div className="dashboard-header">
@@ -464,9 +611,44 @@ const DataManagement: React.FC = () => {
                     {tab === 'rooms' && (
                         <div className="table-container">
                             <table>
-                                <thead><tr><th>Name</th><th>Building</th><th>Floor</th><th>Type</th><th>Capacity</th><th>Status</th><th style={{ width: 60 }}></th></tr></thead>
+                                <thead>
+                                    <tr>
+                                        <th>
+                                            <button onClick={() => handleSort('name')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Name
+                                                {sortColumn === 'name' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('building')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Building
+                                                {sortColumn === 'building' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('floor')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Floor
+                                                {sortColumn === 'floor' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('type')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Type
+                                                {sortColumn === 'type' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('capacity')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Capacity
+                                                {sortColumn === 'capacity' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>Status</th>
+                                        <th style={{ width: 60 }}></th>
+                                    </tr>
+                                </thead>
                                 <tbody>
-                                    {rooms.map(r => (
+                                    {getSortedRooms().map(r => (
                                         <tr key={r.id}>
                                             <td style={{ fontWeight: 600 }}>{r.name}</td>
                                             <td>{r.building}</td>
@@ -486,7 +668,7 @@ const DataManagement: React.FC = () => {
                                             </td>
                                         </tr>
                                     ))}
-                                    {rooms.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No rooms added yet.</td></tr>}
+                                    {getSortedRooms().length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No rooms added yet.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -496,9 +678,50 @@ const DataManagement: React.FC = () => {
                     {tab === 'subjects' && (
                         <div className="table-container">
                             <table>
-                                <thead><tr><th>Code</th><th>Name</th><th>Units</th><th>Type</th><th>Program</th><th>Year</th><th>Hours</th><th style={{ width: 60 }}></th></tr></thead>
+                                <thead>
+                                    <tr>
+                                        <th>
+                                            <button onClick={() => handleSort('code')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Code
+                                                {sortColumn === 'code' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('name')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Name
+                                                {sortColumn === 'name' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('units')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Units
+                                                {sortColumn === 'units' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('type')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Type
+                                                {sortColumn === 'type' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('program')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Program
+                                                {sortColumn === 'program' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('year_level')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Year
+                                                {sortColumn === 'year_level' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>Hours</th>
+                                        <th style={{ width: 60 }}></th>
+                                    </tr>
+                                </thead>
                                 <tbody>
-                                    {subjects.map(s => (
+                                    {getSortedSubjects().map(s => (
                                         <tr key={s.id}>
                                             <td style={{ fontWeight: 600 }}>{s.code}</td>
                                             <td>{s.name}</td>
@@ -519,7 +742,7 @@ const DataManagement: React.FC = () => {
                                             </td>
                                         </tr>
                                     ))}
-                                    {subjects.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No subjects added yet.</td></tr>}
+                                    {getSortedSubjects().length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No subjects added yet.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -529,9 +752,50 @@ const DataManagement: React.FC = () => {
                     {tab === 'sections' && (
                         <div className="table-container">
                             <table>
-                                <thead><tr><th>Name</th><th>Type</th><th>Parent</th><th>Program</th><th>Year Level</th><th>Students</th><th>Weight</th><th style={{ width: 60 }}></th></tr></thead>
+                                <thead>
+                                    <tr>
+                                        <th>
+                                            <button onClick={() => handleSort('name')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Name
+                                                {sortColumn === 'name' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('type')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Type
+                                                {sortColumn === 'type' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>Parent</th>
+                                        <th>
+                                            <button onClick={() => handleSort('program')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Program
+                                                {sortColumn === 'program' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('year_level')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Year Level
+                                                {sortColumn === 'year_level' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('student_count')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Students
+                                                {sortColumn === 'student_count' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th>
+                                            <button onClick={() => handleSort('weight')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Weight
+                                                {sortColumn === 'weight' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
+                                        <th style={{ width: 60 }}></th>
+                                    </tr>
+                                </thead>
                                 <tbody>
-                                    {sections.map(s => {
+                                    {getSortedSections().map(s => {
                                         const parent = sections.find(p => p.id === s.parent_id);
                                         return (
                                             <tr key={s.id}>
@@ -558,7 +822,7 @@ const DataManagement: React.FC = () => {
                                             </tr>
                                         );
                                     })}
-                                    {sections.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No sections added yet.</td></tr>}
+                                    {getSortedSections().length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>No sections added yet.</td></tr>}
                                 </tbody>
                             </table>
                         </div>

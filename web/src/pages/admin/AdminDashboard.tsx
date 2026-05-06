@@ -417,10 +417,8 @@ const AdminDashboard: React.FC = () => {
 
     const pendingRequests = requests.filter(r => r.status === 'pending');
     const prioStyles: Record<string, { bg: string; color: string }> = {
-        urgent: { bg: 'rgba(239,68,68,0.12)', color: '#ef4444' },
         important: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
         normal: { bg: 'rgba(59,130,246,0.12)', color: '#3b82f6' },
-// ... (rest of the code remains the same)
     };
 
     // Build stat cards based on role, with deltas (state plus recent change)

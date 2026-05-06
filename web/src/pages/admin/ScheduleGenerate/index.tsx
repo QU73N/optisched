@@ -48,6 +48,8 @@ const ScheduleGenerate: React.FC = () => {
     const [sections, setSections] = useState<Section[]>([]);
     const [existing, setExisting] = useState<ExistingSchedule[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
+    const [availableVersions, setAvailableVersions] = useState<Array<{ id: string; version_number: number; changed_at: string; change_type: string; is_active: boolean; snapshot?: unknown }>>([]);
+    const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
 
     const [progress, setProgress] = useState<GenerationProgress>({
         subStage: 'idle', attempt: 0, totalAttempts: 0, placed: 0, total: 0, message: 'Ready',
@@ -123,6 +125,49 @@ const ScheduleGenerate: React.FC = () => {
         }));
         
         setExisting(mappedData as unknown as ExistingSchedule[]);
+    };
+
+    const loadSchedulesFromVersion = async (versionId: string | null) => {
+        if (!versionId) {
+            // Load current schedules from database
+            const { data: sch } = await supabase
+                .from('schedules')
+                .select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at, batch_id');
+            setExisting((sch as unknown as ExistingSchedule[]) || []);
+            return;
+        }
+
+        // Load schedules from version snapshot
+        const { data: versionData, error } = await supabase
+            .from('schedule_versions')
+            .select('final_schedule')
+            .eq('id', versionId)
+            .single();
+
+        if (error || !versionData) {
+            console.error('Error loading version snapshot:', error);
+            return;
+        }
+
+        // Parse the snapshot JSONB data
+        const snapshot = versionData.final_schedule as { entries?: Array<{ subjectId: string; teacherId: string; roomId: string; sectionId: string; day: string; start: string; end: string }> };
+        
+        if (snapshot?.entries) {
+            const versionSchedules: ExistingSchedule[] = snapshot.entries.map((entry, idx) => ({
+                id: `version-${versionId}-${idx}`,
+                subject_id: entry.subjectId,
+                teacher_id: entry.teacherId,
+                room_id: entry.roomId,
+                section_id: entry.sectionId,
+                day_of_week: entry.day,
+                start_time: entry.start,
+                end_time: entry.end,
+                status: 'draft',
+                created_at: null,
+                batch_id: versionId,
+            }));
+            setExisting(versionSchedules);
+        }
     };
 
     useEffect(() => {
@@ -245,6 +290,16 @@ const ScheduleGenerate: React.FC = () => {
             );
             setSections((sec.data as unknown as Section[]) || []);
             setExisting((sch.data as unknown as ExistingSchedule[]) || []);
+
+            // Fetch available schedule versions for partial regeneration
+            const { data: versionsData } = await supabase
+                .from('schedule_versions')
+                .select('id, version_number, changed_at, change_type, is_active, snapshot')
+                .order('changed_at', { ascending: false })
+                .limit(50);
+
+            setAvailableVersions((versionsData as unknown as Array<{ id: string; version_number: number; changed_at: string; change_type: string; is_active: boolean; snapshot?: unknown }>) || []);
+
             setDataLoading(false);
             } catch (err) {
                 console.error('Data load error:', err);
@@ -827,6 +882,12 @@ const ScheduleGenerate: React.FC = () => {
                             rooms={rooms}
                             subjects={subjects}
                             compact={preferences.compact_mode}
+                            availableVersions={availableVersions}
+                            selectedVersionId={selectedVersionId}
+                            onVersionChange={async (versionId) => {
+                                setSelectedVersionId(versionId);
+                                await loadSchedulesFromVersion(versionId);
+                            }}
                         />
                     )}
                     {stage === 'structure' && (
@@ -887,9 +948,11 @@ const ScheduleGenerate: React.FC = () => {
 
             {!dataLoading && stage !== 'generate' && (
                 <div className="sg-nav">
-                    <button className="btn btn-secondary" onClick={goBack} disabled={stageIndex === 0 || generating}>
-                        <ArrowLeft size={14} /> Back
-                    </button>
+                    {stageIndex > 0 && (
+                        <button className="btn btn-secondary" onClick={goBack} disabled={generating}>
+                            <ArrowLeft size={14} /> Back
+                        </button>
+                    )}
                     {stage === 'review' ? (
                         <button className="btn btn-primary" onClick={() => { setStage('generate'); setTimeout(startGeneration, 50); }} disabled={blockers.length > 0}>
                             <Sparkles size={14} /> Start generation
@@ -980,7 +1043,10 @@ const ScopeStage: React.FC<{
     rooms: Room[];
     subjects: Subject[];
     compact?: boolean;
-}> = ({ config, setConfig, sections, teachers, rooms, subjects, compact = false }) => {
+    availableVersions: Array<{ id: string; version_number: number; changed_at: string; change_type: string; is_active: boolean; snapshot?: unknown }>;
+    selectedVersionId: string | null;
+    onVersionChange: (versionId: string | null) => void;
+}> = ({ config, setConfig, sections, teachers, rooms, subjects, compact = false, availableVersions, selectedVersionId, onVersionChange }) => {
     const setMode = (mode: GenerationMode) => setConfig(c => ({ ...c, mode, sectionIds: [] }));
 
     const setPartialKind = (kind: PartialKind) =>
@@ -1035,6 +1101,9 @@ const ScopeStage: React.FC<{
                     options={targetOptions}
                     onKindChange={setPartialKind}
                     onIdChange={setPartialId}
+                    availableVersions={availableVersions}
+                    selectedVersionId={selectedVersionId}
+                    onVersionChange={onVersionChange}
                 />
             )}
         </div>
@@ -1046,7 +1115,10 @@ const PartialTargetPicker: React.FC<{
     options: { id: string; label: string; sub?: string }[];
     onKindChange: (kind: PartialKind) => void;
     onIdChange: (id: string) => void;
-}> = ({ target, options, onKindChange, onIdChange }) => {
+    availableVersions: Array<{ id: string; version_number: number; changed_at: string; change_type: string; is_active: boolean; snapshot?: unknown }>;
+    selectedVersionId: string | null;
+    onVersionChange: (versionId: string | null) => void;
+}> = ({ target, options, onKindChange, onIdChange, availableVersions, selectedVersionId, onVersionChange }) => {
     const kind = target?.kind ?? 'section';
 
     const kindIcons: Record<PartialKind, React.ReactNode> = {
@@ -1100,6 +1172,44 @@ const PartialTargetPicker: React.FC<{
                             {o.label}{o.sub ? ` - ${o.sub}` : ''}
                         </option>
                     ))}
+                </select>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+                <div style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <strong>Base Version (Optional)</strong>
+                    <FieldTooltip>Select a historical version snapshot to regenerate from. Leave empty to use current version.</FieldTooltip>
+                </div>
+                <select
+                    className="input"
+                    value={selectedVersionId || ''}
+                    onChange={e => onVersionChange(e.target.value || null)}
+                    style={{
+                        width: '100%',
+                        maxWidth: 480,
+                        padding: '10px 12px',
+                        fontSize: 14,
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--border-light)',
+                        backgroundColor: 'var(--surface)',
+                        color: 'var(--text-primary)'
+                    }}
+                >
+                    <option value="">Current Version</option>
+                    {availableVersions.map(v => {
+                        const date = new Date(v.changed_at).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                        });
+                        const changeLabel = v.change_type === 'created' ? 'Draft' : v.change_type.charAt(0).toUpperCase() + v.change_type.slice(1);
+                        // Only show (Active) for published versions that are actually active
+                        const isActive = v.change_type === 'publish' && v.is_active;
+                        const label = `v${v.version_number} - ${changeLabel} - ${date}${isActive ? ' (Active)' : ''}`;
+                        return (
+                            <option key={v.id} value={v.id}>
+                                {label}
+                            </option>
+                        );
+                    })}
                 </select>
             </div>
 
@@ -1190,188 +1300,191 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
                     </div>
                 </div>
 
-                {/* Section 1: Break Mode */}
-                <div className="sg-break-config-section">
-                    <div className="sg-field-label sg-break-config-label">
-                        Break Mode
-                        <FieldTooltip>Choose between a fixed break time for everyone, or variable breaks that teachers/sections can customize.</FieldTooltip>
-                    </div>
-                    <div className="sg-break-mode-toggle">
-                        <button
-                            className={`btn ${config.breakMode === 'fixed' ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => setConfig(c => ({ ...c, breakMode: 'fixed' }))}
-                        >
-                            Fixed Break
-                        </button>
-                        <button
-                            className={`btn ${config.breakMode === 'variable' ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => setConfig(c => ({ ...c, breakMode: 'variable' }))}
-                        >
-                            Variable Break
-                        </button>
-                    </div>
-
-                    {config.breakMode === 'fixed' && (
-                        <div className="sg-grid-3">
-                            <div>
-                                <div className="sg-field-label">
-                                    Label
-                                    <FieldTooltip>Name for this break period (e.g., Lunch, Recess).</FieldTooltip>
-                                </div>
-                                <input
-                                    className="input"
-                                    value={config.fixedBreak.label}
-                                    onChange={e => setConfig(c => ({ ...c, fixedBreak: { ...c.fixedBreak, label: e.target.value } }))}
-                                    placeholder="e.g., Lunch"
-                                />
-                            </div>
-                            <div>
-                                <div className="sg-field-label">
-                                    Start time
-                                    <FieldTooltip>When the break period starts each day.</FieldTooltip>
-                                </div>
-                                <input
-                                    type="time"
-                                    className="input"
-                                    value={config.fixedBreak.start}
-                                    onChange={e => setConfig(c => ({ ...c, fixedBreak: { ...c.fixedBreak, start: e.target.value } }))}
-                                />
-                            </div>
-                            <div>
-                                <div className="sg-field-label">
-                                    End time
-                                    <FieldTooltip>When the break period ends each day.</FieldTooltip>
-                                </div>
-                                <input
-                                    type="time"
-                                    className="input"
-                                    value={config.fixedBreak.end}
-                                    onChange={e => setConfig(c => ({ ...c, fixedBreak: { ...c.fixedBreak, end: e.target.value } }))}
-                                />
-                            </div>
+                {/* Section 1: Break Mode and Common Break - Side by Side */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    {/* Break Mode */}
+                    <div className="sg-break-config-section">
+                        <div className="sg-field-label sg-break-config-label">
+                            Break Mode
+                            <FieldTooltip>Choose between a fixed break time for everyone, or variable breaks that teachers/sections can customize.</FieldTooltip>
                         </div>
-                    )}
-
-                    {config.breakMode === 'variable' && (
-                        <div className="sg-grid-4">
-                            <div>
-                                <div className="sg-field-label">
-                                    Start time
-                                    <FieldTooltip>Earliest time teachers/sections can schedule their break.</FieldTooltip>
-                                </div>
-                                <input
-                                    type="time"
-                                    className="input"
-                                    value={config.variableBreak.startTime}
-                                    onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, startTime: e.target.value } }))}
-                                />
-                            </div>
-                            <div>
-                                <div className="sg-field-label">
-                                    End time
-                                    <FieldTooltip>Latest time teachers/sections can schedule their break.</FieldTooltip>
-                                </div>
-                                <input
-                                    type="time"
-                                    className="input"
-                                    value={config.variableBreak.endTime}
-                                    onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, endTime: e.target.value } }))}
-                                />
-                            </div>
-                            <div>
-                                <div className="sg-field-label">
-                                    Duration (min)
-                                    <FieldTooltip>Length of each break period in minutes.</FieldTooltip>
-                                </div>
-                                <input
-                                    type="number"
-                                    className="input"
-                                    value={config.variableBreak.duration}
-                                    onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, duration: Number(e.target.value) } }))}
-                                    min={15}
-                                    step={15}
-                                />
-                            </div>
-                            <div>
-                                <div className="sg-field-label">
-                                    Increments (min)
-                                    <FieldTooltip>Time granularity for scheduling breaks (e.g., 15 = breaks can start at :00, :15, :30, :45).</FieldTooltip>
-                                </div>
-                                <input
-                                    type="number"
-                                    className="input"
-                                    value={config.variableBreak.increments}
-                                    onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, increments: Number(e.target.value) } }))}
-                                    min={15}
-                                    step={15}
-                                />
-                            </div>
+                        <div className="sg-break-mode-toggle">
+                            <button
+                                className={`btn ${config.breakMode === 'fixed' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setConfig(c => ({ ...c, breakMode: 'fixed' }))}
+                            >
+                                Fixed Break
+                            </button>
+                            <button
+                                className={`btn ${config.breakMode === 'variable' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setConfig(c => ({ ...c, breakMode: 'variable' }))}
+                            >
+                                Variable Break
+                            </button>
                         </div>
-                    )}
-                </div>
 
-                {/* Section 2: Common Break */}
-                <div className="sg-break-config-section">
-                    <div className="sg-field-label sg-break-config-label">
-                        Common Break
-                        <FieldTooltip>Overrides all other breaks on selected day. All classes and teachers have a break at this time.</FieldTooltip>
-                    </div>
-                    <div className="sg-common-break-toggle">
-                        <label className="sg-toggle-label">
-                            <input
-                                type="checkbox"
-                                checked={config.commonBreak.enabled}
-                                onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, enabled: e.target.checked } }))}
-                                className="sg-toggle-checkbox"
-                            />
-                            <span className="sg-toggle-slider"></span>
-                            <span className="sg-toggle-text">Enable Common Break</span>
-                        </label>
+                        {config.breakMode === 'fixed' && (
+                            <div className="sg-grid-3">
+                                <div>
+                                    <div className="sg-field-label">
+                                        Label
+                                        <FieldTooltip>Name for this break period (e.g., Lunch, Recess).</FieldTooltip>
+                                    </div>
+                                    <input
+                                        className="input"
+                                        value={config.fixedBreak.label}
+                                        onChange={e => setConfig(c => ({ ...c, fixedBreak: { ...c.fixedBreak, label: e.target.value } }))}
+                                        placeholder="e.g., Lunch"
+                                    />
+                                </div>
+                                <div>
+                                    <div className="sg-field-label">
+                                        Start time
+                                        <FieldTooltip>When the break period starts each day.</FieldTooltip>
+                                    </div>
+                                    <input
+                                        type="time"
+                                        className="input"
+                                        value={config.fixedBreak.start}
+                                        onChange={e => setConfig(c => ({ ...c, fixedBreak: { ...c.fixedBreak, start: e.target.value } }))}
+                                    />
+                                </div>
+                                <div>
+                                    <div className="sg-field-label">
+                                        End time
+                                        <FieldTooltip>When the break period ends each day.</FieldTooltip>
+                                    </div>
+                                    <input
+                                        type="time"
+                                        className="input"
+                                        value={config.fixedBreak.end}
+                                        onChange={e => setConfig(c => ({ ...c, fixedBreak: { ...c.fixedBreak, end: e.target.value } }))}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {config.breakMode === 'variable' && (
+                            <div className="sg-grid-4">
+                                <div>
+                                    <div className="sg-field-label">
+                                        Start time
+                                        <FieldTooltip>Earliest time teachers/sections can schedule their break.</FieldTooltip>
+                                    </div>
+                                    <input
+                                        type="time"
+                                        className="input"
+                                        value={config.variableBreak.startTime}
+                                        onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, startTime: e.target.value } }))}
+                                    />
+                                </div>
+                                <div>
+                                    <div className="sg-field-label">
+                                        End time
+                                        <FieldTooltip>Latest time teachers/sections can schedule their break.</FieldTooltip>
+                                    </div>
+                                    <input
+                                        type="time"
+                                        className="input"
+                                        value={config.variableBreak.endTime}
+                                        onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, endTime: e.target.value } }))}
+                                    />
+                                </div>
+                                <div>
+                                    <div className="sg-field-label">
+                                        Duration (min)
+                                        <FieldTooltip>Length of each break period in minutes.</FieldTooltip>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        value={config.variableBreak.duration}
+                                        onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, duration: Number(e.target.value) } }))}
+                                        min={15}
+                                        step={15}
+                                    />
+                                </div>
+                                <div>
+                                    <div className="sg-field-label">
+                                        Increments (min)
+                                        <FieldTooltip>Time granularity for scheduling breaks (e.g., 15 = breaks can start at :00, :15, :30, :45).</FieldTooltip>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        value={config.variableBreak.increments}
+                                        onChange={e => setConfig(c => ({ ...c, variableBreak: { ...c.variableBreak, increments: Number(e.target.value) } }))}
+                                        min={15}
+                                        step={15}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {config.commonBreak.enabled && (
-                        <div className="sg-grid-3">
-                            <div>
-                                <div className="sg-field-label">
-                                    Day
-                                    <FieldTooltip>Select which day has the common break.</FieldTooltip>
-                                </div>
-                                <select
-                                    className="input"
-                                    value={config.commonBreak.day}
-                                    onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, day: e.target.value } }))}
-                                >
-                                    {ALL_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <div className="sg-field-label">
-                                    Time
-                                    <FieldTooltip>When the common break occurs on the selected day.</FieldTooltip>
-                                </div>
-                                <input
-                                    type="time"
-                                    className="input"
-                                    value={config.commonBreak.time}
-                                    onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, time: e.target.value } }))}
-                                />
-                            </div>
-                            <div>
-                                <div className="sg-field-label">
-                                    Duration (min)
-                                    <FieldTooltip>Length of the common break in minutes.</FieldTooltip>
-                                </div>
-                                <input
-                                    type="number"
-                                    className="input"
-                                    value={config.commonBreak.duration}
-                                    onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, duration: Number(e.target.value) } }))}
-                                    min={15}
-                                    step={15}
-                                />
-                            </div>
+                    {/* Common Break */}
+                    <div className="sg-break-config-section">
+                        <div className="sg-field-label sg-break-config-label" style={{ marginBottom: 12 }}>
+                            Common Break
+                            <FieldTooltip>Overrides all other breaks on selected day. All classes and teachers have a break at this time.</FieldTooltip>
                         </div>
-                    )}
+                        <div className="sg-common-break-toggle" style={{ marginBottom: 12 }}>
+                            <label className="sg-toggle-label">
+                                <input
+                                    type="checkbox"
+                                    checked={config.commonBreak.enabled}
+                                    onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, enabled: e.target.checked } }))}
+                                    className="sg-toggle-checkbox"
+                                />
+                                <span className="sg-toggle-slider"></span>
+                                <span className="sg-toggle-text">Enable Common Break</span>
+                            </label>
+                        </div>
+
+                        {config.commonBreak.enabled && (
+                            <div className="sg-grid-3">
+                                <div>
+                                    <div className="sg-field-label">
+                                        Day
+                                        <FieldTooltip>Select which day has the common break.</FieldTooltip>
+                                    </div>
+                                    <select
+                                        className="input"
+                                        value={config.commonBreak.day}
+                                        onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, day: e.target.value } }))}
+                                    >
+                                        {ALL_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <div className="sg-field-label">
+                                        Time
+                                        <FieldTooltip>When the common break occurs on the selected day.</FieldTooltip>
+                                    </div>
+                                    <input
+                                        type="time"
+                                        className="input"
+                                        value={config.commonBreak.time}
+                                        onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, time: e.target.value } }))}
+                                    />
+                                </div>
+                                <div>
+                                    <div className="sg-field-label">
+                                        Duration (min)
+                                        <FieldTooltip>Length of the common break in minutes.</FieldTooltip>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        value={config.commonBreak.duration}
+                                        onChange={e => setConfig(c => ({ ...c, commonBreak: { ...c.commonBreak, duration: Number(e.target.value) } }))}
+                                        min={15}
+                                        step={15}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -1390,7 +1503,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
         setConfig(c => ({ ...c, soft: { ...c.soft, [key]: val } }));
 
     return (
-        <div>
+        <div style={{ maxHeight: '600px', overflowY: 'auto', paddingRight: '8px' }}>
             <StageHeader icon={<Sliders size={16} />} title="Constraints" desc="Hard rules are always enforced. Tune soft weights to guide optimization." compact={compact} />
 
             <div className="sg-subhead"><ShieldCheck size={12} /> Policies</div>
@@ -2408,22 +2521,77 @@ const PrioritiesStage: React.FC<{
     const [kind, setKind] = useState<PriorityKind>('sections');
     const [search, setSearch] = useState('');
 
+    // Filter sections based on partial generation target
+    const filteredSections = useMemo(() => {
+        if (config.mode !== 'partial' || !config.partialTarget) {
+            return sections;
+        }
+
+        const { kind: targetKind, id: targetId } = config.partialTarget;
+
+        switch (targetKind) {
+            case 'section':
+                // Only show the target section
+                return sections.filter(s => s.id === targetId);
+            case 'subject': {
+                // Show sections matching the subject's program/year level
+                const subject = subjects.find(s => s.id === targetId);
+                if (!subject) return sections;
+                return sections.filter(s =>
+                    s.program === subject.program &&
+                    s.year_level === subject.year_level
+                );
+            }
+            case 'teacher':
+            case 'room':
+                // Show all sections (teachers/rooms can be used by multiple sections)
+                return sections;
+            default:
+                return sections;
+        }
+    }, [config.mode, config.partialTarget, sections, subjects]);
+
+    // Filter subjects based on partial generation target
+    const filteredSubjects = useMemo(() => {
+        if (config.mode !== 'partial' || !config.partialTarget) {
+            return subjects;
+        }
+
+        const { kind: targetKind, id: targetId } = config.partialTarget;
+
+        switch (targetKind) {
+            case 'subject':
+                // Only show the target subject
+                return subjects.filter(s => s.id === targetId);
+            case 'teacher':
+                // Show subjects taught by the target teacher
+                // This would require fetching teacher-subject assignments, for now show all
+                return subjects;
+            case 'section':
+            case 'room':
+                // Show all subjects
+                return subjects;
+            default:
+                return subjects;
+        }
+    }, [config.mode, config.partialTarget, subjects]);
+
     const items: PriorityItem[] = useMemo(() => {
         if (kind === 'sections') {
-            return sections.map(s => ({
+            return filteredSections.map(s => ({
                 id: s.id,
                 label: s.name,
                 sub: [s.program, s.year_level ? `Year ${s.year_level}` : null].filter(Boolean).join(' · ') || 'Section',
                 groupKey: `${s.program || 'Unassigned'} · Year ${s.year_level ?? '?'}`,
             }));
         }
-        return subjects.map(s => ({
+        return filteredSubjects.map(s => ({
             id: s.id,
             label: s.code,
             sub: s.name,
             groupKey: `${s.program || 'Unassigned'} · Year ${s.year_level ?? '?'}`,
         }));
-    }, [kind, sections, subjects]);
+    }, [kind, filteredSections, filteredSubjects]);
 
     const grouped = useMemo(() => {
         const q = search.trim().toLowerCase();
