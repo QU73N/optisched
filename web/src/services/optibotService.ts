@@ -148,6 +148,81 @@ Rules for actions:
 - If the user is not an admin, refuse: "Only administrators can perform system actions."
 - CRITICAL: Email addresses MUST always contain "@". Example: "lastname@meycauayan.sti.edu.ph" NOT "lastname.meycauayan.sti.edu.ph". Double-check every email you generate.
 
+## DATA VALIDATION AND COMPLETENESS CHECKING:
+
+Before executing ANY create action (create_user, create_room, create_subject, create_section, create_schedule, etc.), you MUST:
+
+### 1. Verify Required Fields
+Check that ALL required fields are provided. If any required field is missing, ask for it BEFORE executing the action:
+
+**create_user REQUIRED fields:**
+- full_name (required)
+- role (required: student, teacher, admin, power_admin, system_admin, schedule_admin, schedule_manager)
+- email (required, must contain "@")
+- For students: program, year_level, section (ALL required)
+- For teachers: department (required)
+
+**create_room REQUIRED fields:**
+- name (required)
+- building (required)
+- floor (required, must be a positive integer)
+- type (required: common or special)
+- capacity (required, must be a positive integer)
+
+**create_subject REQUIRED fields:**
+- name (required)
+- code (required, unique)
+- units (required, must be a positive integer)
+- type (required: common or special)
+- program (required)
+- year_level (required, must be a positive integer)
+
+**create_section REQUIRED fields:**
+- name (required, unique)
+- program (required)
+- year_level (required, must be a positive integer)
+- student_count (required, must be a positive integer)
+
+**create_schedule REQUIRED fields:**
+- subject_name (required, must exist in database)
+- teacher_name (required, must exist in database)
+- room_name (required, must exist in database)
+- section_name (required, must exist in database)
+- day_of_week (required: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday)
+- start_time (required, format: HH:MM)
+- end_time (required, format: HH:MM, must be after start_time)
+
+### 2. Cross-Reference with Existing Data
+Before creating any entity, check the existing database context to:
+- Verify that the name/code doesn't already exist (for rooms, subjects, sections)
+- Check if referenced entities exist (e.g., when creating a schedule, verify the subject, teacher, room, and section all exist)
+- Look for potential duplicates or similar names that might indicate typos
+
+### 3. Identify Potential Issues
+If you notice any of the following, ask clarifying questions:
+- Typos in names (e.g., "Mathmatics" instead of "Mathematics")
+- Inconsistent formatting (e.g., room names that don't follow the pattern)
+- Unusual values (e.g., capacity of 1 or 1000, year_level of 20)
+- Missing logical connections (e.g., creating a schedule for a section that doesn't exist)
+
+### 4. Ask Clarifying Questions ONLY When Needed
+Do NOT be overly cautious. Only ask questions when:
+- A REQUIRED field is missing
+- You detect a clear error or inconsistency
+- The information provided is ambiguous
+- You need to prevent a duplicate or conflict
+
+If all required fields are present and the information appears valid, proceed with the action without unnecessary questions.
+
+### 5. How to Ask for Missing Information
+When asking for missing information:
+- Be specific about what's missing
+- Provide examples if helpful
+- Explain why the information is needed
+- Use the same language as the user (English/Tagalog/Taglish)
+
+Example response: "I need a bit more information to create this room. You've provided the name, building, type, and capacity, but I also need to know which floor this room is on. What floor is Room 201 located on?"
+
 Keep responses concise, professional, and formatted with clear structure using bullet points or numbered lists when applicable.`;
 
 export interface GeminiMessage {

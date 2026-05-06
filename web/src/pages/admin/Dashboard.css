@@ -58,6 +58,7 @@
     font-size: var(--d-text-base);
     line-height: 1.5;
     overflow-x: hidden;
+    overflow-y: hidden;
 }
 
 .dashboard.fade-in { animation: dashFadeIn 240ms var(--ease-out) both; }
@@ -3518,4 +3519,52 @@
 .audit-time-pill-active:hover {
     background: var(--accent-primary);
     color: var(--text-on-accent);
+}
+
+/* ============================================================
+   Table Container - Scrollable table with fixed header
+   ============================================================ */
+.table-container {
+    max-height: calc(100vh - 280px);
+    overflow-y: auto;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+}
+
+.table-container table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--d-text-base);
+}
+
+.table-container thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-surface);
+}
+
+.table-container thead th {
+    background: var(--bg-surface);
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border-default);
+    white-space: nowrap;
+}
+
+.table-container tbody tr {
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background var(--transition-fast);
+}
+
+.table-container tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+.table-container tbody td {
+    padding: 12px 16px;
+    color: var(--text-primary);
 }
