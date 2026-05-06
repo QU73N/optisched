@@ -70,9 +70,13 @@ const ScheduleVersions: React.FC = () => {
             // Check if there is an active published version
             const hasActivePublished = allVersions.some(v => v.is_active && ['publish', 'overwrite', 'restore'].includes(v.change_type));
             
-            // If no active published version exists in history, but there ARE current schedules in the database,
-            // we create a virtual version so they can still see what is currently active.
-            if (!hasActivePublished) {
+            // Only add virtual current version if:
+            // 1. No active published version exists in history
+            // 2. There are current published schedules in the database
+            // 3. The filter is 'all' or 'published' (not draft/previous/submitted)
+            const shouldAddVirtualVersion = !hasActivePublished && (filter === 'all' || filter === 'published');
+            
+            if (shouldAddVirtualVersion) {
                 const { data: currentSchedules, error: schedulesError } = await supabase
                     .from('schedules')
                     .select('id, status, academic_year, semester, created_at')
