@@ -112,13 +112,13 @@ export async function restoreBackup(backupData: BackupData): Promise<{
         }
 
         try {
-            // Skip certain tables to prevent conflicts
-            if (tableName === 'profiles' || tableName === 'backup_jobs') {
+            // Skip backup_jobs table to prevent conflicts with job tracking
+            if (tableName === 'backup_jobs') {
                 result.restored_tables[tableName] = 0;
                 continue;
             }
 
-            // Delete existing data
+            // Delete existing data (using a condition that matches all rows)
             const { error: deleteError } = await supabase
                 .from(tableName)
                 .delete()

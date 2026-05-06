@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { logAudit } from '../../hooks/useActivityLogger';
 import {
     Save, Database, Loader2, RefreshCw, CheckCircle, XCircle, Clock,
-    AlertTriangle, Download, PlayCircle, Upload,
+    AlertTriangle, Download, PlayCircle, Upload, Trash2,
 } from 'lucide-react';
 import {
     createBackup,
@@ -159,7 +159,7 @@ const AdminBackup: React.FC = () => {
                 throw new Error('Invalid backup file format');
             }
 
-            if (!confirm(`Restore backup from ${backupData.metadata.timestamp}?\n\nThis will replace existing data. Continue?`)) {
+            if (!confirm(`Restore backup from ${backupData.metadata.timestamp}?\n\nThis will DELETE all current data and replace it with the backup. This action cannot be undone.\n\nContinue?`)) {
                 setRestoring(false);
                 return;
             }
@@ -181,6 +181,26 @@ const AdminBackup: React.FC = () => {
             setError(err instanceof Error ? err.message : 'Failed to restore backup');
         }
         setRestoring(false);
+    };
+
+    const handleDeleteJob = async (jobId: string) => {
+        if (!confirm('Are you sure you want to delete this backup job? This cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const { error } = await supabase
+                .from('backup_jobs')
+                .delete()
+                .eq('id', jobId);
+
+            if (error) throw error;
+
+            setJobs(prev => prev.filter(j => j.id !== jobId));
+            await logAudit('backup_job_deleted', 'backup_jobs', jobId, {});
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to delete backup job');
+        }
     };
 
     if (!isPower) {
@@ -293,6 +313,7 @@ const AdminBackup: React.FC = () => {
                                     <th style={{ width: 100 }}>Size</th>
                                     <th>Note</th>
                                     <th style={{ width: 120 }}>File</th>
+                                    <th style={{ width: 80 }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -309,6 +330,25 @@ const AdminBackup: React.FC = () => {
                                                     <Download size={12} /> Download
                                                 </a>
                                             ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
+                                        </td>
+                                        <td>
+                                            <button
+                                                onClick={() => handleDeleteJob(j.id)}
+                                                style={{ 
+                                                    padding: 4, 
+                                                    borderRadius: 4, 
+                                                    border: 'none', 
+                                                    backgroundColor: 'var(--accent-error-10, rgba(200, 75, 75, 0.1))', 
+                                                    color: 'var(--accent-error)', 
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center'
+                                                }}
+                                                title="Delete backup job"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
