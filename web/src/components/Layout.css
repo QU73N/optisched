@@ -350,7 +350,8 @@
     flex: 1;
     padding: 28px clamp(16px, 3vw, 40px);
     height: calc(100vh - 56px);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 /* ========== SIDERAIL ========== */
