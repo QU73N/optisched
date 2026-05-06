@@ -369,8 +369,20 @@ const DataManagement: React.FC = () => {
 
     const handleDelete = async (table: string, id: string, label: string) => {
         if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
-        await supabase.from(table).delete().eq('id', id);
-        fetchAll();
+        
+        try {
+            const { error } = await supabase.from(table).delete().eq('id', id);
+            if (error) {
+                console.error('Delete error:', error);
+                alert(`Failed to delete: ${error.message}`);
+                return;
+            }
+            await fetchAll();
+        } catch (err: unknown) {
+            console.error('Delete exception:', err);
+            const message = err instanceof Error ? err.message : String(err);
+            alert(`Failed to delete: ${message}`);
+        }
     };
 
     const openEditRoom = async (room: Room) => {
@@ -454,40 +466,66 @@ const DataManagement: React.FC = () => {
         
         setSaving(true);
         
-        // Update room
-        await supabase.from('rooms').update({
-            name: editRoom.name,
-            capacity: editRoom.capacity,
-            type: editRoom.type,
-            room_facility_type: editRoom.room_facility_type,
-            building: editRoom.building,
-            floor: editRoom.floor,
-            weight: editRoom.weight,
-            priority_note: editRoom.priority_note,
-            owner_id: editRoom.owner_id,
-            is_public: editRoom.is_public,
-            shared_with: editRoom.shared_with,
-            is_special_room: editRoom.is_special_room,
-            movement_cost: editRoom.movement_cost,
-        }).eq('id', editingId);
+        try {
+            // Update room
+            const { error: updateError } = await supabase.from('rooms').update({
+                name: editRoom.name,
+                capacity: editRoom.capacity,
+                type: editRoom.type,
+                room_facility_type: editRoom.room_facility_type,
+                building: editRoom.building,
+                floor: editRoom.floor,
+                weight: editRoom.weight,
+                priority_note: editRoom.priority_note,
+                owner_id: editRoom.owner_id,
+                is_public: editRoom.is_public,
+                shared_with: editRoom.shared_with,
+                is_special_room: editRoom.is_special_room,
+                movement_cost: editRoom.movement_cost,
+            }).eq('id', editingId);
 
-        // Sync subject compatibility - delete old and insert new
-        await supabase.from('subject_rooms').delete().eq('room_id', editingId);
-        
-        if (editRoom.type === 'special' && editRoom.compatible_subject_ids.length > 0) {
-            const subjectRelations = editRoom.compatible_subject_ids.map(subjectId => ({
-                subject_id: subjectId,
-                room_id: editingId,
-                priority: 1
-            }));
-            await supabase.from('subject_rooms').insert(subjectRelations);
+            if (updateError) {
+                console.error('Update room error:', updateError);
+                alert(`Failed to update room: ${updateError.message}`);
+                setSaving(false);
+                return;
+            }
+
+            // Sync subject compatibility - delete old and insert new
+            const { error: deleteError } = await supabase.from('subject_rooms').delete().eq('room_id', editingId);
+            if (deleteError) {
+                console.error('Delete subject_rooms error:', deleteError);
+                alert(`Failed to update room compatibility: ${deleteError.message}`);
+                setSaving(false);
+                return;
+            }
+            
+            if (editRoom.type === 'special' && editRoom.compatible_subject_ids.length > 0) {
+                const subjectRelations = editRoom.compatible_subject_ids.map(subjectId => ({
+                    subject_id: subjectId,
+                    room_id: editingId,
+                    priority: 1
+                }));
+                const { error: insertError } = await supabase.from('subject_rooms').insert(subjectRelations);
+                if (insertError) {
+                    console.error('Insert subject_rooms error:', insertError);
+                    alert(`Failed to update room compatibility: ${insertError.message}`);
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            setShowEditRoom(false);
+            setEditRoom({ name: '', capacity: 40, type: 'common', room_facility_type: 'general_classroom', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [], is_special_room: false, movement_cost: 50, compatible_subject_ids: [] });
+            setEditingId(null);
+            setSaving(false);
+            await fetchAll();
+        } catch (err: unknown) {
+            console.error('Edit room exception:', err);
+            const message = err instanceof Error ? err.message : String(err);
+            alert(`Failed to update room: ${message}`);
+            setSaving(false);
         }
-
-        setShowEditRoom(false);
-        setEditRoom({ name: '', capacity: 40, type: 'common', room_facility_type: 'general_classroom', building: '', floor: 1, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [], is_special_room: false, movement_cost: 50, compatible_subject_ids: [] });
-        setEditingId(null);
-        setSaving(false);
-        fetchAll();
     };
 
     const handleEditSubject = async (e: React.FormEvent) => {
@@ -501,57 +539,97 @@ const DataManagement: React.FC = () => {
         
         setSaving(true);
 
-        // Update subject
-        await supabase.from('subjects').update({
-            code: editSubject.code,
-            name: editSubject.name,
-            units: editSubject.units,
-            type: editSubject.type,
-            duration_hours: editSubject.duration_hours,
-            program: editSubject.program,
-            year_level: editSubject.year_level,
-            teacher_id: editSubject.teacher_id,
-            weight: editSubject.weight,
-            priority_note: editSubject.priority_note,
-            owner_id: editSubject.owner_id,
-            is_public: editSubject.is_public,
-            shared_with: editSubject.shared_with,
-            required_weekly_hours: editSubject.required_weekly_hours,
-            optional_monthly_hours: editSubject.optional_monthly_hours,
-            session_duration_preference: editSubject.session_duration_preference,
-            priority_level: editSubject.priority_level,
-            requires_special_room: editSubject.requires_special_room,
-            preferred_time_window: editSubject.preferred_time_window,
-        }).eq('id', editingId);
+        try {
+            // Update subject
+            const { error: updateError } = await supabase.from('subjects').update({
+                code: editSubject.code,
+                name: editSubject.name,
+                units: editSubject.units,
+                type: editSubject.type,
+                duration_hours: editSubject.duration_hours,
+                program: editSubject.program,
+                year_level: editSubject.year_level,
+                teacher_id: editSubject.teacher_id,
+                weight: editSubject.weight,
+                priority_note: editSubject.priority_note,
+                owner_id: editSubject.owner_id,
+                is_public: editSubject.is_public,
+                shared_with: editSubject.shared_with,
+                required_weekly_hours: editSubject.required_weekly_hours,
+                optional_monthly_hours: editSubject.optional_monthly_hours,
+                session_duration_preference: editSubject.session_duration_preference,
+                priority_level: editSubject.priority_level,
+                requires_special_room: editSubject.requires_special_room,
+                preferred_time_window: editSubject.preferred_time_window,
+            }).eq('id', editingId);
 
-        // Sync room compatibility - delete old and insert new
-        await supabase.from('subject_rooms').delete().eq('subject_id', editingId);
-        
-        if (editSubject.type === 'special' && editSubject.compatible_room_ids.length > 0) {
-            const roomRelations = editSubject.compatible_room_ids.map(roomId => ({
-                subject_id: editingId,
-                room_id: roomId,
-                priority: 1
-            }));
-            await supabase.from('subject_rooms').insert(roomRelations);
+            if (updateError) {
+                console.error('Update subject error:', updateError);
+                alert(`Failed to update subject: ${updateError.message}`);
+                setSaving(false);
+                return;
+            }
+
+            // Sync room compatibility - delete old and insert new
+            const { error: deleteError } = await supabase.from('subject_rooms').delete().eq('subject_id', editingId);
+            if (deleteError) {
+                console.error('Delete subject_rooms error:', deleteError);
+                alert(`Failed to update subject compatibility: ${deleteError.message}`);
+                setSaving(false);
+                return;
+            }
+            
+            if (editSubject.type === 'special' && editSubject.compatible_room_ids.length > 0) {
+                const roomRelations = editSubject.compatible_room_ids.map(roomId => ({
+                    subject_id: editingId,
+                    room_id: roomId,
+                    priority: 1
+                }));
+                const { error: insertError } = await supabase.from('subject_rooms').insert(roomRelations);
+                if (insertError) {
+                    console.error('Insert subject_rooms error:', insertError);
+                    alert(`Failed to update subject compatibility: ${insertError.message}`);
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            setShowEditSubject(false);
+            setEditSubject({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, teacher_id: null, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [], required_weekly_hours: null, optional_monthly_hours: null, session_duration_preference: 60, priority_level: 'normal', requires_special_room: false, preferred_time_window: null, compatible_room_ids: [] });
+            setEditingId(null);
+            setSaving(false);
+            await fetchAll();
+        } catch (err: unknown) {
+            console.error('Edit subject exception:', err);
+            const message = err instanceof Error ? err.message : String(err);
+            alert(`Failed to update subject: ${message}`);
+            setSaving(false);
         }
-
-        setShowEditSubject(false);
-        setEditSubject({ code: '', name: '', units: 3, type: 'common', duration_hours: 1, program: '', year_level: 1, teacher_id: null, weight: 50, priority_note: '', owner_id: null, is_public: false, shared_with: [], required_weekly_hours: null, optional_monthly_hours: null, session_duration_preference: 60, priority_level: 'normal', requires_special_room: false, preferred_time_window: null, compatible_room_ids: [] });
-        setEditingId(null);
-        setSaving(false);
-        fetchAll();
     };
 
     const handleEditSection = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
-        await supabase.from('sections').update(editSection).eq('id', editingId);
-        setShowEditSection(false);
-        setEditSection({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null, weight: 50, node_type: 'section', description: '', sort_order: 0, load_category: 'normal', owner_id: null, is_public: false, shared_with: [], hierarchy_path: '', hierarchy_weight: 50, priority_weight: 50 });
-        setEditingId(null);
-        setSaving(false);
-        fetchAll();
+        
+        try {
+            const { error } = await supabase.from('sections').update(editSection).eq('id', editingId);
+            if (error) {
+                console.error('Update section error:', error);
+                alert(`Failed to update section: ${error.message}`);
+                setSaving(false);
+                return;
+            }
+            setShowEditSection(false);
+            setEditSection({ name: '', program: '', year_level: 1, student_count: 30, parent_id: null, weight: 50, node_type: 'section', description: '', sort_order: 0, load_category: 'normal', owner_id: null, is_public: false, shared_with: [], hierarchy_path: '', hierarchy_weight: 50, priority_weight: 50 });
+            setEditingId(null);
+            setSaving(false);
+            await fetchAll();
+        } catch (err: unknown) {
+            console.error('Edit section exception:', err);
+            const message = err instanceof Error ? err.message : String(err);
+            alert(`Failed to update section: ${message}`);
+            setSaving(false);
+        }
     };
 
     const tabs: { key: Tab; label: string; icon: React.ElementType; count: number }[] = [
@@ -567,11 +645,12 @@ const DataManagement: React.FC = () => {
         return () => {};
     };
 
-    // Reset sort when switching tabs
-    useEffect(() => {
-        setSortColumn(defaultSortColumn);
+    const handleTabChange = (newTab: Tab) => {
+        setTab(newTab);
+        setSortColumn(newTab === 'rooms' ? 'name' : newTab === 'subjects' ? 'code' : 'name');
         setSortDirection('asc');
-    }, [defaultSortColumn]);
+    };
+
     return (
         <div className="dashboard fade-in">
             <div className="dashboard-header">
@@ -595,7 +674,7 @@ const DataManagement: React.FC = () => {
                     <button key={t.key}
                         className={`btn ${tab === t.key ? 'btn-primary' : 'btn-ghost'}`}
                         style={{ flex: 1, borderRadius: 'var(--radius-sm)' }}
-                        onClick={() => setTab(t.key)}
+                        onClick={() => handleTabChange(t.key)}
                     >
                         <t.icon size={16} />
                         {t.label} ({t.count})
