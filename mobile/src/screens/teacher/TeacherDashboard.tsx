@@ -334,7 +334,7 @@ const TeacherDashboard: React.FC = () => {
                 <View style={styles.statsGrid}>
                     <StatCard icon="school" iconColor="#60a5fa" iconBg="rgba(59,130,246,0.1)" value={loading ? '...' : todaySchedule.length} label="Classes Today" />
                     <StatCard icon="check-circle" iconColor="#10b981" iconBg="rgba(16,185,129,0.1)" value={todaySchedule.filter(s => s.status === 'finished').length} label="Completed" />
-                    <StatCard icon="people" iconColor="#a78bfa" iconBg="rgba(167,139,250,0.1)" value={schedules.length} label="Total Entries" />
+                    <StatCard icon="people" iconColor="#a78bfa" iconBg="rgba(167,139,250,0.1)" value={allSchedules.length} label="Total Entries" />
                     <StatCard icon="campaign" iconColor="#f59e0b" iconBg="rgba(245,158,11,0.1)" value={announcements.length} label="Announcements" />
                 </View>
 
@@ -358,7 +358,14 @@ const TeacherDashboard: React.FC = () => {
                 ) : todaySchedule.length === 0 ? (
                     <View style={styles.panelEmpty}>
                         <MaterialIcons name="event-available" size={36} color={colors.textMuted} style={{ opacity: 0.35 }} />
-                        <Text style={{ color: colors.textMuted, fontSize: 12.5, marginTop: 4 }}>No classes scheduled</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12.5, marginTop: 4 }}>
+                            {allSchedules.length === 0 ? 'No schedules assigned' : 'No classes scheduled today'}
+                        </Text>
+                        {allSchedules.length === 0 && (
+                            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 8, opacity: 0.7 }}>
+                                Contact administrator to assign classes
+                            </Text>
+                        )}
                     </View>
                 ) : (
                     todaySchedule.map(item => {

@@ -138,7 +138,7 @@ const StudentDashboard: React.FC = () => {
             {/* Greeting */}
             <div className="dash-greeting">
                 <div>
-                    <h2>{ongoingClass ? <><span className="dash-live-dot" />In Class Now</> : `Welcome Back, ${profile?.full_name?.split(',')[0] || profile?.full_name?.split(' ')[0] || 'Student'}`}</h2>
+                    <h2>{ongoingClass ? <><span className="dash-live-dot" />In Class Now</> : `Welcome back, ${profile?.full_name?.split(',')[0] || profile?.full_name?.split(' ')[0] || 'Student'}`}</h2>
                     <p>{ongoingClass ? `${ongoingClass.subject} with ${ongoingClass.teacher} in ${ongoingClass.room}` : nextClass ? `Next class: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}` : profile?.section ? `Section ${profile.section}` : 'Your daily schedule overview'}</p>
                 </div>
                 <span className="dash-day-badge">{isOffDay ? 'Tomorrow: Monday' : scheduleDayName}</span>
