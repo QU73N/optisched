@@ -4,8 +4,15 @@ import { useAuth } from '../../contexts/AuthContext';
 import { logAudit } from '../../hooks/useActivityLogger';
 import {
     Save, Database, Loader2, RefreshCw, CheckCircle, XCircle, Clock,
-    AlertTriangle, Download, PlayCircle,
+    AlertTriangle, Download, PlayCircle, Upload,
 } from 'lucide-react';
+import {
+    createBackup,
+    restoreBackup,
+    downloadBackup,
+    readBackupFile,
+    validateBackupData,
+} from '../../services/backupService';
 
 type BackupKind = 'full' | 'schema' | 'data' | 'manual';
 type BackupStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
@@ -64,9 +71,13 @@ const AdminBackup: React.FC = () => {
     const [jobs, setJobs] = useState<BackupJob[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+    const [restoring, setRestoring] = useState(false);
     const [kind, setKind] = useState<BackupKind>('full');
     const [note, setNote] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [restoreResult, setRestoreResult] = useState<{ success: boolean; message: string } | null>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const isPower = profile?.role === 'power_admin' || profile?.role === 'system_admin' || profile?.role === 'admin';
 
@@ -120,6 +131,58 @@ const AdminBackup: React.FC = () => {
         setCreating(false);
     };
 
+    const handleDownloadBackup = async () => {
+        setDownloading(true);
+        setError(null);
+        try {
+            const backupData = await createBackup(kind, note.trim() || null);
+            downloadBackup(backupData);
+            await logAudit('backup_downloaded', 'backup_jobs', null, { kind });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to create backup');
+        }
+        setDownloading(false);
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setRestoring(true);
+        setError(null);
+        setRestoreResult(null);
+
+        try {
+            const backupData = await readBackupFile(file);
+            
+            if (!validateBackupData(backupData)) {
+                throw new Error('Invalid backup file format');
+            }
+
+            if (!confirm(`Restore backup from ${backupData.metadata.timestamp}?\n\nThis will replace existing data. Continue?`)) {
+                setRestoring(false);
+                return;
+            }
+
+            const result = await restoreBackup(backupData);
+            setRestoreResult({ success: result.success, message: result.message });
+            
+            if (result.success) {
+                await logAudit('backup_restored', 'backup_jobs', null, { 
+                    backup_id: backupData.metadata.backup_id,
+                    timestamp: backupData.metadata.timestamp
+                });
+            }
+
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to restore backup');
+        }
+        setRestoring(false);
+    };
+
     if (!isPower) {
         return (
             <div className="dash-empty">
@@ -143,11 +206,11 @@ const AdminBackup: React.FC = () => {
             <div className="card" style={{ marginBottom: 24, borderLeft: '4px solid var(--accent-primary)' }}>
                 <div style={{ marginBottom: 16 }}>
                     <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-primary)' }}>
-                        <PlayCircle size={16} /> Queue New Backup
+                        <PlayCircle size={16} /> Create Backup
                     </h2>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Create a new backup job</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Create and download a full database backup</div>
                 </div>
-                <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '200px 1fr auto', alignItems: 'end', paddingBottom: 16, borderBottom: '1px solid var(--border-light)' }}>
+                <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '200px 1fr auto auto', alignItems: 'end', paddingBottom: 16, borderBottom: '1px solid var(--border-light)' }}>
                     <div>
                         <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6, display: 'block' }}>Backup Type</label>
                         <select className="input" value={kind} onChange={e => setKind(e.target.value as BackupKind)}>
@@ -160,11 +223,51 @@ const AdminBackup: React.FC = () => {
                         <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6, display: 'block' }}>Note (Optional)</label>
                         <input className="input" placeholder="e.g., Before semester rollover" value={note} onChange={e => setNote(e.target.value)} />
                     </div>
-                    <button className="btn btn-primary" onClick={createJob} disabled={creating}>
-                        {creating ? <><Loader2 size={14} className="spin" /> Queueing</> : <><Save size={14} /> Queue Backup</>}
+                    <button className="btn btn-primary" onClick={handleDownloadBackup} disabled={downloading}>
+                        {downloading ? <><Loader2 size={14} className="spin" /> Creating...</> : <><Download size={14} /> Download Backup</>}
+                    </button>
+                    <button className="btn btn-secondary" onClick={createJob} disabled={creating}>
+                        {creating ? <><Loader2 size={14} className="spin" /> Queueing</> : <><Save size={14} /> Queue Job</>}
                     </button>
                 </div>
                 {error && <div className="login-error" role="alert" aria-live="polite" style={{ marginTop: 12 }}>{error}</div>}
+                {restoreResult && (
+                    <div style={{ 
+                        marginTop: 12, 
+                        padding: 12, 
+                        borderRadius: 'var(--radius-sm)', 
+                        backgroundColor: restoreResult.success ? 'var(--accent-success-subtle)' : 'var(--accent-error-subtle)',
+                        border: `1px solid ${restoreResult.success ? 'var(--accent-success)' : 'var(--accent-error)'}`,
+                        color: restoreResult.success ? 'var(--accent-success)' : 'var(--accent-error)',
+                        fontSize: 13
+                    }}>
+                        {restoreResult.success ? <CheckCircle size={14} style={{ display: 'inline', marginRight: 8 }} /> : <XCircle size={14} style={{ display: 'inline', marginRight: 8 }} />}
+                        {restoreResult.message}
+                    </div>
+                )}
+            </div>
+
+            <div className="card" style={{ marginBottom: 24, borderLeft: '4px solid var(--accent-info)' }}>
+                <div style={{ marginBottom: 16 }}>
+                    <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-info)' }}>
+                        <Upload size={16} /> Restore Backup
+                    </h2>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Restore database from a backup JSON file</div>
+                </div>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json"
+                        onChange={handleFileUpload}
+                        disabled={restoring}
+                        style={{ fontSize: 13 }}
+                    />
+                    {restoring && <Loader2 size={16} className="spin" />}
+                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                    Warning: Restore will replace existing data. Make sure to backup before restoring.
+                </div>
             </div>
 
             <div style={{ marginBottom: 16 }}>
