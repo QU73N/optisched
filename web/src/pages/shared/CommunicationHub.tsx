@@ -97,6 +97,17 @@ const CommunicationHub: React.FC = () => {
         // Prevent body scrolling when CommunicationHub is mounted
         document.body.style.overflow = 'hidden';
 
+        // Lock layout content area for fixed full-height messaging UI
+        const mainContent = document.querySelector('.main-content') as HTMLElement | null;
+        const previousMainOverflowY = mainContent?.style.overflowY || '';
+        const previousMainOverflowX = mainContent?.style.overflowX || '';
+
+        if (mainContent) {
+            mainContent.scrollTo({ top: 0 });
+            mainContent.style.overflowY = 'hidden';
+            mainContent.style.overflowX = 'hidden';
+        }
+
         // Real-time subscription for instant message updates
         const channel = supabase
             .channel('comm-hub-messages')
@@ -109,6 +120,10 @@ const CommunicationHub: React.FC = () => {
             supabase.removeChannel(channel);
             // Restore body scrolling when unmounted
             document.body.style.overflow = '';
+            if (mainContent) {
+                mainContent.style.overflowY = previousMainOverflowY;
+                mainContent.style.overflowX = previousMainOverflowX;
+            }
         };
     }, [profile, fetchMessages, fetchAllTeachers]);
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, selectedThread]);
@@ -224,7 +239,7 @@ const CommunicationHub: React.FC = () => {
     const threadMsgs = getThreadMessages();
 
     return (
-        <div className="dashboard fade-in" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)' }}>
+        <div className="dashboard fade-in" style={{ height: '100%', maxHeight: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)', minHeight: 0 }}>
             {/* Header */}
             <div style={{
                 flexShrink: 0,

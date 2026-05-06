@@ -74,8 +74,9 @@ const PasswordResetManager: React.FC = () => {
 
             fetchRequests();
             window.alert(`Password reset to: ${newPassword}\nPlease inform the user.`);
-        } catch (err: any) {
-            window.alert('Error: ' + (err?.message || 'Failed to reset'));
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to reset';
+            window.alert('Error: ' + message);
         }
         setProcessingId(null);
     };
@@ -89,29 +90,34 @@ const PasswordResetManager: React.FC = () => {
         setProcessingId(null);
     };
 
-    if (loading) return <div className="pw-loading"><Loader2 size={24} className="spin" /> Loading requests...</div>;
+    if (loading) return <div className="pw-root"><div className="pw-loading"><Loader2 size={24} className="spin" /> Loading requests...</div></div>;
 
     if (loadError) {
         return (
-            <div className="pw-empty">
-                <div className="pw-empty-icon" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}><X size={48} /></div>
-                <h3>Unable to Load Requests</h3>
-                <p>{loadError}</p>
+            <div className="pw-root">
+                <div className="pw-empty">
+                    <div className="pw-empty-icon" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}><X size={48} /></div>
+                    <h3>Unable to Load Requests</h3>
+                    <p>{loadError}</p>
+                </div>
             </div>
         );
     }
 
     if (requests.length === 0) {
         return (
-            <div className="pw-empty">
-                <div className="pw-empty-icon"><ShieldCheck size={48} /></div>
-                <h3>All Clear</h3>
-                <p>No pending password reset requests.</p>
+            <div className="pw-root">
+                <div className="pw-empty">
+                    <div className="pw-empty-icon"><ShieldCheck size={48} /></div>
+                    <h3>All Clear</h3>
+                    <p>No pending password reset requests.</p>
+                </div>
             </div>
         );
     }
 
     return (
+        <div className="pw-root">
         <div className="pw-reset-list">
             {requests.map(req => (
                 <div key={req.id} className="pw-reset-card glass-panel">
@@ -138,12 +144,13 @@ const PasswordResetManager: React.FC = () => {
             ))}
 
             <style>{`
-                .pw-loading { display: flex; align-items: center; gap: 0.75rem; padding: 2rem; color: var(--text-muted); justify-content: center; }
-                .pw-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 2rem; text-align: center; }
-                .pw-empty-icon { width: 88px; height: 88px; border-radius: 50%; background: rgba(16,185,129,0.1); display: flex; align-items: center; justify-content: center; color: #34d399; margin-bottom: 1rem; }
+                .pw-root { height: 100%; min-height: 100%; display: flex; flex-direction: column; }
+                .pw-loading { flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.75rem; padding: 2rem; color: var(--text-muted); }
+                .pw-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; width: 100%; }
+                .pw-empty-icon { width: 88px; height: 88px; border-radius: 50%; background: rgba(16,185,129,0.1); display: flex; align-items: center; justify-content: center; color: #34d399; margin: 0 auto 1rem; }
                 .pw-empty h3 { font-size: 1.2rem; margin-bottom: 0.25rem; }
                 .pw-empty p { color: var(--text-muted); font-size: 0.9rem; }
-                .pw-reset-list { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 0; }
+                .pw-reset-list { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 0; min-height: 100%; }
                 .pw-reset-card { padding: 1.25rem; }
                 .pw-card-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
                 .pw-card-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(245,158,11,0.12); display: flex; align-items: center; justify-content: center; }
@@ -161,6 +168,7 @@ const PasswordResetManager: React.FC = () => {
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .spin { animation: spin 1s linear infinite; }
             `}</style>
+        </div>
         </div>
     );
 };

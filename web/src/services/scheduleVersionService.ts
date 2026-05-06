@@ -637,34 +637,35 @@ class ScheduleVersionService {
             const { data: activeVersion } = await this.supabase
                 .rpc('get_active_batch_version', { p_batch_id: batchId });
 
-            // If no active version exists, create one first
-            let versionId: string;
-            if (!activeVersion || activeVersion.length === 0) {
-                console.log('[VERSION SERVICE] No active version found, creating one before submit');
-                const stateHash = scheduleValidation.computeStateHash(schedules);
-                const { data: newVersion, error: versionError } = await this.supabase
-                    .rpc('create_batch_version', {
-                        p_batch_id: batchId,
-                        p_change_type: 'created',
-                        p_change_summary: 'Draft version created before submission',
-                        p_change_reason: options.changeReason || 'Pre-submit version creation',
-                        p_state_hash: stateHash,
-                        p_soft_score: 0,
-                        p_conflict_count: 0,
-                        p_changed_by: this.currentUserId,
-                        p_previous_version_id: null,
-                    });
+            // Use existing active version, otherwise promote latest existing version (no creation)
+            let versionId: string | null = activeVersion && activeVersion.length > 0 ? activeVersion[0].id : null;
 
-                if (versionError) {
-                    throw new Error(`Failed to create version before submit: ${versionError.message}`);
+            if (!versionId) {
+                const { data: latestVersion, error: latestError } = await this.supabase
+                    .from('schedule_versions')
+                    .select('id, is_active')
+                    .eq('batch_id', batchId)
+                    .order('changed_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (latestError) {
+                    throw new Error(`Failed to find version for submit: ${latestError.message}`);
                 }
-                versionId = newVersion;
-                
-                // Activate the newly created version
-                await this.supabase
-                    .rpc('activate_batch_version', { p_version_id: versionId });
-            } else {
-                versionId = activeVersion[0].id;
+
+                if (latestVersion?.id) {
+                    versionId = latestVersion.id;
+                    if (!latestVersion.is_active) {
+                        await this.supabase
+                            .from('schedule_versions')
+                            .update({ is_active: true })
+                            .eq('id', versionId);
+                    }
+                }
+            }
+
+            if (!versionId) {
+                throw new Error('No version exists for this draft batch; cannot submit without an existing version');
             }
 
             // Update schedules to submitted status
@@ -743,7 +744,7 @@ class ScheduleVersionService {
         scheduleLogger.system.workflowStarted('Schedule approve');
 
         try {
-            // Get active version
+            // Get active version (required)
             const { data: activeVersion } = await this.supabase.rpc('get_active_batch_version', { p_batch_id: batchId });
             if (!activeVersion || activeVersion.length === 0) throw new Error('No active version found');
 

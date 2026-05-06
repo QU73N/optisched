@@ -3,6 +3,7 @@
 // or request changes. Inline preview of conflicts attached to each version.
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -17,19 +18,20 @@ import './Dashboard.css';
 
 interface SubmittedVersion {
     id: string;
-    version_number: number;
+    version_number?: number;
     change_type: string;
-    changed_at: string;
+    changed_at?: string;
     changed_by: string | null;
     batch_id: string | null;
-    semester: string;
-    academic_year: string;
-    conflict_count: number;
-    creator?: { full_name: string } | { full_name: string }[] | null;
+    semester?: string | null;
+    academic_year?: string | null;
+    conflict_count?: number;
+    creator?: { full_name: string } | null;
 }
 
 const ApprovalsPage: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const perms = usePermissions();
     const [loading, setLoading] = useState(true);
     const [acting, setActing] = useState<string | null>(null);
@@ -48,29 +50,62 @@ const ApprovalsPage: React.FC = () => {
     const load = async () => {
         setLoading(true);
         try {
-            // First, find all batches that have submitted schedules
-            const { data: submittedSchedules } = await supabase
-                .from('schedules')
-                .select('batch_id')
-                .eq('status', 'submitted')
-                .not('batch_id', 'is', null);
-            
-            if (!submittedSchedules || submittedSchedules.length === 0) {
-                setItems([]);
-                setLoading(false);
-                return;
-            }
-            
-            const batchIds = [...new Set(submittedSchedules.map(s => s.batch_id))];
-            
-            // Then fetch the versions for those batches with change_type='status_change'
-            const { data } = await supabase
+            // Primary: fetch submitted versions directly from schedule_versions
+            const { data, error } = await supabase
                 .from('schedule_versions')
-                .select('id, version_number, change_type, changed_at, changed_by, batch_id, semester, academic_year, conflict_count, creator:profiles!schedule_versions_changed_by_fkey(full_name)')
-                .in('batch_id', batchIds)
+                .select('id, version_number, change_type, changed_at, changed_by, batch_id')
                 .eq('change_type', 'status_change')
                 .order('changed_at', { ascending: true });
-            const list = ((data || []) as unknown) as SubmittedVersion[];
+
+            if (error) throw error;
+
+            let list = ((data || []) as unknown) as SubmittedVersion[];
+            console.log('[Approvals] status_change versions fetched:', list.length);
+
+            // Fallback: if no status_change found, try batches with schedules.status=submitted
+            if (list.length === 0) {
+                const { data: submittedSchedules } = await supabase
+                    .from('schedules')
+                    .select('batch_id, submitted_at, created_at, created_by')
+                    .eq('status', 'submitted')
+                    .not('batch_id', 'is', null);
+
+                console.log('[Approvals] schedules with status=submitted:', submittedSchedules?.length || 0);
+
+                if (submittedSchedules && submittedSchedules.length > 0) {
+                    list = submittedSchedules.map((s: { batch_id: string; submitted_at?: string; created_at?: string; created_by?: string | null }, idx) => ({
+                        id: `submitted-fallback-${idx}`,
+                        version_number: 1,
+                        change_type: 'status_change',
+                        changed_at: s.submitted_at || s.created_at || new Date().toISOString(),
+                        changed_by: s.created_by || null,
+                        batch_id: s.batch_id,
+                        semester: null,
+                        academic_year: null,
+                        conflict_count: 0,
+                        creator: null,
+                    }));
+                    console.log('[Approvals] fallback constructed from schedules:', list.length);
+                }
+            }
+
+            const userIds = Array.from(new Set(list.map(i => i.changed_by).filter((id): id is string => Boolean(id))));
+            if (userIds.length > 0) {
+                const { data: profiles, error: profilesError } = await supabase
+                    .from('profiles')
+                    .select('id, full_name')
+                    .in('id', userIds);
+
+                if (!profilesError && profiles) {
+                    const profileMap = new Map<string, string>(profiles.map((p: { id: string; full_name: string }) => [p.id, p.full_name]));
+                    list = list.map(item => ({
+                        ...item,
+                        creator: item.changed_by ? { full_name: profileMap.get(item.changed_by) || 'Unknown' } : null,
+                    }));
+                }
+            }
+
+            console.log('[Approvals] final submitted list size:', list.length);
             setItems(list);
         } catch (err) {
             console.error('[Approvals] load failed', err);
@@ -83,7 +118,6 @@ const ApprovalsPage: React.FC = () => {
 
     const creatorName = (s: SubmittedVersion['creator']): string => {
         if (!s) return 'Unknown';
-        if (Array.isArray(s)) return s[0]?.full_name || 'Unknown';
         return s.full_name;
     };
 
@@ -280,12 +314,12 @@ const ApprovalsPage: React.FC = () => {
                                 ) : (
                                     <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
                                         <button className="btn btn-primary" onClick={() => approve(item.id)} disabled={isActing}>
-                                            {isActing ? <Loader2 className="spin" size={14} /> : <CheckCircle size={14} />} Approve & Publish
+                                            {isActing ? <Loader2 className="spin" size={14} /> : <CheckCircle size={14} />} Publish
                                         </button>
                                         <button className="btn btn-secondary" onClick={() => setShowRejectFor(item.id)} disabled={isActing}>
                                             <XCircle size={14} /> Reject
                                         </button>
-                                        <button className="btn btn-secondary" onClick={() => window.open(`/admin/schedules/current?version=${item.id}`, '_blank')}>
+                                        <button className="btn btn-secondary" onClick={() => navigate(`/admin/schedules/current?version=${item.id}`)}>
                                             <MessageSquare size={14} /> View Detail
                                         </button>
                                     </div>

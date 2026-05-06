@@ -19,7 +19,7 @@ interface ScheduleVersion {
     id: string;
     schedule_id: string;
     version_number: number;
-    snapshot: any;
+    snapshot: unknown;
     change_type: string;
     change_summary: string;
     changed_by: string;
@@ -27,13 +27,15 @@ interface ScheduleVersion {
     is_active: boolean;
 }
 
+type LabeledVersion = ScheduleVersion & { label?: string };
+
 const ScheduleVersions: React.FC = () => {
     const navigate = useNavigate();
-    const { role, roles, user } = useAuth();
+    const { role, roles } = useAuth();
     const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
     const isPowerAdmin = allRoles.some(r => r === 'admin' || r === 'power_admin');
 
-    const [versions, setVersions] = useState<ScheduleVersion[]>([]);
+    const [versions, setVersions] = useState<LabeledVersion[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<'all' | 'published' | 'previous' | 'submitted' | 'draft'>('all');
@@ -65,7 +67,7 @@ const ScheduleVersions: React.FC = () => {
             
             if (versionsError) throw versionsError;
             
-            let allVersions: ScheduleVersion[] = rawVersionData || [];
+            const allVersions: LabeledVersion[] = rawVersionData || [];
             
             // Check if there is an active published version
             const hasActivePublished = allVersions.some(v => v.is_active && ['publish', 'overwrite', 'restore'].includes(v.change_type));
@@ -86,18 +88,24 @@ const ScheduleVersions: React.FC = () => {
                     .limit(1);
                 
                 if (!schedulesError && currentSchedules && currentSchedules.length > 0) {
-                    const virtualVersion: ScheduleVersion = {
-                        id: 'current',
-                        schedule_id: 'current',
-                        version_number: 1,
-                        snapshot: null, // Will load current schedules when viewed
-                        change_type: 'publish', // acts as a publish
-                        change_summary: 'Current active schedules',
-                        changed_by: 'system',
-                        changed_at: currentSchedules[0].created_at || new Date(0).toISOString(), // Use oldest date
-                        is_active: true,
-                    };
-                    allVersions.push(virtualVersion);
+                    const createdAt = currentSchedules[0].created_at || new Date(0).toISOString();
+                    const withinDateFrom = dateFrom ? new Date(createdAt) >= new Date(dateFrom) : true;
+                    const withinDateTo = dateTo ? new Date(createdAt) <= new Date(dateTo) : true;
+
+                    if (withinDateFrom && withinDateTo) {
+                        const virtualVersion: ScheduleVersion = {
+                            id: 'current',
+                            schedule_id: 'current',
+                            version_number: 1,
+                            snapshot: null, // Will load current schedules when viewed
+                            change_type: 'publish', // acts as a publish
+                            change_summary: 'Current active schedules',
+                            changed_by: 'system',
+                            changed_at: createdAt, // Use oldest date
+                            is_active: true,
+                        };
+                        allVersions.push(virtualVersion);
+                    }
                 }
             }
 
@@ -107,7 +115,7 @@ const ScheduleVersions: React.FC = () => {
             allVersions.forEach((v, index) => {
                 const letter = String.fromCharCode(97 + (index % 26)); // a, b, c
                 const number = Math.floor(index / 26) + 1;
-                (v as any).label = `v${number}${letter}`;
+                v.label = `v${number}${letter}`;
             });
 
             // Now sort descending for newest-first display
@@ -261,20 +269,22 @@ const ScheduleVersions: React.FC = () => {
 
             {/* Version Filters */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }} role="radiogroup" aria-label="Version filter">
-                {[
-                    { key: 'all', label: 'All' },
-                    { key: 'published', label: 'Published' },
-                    { key: 'previous', label: 'Previous' },
-                    { key: 'submitted', label: 'Submitted' },
-                    { key: 'draft', label: 'Drafts' },
-                ].map(f => (
+                {(
+                    [
+                        { key: 'all', label: 'All' },
+                        { key: 'published', label: 'Published' },
+                        { key: 'previous', label: 'Previous' },
+                        { key: 'submitted', label: 'Submitted' },
+                        { key: 'draft', label: 'Drafts' },
+                    ] as const
+                ).map(f => (
                     <button
                         key={f.key}
                         type="button"
                         role="radio"
                         aria-checked={filter === f.key}
                         className={`sg-chip ${filter === f.key ? 'sg-chip-active' : ''}`}
-                        onClick={() => setFilter(f.key as any)}
+                        onClick={() => setFilter(f.key)}
                         style={{
                             padding: '6px 12px',
                             borderRadius: 'var(--radius-sm)',
@@ -392,22 +402,24 @@ const ScheduleVersions: React.FC = () => {
                     gap: 16
                 }}>
                     {versions.map((version) => {
-                        const versionLabel = (version as any).label || 'v1a';
-                        const snapshot = version.snapshot as any;
+                        const versionLabel = version.label || 'v1a';
+                        const snapshot = version.snapshot;
                         
                         let academicYear = 'N/A';
                         let semester = 'N/A';
                         let scheduleCount = 0;
                         
-                        if (snapshot && Array.isArray(snapshot)) {
+                        if (Array.isArray(snapshot)) {
                             scheduleCount = snapshot.length;
                             if (snapshot.length > 0) {
-                                academicYear = snapshot[0].academic_year || 'N/A';
-                                semester = snapshot[0].semester || 'N/A';
+                                const first = snapshot[0] as { academic_year?: string; semester?: string };
+                                academicYear = first.academic_year || 'N/A';
+                                semester = first.semester || 'N/A';
                             }
-                        } else if (snapshot) {
-                            academicYear = snapshot.academic_year || 'N/A';
-                            semester = snapshot.semester || 'N/A';
+                        } else if (snapshot && typeof snapshot === 'object') {
+                            const snapObj = snapshot as { academic_year?: string; semester?: string };
+                            academicYear = snapObj.academic_year || 'N/A';
+                            semester = snapObj.semester || 'N/A';
                             scheduleCount = 1; // It's a single schedule data object
                         }
                         const isGloballyActive = version.is_active && ['publish', 'overwrite', 'restore'].includes(version.change_type);

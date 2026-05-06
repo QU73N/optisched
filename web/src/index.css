@@ -3,6 +3,9 @@
    ========================================= */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lexend:wght@400;500;600;700;800&family=Atkinson+Hyperlegible:wght@400;700&family=Crimson+Pro:wght@400;500;600;700&display=swap');
 
+/* Import print stylesheet */
+@import './styles/print.css';
+
 /* Tailwind (preflight disabled in tailwind.config.js to protect existing custom CSS) */
 /* stylelint-disable */
 @tailwind base;
@@ -375,13 +378,10 @@ a:hover {
 
 /* Dashboard animations */
 [data-dashboard-animations="false"] .fade-in,
-[data-dashboard-animations="false"] .slide-up,
 [data-dashboard-animations="false"] .dash-stagger {
   animation: none !important;
 }
 
-/* Import print stylesheet */
-@import './styles/print.css';
 
 /* Error Boundary */
 .error-boundary {

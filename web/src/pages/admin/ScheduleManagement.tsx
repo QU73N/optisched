@@ -435,37 +435,38 @@ const ScheduleManagement: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [versionId]);
 
-    const canApprove = allRoles.some(r => ['admin', 'power_admin', 'schedule_admin', 'system_admin'].includes(r));
+    const canApprove = allRoles.some(r => ['admin', 'power_admin', 'schedule_admin'].includes(r));
 
     const handleSubmitVersion = async () => {
-        if (!versionStatus?.batch_id) return;
-        if (!confirm(canApprove ? 'Submit and instantly publish this draft? This will replace the active schedule.' : 'Submit this draft for approval?')) return;
+        if (!versionStatus?.batch_id) {
+            console.warn('[SCHEDULE MGMT] Submit blocked: no batch_id (select a draft version)');
+            alert('Select a draft version to submit.');
+            return;
+        }
+        if (!confirm('Submit this draft for approval?')) return;
         try {
-            if (canApprove) {
-                let res = await scheduleVersionService.submitSchedule(versionStatus.batch_id, { changeReason: 'Submitted from schedule management' });
-                if (!res.success) throw new Error(res.message);
-                
-                res = await (scheduleVersionService as any).approveSchedule(versionStatus.batch_id, { changeReason: 'Auto-approved by admin' }); // eslint-disable-line @typescript-eslint/no-explicit-any
-                if (!res.success) throw new Error(res.message);
-                
-                res = await (scheduleVersionService as any).publishApprovedSchedule(versionStatus.batch_id, { changeReason: 'Auto-published by admin' }); // eslint-disable-line @typescript-eslint/no-explicit-any
-                if (!res.success) throw new Error(res.message);
-                
-                alert('Successfully published schedule.');
-                if (res.active_version_id) {
-                    navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
-                } else {
-                    fetchData();
-                }
+            // Pre-check: ensure batch has active schedules
+            const { data: activeSchedules, error: activeErr } = await supabase
+                .from('schedules')
+                .select('id')
+                .eq('batch_id', versionStatus.batch_id)
+                .eq('is_active', true)
+                .limit(1);
+            if (activeErr) {
+                console.warn('[SCHEDULE MGMT] Unable to verify schedules before submit', activeErr.message);
+            }
+            if (!activeSchedules || activeSchedules.length === 0) {
+                alert('This draft has no active schedules. Save as draft first, then submit.');
+                return;
+            }
+
+            const res = await scheduleVersionService.submitSchedule(versionStatus.batch_id, { changeReason: 'Submitted from schedule management' });
+            if (!res.success) throw new Error(res.message);
+            alert('Successfully submitted draft.');
+            if (res.active_version_id) {
+                navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
             } else {
-                const res = await scheduleVersionService.submitSchedule(versionStatus.batch_id, { changeReason: 'Submitted from schedule management' });
-                if (!res.success) throw new Error(res.message);
-                alert('Successfully submitted draft.');
-                if (res.active_version_id) {
-                    navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
-                } else {
-                    fetchData();
-                }
+                fetchData();
             }
         } catch (err: unknown) {
             console.error(err);
@@ -788,12 +789,12 @@ const ScheduleManagement: React.FC = () => {
                                     <CheckCircle size={16} /> Publish
                                 </button>
                             )}
-                            {versionStatus?.change_type === 'status_change' && versionStatus?.schedules_status === 'submitted' && canApprove && (
+                            {versionStatus?.schedules_status === 'submitted' && canApprove && (
                                 <button onClick={handleApprovePublishVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                     <CheckCircle size={16} /> Approve & Publish
                                 </button>
                             )}
-                            {versionStatus?.change_type === 'created' && (
+                            {versionStatus?.schedules_status === 'draft' && (
                                 <button onClick={handleSubmitVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                     <Send size={16} /> Submit
                                 </button>
