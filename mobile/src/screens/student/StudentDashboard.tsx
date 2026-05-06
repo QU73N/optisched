@@ -257,7 +257,7 @@ const StudentDashboard: React.FC = () => {
                     <View style={styles.greetingTitleRow}>
                         {ongoingClass && <View style={styles.liveDot} />}
                         <Text style={[styles.greetingTitle, { color: colors.textPrimary }]}>
-                            {ongoingClass ? 'In Class Now' : `Welcome back, ${firstName}`}
+                            {ongoingClass ? 'In Class Now' : `Welcome Back, ${firstName}`}
                         </Text>
                     </View>
                     <Text style={[styles.greetingSub, { color: colors.textMuted }]}>
