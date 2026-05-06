@@ -97,7 +97,7 @@ const RoomHub: React.FC = () => {
             </div>
 
             {/* Room Grid */}
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', paddingBottom: '2rem' }}>
+            <div style={{ height: 'calc(100vh - 320px)', overflowY: 'auto', overflowX: 'hidden', paddingBottom: '1.5rem' }}>
             <div className="fhub-grid">
                 {loadingRooms ? (
                     <div className="fhub-empty"><div className="spinner" /></div>

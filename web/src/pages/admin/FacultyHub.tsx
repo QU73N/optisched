@@ -96,7 +96,7 @@ const FacultyHub: React.FC = () => {
             </div>
 
             {/* Faculty Grid */}
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', paddingBottom: '2rem' }}>
+            <div style={{ height: 'calc(100vh - 320px)', overflowY: 'auto', overflowX: 'hidden', paddingBottom: '1.5rem' }}>
             <div className="fhub-grid">
                 {loadingTeachers ? (
                     <div className="fhub-empty"><div className="spinner" /></div>
