@@ -2,7 +2,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, ScrollView, StyleSheet, Switch, Alert,
-    Modal, TextInput, ActivityIndicator
+    Modal, TextInput, ActivityIndicator,
+    KeyboardAvoidingView, Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -184,7 +185,11 @@ const TeacherPreferences: React.FC = () => {
                 </AnimatedPressable>
             </View>
 
-            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={{ flex: 1 }}
+            >
+                <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Teacher Info */}
                 <View style={styles.profileCard}>
                     <View style={styles.profileAvatar}>
@@ -303,6 +308,7 @@ const TeacherPreferences: React.FC = () => {
 
                 <View style={{ height: 100 }} />
             </ScrollView>
+            </KeyboardAvoidingView>
 
             {/* Subject Picker Modal */}
             <Modal visible={showSubjectPicker} animationType="slide" transparent>

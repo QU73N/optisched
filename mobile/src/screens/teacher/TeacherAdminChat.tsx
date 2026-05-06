@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, ScrollView,  StyleSheet,
-    TextInput, ActivityIndicator, Alert
+    TextInput, ActivityIndicator, Alert,
+    KeyboardAvoidingView, Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -168,19 +169,24 @@ const TeacherAdminChat: React.FC = () => {
             )}
 
             {/* Input */}
-            <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-                <TextInput
-                    style={[styles.textInput, { backgroundColor: colors.isDark ? '#263241' : '#f1f5f9', color: colors.textPrimary, borderColor: colors.border }]}
-                    placeholder="Type a message..." placeholderTextColor={colors.textSecondary}
-                    value={input} onChangeText={setInput} multiline maxLength={500}
-                />
-                <AnimatedPressable
-                    style={[styles.sendBtn, { backgroundColor: input.trim() ? Colors.primary : '#1E2935' }]}
-                    onPress={handleSend} disabled={!input.trim() || sending}
-                >
-                    {sending ? <ActivityIndicator size="small" color={Colors.white} /> : <MaterialIcons name="send" size={18} color={Colors.white} />}
-                </AnimatedPressable>
-            </View>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={0}
+            >
+                <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+                    <TextInput
+                        style={[styles.textInput, { backgroundColor: colors.isDark ? '#263241' : '#f1f5f9', color: colors.textPrimary, borderColor: colors.border }]}
+                        placeholder="Type a message..." placeholderTextColor={colors.textSecondary}
+                        value={input} onChangeText={setInput} multiline maxLength={500}
+                    />
+                    <AnimatedPressable
+                        style={[styles.sendBtn, { backgroundColor: input.trim() ? Colors.primary : '#1E2935' }]}
+                        onPress={handleSend} disabled={!input.trim() || sending}
+                    >
+                        {sending ? <ActivityIndicator size="small" color={Colors.white} /> : <MaterialIcons name="send" size={18} color={Colors.white} />}
+                    </AnimatedPressable>
+                </View>
+            </KeyboardAvoidingView>
         </View>
     );
 };

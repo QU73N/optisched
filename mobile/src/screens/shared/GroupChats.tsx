@@ -2,7 +2,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useEffect, useState, useRef } from 'react';
 import {
     View, Text, ScrollView, StyleSheet,
-    TextInput, ActivityIndicator, FlatList, Image, TouchableOpacity
+    TextInput, ActivityIndicator, FlatList, Image, TouchableOpacity,
+    KeyboardAvoidingView, Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -298,27 +299,32 @@ const GroupChats: React.FC = () => {
                     )}
                 </ScrollView>
 
-                <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-                    <TextInput
-                        style={[styles.input, { backgroundColor: colors.background, color: colors.textPrimary }]}
-                        value={newMessage}
-                        onChangeText={setNewMessage}
-                        placeholder="Type a message..."
-                        placeholderTextColor={colors.textSecondary}
-                        multiline
-                    />
-                    <TouchableOpacity
-                        style={[styles.sendButton, { backgroundColor: colors.accentPrimary }]}
-                        onPress={sendMessage}
-                        disabled={sending || !newMessage.trim()}
-                    >
-                        {sending ? (
-                            <ActivityIndicator size="small" color="white" />
-                        ) : (
-                            <MaterialIcons name="send" size={24} color="white" />
-                        )}
-                    </TouchableOpacity>
-                </View>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    keyboardVerticalOffset={0}
+                >
+                    <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+                        <TextInput
+                            style={[styles.input, { backgroundColor: colors.background, color: colors.textPrimary }]}
+                            value={newMessage}
+                            onChangeText={setNewMessage}
+                            placeholder="Type a message..."
+                            placeholderTextColor={colors.textSecondary}
+                            multiline
+                        />
+                        <TouchableOpacity
+                            style={[styles.sendButton, { backgroundColor: colors.accentPrimary }]}
+                            onPress={sendMessage}
+                            disabled={sending || !newMessage.trim()}
+                        >
+                            {sending ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <MaterialIcons name="send" size={24} color="white" />
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
             </SafeAreaView>
         );
     }

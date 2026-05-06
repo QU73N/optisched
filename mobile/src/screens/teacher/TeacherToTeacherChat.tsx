@@ -2,7 +2,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, ScrollView, StyleSheet,
-    TextInput, ActivityIndicator, Image, FlatList, Alert
+    TextInput, ActivityIndicator, Image, FlatList, Alert,
+    KeyboardAvoidingView, Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -242,27 +243,32 @@ const TeacherToTeacherChat: React.FC = () => {
                 })}
             </ScrollView>
 
-            <View style={styles.inputRow}>
-                <TextInput
-                    style={styles.chatInput}
-                    value={input}
-                    onChangeText={setInput}
-                    placeholder={`Message ${selectedTeacher.full_name}...`}
-                    placeholderTextColor="#6b7280"
-                    multiline
-                />
-                <AnimatedPressable
-                    style={[styles.sendBtn, !input.trim() && { opacity: 0.4 }]}
-                    onPress={handleSend}
-                    disabled={sending || !input.trim()}
-                >
-                    {sending ? (
-                        <ActivityIndicator color={Colors.white} size="small" />
-                    ) : (
-                        <MaterialIcons name="send" size={20} color={Colors.white} />
-                    )}
-                </AnimatedPressable>
-            </View>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={0}
+            >
+                <View style={styles.inputRow}>
+                    <TextInput
+                        style={styles.chatInput}
+                        value={input}
+                        onChangeText={setInput}
+                        placeholder={`Message ${selectedTeacher.full_name}...`}
+                        placeholderTextColor="#6b7280"
+                        multiline
+                    />
+                    <AnimatedPressable
+                        style={[styles.sendBtn, !input.trim() && { opacity: 0.4 }]}
+                        onPress={handleSend}
+                        disabled={sending || !input.trim()}
+                    >
+                        {sending ? (
+                            <ActivityIndicator color={Colors.white} size="small" />
+                        ) : (
+                            <MaterialIcons name="send" size={20} color={Colors.white} />
+                        )}
+                    </AnimatedPressable>
+                </View>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 };

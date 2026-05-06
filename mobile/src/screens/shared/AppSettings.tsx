@@ -2,7 +2,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
 import {
     View, Text, ScrollView, StyleSheet,
-    Switch, Alert, TextInput, Modal, ActivityIndicator, Linking, Image
+    Switch, Alert, TextInput, Modal, ActivityIndicator, Linking, Image,
+    KeyboardAvoidingView, Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -375,79 +376,89 @@ const AppSettings: React.FC = () => {
 
             {/* Change Password Modal */}
             <Modal visible={showPasswordModal} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.elevated }]}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Change Password</Text>
-                            <AnimatedPressable onPress={() => setShowPasswordModal(false)}>
-                                <MaterialIcons name="close" size={24} color={colors.textMuted} />
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={{ flex: 1 }}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={[styles.modalContent, { backgroundColor: colors.elevated }]}>
+                            <View style={styles.modalHeader}>
+                                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Change Password</Text>
+                                <AnimatedPressable onPress={() => setShowPasswordModal(false)}>
+                                    <MaterialIcons name="close" size={24} color={colors.textMuted} />
+                                </AnimatedPressable>
+                            </View>
+                            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>NEW PASSWORD</Text>
+                            <TextInput
+                                style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]}
+                                placeholder="Min 6 characters"
+                                placeholderTextColor="#6b7280"
+                                secureTextEntry
+                                value={newPassword}
+                                onChangeText={setNewPassword}
+                            />
+                            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>CONFIRM PASSWORD</Text>
+                            <TextInput
+                                style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]}
+                                placeholder="Repeat new password"
+                                placeholderTextColor="#6b7280"
+                                secureTextEntry
+                                value={confirmPassword}
+                                onChangeText={setConfirmPassword}
+                            />
+                            <AnimatedPressable style={styles.modalBtn} onPress={handleChangePassword} disabled={changingPassword}>
+                                {changingPassword ? (
+                                    <ActivityIndicator color={Colors.white} />
+                                ) : (
+                                    <Text style={styles.modalBtnText}>Update Password</Text>
+                                )}
                             </AnimatedPressable>
                         </View>
-                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>NEW PASSWORD</Text>
-                        <TextInput
-                            style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]}
-                            placeholder="Min 6 characters"
-                            placeholderTextColor="#6b7280"
-                            secureTextEntry
-                            value={newPassword}
-                            onChangeText={setNewPassword}
-                        />
-                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>CONFIRM PASSWORD</Text>
-                        <TextInput
-                            style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]}
-                            placeholder="Repeat new password"
-                            placeholderTextColor="#6b7280"
-                            secureTextEntry
-                            value={confirmPassword}
-                            onChangeText={setConfirmPassword}
-                        />
-                        <AnimatedPressable style={styles.modalBtn} onPress={handleChangePassword} disabled={changingPassword}>
-                            {changingPassword ? (
-                                <ActivityIndicator color={Colors.white} />
-                            ) : (
-                                <Text style={styles.modalBtnText}>Update Password</Text>
-                            )}
-                        </AnimatedPressable>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Edit Profile Modal */}
             <Modal visible={showProfileModal} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.elevated }]}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Edit Profile</Text>
-                            <AnimatedPressable onPress={() => setShowProfileModal(false)}>
-                                <MaterialIcons name="close" size={24} color={colors.textMuted} />
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={{ flex: 1 }}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={[styles.modalContent, { backgroundColor: colors.elevated }]}>
+                            <View style={styles.modalHeader}>
+                                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Edit Profile</Text>
+                                <AnimatedPressable onPress={() => setShowProfileModal(false)}>
+                                    <MaterialIcons name="close" size={24} color={colors.textMuted} />
+                                </AnimatedPressable>
+                            </View>
+
+                            <View style={styles.avatarEditRow}>
+                                <View style={styles.avatarLarge}>
+                                    <Text style={styles.avatarLargeText}>{initials}</Text>
+                                </View>
+                                <Text style={[styles.avatarEditHint, { color: colors.textMuted }]}>Profile initials are auto-generated from your name</Text>
+                            </View>
+
+                            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>FULL NAME</Text>
+                            <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editName} onChangeText={setEditName} placeholderTextColor="#6b7280" />
+
+                            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>STRAND / PROGRAM</Text>
+                            <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editStrand} onChangeText={setEditStrand} placeholder="e.g. MAWD, BSIT, BSCS" placeholderTextColor="#6b7280" />
+
+                            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>SECTION</Text>
+                            <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editSection} onChangeText={setEditSection} placeholder="e.g. MAWD 12A-2" placeholderTextColor="#6b7280" />
+
+                            <AnimatedPressable style={styles.modalBtn} onPress={handleSaveProfile} disabled={savingProfile}>
+                                {savingProfile ? (
+                                    <ActivityIndicator color={Colors.white} />
+                                ) : (
+                                    <Text style={styles.modalBtnText}>Save Changes</Text>
+                                )}
                             </AnimatedPressable>
                         </View>
-
-                        <View style={styles.avatarEditRow}>
-                            <View style={styles.avatarLarge}>
-                                <Text style={styles.avatarLargeText}>{initials}</Text>
-                            </View>
-                            <Text style={[styles.avatarEditHint, { color: colors.textMuted }]}>Profile initials are auto-generated from your name</Text>
-                        </View>
-
-                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>FULL NAME</Text>
-                        <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editName} onChangeText={setEditName} placeholderTextColor="#6b7280" />
-
-                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>STRAND / PROGRAM</Text>
-                        <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editStrand} onChangeText={setEditStrand} placeholder="e.g. MAWD, BSIT, BSCS" placeholderTextColor="#6b7280" />
-
-                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>SECTION</Text>
-                        <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editSection} onChangeText={setEditSection} placeholder="e.g. MAWD 12A-2" placeholderTextColor="#6b7280" />
-
-                        <AnimatedPressable style={styles.modalBtn} onPress={handleSaveProfile} disabled={savingProfile}>
-                            {savingProfile ? (
-                                <ActivityIndicator color={Colors.white} />
-                            ) : (
-                                <Text style={styles.modalBtnText}>Save Changes</Text>
-                            )}
-                        </AnimatedPressable>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
         </SafeAreaView>
     );

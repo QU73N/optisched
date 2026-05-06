@@ -1,6 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
@@ -33,19 +33,24 @@ const TeacherTabs: React.FC = () => {
                     backgroundColor: colors.surface,
                     borderTopColor: colors.border,
                     borderTopWidth: 1,
-                    height: 80,
-                    paddingBottom: 16,
+                    height: Platform.OS === 'web' ? 70 : 80,
+                    paddingBottom: Platform.OS === 'web' ? 8 : 16,
                     paddingTop: 8,
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: -4 },
                     shadowOpacity: 0.15,
                     shadowRadius: 12,
                     elevation: 8,
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
                 },
                 tabBarActiveTintColor: Colors.accentPrimaryHover,
                 tabBarInactiveTintColor: colors.isDark ? Colors.slate500 : Colors.slate400,
                 tabBarLabelStyle: {
-                    fontSize: 10,
+                    fontSize: Platform.OS === 'web' ? 11 : 10,
                     fontWeight: '600',
                 },
             }}
