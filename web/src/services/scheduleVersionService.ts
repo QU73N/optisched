@@ -618,14 +618,6 @@ class ScheduleVersionService {
                 throw new Error('Draft batch not found');
             }
 
-            // Get the active version for this batch
-            const { data: activeVersion } = await this.supabase
-                .rpc('get_active_batch_version', { p_batch_id: batchId });
-
-            if (!activeVersion || activeVersion.length === 0) {
-                throw new Error('No active version found for this batch');
-            }
-
             // Get the schedules in this batch
             const { data: schedules, error: schedulesError } = await this.supabase
                 .from('schedules')
@@ -635,6 +627,44 @@ class ScheduleVersionService {
 
             if (schedulesError || !schedules) {
                 throw new Error('Failed to fetch schedules from batch');
+            }
+
+            if (schedules.length === 0) {
+                throw new Error('Cannot submit an empty schedule');
+            }
+
+            // Get the active version for this batch (if exists)
+            const { data: activeVersion } = await this.supabase
+                .rpc('get_active_batch_version', { p_batch_id: batchId });
+
+            // If no active version exists, create one first
+            let versionId: string;
+            if (!activeVersion || activeVersion.length === 0) {
+                console.log('[VERSION SERVICE] No active version found, creating one before submit');
+                const stateHash = scheduleValidation.computeStateHash(schedules);
+                const { data: newVersion, error: versionError } = await this.supabase
+                    .rpc('create_batch_version', {
+                        p_batch_id: batchId,
+                        p_change_type: 'created',
+                        p_change_summary: 'Draft version created before submission',
+                        p_change_reason: options.changeReason || 'Pre-submit version creation',
+                        p_state_hash: stateHash,
+                        p_soft_score: 0,
+                        p_conflict_count: 0,
+                        p_changed_by: this.currentUserId,
+                        p_previous_version_id: null,
+                    });
+
+                if (versionError) {
+                    throw new Error(`Failed to create version before submit: ${versionError.message}`);
+                }
+                versionId = newVersion;
+                
+                // Activate the newly created version
+                await this.supabase
+                    .rpc('activate_batch_version', { p_version_id: versionId });
+            } else {
+                versionId = activeVersion[0].id;
             }
 
             // Update schedules to submitted status
@@ -651,8 +681,8 @@ class ScheduleVersionService {
                 throw new Error(`Failed to update status: ${updateError.message}`);
             }
 
-            // Update the existing active version to reflect the status change
-            // Instead of creating a new version, we update the current version's metadata
+            // Update the version to reflect the status change
+            // If we created a new version, update it; if we used an existing one, update that one
             const { error: versionUpdateError } = await this.supabase
                 .from('schedule_versions')
                 .update({
@@ -662,7 +692,7 @@ class ScheduleVersionService {
                     changed_by: this.currentUserId,
                     changed_at: new Date().toISOString(),
                 })
-                .eq('id', activeVersion[0].id);
+                .eq('id', versionId);
 
             if (versionUpdateError) {
                 // ROLLBACK: Revert status back to draft
@@ -681,7 +711,7 @@ class ScheduleVersionService {
                 message: `Successfully submitted ${schedules.length} sessions for approval`,
                 version_set_id: batchId,
                 version_count: 1,
-                active_version_id: activeVersion[0].id,
+                active_version_id: versionId,
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
