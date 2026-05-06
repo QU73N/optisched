@@ -38,17 +38,30 @@ const ScheduleVersions: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<'all' | 'published' | 'previous' | 'submitted' | 'draft'>('all');
     const [isDeletingAll, setIsDeletingAll] = useState(false);
+    
+    // Advanced date filters
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
 
     const loadVersions = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
             
-            // Load all schedule versions, ordered by creation time ascending to assign labels chronologically
-            const { data: rawVersionData, error: versionsError } = await supabase
+            // Build query with date filters
+            let query = supabase
                 .from('schedule_versions')
                 .select('*')
                 .order('changed_at', { ascending: true });
+            
+            if (dateFrom) {
+                query = query.gte('changed_at', dateFrom);
+            }
+            if (dateTo) {
+                query = query.lte('changed_at', dateTo);
+            }
+            
+            const { data: rawVersionData, error: versionsError } = await query;
             
             if (versionsError) throw versionsError;
             
@@ -124,7 +137,7 @@ const ScheduleVersions: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [filter]);
+    }, [filter, dateFrom, dateTo]);
 
     useEffect(() => {
         loadVersions();
@@ -138,6 +151,11 @@ const ScheduleVersions: React.FC = () => {
             hour: '2-digit',
             minute: '2-digit'
         });
+    };
+
+    const clearDateFilters = () => {
+        setDateFrom('');
+        setDateTo('');
     };
 
 
@@ -266,6 +284,66 @@ const ScheduleVersions: React.FC = () => {
                         {f.label}
                     </button>
                 ))}
+            </div>
+
+            {/* Date Range Filters */}
+            <div style={{ 
+                display: 'flex', 
+                gap: 12, 
+                alignItems: 'center', 
+                marginBottom: 16,
+                padding: '12px 16px',
+                backgroundColor: 'var(--surface-soft)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-light)'
+            }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    Date Range:
+                </span>
+                <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    style={{
+                        padding: '6px 12px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-light)',
+                        backgroundColor: 'var(--surface)',
+                        color: 'var(--text-primary)',
+                        fontSize: 13,
+                    }}
+                />
+                <span style={{ color: 'var(--text-muted)' }}>to</span>
+                <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    style={{
+                        padding: '6px 12px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-light)',
+                        backgroundColor: 'var(--surface)',
+                        color: 'var(--text-primary)',
+                        fontSize: 13,
+                    }}
+                />
+                {(dateFrom || dateTo) && (
+                    <button
+                        onClick={clearDateFilters}
+                        style={{
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--accent-error)',
+                            backgroundColor: 'var(--accent-error-10, rgba(200, 75, 75, 0.1))',
+                            color: 'var(--accent-error)',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Clear
+                    </button>
+                )}
             </div>
 
             {/* Error Message */}
