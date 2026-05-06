@@ -54,7 +54,6 @@ const FacultyHub: React.FC = () => {
                 </div>
             </div>
 
-            <div style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' }}>
             {/* Stats */}
             <div className="fhub-stats">
                 <div className="fhub-stat-card">
@@ -97,6 +96,7 @@ const FacultyHub: React.FC = () => {
             </div>
 
             {/* Faculty Grid */}
+            <div style={{ maxHeight: 'calc(100vh - 280px)', overflowY: 'auto', overflowX: 'hidden' }}>
             <div className="fhub-grid">
                 {loadingTeachers ? (
                     <div className="fhub-empty"><div className="spinner" /></div>
