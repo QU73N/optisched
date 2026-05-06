@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>OptiSched</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      
+      #root {
+        width: 100%;
+        height: 100%;
+        max-width: 430px;
+        max-height: 932px;
+        aspect-ratio: 9/16;
+        background: #fff;
+        overflow: hidden;
+        position: relative;
+      }
+      
+      @media (min-width: 768px) {
+        body {
+          background: #1a1a1a;
+          padding: 20px;
+        }
+        
+        #root {
+          border-radius: 40px;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+          border: 8px solid #333;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
