@@ -147,8 +147,8 @@ const DataManagement: React.FC = () => {
 
     const getSortedRooms = () => {
         return [...rooms].sort((a, b) => {
-            let aValue: string | number;
-            let bValue: string | number;
+            let aValue: string | number | boolean;
+            let bValue: string | number | boolean;
             const column = sortColumn || defaultSortColumn;
 
             switch (column) {
@@ -171,6 +171,10 @@ const DataManagement: React.FC = () => {
                 case 'capacity':
                     aValue = a.capacity || 0;
                     bValue = b.capacity || 0;
+                    break;
+                case 'status':
+                    aValue = a.is_available || false;
+                    bValue = b.is_available || false;
                     break;
                 default:
                     aValue = a.name?.toLowerCase() || '';
@@ -214,6 +218,10 @@ const DataManagement: React.FC = () => {
                     aValue = a.year_level || 0;
                     bValue = b.year_level || 0;
                     break;
+                case 'duration_hours':
+                    aValue = a.duration_hours || 0;
+                    bValue = b.duration_hours || 0;
+                    break;
                 default:
                     aValue = a.code?.toLowerCase() || '';
                     bValue = b.code?.toLowerCase() || '';
@@ -240,6 +248,13 @@ const DataManagement: React.FC = () => {
                     aValue = a.node_type?.toLowerCase() || '';
                     bValue = b.node_type?.toLowerCase() || '';
                     break;
+                case 'parent': {
+                    const parentA = sections.find(s => s.id === a.parent_id);
+                    const parentB = sections.find(s => s.id === b.parent_id);
+                    aValue = parentA?.name?.toLowerCase() || '';
+                    bValue = parentB?.name?.toLowerCase() || '';
+                    break;
+                }
                 case 'program':
                     aValue = a.program?.toLowerCase() || '';
                     bValue = b.program?.toLowerCase() || '';
@@ -722,7 +737,12 @@ const DataManagement: React.FC = () => {
                                                 {sortColumn === 'capacity' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                                             </button>
                                         </th>
-                                        <th>Status</th>
+                                        <th>
+                                            <button onClick={() => handleSort('status')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Status
+                                                {sortColumn === 'status' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
                                         <th style={{ width: 60 }}></th>
                                     </tr>
                                 </thead>
@@ -795,7 +815,12 @@ const DataManagement: React.FC = () => {
                                                 {sortColumn === 'year_level' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                                             </button>
                                         </th>
-                                        <th>Hours</th>
+                                        <th>
+                                            <button onClick={() => handleSort('duration_hours')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Hours
+                                                {sortColumn === 'duration_hours' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
                                         <th style={{ width: 60 }}></th>
                                     </tr>
                                 </thead>
@@ -845,7 +870,12 @@ const DataManagement: React.FC = () => {
                                                 {sortColumn === 'type' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                                             </button>
                                         </th>
-                                        <th>Parent</th>
+                                        <th>
+                                            <button onClick={() => handleSort('parent')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
+                                                Parent
+                                                {sortColumn === 'parent' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                            </button>
+                                        </th>
                                         <th>
                                             <button onClick={() => handleSort('program')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit' }}>
                                                 Program
