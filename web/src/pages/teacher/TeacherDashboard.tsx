@@ -11,6 +11,65 @@ import {
 } from 'lucide-react';
 import '../admin/Dashboard.css';
 
+interface WeeklyScheduleItem {
+    day_of_week: string;
+    start_time: string;
+    end_time: string;
+    teacher?: { profile_id: string }[];
+}
+
+interface ScheduleItem {
+    teacher?: { profile?: { full_name: string }; full_name?: string };
+    section?: { name: string };
+}
+
+interface AnnouncementItem {
+    id: string;
+    target_section?: string;
+    author_id?: string;
+    title?: string;
+    content?: string;
+    created_at?: string;
+    priority?: string;
+}
+
+interface AdminProfile {
+    id: string;
+    full_name: string;
+    role: string;
+}
+
+interface TodayScheduleItem {
+    id: string;
+    subject?: { name: string };
+    teacher?: { profile?: { full_name: string }; full_name?: string };
+    room?: { name: string };
+    start_time: string;
+    end_time: string;
+    section?: { name: string };
+}
+
+interface RequestItem {
+    id: string;
+    teacher_id: string;
+    status: string;
+    reason?: string;
+    admin_notes?: string;
+    request_type?: string;
+}
+
+interface SectionItem {
+    id: string;
+    name: string;
+}
+
+interface CustomEventItem {
+    id: string;
+    title?: string;
+    event_date?: string;
+    created_by?: string;
+}
+
 const TeacherDashboard: React.FC = () => {
     const { profile } = useAuth();
     const navigate = useNavigate();
@@ -26,8 +85,8 @@ const TeacherDashboard: React.FC = () => {
     const { events: upcomingEvents, createEvent, deleteEvent } = useCustomEvents(undefined, true);
 
     // Teacher data (max_hours)
-    const [teacherData, setTeacherData] = useState<any>(null);
-    const [weeklySchedules, setWeeklySchedules] = useState<any[]>([]);
+    const [teacherData, setTeacherData] = useState<{ max_hours?: number; current_load_percentage?: number } | null>(null);
+    const [weeklySchedules, setWeeklySchedules] = useState<WeeklyScheduleItem[]>([]);
 
     useEffect(() => {
         if (!profile?.full_name) return;
@@ -47,14 +106,14 @@ const TeacherDashboard: React.FC = () => {
                 .eq('status', 'published')
                 .eq('is_active', true);
             
-            const myWeekly = (weekData || []).filter((s: any) => s.teacher?.profile_id === profile.id);
+            const myWeekly = (weekData || []).filter((s: WeeklyScheduleItem) => s.teacher?.[0]?.profile_id === profile.id);
             setWeeklySchedules(myWeekly);
         })();
     }, [profile?.id, profile?.full_name]);
 
     // Calculate weekly hours
     const weeklyHours = useMemo(() => {
-        return weeklySchedules.reduce((total: number, s: any) => {
+        return weeklySchedules.reduce((total: number, s: WeeklyScheduleItem) => {
             const [sh, sm] = (s.start_time || '0:0').split(':').map(Number);
             const [eh, em] = (s.end_time || '0:0').split(':').map(Number);
             const duration = Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
@@ -71,7 +130,7 @@ const TeacherDashboard: React.FC = () => {
     // Filter schedules for this teacher
     const schedules = useMemo(() => {
         if (!profile?.full_name) return allSchedules;
-        return allSchedules.filter((s: any) => {
+        return allSchedules.filter((s: ScheduleItem) => {
             const teacherName = s.teacher?.profile?.full_name || s.teacher?.full_name || '';
             return teacherName.toLowerCase() === profile.full_name!.toLowerCase();
         });
@@ -81,14 +140,14 @@ const TeacherDashboard: React.FC = () => {
     const announcements = useMemo(() => {
         if (!allAnnouncements) return [];
         const teacherSectionNames = new Set<string>();
-        allSchedules.forEach((s: any) => {
+        allSchedules.forEach((s: ScheduleItem) => {
             const tName = s.teacher?.profile?.full_name || s.teacher?.full_name || '';
             if (tName.toLowerCase() === (profile?.full_name || '').toLowerCase()) {
                 const secName = s.section?.name;
                 if (secName) teacherSectionNames.add(secName.toLowerCase().trim());
             }
         });
-        return allAnnouncements.filter((a: any) => {
+        return allAnnouncements.filter((a: AnnouncementItem) => {
             if (a.target_section) {
                 const target = a.target_section.toLowerCase().trim();
                 if (target === 'all sections') return true;
@@ -106,7 +165,7 @@ const TeacherDashboard: React.FC = () => {
     }, []);
 
     // Admins for messaging
-    const [allAdmins, setAllAdmins] = useState<any[]>([]);
+    const [allAdmins, setAllAdmins] = useState<AdminProfile[]>([]);
     useEffect(() => {
         const fetchAdmins = async () => {
             const { data } = await supabase.from('profiles').select('id, full_name, role').in('role', ['admin', 'power_admin', 'schedule_manager', 'schedule_admin']);
@@ -122,7 +181,7 @@ const TeacherDashboard: React.FC = () => {
         const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
         const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
 
-        return schedules.map((s: any, i: number) => {
+        return schedules.map((s: TodayScheduleItem, i: number) => {
             const [startH, startM] = (s.start_time || '00:00').split(':').map(Number);
             const [endH, endM] = (s.end_time || '00:00').split(':').map(Number);
             const startMin = startH * 60 + startM;
@@ -286,7 +345,7 @@ const TeacherDashboard: React.FC = () => {
         upcoming: { bg: 'rgba(59,130,246,0.1)', text: '#60a5fa', label: 'Upcoming' }
     };
 
-    const myRequests = requests.filter((r: any) => r.teacher_id === profile?.id);
+    const myRequests = requests.filter((r: RequestItem) => r.teacher_id === profile?.id);
 
     const ongoingClass = todaySchedule.find(s => s.status === 'ongoing');
     const nextClass = todaySchedule.find(s => s.status === 'upcoming');
@@ -304,7 +363,7 @@ const TeacherDashboard: React.FC = () => {
     // T3: Request outcome counts (already-fetched myRequests)
     const requestOutcome = useMemo(() => {
         const o = { approved: 0, rejected: 0, pending: 0 };
-        myRequests.forEach((r: any) => {
+        myRequests.forEach((r: RequestItem) => {
             if (r.status === 'approved') o.approved++;
             else if (r.status === 'rejected') o.rejected++;
             else o.pending++;
@@ -440,7 +499,7 @@ const TeacherDashboard: React.FC = () => {
                         <div className="dash-schedule-panel">
                             {myRequests.length === 0 ? (
                                 <div className="dash-panel-empty compact"><FileText size={24} /><p>No requests yet</p></div>
-                            ) : myRequests.slice(0, 5).map((req: any) => {
+                            ) : myRequests.slice(0, 5).map((req: RequestItem) => {
                                 const sc: Record<string, { bg: string; text: string; label: string }> = {
                                     pending: { bg: 'rgba(251,191,36,0.12)', text: '#fbbf24', label: 'PENDING' },
                                     approved: { bg: 'rgba(34,197,94,0.12)', text: '#22c55e', label: 'APPROVED' },
@@ -527,7 +586,7 @@ const TeacherDashboard: React.FC = () => {
                                 <span className="dash-section-count">{upcomingEvents.length}</span>
                             </div>
                             <div className="dash-schedule-panel">
-                                {upcomingEvents.slice(0, 4).map((evt: any) => (
+                                {upcomingEvents.slice(0, 4).map((evt: CustomEventItem) => (
                                     <div key={evt.id} className="dash-event-item">
                                         <div className="dash-event-info">
                                             <span className="dash-event-title">{evt.title}</span>
@@ -550,7 +609,7 @@ const TeacherDashboard: React.FC = () => {
                         <div className="dash-schedule-panel">
                             {announcements.length === 0 ? (
                                 <div className="dash-panel-empty compact"><Megaphone size={24} /><p>No announcements</p></div>
-                            ) : announcements.slice(0, 4).map((ann: any) => {
+                            ) : announcements.slice(0, 4).map((ann: AnnouncementItem) => {
                                 const dotColor = ann.priority === 'urgent' ? '#ef4444' : ann.priority === 'important' ? '#f59e0b' : '#22c55e';
                                 return (
                                     <div key={ann.id} className="dash-ann-item">
@@ -647,7 +706,7 @@ const TeacherDashboard: React.FC = () => {
                         <div className="dash-modal-body">
                             <label>Select Section</label>
                             <div className="dash-chip-group">
-                                {sections.map((sec: any) => (
+                                {sections.map((sec: SectionItem) => (
                                     <button key={sec.id} className={`dash-chip ${annSection === sec.name ? 'active' : ''}`} onClick={() => setAnnSection(sec.name)}>{sec.name}</button>
                                 ))}
                             </div>

@@ -12,6 +12,36 @@ import { ChartTooltip } from '../../components/ChartTooltip';
 import { supabase } from '../../lib/supabase';
 import '../admin/Dashboard.css';
 
+interface ScheduleItem {
+    id: string;
+    day_of_week: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+    subject?: { name: string }[];
+    section?: { name: string }[];
+    teacher?: { profile?: { full_name: string }; full_name?: string };
+    room?: { name: string };
+}
+
+interface AnnouncementItem {
+    id: string;
+    target_section?: string;
+    title?: string;
+    content?: string;
+    author_name?: string;
+    created_at?: string;
+    priority?: string;
+}
+
+interface EventItem {
+    id: string;
+    title?: string;
+    event_date?: string;
+    creator_name?: string | null;
+    creator_role?: string | null;
+}
+
 const StudentDashboard: React.FC = () => {
     const { profile } = useAuth();
     const navigate = useNavigate();
@@ -24,7 +54,7 @@ const StudentDashboard: React.FC = () => {
     const { events: upcomingEvents } = useCustomEvents(undefined, true);
 
     // Fetch all weekly schedules for the student's section (real data for charts)
-    const [weekSectionSchedules, setWeekSectionSchedules] = useState<any[]>([]);
+    const [weekSectionSchedules, setWeekSectionSchedules] = useState<ScheduleItem[]>([]);
     useEffect(() => {
         if (!profile?.section) return;
         (async () => {
@@ -33,7 +63,7 @@ const StudentDashboard: React.FC = () => {
                 .select('id, day_of_week, start_time, end_time, status, subject:subjects(name), section:sections(name)')
                 .eq('status', 'published')
                 .eq('is_active', true);
-            const mine = (data || []).filter((s: any) => (s.section?.name || '').toLowerCase() === (profile.section || '').toLowerCase());
+            const mine = (data || []).filter((s: ScheduleItem) => (s.section?.[0]?.name || '').toLowerCase() === (profile.section || '').toLowerCase());
             setWeekSectionSchedules(mine);
         })();
     }, [profile?.section]);
@@ -41,16 +71,16 @@ const StudentDashboard: React.FC = () => {
     // Filter schedules for student's section
     const schedules = useMemo(() => {
         if (!profile?.section) return allSchedules;
-        return allSchedules.filter((s: any) => {
-            const secName = s.section?.name || '';
+        return allSchedules.filter((s: ScheduleItem) => {
+            const secName = s.section?.[0]?.name || '';
             return secName.toLowerCase() === (profile.section ?? '').toLowerCase();
         });
-    }, [allSchedules, profile?.section]);
+    }, [allSchedules, profile]);
 
     // Filter announcements for student's section
     const announcements = useMemo(() => {
         if (!allAnnouncements) return [];
-        return allAnnouncements.filter((a: any) => {
+        return allAnnouncements.filter((a: AnnouncementItem) => {
             if (a.target_section) {
                 const target = a.target_section.toLowerCase().trim();
                 if (target === 'all sections') return true;
@@ -71,7 +101,7 @@ const StudentDashboard: React.FC = () => {
         const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
         const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
 
-        return schedules.map((s: any, i: number) => {
+        return schedules.map((s: ScheduleItem, i: number) => {
             const [startH, startM] = (s.start_time || '00:00').split(':').map(Number);
             const [endH, endM] = (s.end_time || '00:00').split(':').map(Number);
             const startMin = startH * 60 + startM;
@@ -95,7 +125,7 @@ const StudentDashboard: React.FC = () => {
 
             return {
                 id: s.id,
-                subject: s.subject?.name || 'Unknown',
+                subject: s.subject?.[0]?.name || 'Unknown',
                 teacher: s.teacher?.profile?.full_name || s.teacher?.full_name || 'TBA',
                 room: s.room?.name || 'TBA',
                 time: `${formatTime(startH, startM)} – ${formatTime(endH, endM)}`,
@@ -116,8 +146,8 @@ const StudentDashboard: React.FC = () => {
     // S3: Subject distribution by total weekly hours (top 5)
     const subjectDistribution = useMemo(() => {
         const hours: Record<string, number> = {};
-        weekSectionSchedules.forEach((s: any) => {
-            const name = s.subject?.name || 'Other';
+        weekSectionSchedules.forEach((s: ScheduleItem) => {
+            const name = s.subject?.[0]?.name || 'Other';
             const [sh, sm] = (s.start_time || '0:0').split(':').map(Number);
             const [eh, em] = (s.end_time || '0:0').split(':').map(Number);
             const dur = Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
@@ -272,7 +302,7 @@ const StudentDashboard: React.FC = () => {
                         <div className="dash-schedule-panel">
                             {announcements.length === 0 ? (
                                 <div className="dash-panel-empty compact"><Megaphone size={24} /><p>No announcements</p></div>
-                            ) : announcements.slice(0, 5).map((ann: any) => {
+                            ) : announcements.slice(0, 5).map((ann: AnnouncementItem) => {
                                 const dotColor = ann.priority === 'urgent' ? '#ef4444' : ann.priority === 'important' ? '#f59e0b' : '#22c55e';
                                 return (
                                     <div key={ann.id} className="dash-ann-item">
@@ -296,7 +326,7 @@ const StudentDashboard: React.FC = () => {
                                 <span className="dash-section-count">{upcomingEvents.length}</span>
                             </div>
                             <div className="dash-schedule-panel">
-                                {upcomingEvents.slice(0, 5).map((evt: any) => (
+                                {upcomingEvents.slice(0, 5).map((evt: EventItem) => (
                                     <div key={evt.id} className="dash-event-item">
                                         <div className="dash-event-info">
                                             <span className="dash-event-title">{evt.title}</span>
