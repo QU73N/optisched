@@ -20,7 +20,6 @@ const AdminScheduleTasks: React.FC = () => {
     useAuth();
     const [tasks, setTasks] = useState<AdminTask[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeFilter, setActiveFilter] = useState('All Tasks');
     const [sortMode, setSortMode] = useState<'priority' | 'progress' | 'title'>('priority');
 
     // Modal
@@ -49,13 +48,9 @@ const AdminScheduleTasks: React.FC = () => {
         return () => { supabase.removeChannel(channel); };
     }, []);
 
-    const filters = ['All Tasks', 'In Progress', 'Pending', 'Completed'];
 
     const filteredTasks = useMemo(() => {
-        let result = [...tasks];
-        if (activeFilter === 'In Progress') result = tasks.filter(t => t.status === 'in_progress');
-        else if (activeFilter === 'Pending') result = tasks.filter(t => t.status === 'pending');
-        else if (activeFilter === 'Completed') result = tasks.filter(t => t.status === 'completed');
+        const result = [...tasks];
 
         const prio = { high: 0, medium: 1, low: 2 };
         if (sortMode === 'priority') result.sort((a, b) => prio[a.priority] - prio[b.priority]);
@@ -63,7 +58,7 @@ const AdminScheduleTasks: React.FC = () => {
         else result.sort((a, b) => a.title.localeCompare(b.title));
 
         return result;
-    }, [tasks, activeFilter, sortMode]);
+    }, [tasks, sortMode]);
 
     const handleSave = async () => {
         if (!modalTitle.trim()) return;
@@ -81,8 +76,8 @@ const AdminScheduleTasks: React.FC = () => {
             }
             setShowModal(false);
             fetchTasks();
-        } catch (err: any) {
-            window.alert('Error: ' + err.message);
+        } catch (err: unknown) {
+            window.alert('Error: ' + (err instanceof Error ? err.message : String(err)));
         } finally { setSaving(false); }
     };
 
@@ -108,13 +103,6 @@ const AdminScheduleTasks: React.FC = () => {
         setActionMenuId(null);
     };
 
-    const openAdd = () => {
-        setEditingTask(null);
-        setModalTitle('');
-        setModalDesc('');
-        setModalPriority('medium');
-        setShowModal(true);
-    };
 
     const cycleSortMode = () => {
         const modes: typeof sortMode[] = ['priority', 'progress', 'title'];
@@ -135,8 +123,8 @@ const AdminScheduleTasks: React.FC = () => {
                 <h1><ClipboardList size={24} /> Admin Tasks</h1>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                     <button className="sort-btn" onClick={cycleSortMode}>
-                        {sortMode === 'priority' ? <Flag size={16} /> : <Calendar size={16} />}
-                        {sortMode === 'priority' ? 'Priority' : sortMode === 'deadline' ? 'Deadline' : 'Created'}
+                        {sortMode === 'priority' ? <Flag size={16} /> : <ArrowUpDown size={16} />}
+                        {sortMode === 'priority' ? 'Priority' : sortMode === 'progress' ? 'Progress' : 'Title'}
                     </button>
                     <button className="create-btn" onClick={() => { setEditingTask(null); setModalTitle(''); setModalDesc(''); setModalPriority('medium'); setShowModal(true); }}>
                         <Plus size={16} /> New Task
