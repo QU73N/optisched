@@ -33,11 +33,11 @@ const TeacherTabs: React.FC = () => {
                     borderTopWidth: 1,
                     height: Platform.OS === 'web' ? 70 : 80,
                     paddingBottom: Platform.OS === 'web' ? 8 : 16,
-                    paddingTop: 8,
+                    paddingTop: 12,
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: -4 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 12,
+                    shadowOpacity: 0.1,
+                    shadowRadius: 16,
                     elevation: 8,
                     position: 'absolute',
                     bottom: 0,
@@ -45,11 +45,15 @@ const TeacherTabs: React.FC = () => {
                     right: 0,
                     zIndex: 1000,
                 },
-                tabBarActiveTintColor: Colors.accentPrimaryHover,
-                tabBarInactiveTintColor: colors.isDark ? Colors.slate500 : Colors.slate400,
+                tabBarActiveTintColor: colors.accentPrimary,
+                tabBarInactiveTintColor: colors.textMuted,
                 tabBarLabelStyle: {
-                    fontSize: Platform.OS === 'web' ? 11 : 10,
+                    fontSize: Platform.OS === 'web' ? 12 : 11,
                     fontWeight: '600',
+                    fontFamily: Platform.OS === 'web' ? 'Lexend' : undefined,
+                },
+                tabBarIconStyle: {
+                    marginBottom: 4,
                 },
             }}
         >
@@ -57,8 +61,12 @@ const TeacherTabs: React.FC = () => {
                 name="Home"
                 component={TeacherDashboard}
                 options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <MaterialIcons name="home" size={size} color={color} />
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <MaterialIcons 
+                            name="home" 
+                            size={focused ? size + 2 : size} 
+                            color={color} 
+                        />
                     ),
                 }}
             />
@@ -66,8 +74,12 @@ const TeacherTabs: React.FC = () => {
                 name="Schedule"
                 component={TeacherSchedule}
                 options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <MaterialIcons name="calendar-month" size={size} color={color} />
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <MaterialIcons 
+                            name="calendar-month" 
+                            size={focused ? size + 2 : size} 
+                            color={color} 
+                        />
                     ),
                 }}
             />
@@ -75,8 +87,12 @@ const TeacherTabs: React.FC = () => {
                 name="AI"
                 component={OptiBotChat}
                 options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <MaterialIcons name="smart-toy" size={size} color={color} />
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <MaterialIcons 
+                            name="smart-toy" 
+                            size={focused ? size + 2 : size} 
+                            color={color} 
+                        />
                     ),
                     tabBarLabel: 'OptiBot',
                 }}
@@ -85,8 +101,12 @@ const TeacherTabs: React.FC = () => {
                 name="Messages"
                 component={TeacherChatHub}
                 options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <MaterialIcons name="chat" size={size} color={color} />
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <MaterialIcons 
+                            name="chat" 
+                            size={focused ? size + 2 : size} 
+                            color={color} 
+                        />
                     ),
                     tabBarLabel: 'Messages',
                 }}
@@ -95,8 +115,12 @@ const TeacherTabs: React.FC = () => {
                 name="Profile"
                 component={AppSettings}
                 options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <MaterialIcons name="person" size={size} color={color} />
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <MaterialIcons 
+                            name="person" 
+                            size={focused ? size + 2 : size} 
+                            color={color} 
+                        />
                     ),
                 }}
             />

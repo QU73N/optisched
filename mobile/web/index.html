@@ -4,7 +4,27 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>OptiSched</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+      :root {
+        /* Brand Colors - Dark Mode (Default) */
+        --brand-navy: #0F2854;
+        --brand-core: #1C4D8D;
+        --brand-bright: #4988C4;
+        --brand-ice: #BDE8F5;
+        --surface-light: #F8FAFC;
+        --surface-soft: #EEF4FA;
+        --border-light: #D7E3F1;
+        --text-primary: #0F172A;
+        --text-secondary: #475569;
+        --text-muted: #64748B;
+        --success: #2F8F5B;
+        --warning: #D38B20;
+        --error: #C84B4B;
+      }
+      
       * {
         margin: 0;
         padding: 0;
@@ -15,16 +35,17 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #000;
+        background: #0B0F14;
         display: flex;
         justify-content: center;
         align-items: center;
+        font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       }
       
       #root {
         width: 100%;
         height: 100%;
-        background: #fff;
+        background: #0B0F14;
         overflow: hidden;
         position: relative;
       }
@@ -32,16 +53,20 @@
       /* Only constrain to phone size on larger screens (desktop/tablet) */
       @media (min-width: 768px) {
         body {
-          background: #1a1a1a;
-          padding: 20px;
+          background: linear-gradient(135deg, #0B0F14 0%, #161D26 100%);
+          padding: 40px;
         }
         
         #root {
           max-width: 430px;
           max-height: 932px;
           border-radius: 40px;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-          border: 8px solid #333;
+          box-shadow: 
+            0 25px 50px -12px rgba(0, 0, 0, 0.5),
+            0 0 0 8px #1C4D8D,
+            0 0 0 10px #0F2854;
+          border: 8px solid #1C4D8D;
+          background: #0B0F14;
         }
       }
     </style>
