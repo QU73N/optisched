@@ -148,7 +148,7 @@ const TeacherRequests: React.FC = () => {
                             <div style={{ flex: 1 }}>
                                 <label>Proposed day (optional)</label>
                                 <select className="input" value={proposedDay} onChange={e => setProposedDay(e.target.value)}>
-                                    <option value="">—</option>
+                                    <option value="">None</option>
                                     {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(d =>
                                         <option key={d} value={d}>{d}</option>
                                     )}

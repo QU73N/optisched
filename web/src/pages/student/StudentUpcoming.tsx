@@ -61,8 +61,8 @@ const StudentUpcoming: React.FC = () => {
     const todayName = DAYS[now.getDay()];
 
     const subjectName = (s: ScheduleRow['subject']): string => {
-        if (!s) return '—';
-        if (Array.isArray(s)) return s[0]?.name || '—';
+        if (!s) return 'N/A';
+        if (Array.isArray(s)) return s[0]?.name || 'N/A';
         return s.name;
     };
     const roomName = (r: ScheduleRow['room']): string => {

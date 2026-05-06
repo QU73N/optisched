@@ -1,4 +1,4 @@
-/* Layout — Sidebar + Main Content
+/* OptiSched Layout - Sidebar, Topbar, Mobile Navigation
    ================================ */
 
 /* --- Sidebar geometry --- */
@@ -11,8 +11,8 @@
 
 .layout {
     display: flex;
-    min-height: 100vh;
-    overflow-x: hidden;
+    height: 100vh;
+    overflow: hidden;
 }
 
 /* ========== SIDEBAR ========== */
@@ -276,13 +276,19 @@
 .main-wrapper {
     flex: 1;
     margin-left: var(--sidebar-w);
-    width: calc(100% - var(--sidebar-w) - 320px);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     padding-top: 56px;
     transition: width 350ms cubic-bezier(0.4, 0, 0.2, 1);
     will-change: width;
+}
+
+/* ========== CONTENT AREA ========== */
+.content-area {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
 }
 
 /* ========== TOPBAR ========== */
@@ -343,20 +349,22 @@
 .main-content {
     flex: 1;
     padding: 28px clamp(16px, 3vw, 40px);
-    min-height: calc(100vh - 56px);
+    height: calc(100vh - 56px);
+    overflow: hidden;
 }
 
 /* ========== SIDERAIL ========== */
 .siderail {
     width: 0;
     min-width: 0;
+    height: 100%;
     background: var(--bg-surface);
     border-left: 1px solid var(--border-default);
     transition: width 350ms cubic-bezier(0.4, 0, 0.2, 1), min-width 350ms cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    margin-top: 56px;
+    padding-top: 56px;
     will-change: width, min-width;
 }
 
@@ -371,7 +379,7 @@
 
 .siderail-content {
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden;
     padding: var(--space-4) var(--space-5);
 }
 
@@ -751,10 +759,6 @@
     .sidebar-overlay {
         display: none;
     }
-}
-
-.layout:not(.siderail-open-layout) .main-wrapper {
-    width: calc(100% - var(--sidebar-w));
 }
 
 /* ========== REDUCED MOTION ========== */

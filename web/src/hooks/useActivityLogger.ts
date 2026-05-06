@@ -45,7 +45,7 @@ export async function logActivity(p: LogPayload): Promise<void> {
             p_duration_ms: p.durationMs ?? null,
         });
     } catch {
-        // Logging must never throw — silently swallow.
+        // Logging must never throw - silently swallow.
     }
 }
 

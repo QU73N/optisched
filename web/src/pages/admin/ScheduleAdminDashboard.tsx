@@ -245,7 +245,7 @@ const ScheduleAdminDashboard: React.FC = () => {
                             )}
                         </div>
                         {pendingApprovals.length === 0 ? (
-                            <div className="dash-empty"><CheckCircle size={28} /><div>Nothing pending — all caught up</div></div>
+                            <div className="dash-empty"><CheckCircle size={28} /><div>Nothing pending - all caught up</div></div>
                         ) : (
                             <div className="dash-list">
                                 {pendingApprovals.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(s => (
@@ -254,7 +254,7 @@ const ScheduleAdminDashboard: React.FC = () => {
                                         <div className="dash-list-item-body dash-list-item-body--compact">
                                             <div className="dash-list-item-title">{s.section?.name || 'Schedule'}</div>
                                             <div className="dash-list-item-meta">
-                                                Submitted {s.submitted_at ? new Date(s.submitted_at).toLocaleDateString() : '—'}
+                                                Submitted {s.submitted_at ? new Date(s.submitted_at).toLocaleDateString() : 'N/A'}
                                             </div>
                                         </div>
                                         <div className="dash-icon-group" style={{ gap: 6 }}>
@@ -291,9 +291,9 @@ const ScheduleAdminDashboard: React.FC = () => {
                                     <div key={r.id} className="dash-list-item">
                                         <div className="dash-list-item-accent dash-accent-warning" />
                                         <div className="dash-list-item-body dash-list-item-body--compact">
-                                            <div className="dash-list-item-title">{r.teacher_name} — {r.request_type}</div>
+                                            <div className="dash-list-item-title">{r.teacher_name} - {r.request_type}</div>
                                             <div className="dash-list-item-desc">
-                                                {r.reason?.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.MESSAGE_TRUNCATION) || '—'}
+                                                {r.reason?.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.MESSAGE_TRUNCATION) || 'None'}
                                             </div>
                                         </div>
                                         <div className="dash-icon-group" style={{ gap: 6 }}>

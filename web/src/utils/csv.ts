@@ -1,4 +1,4 @@
-// CSV export helpers — Session 1 / Task C5 of HARDENING_PLAN.md
+// CSV export helpers - Session 1 / Task C5 of HARDENING_PLAN.md
 //
 // Why this file exists:
 //   1. Prevent CSV/Spreadsheet formula injection. Any cell whose first

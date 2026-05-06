@@ -1,4 +1,4 @@
-// PII redaction — Session 1 / Task C6 of HARDENING_PLAN.md
+// PII redaction - Session 1 / Task C6 of HARDENING_PLAN.md
 //
 // Goal: never persist secrets or full PII inside `activity_logs.details`
 // or `audit_logs.details`. Activity rows are queryable by Power Admin and
@@ -7,7 +7,7 @@
 //
 // Strategy:
 //   1. Strip any key whose name matches a sensitive pattern.
-//      The match is intentionally aggressive — false-redact > false-leak.
+//      The match is intentionally aggressive - false-redact > false-leak.
 //   2. Truncate long string values to 500 chars (preserves debuggability,
 //      caps storage cost, and prevents accidental dumps of paste content).
 //   3. Replace email-like strings with `j***@domain` (preserves domain for

@@ -1,4 +1,4 @@
-// IdleTimeoutModal — Session 2 / Task C4 of HARDENING_PLAN.md
+// IdleTimeoutModal - Session 2 / Task C4 of HARDENING_PLAN.md
 //
 // Shown when the idle timer fires. Two flavours:
 //   - 'reauth' (Power Admin): user must re-enter password; on success the

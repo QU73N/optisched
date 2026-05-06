@@ -177,7 +177,7 @@ const StudentSchedule: React.FC = () => {
                                             background: `${color}18`, border: `1px solid ${color}50`, borderLeft: `4px solid ${color}`,
                                             borderRadius: 10, padding: '8px 12px', zIndex: 1, overflow: 'hidden',
                                         }}>
-                                            <div className="font-semibold text-base">{(s.subject as any)?.code} — {(s.subject as any)?.name}</div>
+                                            <div className="font-semibold text-base">{(s.subject as any)?.code} - {(s.subject as any)?.name}</div>
                                             <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 2, display: 'flex', gap: 12 }}>
                                                 <span><Clock size={10} /> {formatTime12(s.start_time)} – {formatTime12(s.end_time)}</span>
                                                 <span><MapPin size={10} /> {(s.room as any)?.name}</span>

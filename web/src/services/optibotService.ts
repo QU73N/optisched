@@ -2,13 +2,17 @@
 // Multi-provider AI with Gemini, Groq, and OpenRouter + full database context + action execution
 
 import { supabase } from '../lib/supabase';
+import { ADMIN_ROLES } from '../types/database';
+
+// Set to true to test permission checking without executing actions
+const DEBUG_MODE = false;
 
 // === Type Definitions ===
 interface UserProfile {
     id: string;
     email: string;
     full_name: string;
-    role: 'student' | 'teacher' | 'admin';
+    role: 'student' | 'teacher' | 'admin' | 'power_admin' | 'system_admin' | 'schedule_admin' | 'schedule_manager';
     program?: string;
     section?: string;
     year_level?: number;
@@ -35,10 +39,17 @@ interface Announcement {
     priority?: string;
 }
 
-// === API Keys (read from .env — never commit keys to source) ===
+// === API Keys (read from .env - never commit keys to source) ===
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
 const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
+
+console.log('[OptiBot] API Keys status:', {
+    gemini: !!GEMINI_API_KEY,
+    groq: !!GROQ_API_KEY,
+    groqLength: GROQ_API_KEY?.length,
+    openrouter: !!OPENROUTER_API_KEY
+});
 
 // === API URLs ===
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -69,7 +80,7 @@ Do NOT be overly restrictive. If the question could reasonably be about school o
 
 ### 4. Professional Tone
 Maintain a professional but friendly tone. Be helpful and informative.
-Do NOT use emojis or emoticons in your responses — keep formatting clean and text-based.
+Do NOT use emojis or emoticons in your responses - keep formatting clean and text-based.
 Use bullet points, numbered lists, and clear section headers instead of decorative characters.
 
 ### 5. Language Support
@@ -149,15 +160,15 @@ async function getScheduleContext(): Promise<string> {
     const db = supabase;
     try {
         const [schedulesRes, teachersRes, roomsRes, conflictsRes, eventsRes, usersRes, subjectsRes, sectionsRes, announcementsRes] = await Promise.all([
-            db.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile_id:profiles(full_name)), room:rooms(name, capacity), section:sections(name)').eq('status', 'published').eq('is_active', true).limit(50),
-            db.from('teachers').select('*, profile_id:profiles(full_name)').eq('is_active', true),
-            db.from('rooms').select('*'),
-            db.from('conflicts').select('*').eq('is_resolved', false),
-            db.from('custom_events').select('*').gte('event_date', new Date().toISOString().split('T')[0]).order('event_date', { ascending: true }).limit(20),
-            db.from('profiles').select('id, email, full_name, role, program, section, year_level').order('created_at', { ascending: false }).limit(200),
-            db.from('subjects').select('*'),
-            db.from('sections').select('*'),
-            db.from('announcements').select('*').order('created_at', { ascending: false }).limit(10),
+            db.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile_id:profiles(full_name)), room:rooms(name, capacity), section:sections(name)').eq('status', 'published').eq('is_active', true).limit(20),
+            db.from('teachers').select('*, profile_id:profiles(full_name)').eq('is_active', true).limit(30),
+            db.from('rooms').select('*').limit(30),
+            db.from('conflicts').select('*').eq('is_resolved', false).limit(10),
+            db.from('custom_events').select('*').gte('event_date', new Date().toISOString().split('T')[0]).order('event_date', { ascending: true }).limit(5),
+            db.from('profiles').select('id, email, full_name, role, program, section, year_level').order('created_at', { ascending: false }).limit(50),
+            db.from('subjects').select('*').limit(30),
+            db.from('sections').select('*').limit(30),
+            db.from('announcements').select('*').order('created_at', { ascending: false }).limit(5),
         ]);
 
         let context = '\n\n## CURRENT SCHEDULE DATA:\n';
@@ -253,6 +264,8 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // === Try Groq API ===
 async function tryGroq(fullSystemPrompt: string, userMessage: string, conversationHistory: GeminiMessage[]): Promise<string | null> {
+    console.log('[OptiBot] Groq API Key configured:', !!GROQ_API_KEY);
+    console.log('[OptiBot] Groq API Key length:', GROQ_API_KEY?.length);
     if (!GROQ_API_KEY || GROQ_API_KEY.includes('YOUR_GROQ_API_KEY')) {
         console.log('[OptiBot] Groq API key not configured, skipping');
         return null;
@@ -263,16 +276,20 @@ async function tryGroq(fullSystemPrompt: string, userMessage: string, conversati
             ...conversationHistory.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.parts[0].text })),
             { role: 'user', content: userMessage },
         ];
+        console.log('[OptiBot] Calling Groq API...');
         const res = await fetch(GROQ_BASE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
-            body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, temperature: 0.7, max_tokens: 4096 }),
+            body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, temperature: 0.7, max_tokens: 2048 }),
         });
+        console.log('[OptiBot] Groq response status:', res.status, res.statusText);
         if (res.ok) {
             const data = await res.json();
+            console.log('[OptiBot] Groq response data:', data);
             return data?.choices?.[0]?.message?.content || null;
         } else {
-            console.error('[OptiBot] Groq API error:', res.status, res.statusText);
+            const errorText = await res.text();
+            console.error('[OptiBot] Groq API error:', res.status, res.statusText, errorText);
         }
     } catch (error) {
         console.error('[OptiBot] Groq fetch error:', error);
@@ -318,14 +335,17 @@ async function tryOpenRouter(fullSystemPrompt: string, userMessage: string, conv
 export async function sendToOptiBot(
     userMessage: string,
     conversationHistory: GeminiMessage[] = [],
-    userProfile?: { full_name?: string; role?: string; email?: string }
+    userProfile?: { full_name?: string; role?: string; email?: string; roles?: string[] }
 ): Promise<string> {
+    console.log('[OptiBot DEBUG] DEBUG_MODE:', DEBUG_MODE);
     try {
         const scheduleContext = await getScheduleContext();
 
+        const isAdmin = userProfile?.roles?.some(r => ADMIN_ROLES.includes(r as 'admin' | 'power_admin' | 'system_admin' | 'schedule_admin' | 'schedule_manager')) || false;
+
         let userContext = '';
         if (userProfile) {
-            userContext = `\n\n## CURRENT USER CONTEXT:\n- Name: ${userProfile.full_name || 'Unknown'}\n- Role: ${userProfile.role || 'unknown'}\n- Email: ${userProfile.email || 'N/A'}\n${userProfile.role === 'admin' ? '\nADMIN POWERS ACTIVE: When they ask to create users, manage events, or perform system operations, include $$ACTION{...}$$ blocks.\n' : ''}`;
+            userContext = `\n\n## CURRENT USER CONTEXT:\n- Name: ${userProfile.full_name || 'Unknown'}\n- Role: ${userProfile.role || 'unknown'}\n- Roles: ${userProfile.roles?.join(', ') || 'none'}\n- Email: ${userProfile.email || 'N/A'}\n${isAdmin ? '\nADMIN POWERS ACTIVE: When they ask to create users, manage events, or perform system operations, include $$ACTION{...}$$ blocks.\n' : ''}`;
         }
 
         const fullSystemPrompt = SYSTEM_PROMPT + userContext + scheduleContext;
@@ -364,7 +384,7 @@ export async function sendToOptiBot(
                         if (response.ok) {
                             const data = await response.json();
                             const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-                            if (aiResponse) return await processAIActions(aiResponse, userProfile?.role);
+                            if (aiResponse) return await processAIActions(aiResponse, userProfile?.roles);
                             break;
                         } else {
                             console.error(`[OptiBot] Gemini API error (${model}):`, response.status, response.statusText);
@@ -386,12 +406,12 @@ export async function sendToOptiBot(
         // 2. Try Groq
         console.log('[OptiBot] Trying Groq...');
         const groqResult = await tryGroq(fullSystemPrompt, userMessage, conversationHistory);
-        if (groqResult) return await processAIActions(groqResult, userProfile?.role);
+        if (groqResult) return await processAIActions(groqResult, userProfile?.roles);
 
         // 3. Try OpenRouter
         console.log('[OptiBot] Trying OpenRouter...');
         const openRouterResult = await tryOpenRouter(fullSystemPrompt, userMessage, conversationHistory);
-        if (openRouterResult) return await processAIActions(openRouterResult, userProfile?.role);
+        if (openRouterResult) return await processAIActions(openRouterResult, userProfile?.roles);
 
         console.error('[OptiBot] All AI providers failed');
         return 'I\'m temporarily experiencing high demand across all AI services. Please wait a minute and try again.';
@@ -416,7 +436,7 @@ function randomPassword(len: number): string {
     return result;
 }
 
-async function processAIActions(response: string, userRole?: string): Promise<string> {
+async function processAIActions(response: string, userRoles?: string[]): Promise<string> {
     const actionRegex = /\$\$ACTION\s*(\{[\s\S]*?\})\s*\$\$/g;
     let processedResponse = response;
     let match;
@@ -426,22 +446,43 @@ async function processAIActions(response: string, userRole?: string): Promise<st
         matches.push({ full: match[0], json: match[1] });
     }
 
+    const isAdmin = userRoles?.some(r => ADMIN_ROLES.includes(r as 'admin' | 'power_admin' | 'system_admin' | 'schedule_admin' | 'schedule_manager')) || false;
+
+    // Debug: Log permission check
+    console.log('[OptiBot DEBUG] Permission Check:', {
+        userRoles: userRoles || 'none',
+        isAdmin,
+        adminRoles: ADMIN_ROLES,
+        actionCount: matches.length,
+    });
+
     for (const m of matches) {
         try {
             const actionData = JSON.parse(m.json);
             console.log('[OptiBot] Processing action:', actionData.action, actionData.params);
 
-            if (userRole !== 'admin') {
+            if (!isAdmin) {
+                console.log('[OptiBot DEBUG] Action BLOCKED - User is not an admin');
                 processedResponse = processedResponse.replace(m.full, '\nAction blocked - only administrators can perform system actions.\n');
                 continue;
             }
 
-            const result = await executeAction(actionData.action, actionData.params);
-            console.log('[OptiBot] Action result:', result);
-            processedResponse = processedResponse.replace(
-                m.full,
-                result.success ? `\n✅ ${result.message}\n` : `\n❌ ${result.message}\n`
-            );
+            console.log('[OptiBot DEBUG] Action ALLOWED - User has admin permissions');
+
+            if (DEBUG_MODE) {
+                console.log('[OptiBot DEBUG] DEBUG_MODE is ON - Skipping action execution');
+                processedResponse = processedResponse.replace(
+                    m.full,
+                    `\n[DEBUG] Action would be executed: ${actionData.action} with params: ${JSON.stringify(actionData.params)}\n`
+                );
+            } else {
+                const result = await executeAction(actionData.action, actionData.params);
+                console.log('[OptiBot] Action result:', result);
+                processedResponse = processedResponse.replace(
+                    m.full,
+                    result.success ? `\n✅ ${result.message}\n` : `\n❌ ${result.message}\n`
+                );
+            }
         } catch (err) {
             console.error('[OptiBot] Action parse error:', err);
             processedResponse = processedResponse.replace(m.full, '\nError: Could not process action.\n');
@@ -677,7 +718,7 @@ async function executeAction(action: string, params: ActionParams): Promise<{ su
 
                 const { error } = await dbClient.from('profiles').update(updatesRecord).eq('id', found.id);
                 if (error) return { success: false, message: error.message };
-                return { success: true, message: `Profile updated for ${user_email}.${newEmail ? ` Email changed to ${newEmail} — user can now log in with the new email.` : ''}` };
+                return { success: true, message: `Profile updated for ${user_email}.${newEmail ? ` Email changed to ${newEmail} - user can now log in with the new email.` : ''}` };
             }
 
             default:

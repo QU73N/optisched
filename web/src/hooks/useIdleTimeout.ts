@@ -1,4 +1,4 @@
-// useIdleTimeout — Session 2 / Task C4 of HARDENING_PLAN.md
+// useIdleTimeout - Session 2 / Task C4 of HARDENING_PLAN.md
 //
 // Monitors user activity and fires `onWarn` when the configured idle
 // threshold is reached, then `onTimeout` after the grace period unless the
@@ -131,7 +131,7 @@ export function useIdleTimeout(opts: IdleTimeoutOptions): IdleTimeoutHandle {
             if (now - lastActivityRef.current < THROTTLE_MS) return;
             lastActivityRef.current = now;
             // If we're already in the warning phase, don't auto-dismiss on
-            // mousemove — the user must take an explicit action.
+            // mousemove - the user must take an explicit action.
             if (warningRef.current) return;
             armIdle();
         };

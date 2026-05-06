@@ -200,12 +200,12 @@ const AuditLogPage: React.FC = () => {
                                             </td>
                                             <td><code className="audit-action">{r.action}</code></td>
                                             <td>
-                                                {r.target_table ? <code className="audit-target">{r.target_table}{r.target_id ? `:${r.target_id.slice(0,8)}` : ''}</code> : '—'}
+                                                {r.target_table ? <code className="audit-target">{r.target_table}{r.target_id ? `:${r.target_id.slice(0,8)}` : ''}</code> : 'N/A'}
                                             </td>
                                             <td className="audit-details-preview">
                                                 {Object.keys(r.details || {}).length > 0
-                                                    ? `${Object.keys(r.details).length} field(s) — click to view`
-                                                    : '—'}
+                                                    ? `${Object.keys(r.details).length} field(s) - click to view`
+                                                    : 'N/A'}
                                             </td>
                                         </tr>
                                         {open && (

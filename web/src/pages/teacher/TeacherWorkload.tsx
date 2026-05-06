@@ -63,8 +63,8 @@ const TeacherWorkload: React.FC = () => {
         return Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
     };
     const subjectName = (s: ScheduleRow['subject']): string => {
-        if (!s) return '—';
-        if (Array.isArray(s)) return s[0]?.name || '—';
+        if (!s) return 'N/A';
+        if (Array.isArray(s)) return s[0]?.name || 'N/A';
         return s.name;
     };
 

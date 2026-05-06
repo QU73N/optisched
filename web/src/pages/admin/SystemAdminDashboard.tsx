@@ -220,7 +220,7 @@ const SystemAdminDashboard: React.FC = () => {
                                             <div className="dash-list-item-body dash-list-item-body--compact">
                                                 <div className="dash-list-item-title">{r.rule_key}</div>
                                                 <div className="dash-list-item-desc">
-                                                    {r.description || '—'} · <strong>{String(r.rule_value)}</strong>
+                                                    {r.description || 'None'} · <strong>{String(r.rule_value)}</strong>
                                                 </div>
                                             </div>
                                         </div>

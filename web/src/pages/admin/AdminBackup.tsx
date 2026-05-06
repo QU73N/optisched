@@ -25,7 +25,7 @@ interface BackupJob {
 }
 
 const fmtSize = (b: number | null) => {
-    if (!b) return '—';
+    if (!b) return 'N/A';
     if (b < 1024) return `${b} B`;
     if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
     if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
@@ -167,13 +167,13 @@ const AdminBackup: React.FC = () => {
                                     <td>{j.kind}</td>
                                     <td>{statusBadge(j.status)}</td>
                                     <td>{fmtSize(j.size_bytes)}</td>
-                                    <td style={{ color: 'var(--text-secondary)' }}>{j.note || '—'}</td>
+                                    <td style={{ color: 'var(--text-secondary)' }}>{j.note || 'None'}</td>
                                     <td>
                                         {j.file_path ? (
                                             <a href={j.file_path} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                                 <Download size={12} /> Download
                                             </a>
-                                        ) : '—'}
+                                        ) : 'N/A'}
                                     </td>
                                 </tr>
                             ))}

@@ -969,7 +969,7 @@ const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJum
 };
 
 // ---------------------------------------------------------------------------
-// Stage 1 — Scope
+// Stage 1 - Scope
 // ---------------------------------------------------------------------------
 
 const ScopeStage: React.FC<{
@@ -1097,7 +1097,7 @@ const PartialTargetPicker: React.FC<{
                     <option value="">Select a {PARTIAL_KIND_LABELS[kind].toLowerCase()}...</option>
                     {options.map(o => (
                         <option key={o.id} value={o.id}>
-                            {o.label}{o.sub ? ` — ${o.sub}` : ''}
+                            {o.label}{o.sub ? ` - ${o.sub}` : ''}
                         </option>
                     ))}
                 </select>
@@ -1132,7 +1132,7 @@ const FieldTooltip: React.FC<{ children: string }> = ({ children }) => (
 );
 
 // ---------------------------------------------------------------------------
-// Stage 2 — Structure
+// Stage 2 - Structure
 // ---------------------------------------------------------------------------
 
 const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>>; compact?: boolean }> = ({ config, setConfig, compact = false }) => {
@@ -1379,7 +1379,7 @@ const StructureStage: React.FC<{ config: GenerationConfig; setConfig: React.Disp
 };
 
 // ---------------------------------------------------------------------------
-// Stage 3 — Constraints
+// Stage 3 - Constraints
 // ---------------------------------------------------------------------------
 
 const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Dispatch<React.SetStateAction<GenerationConfig>>; compact?: boolean }> = ({ config, setConfig, compact = false }) => {
@@ -1437,7 +1437,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                         <FieldTooltip>Number of times the generator will try to place all sessions. Higher values take longer but may find better solutions.</FieldTooltip>
                     </div>
                     <select className="input" value={config.maxAttempts} onChange={e => setConfig(c => ({ ...c, maxAttempts: Number(e.target.value) }))}>
-                        {[10, 25, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}
+                        {[10, 25, 50, 100, 200, 500, 1000].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                 </div>
             </div>
@@ -1512,7 +1512,7 @@ const SoftSlider: React.FC<{ label: string; desc: string; value: number; onChang
 );
 
 // ---------------------------------------------------------------------------
-// Stage 4 — Review
+// Stage 4 - Review
 // ---------------------------------------------------------------------------
 
 // Helper function to format time based on user preference
@@ -1677,7 +1677,7 @@ const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => (
 );
 
 // ---------------------------------------------------------------------------
-// Stage 5 — Generate (progress)
+// Stage 5 - Generate (progress)
 // ---------------------------------------------------------------------------
 
 const SUBSTAGES: { key: GenerationProgress['subStage']; label: string }[] = [
@@ -1791,7 +1791,7 @@ const GenerateStage: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Stage 6 — Results
+// Stage 6 - Results
 // ---------------------------------------------------------------------------
 
 const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
@@ -1866,7 +1866,7 @@ const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
 };
 
 // ---------------------------------------------------------------------------
-// Stage 7 — Outcome
+// Stage 7 - Outcome
 // ---------------------------------------------------------------------------
 
 const OutcomeStage: React.FC<{
@@ -2143,7 +2143,7 @@ const OutcomeStage: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Stage 8 — Save
+// Stage 8 - Save
 // ---------------------------------------------------------------------------
 
 const SaveStage: React.FC<{

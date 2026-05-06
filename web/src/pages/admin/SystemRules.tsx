@@ -341,7 +341,7 @@ const SystemRules: React.FC = () => {
                                     <code>{rule.rule_key}</code>
                                     <span className="rule-card-cat">{rule.category}</span>
                                 </div>
-                                <div className="rule-card-desc">{rule.description || '—'}</div>
+                                <div className="rule-card-desc">{rule.description || 'None'}</div>
                                 <div className="rule-card-current">
                                     <Globe size={12} /> {formatValue(rule.rule_value)}
                                 </div>

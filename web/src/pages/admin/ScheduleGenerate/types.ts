@@ -54,6 +54,7 @@ export interface Subject {
 export interface Teacher {
     id: string;
     max_hours: number | null;
+    max_hours_per_day: number | null;
     full_name: string;
     weight: number;
     priority_note: string | null;
@@ -64,7 +65,7 @@ export interface Teacher {
     preferred_time_end?: string | null;   // HH:MM
     max_classes_per_day?: number | null;
     max_consecutive_classes?: number | null;
-    // Per-slot availability map: { "Monday-08:00": false, ... } — missing keys default to true
+    // Per-slot availability map: { "Monday-08:00": false, ... } - missing keys default to true
     availability?: Record<string, boolean>;
 }
 
@@ -163,15 +164,15 @@ export interface CommonBreakConfig {
 }
 
 export interface SoftWeights {
-    balancedLoad: number;         // 0 to 100 — spread sessions evenly across teachers
-    compactSchedule: number;      // 0 to 100 — reduce idle gaps inside section days
-    minimizeRoomSwitch: number;   // 0 to 100 — keep teachers in fewer rooms
-    teacherPreferredTime: number; // 0 to 100 — honor each teacher's preferred window
-    dailyLoadBalance: number;     // 0 to 100 — even teaching load per teacher per day
-    workloadFairness: number;     // 0 to 100 — (now hard constraint, kept for compatibility)
-    subjectSpacing: number;       // 0 to 100 — avoid stacking the same subject on one day
-    roomUtilization: number;      // 0 to 100 — reward high utilization of scarce rooms
-    specialRoomBias: number;      // 0 to 100 — how strongly to reserve labs and studios for subjects that need them
+    balancedLoad: number;         // 0 to 100 - spread sessions evenly across teachers
+    compactSchedule: number;      // 0 to 100 - reduce idle gaps inside section days
+    minimizeRoomSwitch: number;   // 0 to 100 - keep teachers in fewer rooms
+    teacherPreferredTime: number; // 0 to 100 - honor each teacher's preferred window
+    dailyLoadBalance: number;     // 0 to 100 - even teaching load per teacher per day
+    workloadFairness: number;     // 0 to 100 - (now hard constraint, kept for compatibility)
+    subjectSpacing: number;       // 0 to 100 - avoid stacking the same subject on one day
+    roomUtilization: number;      // 0 to 100 - reward high utilization of scarce rooms
+    specialRoomBias: number;      // 0 to 100 - how strongly to reserve labs and studios for subjects that need them
 }
 
 export type PriorityTier = 'high' | 'normal' | 'low';

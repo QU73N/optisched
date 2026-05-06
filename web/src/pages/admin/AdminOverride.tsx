@@ -198,7 +198,7 @@ const AdminOverride: React.FC = () => {
                                     <td>{KIND_META[r.kind].label}</td>
                                     <td style={{ color: 'var(--text-secondary)' }}>{r.reason}</td>
                                     <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
-                                        {r.deactivated_at ? new Date(r.deactivated_at).toLocaleString() : (r.expires_at ? `expired ${new Date(r.expires_at).toLocaleString()}` : '—')}
+                                        {r.deactivated_at ? new Date(r.deactivated_at).toLocaleString() : (r.expires_at ? `expired ${new Date(r.expires_at).toLocaleString()}` : 'N/A')}
                                     </td>
                                 </tr>
                             ))}

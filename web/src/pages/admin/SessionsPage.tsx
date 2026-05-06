@@ -152,7 +152,7 @@ const SessionsPage: React.FC = () => {
                                         </div>
                                     </td>
                                     <td><code className="audit-target">{ROLE_DISPLAY_NAMES[r.role as UserRole] || r.role}</code></td>
-                                    <td className="audit-time">{r.last_login ? new Date(r.last_login).toLocaleTimeString() : '—'}</td>
+                                    <td className="audit-time">{r.last_login ? new Date(r.last_login).toLocaleTimeString() : 'N/A'}</td>
                                     <td className="audit-time">{new Date(r.last_activity).toLocaleTimeString()}</td>
                                     <td>{r.activity_count}</td>
                                     <td>

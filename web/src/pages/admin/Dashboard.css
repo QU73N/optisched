@@ -57,6 +57,7 @@
     font-family: var(--font-sans);
     font-size: var(--d-text-base);
     line-height: 1.5;
+    overflow-x: hidden;
 }
 
 .dashboard.fade-in { animation: dashFadeIn 240ms var(--ease-out) both; }
@@ -972,6 +973,7 @@
     margin: 0;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -1178,23 +1180,28 @@
 
 /* Button group / tabs (modal) */
 .dash-btn-group {
-    display: inline-flex;
+    display: flex;
+    width: 100%;
     border: 1px solid var(--border-default);
-    border-radius: var(--d-radius-sm);
+    border-radius: var(--d-radius-md);
     overflow: hidden;
+    background: var(--bg-surface);
 }
 
 .dash-btn-tab {
-    padding: 6px 12px;
+    flex: 1;
+    padding: 10px 16px;
     background: transparent;
     border: none;
     border-right: 1px solid var(--border-default);
     color: var(--text-secondary);
     font: inherit;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 140ms var(--ease-out), color 140ms var(--ease-out);
+    transition: all 160ms var(--ease-out);
+    text-align: center;
+    white-space: nowrap;
 }
 
 .dash-btn-tab:last-child { border-right: none; }
@@ -1203,6 +1210,7 @@
 .dash-btn-tab.active {
     background: var(--accent-primary);
     color: var(--text-on-accent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
 }
 
 /* Chip selector */
@@ -1390,7 +1398,7 @@
 
 
 /* ============================================================
-   SCHEDULE MANAGEMENT — category tabs + weekly calendar
+   SCHEDULE MANAGEMENT - category tabs + weekly calendar
    Brand palette (navy #0F2854, core #1C4D8D, bright #4988C4, ice #BDE8F5)
    ============================================================ */
 
@@ -1686,7 +1694,7 @@
     .sm-cal-event-sub { display: none; }
 }
 /* ============================================================
-   SCHEDULE GENERATE — staged generation workspace (Phase 1)
+   SCHEDULE GENERATE - staged generation workspace (Phase 1)
    ============================================================ */
 
 .sg-stepper {

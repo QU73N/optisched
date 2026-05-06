@@ -9,7 +9,7 @@ interface AuroraBackgroundProps extends React.HTMLProps<HTMLDivElement> {
 }
 
 /**
- * Aurora background — brand-aligned.
+ * Aurora background - brand-aligned.
  * Uses OptiSched brand palette (Deep Navy, Core, Bright, Ice) instead of
  * the original blue/indigo/violet stack. Palette driven by CSS variables
  * (--brand-navy, --brand-core, --brand-bright, --brand-ice) set by the

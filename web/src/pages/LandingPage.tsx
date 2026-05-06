@@ -15,7 +15,7 @@ import { AuroraBackground } from '@/components/ui/aurora-background';
 import './LandingPage.css';
 
 /* ============================================================
-   useReveal — IntersectionObserver scroll reveal
+   useReveal - IntersectionObserver scroll reveal
    ============================================================ */
 const useReveal = (animationsEnabled: boolean) => {
     useEffect(() => {
@@ -737,7 +737,7 @@ const FeaturesBento: React.FC = () => (
                 card.style.setProperty('--mx', `${((e.clientX - rect.left) / rect.width) * 100}%`);
                 card.style.setProperty('--my', `${((e.clientY - rect.top) / rect.height) * 100}%`);
             }}>
-                {/* Tile 1 — wide: Schedule generation */}
+                {/* Tile 1 - wide: Schedule generation */}
                 <div className="lp-bento-card lp-b-wide reveal">
                     <div className="lp-bento-icon"><Sparkles size={20} /></div>
                     <h3 className="lp-bento-title">Conflict-free schedule generation</h3>
@@ -757,7 +757,7 @@ const FeaturesBento: React.FC = () => (
                     </div>
                 </div>
 
-                {/* Tile 2 — third: Approval workflow */}
+                {/* Tile 2 - third: Approval workflow */}
                 <div className="lp-bento-card lp-b-third reveal delay-1">
                     <div className="lp-bento-icon"><FileCheck size={20} /></div>
                     <h3 className="lp-bento-title">Approval workflow</h3>
@@ -767,7 +767,7 @@ const FeaturesBento: React.FC = () => (
                     </p>
                 </div>
 
-                {/* Tile 3 — half: Constraints */}
+                {/* Tile 3 - half: Constraints */}
                 <div className="lp-bento-card lp-b-half reveal delay-2">
                     <div className="lp-bento-icon"><Scale size={20} /></div>
                     <h3 className="lp-bento-title">Hard &amp; soft constraints</h3>
@@ -793,7 +793,7 @@ const FeaturesBento: React.FC = () => (
                     </div>
                 </div>
 
-                {/* Tile 4 — half: Faculty workload */}
+                {/* Tile 4 - half: Faculty workload */}
                 <div className="lp-bento-card lp-b-half reveal delay-3">
                     <div className="lp-bento-icon"><Gauge size={20} /></div>
                     <h3 className="lp-bento-title">Faculty load, automatically balanced</h3>
@@ -810,7 +810,7 @@ const FeaturesBento: React.FC = () => (
                     </div>
                 </div>
 
-                {/* Tile 5 — third: AI assistant */}
+                {/* Tile 5 - third: AI assistant */}
                 <div className="lp-bento-card lp-b-third reveal delay-1">
                     <div className="lp-bento-icon"><MessageSquare size={20} /></div>
                     <h3 className="lp-bento-title">AI schedule assistant</h3>
@@ -820,7 +820,7 @@ const FeaturesBento: React.FC = () => (
                     </p>
                 </div>
 
-                {/* Tile 6 — third: Versioning */}
+                {/* Tile 6 - third: Versioning */}
                 <div className="lp-bento-card lp-b-third reveal delay-2">
                     <div className="lp-bento-icon"><GitBranch size={20} /></div>
                     <h3 className="lp-bento-title">Versioning &amp; rollback</h3>
@@ -849,7 +849,7 @@ const FeaturesBento: React.FC = () => (
                     </div>
                 </div>
 
-                {/* Tile 7 — third: Collaboration */}
+                {/* Tile 7 - third: Collaboration */}
                 <div className="lp-bento-card lp-b-third reveal delay-3">
                     <div className="lp-bento-icon"><Users size={20} /></div>
                     <h3 className="lp-bento-title">Built for coordination</h3>
@@ -859,7 +859,7 @@ const FeaturesBento: React.FC = () => (
                     </p>
                 </div>
 
-                {/* Tile 8 — third: Notifications */}
+                {/* Tile 8 - third: Notifications */}
                 <div className="lp-bento-card lp-b-third reveal delay-4">
                     <div className="lp-bento-icon"><Bell size={20} /></div>
                     <h3 className="lp-bento-title">Targeted notifications</h3>
@@ -869,7 +869,7 @@ const FeaturesBento: React.FC = () => (
                     </p>
                 </div>
 
-                {/* Tile 9 — third: Section hierarchy */}
+                {/* Tile 9 - third: Section hierarchy */}
                 <div className="lp-bento-card lp-b-third reveal delay-5">
                     <div className="lp-bento-icon"><FolderTree size={20} /></div>
                     <h3 className="lp-bento-title">Section hierarchy</h3>
@@ -879,7 +879,7 @@ const FeaturesBento: React.FC = () => (
                     </p>
                 </div>
 
-                {/* Tile 10 — third: Special rooms */}
+                {/* Tile 10 - third: Special rooms */}
                 <div className="lp-bento-card lp-b-third reveal delay-6">
                     <div className="lp-bento-icon"><Building2 size={20} /></div>
                     <h3 className="lp-bento-title">Special room priority</h3>

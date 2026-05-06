@@ -16,7 +16,7 @@ export interface CustomEvent {
 }
 
 /**
- * Hook for custom events — supports filtering by date or fetching upcoming events.
+ * Hook for custom events - supports filtering by date or fetching upcoming events.
  */
 export function useCustomEvents(filterDate?: string, upcoming?: boolean) {
     const [events, setEvents] = useState<CustomEvent[]>([]);

@@ -8,7 +8,7 @@ import {
     Shield, FileSearch, CheckCircle, Activity, Server, Save,
     AlertOctagon, ToggleRight, Megaphone, Briefcase, Building2,
     Palette, Inbox, Clock, BookOpen, History, Share2, FileText,
-    User, Calendar, ListChecks, MapPin, HelpCircle, Bot, Monitor
+    User, Calendar, ListChecks, MapPin, HelpCircle, Bot, Monitor, DoorOpen
 } from 'lucide-react';
 
 export interface NavLink {
@@ -40,7 +40,8 @@ export const POWER_ADMIN_NAV: NavGroup[] = [
             { to: '/admin/approvals', icon: CheckCircle, label: 'Approvals', badgeKey: 'approvals' },
             { to: '/admin/generate', icon: Sparkles, label: 'Generate' },
             { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts', badgeKey: 'conflicts' },
-            { to: '/admin/faculty', icon: UserCheck, label: 'Faculty Load' },
+            { to: '/admin/faculty', icon: UserCheck, label: 'Faculty' },
+            { to: '/admin/rooms', icon: DoorOpen, label: 'Rooms' },
             { to: '/admin/data', icon: Database, label: 'Data' },
         ],
     },
@@ -48,14 +49,14 @@ export const POWER_ADMIN_NAV: NavGroup[] = [
         label: 'Governance',
         links: [
             { to: '/admin/users', icon: Users, label: 'Users' },
-            { to: '/admin/rules', icon: Shield, label: 'System Rules' },
-            { to: '/admin/audit', icon: FileSearch, label: 'Audit Log', powerOnly: true },
-            { to: '/admin/activity', icon: Activity, label: 'User Activity' },
+            { to: '/admin/rules', icon: Shield, label: 'Rules' },
+            { to: '/admin/audit', icon: FileSearch, label: 'Audit', powerOnly: true },
+            { to: '/admin/activity', icon: Activity, label: 'Activity' },
             { to: '/admin/sessions', icon: Server, label: 'Sessions' },
-            { to: '/admin/health', icon: Monitor, label: 'System Health' },
+            { to: '/admin/health', icon: Monitor, label: 'Health' },
             { to: '/admin/backup', icon: Save, label: 'Backup', powerOnly: true },
             { to: '/admin/override', icon: AlertOctagon, label: 'Override', powerOnly: true },
-            { to: '/admin/flags', icon: ToggleRight, label: 'Feature Flags', powerOnly: true },
+            { to: '/admin/flags', icon: ToggleRight, label: 'Flags', powerOnly: true },
         ],
     },
     {
@@ -63,7 +64,6 @@ export const POWER_ADMIN_NAV: NavGroup[] = [
         links: [
             { to: '/admin/announcements', icon: Megaphone, label: 'Announcements' },
             { to: '/admin/messages', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
-            { to: '/admin/group-chats', icon: Users, label: 'Group Chats' },
         ],
     },
     {
@@ -87,11 +87,11 @@ export const SYSTEM_ADMIN_NAV: NavGroup[] = [
         label: 'Governance',
         links: [
             { to: '/admin/users', icon: Users, label: 'Users' },
-            { to: '/admin/rules', icon: Shield, label: 'System Rules' },
-            { to: '/admin/activity', icon: Activity, label: 'User Activity' },
+            { to: '/admin/rules', icon: Shield, label: 'Rules' },
+            { to: '/admin/activity', icon: Activity, label: 'Activity' },
             { to: '/admin/sessions', icon: Server, label: 'Sessions' },
-            { to: '/admin/health', icon: Monitor, label: 'System Health' },
-            { to: '/admin/lifecycle', icon: Briefcase, label: 'Account Lifecycle' },
+            { to: '/admin/health', icon: Monitor, label: 'Health' },
+            { to: '/admin/lifecycle', icon: Briefcase, label: 'Lifecycle' },
             { to: '/admin/structure', icon: Building2, label: 'Departments' },
             { to: '/admin/branding', icon: Palette, label: 'Branding' },
         ],
@@ -101,7 +101,6 @@ export const SYSTEM_ADMIN_NAV: NavGroup[] = [
         links: [
             { to: '/admin/announcements', icon: Megaphone, label: 'Announcements' },
             { to: '/admin/messages', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
-            { to: '/admin/group-chats', icon: Users, label: 'Group Chats' },
         ],
     },
     {
@@ -128,8 +127,9 @@ export const SCHEDULE_ADMIN_NAV: NavGroup[] = [
             { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
             { to: '/admin/history', icon: History, label: 'History' },
             { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts', badgeKey: 'conflicts' },
-            { to: '/admin/requests', icon: Inbox, label: 'Change Requests', badgeKey: 'requests' },
-            { to: '/admin/faculty', icon: UserCheck, label: 'Faculty Load' },
+            { to: '/admin/requests', icon: Inbox, label: 'Requests', badgeKey: 'requests' },
+            { to: '/admin/faculty', icon: UserCheck, label: 'Faculty' },
+            { to: '/admin/rooms', icon: DoorOpen, label: 'Rooms' },
         ],
     },
     {
@@ -137,7 +137,6 @@ export const SCHEDULE_ADMIN_NAV: NavGroup[] = [
         links: [
             { to: '/admin/announcements', icon: Megaphone, label: 'Announcements' },
             { to: '/admin/messages', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
-            { to: '/admin/group-chats', icon: Users, label: 'Group Chats' },
         ],
     },
     {
@@ -159,11 +158,12 @@ export const SCHEDULE_MANAGER_NAV: NavGroup[] = [
     {
         label: 'Operations',
         links: [
-            { to: '/admin/schedules', icon: CalendarDays, label: 'My Schedules' },
+            { to: '/admin/schedules', icon: CalendarDays, label: 'Schedules' },
             { to: '/admin/generate', icon: Sparkles, label: 'Generate' },
             { to: '/admin/data', icon: Database, label: 'Data' },
             { to: '/admin/conflicts', icon: AlertTriangle, label: 'Conflicts', badgeKey: 'conflicts' },
-            { to: '/admin/faculty', icon: UserCheck, label: 'Faculty Load' },
+            { to: '/admin/faculty', icon: UserCheck, label: 'Faculty' },
+            { to: '/admin/rooms', icon: DoorOpen, label: 'Rooms' },
             { to: '/admin/sharing', icon: Share2, label: 'Sharing' },
             { to: '/admin/templates', icon: FileText, label: 'Templates' },
         ],
@@ -193,18 +193,17 @@ export const TEACHER_NAV: NavGroup[] = [
     {
         label: 'Personal',
         links: [
-            { to: '/teacher/schedule', icon: Calendar, label: 'My Schedule' },
-            { to: '/teacher/workload', icon: BookOpen, label: 'My Workload' },
-            { to: '/teacher/preferences', icon: ListChecks, label: 'My Preferences' },
-            { to: '/teacher/requests', icon: Inbox, label: 'My Requests' },
-            { to: '/teacher/sections', icon: Users, label: 'My Sections' },
+            { to: '/teacher/schedule', icon: Calendar, label: 'Schedule' },
+            { to: '/teacher/workload', icon: BookOpen, label: 'Workload' },
+            { to: '/teacher/preferences', icon: ListChecks, label: 'Preferences' },
+            { to: '/teacher/requests', icon: Inbox, label: 'Requests' },
+            { to: '/teacher/sections', icon: Users, label: 'Sections' },
         ],
     },
     {
         label: 'Communication',
         links: [
             { to: '/teacher/chat', icon: MessageSquare, label: 'Messages', badgeKey: 'messages' },
-            { to: '/teacher/group-chats', icon: Users, label: 'Group Chats' },
             { to: '/teacher/announcements', icon: Megaphone, label: 'Announcements' },
         ],
     },
@@ -227,9 +226,9 @@ export const STUDENT_NAV: NavGroup[] = [
     {
         label: 'Personal',
         links: [
-            { to: '/student/schedule', icon: Calendar, label: 'My Schedule' },
+            { to: '/student/schedule', icon: Calendar, label: 'Schedule' },
             { to: '/student/upcoming', icon: Clock, label: 'Upcoming' },
-            { to: '/student/section', icon: MapPin, label: 'Section Schedule' },
+            { to: '/student/section', icon: MapPin, label: 'Section' },
         ],
     },
     {
@@ -266,14 +265,14 @@ export function resolveNav(role: string | null, roles: string[]): NavGroup[] {
         for (const r of extra) {
             if (r === 'schedule_admin') {
                 groups.splice(groups.length - 1, 0, {
-                    label: 'Approvals (Sched Admin)',
+                    label: 'Approvals',
                     links: SCHEDULE_ADMIN_NAV
                         .find(g => g.label === 'Operations')?.links
                         .map(l => ({ ...l, to: l.to })) || [],
                 });
             } else if (r === 'schedule_manager') {
                 groups.splice(groups.length - 1, 0, {
-                    label: 'Build (Sched Mgr)',
+                    label: 'Build',
                     links: SCHEDULE_MANAGER_NAV
                         .find(g => g.label === 'Operations')?.links
                         .map(l => ({ ...l, to: l.to })) || [],

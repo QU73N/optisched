@@ -154,7 +154,7 @@ const UserActivityPage: React.FC = () => {
                 <h1 className="dashboard-title"><Activity size={20} /> User Activity</h1>
                 <p className="dashboard-subtitle">
                     Per-user troubleshooting trail. Retained {String(perms.ruleNumber('activity_log_retention_days', 90))} days.
-                    Operational data only — no message content.
+                    Operational data only - no message content.
                 </p>
             </div>
 
@@ -218,7 +218,7 @@ const UserActivityPage: React.FC = () => {
                         <div className="stat-card">
                             <div className="stat-icon"><Calendar size={20} /></div>
                             <div className="stat-number" style={{ fontSize: 14 }}>
-                                {summary.lastActive ? new Date(summary.lastActive).toLocaleString() : '—'}
+                                {summary.lastActive ? new Date(summary.lastActive).toLocaleString() : 'N/A'}
                             </div>
                             <div className="stat-label">Last Active</div>
                         </div>
@@ -260,13 +260,13 @@ const UserActivityPage: React.FC = () => {
                                         <tr key={r.id} className="audit-row">
                                             <td className="audit-time">{new Date(r.created_at).toLocaleString()}</td>
                                             <td><code className={`audit-action ${ACTION_COLORS[r.action_type] || ''}`}>{r.action_type}</code></td>
-                                            <td><code className="audit-target">{r.resource || '—'}</code></td>
+                                            <td><code className="audit-target">{r.resource || 'N/A'}</code></td>
                                             <td>
                                                 {r.success
                                                     ? <span className="activity-action-success" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckCircle size={12} /> ok</span>
                                                     : <span className="activity-action-failure" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><XCircle size={12} /> {r.error_message || 'failed'}</span>}
                                             </td>
-                                            <td className="audit-time">{r.duration_ms != null ? `${r.duration_ms}ms` : '—'}</td>
+                                            <td className="audit-time">{r.duration_ms != null ? `${r.duration_ms}ms` : 'N/A'}</td>
                                         </tr>
                                     ))}
                                 </tbody>

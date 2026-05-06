@@ -57,7 +57,7 @@ const StudentSection: React.FC = () => {
         })();
     }, [profile?.section, perms]);
 
-    const subjectName = (s: Row['subject']) => Array.isArray(s) ? s[0]?.name : s?.name || '—';
+    const subjectName = (s: Row['subject']) => Array.isArray(s) ? s[0]?.name : s?.name || 'N/A';
     const roomName = (r: Row['room']) => Array.isArray(r) ? r[0]?.name : r?.name || 'TBA';
     const teacherName = (t: Row['teacher']): string => {
         const obj = Array.isArray(t) ? t[0] : t;
@@ -125,7 +125,7 @@ const StudentSection: React.FC = () => {
                                 <span className="dash-card-badge dash-badge-info">{list.length}</span>
                             </div>
                             {list.length === 0 ? (
-                                <div className="dash-empty" style={{ padding: '12px 0' }}><div>—</div></div>
+                                <div className="dash-empty" style={{ padding: '12px 0' }}><div>N/A</div></div>
                             ) : (
                                 <div className="dash-list" style={{ gap: 4 }}>
                                     {list.map(s => (

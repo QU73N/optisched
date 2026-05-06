@@ -25,6 +25,7 @@ const GroupChats = lazy(() => import('./pages/shared/GroupChats'));
 const AuditLogLegacy = lazy(() => import('./pages/admin/AuditLog'));
 const ScheduleGenerate = lazy(() => import('./pages/admin/ScheduleGenerate'));
 const FacultyHub = lazy(() => import('./pages/admin/FacultyHub'));
+const RoomHub = lazy(() => import('./pages/admin/RoomHub'));
 const AIScheduleChat = lazy(() => import('./pages/admin/AIScheduleChat'));
 const AdminScheduleTasks = lazy(() => import('./pages/admin/AdminScheduleTasks'));
 const AppSettings = lazy(() => import('./pages/shared/AppSettings'));
@@ -44,6 +45,7 @@ const AdminOverride = lazy(() => import('./pages/admin/AdminOverride'));
 const AdminFeatureFlags = lazy(() => import('./pages/admin/AdminFeatureFlags'));
 const HealthPage = lazy(() => import('./pages/admin/HealthPage'));
 const VersionManager = lazy(() => import('./pages/admin/VersionManager'));
+const HelpPage = lazy(() => import('./pages/shared/HelpPage'));
 
 const TeacherDashboard = lazy(() => import('./pages/teacher/TeacherDashboard'));
 const TeacherSchedule = lazy(() => import('./pages/teacher/TeacherSchedule'));
@@ -116,6 +118,7 @@ function App() {
           <Route path="/" element={<LandingGuard />} />
           <Route path="/login" element={<LandingGuard />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/help" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><HelpPage /></Suspense>} />
 
           {/* Admin routes - accessible by all admin sub-roles */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={adminRoles}><Layout /></ProtectedRoute>}>
@@ -141,6 +144,7 @@ function App() {
             <Route path="audit-legacy" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AuditLogLegacy /></Suspense>} />
             <Route path="generate" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><ScheduleGenerate /></Suspense>} />
             <Route path="faculty" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><FacultyHub /></Suspense>} />
+            <Route path="rooms" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><RoomHub /></Suspense>} />
             <Route path="ai-chat" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AIScheduleChat /></Suspense>} />
             <Route path="tasks" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminScheduleTasks /></Suspense>} />
             <Route path="optibot" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><OptiBotPage /></Suspense>} />
@@ -160,7 +164,7 @@ function App() {
             {/* Schedule Manager extras */}
             <Route path="templates" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
 
-            {/* System Admin extras (placeholders — reuse existing surfaces for now) */}
+            {/* System Admin extras (placeholders - reuse existing surfaces for now) */}
             <Route path="health" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><HealthPage /></Suspense>} />
             <Route path="lifecycle" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminManageUsers /></Suspense>} />
             <Route path="structure" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><DataManagement /></Suspense>} />
