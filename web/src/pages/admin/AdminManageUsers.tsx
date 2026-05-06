@@ -110,6 +110,7 @@ const AdminManageUsers: React.FC = () => {
         section: '', program: '', yearLevel: '', department: '',
         // Teacher-specific fields for generation
         max_hours: 40,
+        max_hours_per_day: 8,
         max_consecutive_classes: null as number | null,
         max_daily_load: null as number | null,
         preferred_days: [] as string[],
@@ -128,6 +129,7 @@ const AdminManageUsers: React.FC = () => {
         year_level: '', section: '',
         // Teacher-specific fields for generation
         max_hours: 40,
+        max_hours_per_day: 8,
         max_consecutive_classes: null as number | null,
         max_daily_load: null as number | null,
         preferred_days: [] as string[],
@@ -284,6 +286,7 @@ const AdminManageUsers: React.FC = () => {
                         employment_type: 'full-time',
                         is_public: true,
                         max_hours: newUser.max_hours,
+                        max_hours_per_day: newUser.max_hours_per_day,
                         weight: newUser.priority_flag,
                         shared_assignment: newUser.is_shared,
                         preferred_days: newUser.preferred_days,
@@ -317,6 +320,7 @@ const AdminManageUsers: React.FC = () => {
                 section: '', program: '', yearLevel: '', department: '',
                 // Teacher-specific fields for generation
                 max_hours: 40,
+                max_hours_per_day: 8,
                 max_consecutive_classes: null,
                 max_daily_load: null,
                 preferred_days: [],
@@ -356,6 +360,7 @@ const AdminManageUsers: React.FC = () => {
             section: user.section || '',
             // Teacher-specific fields for generation (will be loaded from teacher_preferences)
             max_hours: 40,
+            max_hours_per_day: 8,
             max_consecutive_classes: null,
             max_daily_load: null,
             preferred_days: [],
@@ -382,6 +387,20 @@ const AdminManageUsers: React.FC = () => {
         // Load teacher preferences if role is teacher
         if (TEACHER_ROLES.includes(user.role || '')) {
             try {
+                const { data: teacherData } = await supabase
+                    .from('teachers')
+                    .select('*')
+                    .eq('profile_id', user.id)
+                    .single();
+                if (teacherData) {
+                    setEditForm(prev => ({
+                        ...prev,
+                        max_hours: teacherData.max_hours || 40,
+                        max_hours_per_day: teacherData.max_hours_per_day || 8,
+                        priority_flag: teacherData.weight || 50,
+                        is_shared: teacherData.shared_assignment || false,
+                    }));
+                }
                 const { data: teacherPref } = await supabase
                     .from('teacher_preferences')
                     .select('*')
@@ -390,14 +409,11 @@ const AdminManageUsers: React.FC = () => {
                 if (teacherPref) {
                     setEditForm(prev => ({
                         ...prev,
-                        max_hours: teacherPref.max_hours || 40,
                         max_consecutive_classes: teacherPref.max_consecutive_classes || null,
                         max_daily_load: teacherPref.max_daily_load || null,
                         preferred_days: teacherPref.preferred_days || [],
                         preferred_time_start: teacherPref.preferred_time_start || null,
                         preferred_time_end: teacherPref.preferred_time_end || null,
-                        is_shared: teacherPref.shared_assignment || false,
-                        priority_flag: teacherPref.weight || 50,
                     }));
                 }
             } catch (err) {
@@ -445,6 +461,7 @@ const AdminManageUsers: React.FC = () => {
                         .update({ 
                             department: editForm.department || null,
                             max_hours: editForm.max_hours,
+                            max_hours_per_day: editForm.max_hours_per_day,
                             weight: editForm.priority_flag,
                             shared_assignment: editForm.is_shared,
                             preferred_days: editForm.preferred_days,
@@ -465,6 +482,7 @@ const AdminManageUsers: React.FC = () => {
                             employment_type: 'full-time',
                             is_public: true,
                             max_hours: editForm.max_hours,
+                            max_hours_per_day: editForm.max_hours_per_day,
                             weight: editForm.priority_flag,
                             shared_assignment: editForm.is_shared,
                             preferred_days: editForm.preferred_days,
@@ -812,15 +830,33 @@ const AdminManageUsers: React.FC = () => {
                             </div>
 
                             {/* Role-specific fields */}
-                            {renderRoleFields(newUser.role, newUser, (field, value) => setNewUser(p => ({ ...p, [field]: value })))}
+                            {renderRoleFields(newUser.role, {
+                                lastName: newUser.lastName,
+                                firstName: newUser.firstName,
+                                middleInitial: newUser.middleInitial,
+                                suffix: newUser.suffix,
+                                fullName: newUser.fullName,
+                                email: newUser.email,
+                                password: newUser.password,
+                                role: newUser.role,
+                                studentId: newUser.studentId,
+                                section: newUser.section,
+                                program: newUser.program,
+                                yearLevel: newUser.yearLevel,
+                                department: newUser.department,
+                            }, (field, value) => setNewUser(p => ({ ...p, [field]: value })))}
 
                             {/* Teacher-specific fields for generation */}
                             {TEACHER_ROLES.includes(newUser.role) && (
                                 <>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginTop: 16 }}>
                                         <div className="field">
-                                            <label className="field-label">MAX HOURS</label>
+                                            <label className="field-label">MAX HOURS (WEEKLY)</label>
                                             <input className="input" type="number" min={1} max={60} value={newUser.max_hours} onChange={e => setNewUser(p => ({ ...p, max_hours: parseInt(e.target.value) || 40 }))} />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">MAX HOURS PER DAY</label>
+                                            <input className="input" type="number" min={1} max={12} value={newUser.max_hours_per_day} onChange={e => setNewUser(p => ({ ...p, max_hours_per_day: parseInt(e.target.value) || 8 }))} />
                                         </div>
                                         <div className="field">
                                             <label className="field-label">PRIORITY (0-100)</label>
@@ -1070,8 +1106,12 @@ const AdminManageUsers: React.FC = () => {
                                 <>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginTop: 16 }}>
                                         <div className="field">
-                                            <label className="field-label">MAX HOURS</label>
+                                            <label className="field-label">MAX HOURS (WEEKLY)</label>
                                             <input className="input" type="number" min={1} max={60} value={editForm.max_hours} onChange={e => setEditForm(p => ({ ...p, max_hours: parseInt(e.target.value) || 40 }))} />
+                                        </div>
+                                        <div className="field">
+                                            <label className="field-label">MAX HOURS PER DAY</label>
+                                            <input className="input" type="number" min={1} max={12} value={editForm.max_hours_per_day} onChange={e => setEditForm(p => ({ ...p, max_hours_per_day: parseInt(e.target.value) || 8 }))} />
                                         </div>
                                         <div className="field">
                                             <label className="field-label">PRIORITY (0-100)</label>

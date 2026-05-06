@@ -26,6 +26,10 @@ $$;
 CREATE OR REPLACE FUNCTION get_schedules_with_details()
 RETURNS TABLE (
     id uuid,
+    teacher_id uuid,
+    subject_id uuid,
+    room_id uuid,
+    section_id uuid,
     day_of_week text,
     start_time time without time zone,
     end_time time without time zone,
@@ -45,8 +49,12 @@ SECURITY DEFINER
 SET search_path = public
 STABLE
 AS $$
-    SELECT 
+    SELECT
         s.id,
+        s.teacher_id,
+        s.subject_id,
+        s.room_id,
+        s.section_id,
         s.day_of_week,
         s.start_time,
         s.end_time,

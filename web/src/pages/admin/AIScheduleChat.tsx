@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Wand2, Loader2, BookOpen, Users, MapPin, Clock } from 'lucide-react';
 import { sendToOptiBot } from '../../services/optibotService';
 import { useSchedules, useTeachers, useRooms } from '../../hooks/useSupabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ChatMessage {
     role: 'user' | 'assistant' | 'system';
@@ -11,6 +12,7 @@ interface ChatMessage {
 }
 
 const AIScheduleChat: React.FC = () => {
+    const { profile, roles } = useAuth();
     const [messages, setMessages] = useState<ChatMessage[]>([
         { role: 'system', content: 'Hello! I\'m OptiBot, your AI scheduling assistant. I can help you:\n\n• **Generate** optimized schedules\n• **Analyze** conflicts and workloads\n• **Suggest** room and time assignments\n• **Answer** scheduling questions\n\nHow can I help you today?', timestamp: new Date() }
     ]);
@@ -99,7 +101,12 @@ const AIScheduleChat: React.FC = () => {
                 parts: [{ text: m.content }]
             }));
 
-            const response = await sendToOptiBot(input.trim(), conversationHistory);
+            const response = await sendToOptiBot(input.trim(), conversationHistory, {
+                full_name: profile?.full_name,
+                role: profile?.role,
+                email: profile?.email,
+                roles: roles,
+            });
 
             const assistantMsg: ChatMessage = {
                 role: 'assistant',

@@ -54,7 +54,7 @@ function useFetch<T>(
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [fetchData]);
+    }, [fetchData, tableName]);
 
     return { data, loading, error, refetch: fetchData };
 }
@@ -66,6 +66,7 @@ export function useSchedules(filters?: {
     sectionId?: string;
     dayOfWeek?: string;
     status?: string;
+    isActive?: boolean;
 }) {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -77,7 +78,7 @@ export function useSchedules(filters?: {
             setError(null);
 
             // Use RPC function to bypass RLS join issues
-            let query = supabase.rpc('get_schedules_with_details');
+            const query = supabase.rpc('get_schedules_with_details');
 
             const { data: result, error: fetchError } = await query;
             if (fetchError) throw fetchError;
@@ -93,6 +94,7 @@ export function useSchedules(filters?: {
                 start_time: s.start_time,
                 end_time: s.end_time,
                 status: s.status,
+                is_active: s.is_active ?? true, // Default to true if not present
                 semester: s.semester,
                 academic_year: s.academic_year,
                 subject: { name: s.subject_name, code: s.subject_code },
@@ -115,6 +117,9 @@ export function useSchedules(filters?: {
             if (filters?.status) {
                 filteredData = filteredData.filter((s: any) => s.status === filters.status);
             }
+            if (filters?.isActive !== undefined) {
+                filteredData = filteredData.filter((s: any) => s.is_active === filters.isActive);
+            }
 
             setData(filteredData);
         } catch (err) {
@@ -122,7 +127,7 @@ export function useSchedules(filters?: {
         } finally {
             setLoading(false);
         }
-    }, [filters?.teacherId, filters?.sectionId, filters?.dayOfWeek, filters?.status]);
+    }, [filters?.teacherId, filters?.sectionId, filters?.dayOfWeek, filters?.status, filters?.isActive]);
 
     useEffect(() => {
         fetchSchedules();
@@ -524,6 +529,7 @@ export function useScheduleChangeRequests(filterStatus?: string) {
                 setRequests(data || []);
             }
         } catch (err) {
+            console.error('[ChangeRequests] Error:', err);
             setRequests([]);
         } finally {
             setLoading(false);
@@ -614,7 +620,8 @@ export function useAdminDashboardStats() {
     }, []);
 
     useEffect(() => {
-        fetchStats();
+        // Defer fetchStats to avoid synchronous setState in effect
+        const timer = setTimeout(() => fetchStats(), 0);
 
         const tables = ['schedules', 'conflicts', 'teachers', 'rooms', 'sections'];
         const channels = tables.map(table =>
@@ -624,7 +631,10 @@ export function useAdminDashboardStats() {
                 .subscribe()
         );
 
-        return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
+        return () => {
+            clearTimeout(timer);
+            channels.forEach(ch => supabase.removeChannel(ch));
+        };
     }, [fetchStats]);
 
     return { stats, loading, refetch: fetchStats };

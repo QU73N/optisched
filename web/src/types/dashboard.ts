@@ -46,7 +46,7 @@ export interface Announcement {
     id: string;
     title: string;
     content: string;
-    priority: 'normal' | 'important' | 'urgent';
+    priority: 'normal' | 'important';
     target_section: string;
     created_at: string;
     author_id?: string;

@@ -103,6 +103,7 @@ export interface Teacher {
     department: string;
     employment_type: EmploymentType;
     max_hours: number;
+    max_hours_per_day: number;
     current_load_percentage: number;
     is_active: boolean;
     weight: number;

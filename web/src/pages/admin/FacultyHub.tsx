@@ -6,7 +6,7 @@ import { Users, BookOpen, Clock, Search, BarChart3, Calendar, ChevronRight, Brie
 const FacultyHub: React.FC = () => {
     useAuth();
     const { teachers, loading: loadingTeachers } = useTeachers();
-    const { schedules } = useSchedules({}); // Fetch all schedules, not just published
+    const { schedules } = useSchedules({ isActive: true }); // Fetch all active schedules (draft and published)
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedTeacher, setSelectedTeacher] = useState<string | null>(null);
 
@@ -57,28 +57,28 @@ const FacultyHub: React.FC = () => {
             {/* Stats */}
             <div className="fhub-stats">
                 <div className="fhub-stat-card">
-                    <div className="fhub-stat-icon" style={{ background: 'rgba(99,102,241,0.12)' }}><Users size={22} color="#818cf8" /></div>
+                    <div className="fhub-stat-icon" style={{ background: 'var(--accent-primary-subtle)' }}><Users size={22} color="var(--accent-primary)" /></div>
                     <div className="fhub-stat-info">
                         <span className="fhub-stat-num">{teachers.length}</span>
                         <span className="fhub-stat-label">Total Faculty</span>
                     </div>
                 </div>
                 <div className="fhub-stat-card">
-                    <div className="fhub-stat-icon" style={{ background: 'rgba(16,185,129,0.12)' }}><BookOpen size={22} color="#10b981" /></div>
+                    <div className="fhub-stat-icon" style={{ background: 'var(--accent-success-subtle)' }}><BookOpen size={22} color="var(--accent-success)" /></div>
                     <div className="fhub-stat-info">
                         <span className="fhub-stat-num">{totalClasses}</span>
                         <span className="fhub-stat-label">Total Classes</span>
                     </div>
                 </div>
                 <div className="fhub-stat-card">
-                    <div className="fhub-stat-icon" style={{ background: 'rgba(139,92,246,0.12)' }}><BarChart3 size={22} color="#a78bfa" /></div>
+                    <div className="fhub-stat-icon" style={{ background: 'var(--accent-primary-subtle)' }}><BarChart3 size={22} color="var(--accent-primary)" /></div>
                     <div className="fhub-stat-info">
                         <span className="fhub-stat-num">{avgLoad}</span>
                         <span className="fhub-stat-label">Avg Classes/Teacher</span>
                     </div>
                 </div>
                 <div className="fhub-stat-card">
-                    <div className="fhub-stat-icon" style={{ background: 'rgba(59,130,246,0.12)' }}><Clock size={22} color="#60a5fa" /></div>
+                    <div className="fhub-stat-icon" style={{ background: 'var(--accent-primary-subtle)' }}><Clock size={22} color="var(--accent-primary)" /></div>
                     <div className="fhub-stat-info">
                         <span className="fhub-stat-num">{totalHours.toFixed(0)}</span>
                         <span className="fhub-stat-label">Total Hours/Week</span>
@@ -133,8 +133,8 @@ const FacultyHub: React.FC = () => {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                     {empType && (
                                         <span className="fhub-emp-badge" style={{
-                                            background: empType === 'full-time' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
-                                            color: empType === 'full-time' ? '#10b981' : '#f59e0b'
+                                            background: empType === 'full-time' ? 'var(--accent-success-subtle)' : 'var(--accent-warning-subtle)',
+                                            color: empType === 'full-time' ? 'var(--accent-success)' : 'var(--accent-warning)'
                                         }}>
                                             <Briefcase size={10} /> {empType === 'full-time' ? 'FT' : 'PT'}
                                         </span>
@@ -200,11 +200,11 @@ const FacultyHub: React.FC = () => {
             </div>
 
             <style>{`
-                .fhub { display: flex; flex-direction: column; gap: 1.5rem; }
+                .fhub { display: flex; flex-direction: column; gap: 0.75rem; }
 
                 .fhub-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
                 .fhub-stat-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem 1.5rem; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 14px; transition: all 0.2s; }
-                .fhub-stat-card:hover { border-color: var(--border-subtle); transform: translateY(-1px); }
+                .fhub-stat-card:hover { border-color: var(--accent-primary); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(73, 136, 196, 0.1); }
                 .fhub-stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
                 .fhub-stat-info { display: flex; flex-direction: column; }
                 .fhub-stat-num { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
@@ -216,8 +216,8 @@ const FacultyHub: React.FC = () => {
 
                 .fhub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 0.75rem; }
                 .fhub-card { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 14px; padding: 1.25rem; cursor: pointer; transition: all 0.25s ease; }
-                .fhub-card:hover { border-color: rgba(99,102,241,0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-                .fhub-card.expanded { border-color: rgba(99,102,241,0.4); box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
+                .fhub-card:hover { border-color: var(--accent-primary); box-shadow: 0 4px 20px rgba(73, 136, 196, 0.12); transform: translateY(-2px); }
+                .fhub-card.expanded { border-color: var(--accent-primary); box-shadow: 0 8px 30px rgba(73, 136, 196, 0.15); }
 
                 .fhub-card-top { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
                 .fhub-avatar { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.2rem; flex-shrink: 0; }
@@ -229,23 +229,23 @@ const FacultyHub: React.FC = () => {
                 .fhub-load-badge { font-size: 0.65rem; font-weight: 700; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.3px; }
 
                 .fhub-card-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 0.75rem; }
-                .fhub-mini-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; background: rgba(255,255,255,0.02); border-radius: 8px; color: var(--text-secondary); }
+                .fhub-mini-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; background: var(--bg-hover); border-radius: 8px; color: var(--text-secondary); }
                 .fhub-mini-stat span { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
                 .fhub-mini-stat small { font-size: 0.65rem; color: var(--text-muted); }
 
-                .fhub-load-bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+                .fhub-load-bar { height: 4px; background: var(--bg-hover); border-radius: 4px; overflow: hidden; }
                 .fhub-load-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
                 .fhub-load-meta { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; }
 
                 .fhub-expanded { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-default); display: flex; flex-direction: column; gap: 0.75rem; animation: fadeInDown 0.2s ease; }
                 .fhub-detail-group label { font-size: 0.65rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; display: block; }
                 .fhub-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-                .fhub-chip { padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 500; background: rgba(139,92,246,0.1); color: #c4b5fd; }
-                .fhub-chip.sec { background: rgba(59,130,246,0.1); color: #93c5fd; }
+                .fhub-chip { padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 500; background: var(--accent-primary-subtle); color: var(--accent-primary); }
+                .fhub-chip.sec { background: var(--accent-primary-subtle); color: var(--accent-primary); }
 
                 .fhub-day-pills { display: flex; gap: 4px; }
-                .fhub-day-pill { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 500; background: rgba(255,255,255,0.04); color: var(--text-muted); border: 1px solid var(--border-default); }
-                .fhub-day-pill.active { background: rgba(16,185,129,0.12); color: #10b981; border-color: rgba(16,185,129,0.3); font-weight: 600; }
+                .fhub-day-pill { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 500; background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border-default); }
+                .fhub-day-pill.active { background: var(--accent-success-subtle); color: var(--accent-success); border-color: var(--accent-success); font-weight: 600; }
 
                 .fhub-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; color: var(--text-muted); gap: 0.75rem; }
 

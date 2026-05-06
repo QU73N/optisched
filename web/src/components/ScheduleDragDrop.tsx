@@ -1,8 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import type { Room, Teacher, Section } from '../pages/admin/ScheduleGenerate/types';
+import type { Room, Section } from '../pages/admin/ScheduleGenerate/types';
+import type { SubjectType, RoomType } from '../types/database';
 
-// Generic entry interface that works with both PlacedEntry and ScheduleRow
-interface ScheduleEntry {
+export interface ScheduleEntry {
     key: string; // Unique identifier (e.g., "subjectId-sectionId-day-start" or database id)
     subjectId: string;
     sectionId: string;
@@ -16,14 +16,21 @@ interface ScheduleEntry {
     roomName: string;
     sectionName: string;
     subjectCode?: string;
+    // Hard constraint fields
+    subjectType?: SubjectType;
+    roomType?: RoomType;
+    sectionSize?: number | null;
+    capacity?: number | null;
+    compatibleRoomIds?: string[];
+    compatibleSubjectIds?: string[];
 }
 
 interface ScheduleDragDropProps {
     entries: ScheduleEntry[];
     rooms: Room[];
-    teachers: Teacher[];
+    teachers: { id: string; full_name: string; department: string; is_active: boolean }[];
     sections: Section[];
-    onUpdate: (entry: ScheduleEntry, newDay?: string, newStartTime?: string, newEndTime?: string) => Promise<void> | void;
+    onUpdate: (updatedEntry: ScheduleEntry) => Promise<void> | void;
     dayOrder: string[];
     START_HOUR: number;
     TOTAL_SLOTS: number;
@@ -33,20 +40,38 @@ interface ScheduleDragDropProps {
     events: Array<{ entry: ScheduleEntry; dayIdx: number; start: number; span: number }>;
     canEdit?: boolean;
     onContextMenu?: (e: React.MouseEvent, entry: ScheduleEntry) => void;
+    timeFormat?: '12h' | '24h';
 }
 
 // Helper function to format teacher name (last name only, with initial if duplicate last names)
-const formatTeacherName = (teacherName: string, allTeachers: Teacher[]): string => {
+const formatTeacherName = (teacherName: string, allTeachers: { id: string; full_name: string; department: string; is_active: boolean }[]): string => {
     if (!teacherName) return '';
     
-    // Extract last name
+    // Common suffixes to skip when extracting last name
+    const suffixes = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', '1st', '2nd', '3rd', '4th', '5th'];
+    
+    // Extract last name (skip common suffixes)
     const parts = teacherName.trim().split(/\s+/);
-    const lastName = parts[parts.length - 1];
+    let lastNameIndex = parts.length - 1;
+    
+    // Skip suffixes at the end
+    while (lastNameIndex > 0 && suffixes.includes(parts[lastNameIndex])) {
+        lastNameIndex--;
+    }
+    
+    const lastName = parts[lastNameIndex];
     
     // Check if there are multiple teachers with the same last name
     const sameLastNameCount = allTeachers.filter(t => {
         const tParts = (t.full_name || '').trim().split(/\s+/);
-        const tLastName = tParts[tParts.length - 1];
+        let tLastNameIndex = tParts.length - 1;
+        
+        // Skip suffixes for comparison
+        while (tLastNameIndex > 0 && suffixes.includes(tParts[tLastNameIndex])) {
+            tLastNameIndex--;
+        }
+        
+        const tLastName = tParts[tLastNameIndex];
         return tLastName.toLowerCase() === lastName.toLowerCase();
     }).length;
     
@@ -59,13 +84,16 @@ const formatTeacherName = (teacherName: string, allTeachers: Teacher[]): string 
     return lastName;
 };
 
-// Helper function to format time in AM/PM format
-const formatTimeAMPM = (time: string): string => {
+// Helper function to format time based on timeFormat preference
+const formatTimeDisplay = (time: string, timeFormat: '12h' | '24h' = '24h'): string => {
     const [hours, minutes] = time.split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12; // Convert 0 to 12
-    const displayMinutes = minutes.toString().padStart(2, '0');
-    return `${displayHours}:${displayMinutes} ${period}`;
+    if (timeFormat === '12h') {
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12; // Convert 0 to 12
+        const displayMinutes = minutes.toString().padStart(2, '0');
+        return `${displayHours}:${displayMinutes} ${period}`;
+    }
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 };
 
 export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
@@ -83,18 +111,28 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
     events,
     canEdit = true,
     onContextMenu,
+    timeFormat = '24h',
 }) => {
     const [draggedEntry, setDraggedEntry] = useState<ScheduleEntry | null>(null);
+    const [showCustomizationModal, setShowCustomizationModal] = useState(false);
     const [showConflictWarning, setShowConflictWarning] = useState(false);
-    const [conflictDetails, setConflictDetails] = useState<{
-        conflicts: string[];
-        suggestions: { type: 'room' | 'time'; value: string; reason: string }[];
-    } | null>(null);
+    const [conflictDetails, setConflictDetails] = useState<{ conflicts: string[], suggestions: { type: 'room' | 'time'; value: string; reason: string }[] } | null>(null);
     const [pendingMove, setPendingMove] = useState<{
         entry: ScheduleEntry;
-        newDay?: string;
-        newStartTime?: string;
-        newEndTime?: string;
+        newDay: string;
+        newStartTime: string;
+        newEndTime: string;
+        customRoomId: string;
+        customSectionId: string;
+        customTeacherId: string;
+    } | null>(null);
+    const [selectedCustomRoom, setSelectedCustomRoom] = useState<string>('');
+    const [selectedCustomSection, setSelectedCustomSection] = useState<string>('');
+    const [selectedCustomTeacher, setSelectedCustomTeacher] = useState<string>('');
+    const [hoveredSlot, setHoveredSlot] = useState<{
+        day: string;
+        slot: number;
+        span: number;
     } | null>(null);
 
     // Check for conflicts when moving a schedule entry
@@ -102,18 +140,61 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         entry: ScheduleEntry,
         newDay?: string,
         newStartTime?: string,
-        newEndTime?: string
+        newEndTime?: string,
+        customRoomId?: string,
+        customSectionId?: string,
+        customTeacherId?: string
     ) => {
         const conflicts: string[] = [];
         const checkDay = newDay || entry.day;
         const checkStartTime = newStartTime || entry.start;
         const checkEndTime = newEndTime || entry.end;
-        const checkRoomId = entry.roomId;
-        const checkTeacherId = entry.teacherId;
-        const checkSectionId = entry.sectionId;
+        const checkRoomId = customRoomId || entry.roomId;
+        const checkTeacherId = customTeacherId || entry.teacherId;
+        const checkSectionId = customSectionId || entry.sectionId;
+
+        // Skip conflict check if moving to the exact same position
+        if (checkDay === entry.day && checkStartTime === entry.start && checkEndTime === entry.end && 
+            checkRoomId === entry.roomId && checkSectionId === entry.sectionId && checkTeacherId === entry.teacherId) {
+            return conflicts;
+        }
 
         // Create a unique key for the entry to exclude it from conflict checks
         const entryKey = entry.key;
+
+        // ============================================================================
+        // HARD CONSTRAINT: Subject-Room Compatibility
+        // ============================================================================
+        // Special subjects can only be assigned to special rooms (or compatible rooms)
+        // Common rooms should not be used for special subjects
+        const checkRoom = rooms.find(r => r.id === checkRoomId);
+        if (entry.subjectType === 'special' && checkRoom) {
+            const isSpecialRoom = checkRoom.type === 'special';
+            const isCompatibleRoom = entry.compatibleRoomIds?.includes(checkRoomId);
+            
+            if (!isSpecialRoom && !isCompatibleRoom) {
+                conflicts.push(`Subject "${entry.subjectName}" is a special subject and requires a special room or compatible room. Room "${checkRoom.name}" is a common room.`);
+            }
+        }
+
+        // Special rooms should be reserved for special subjects (soft constraint, but warn)
+        if (checkRoom?.type === 'special' && entry.subjectType === 'common') {
+            const isCompatibleSubject = checkRoom.compatible_subject_ids?.includes(entry.subjectId);
+            
+            if (!isCompatibleSubject) {
+                conflicts.push(`Room "${checkRoom.name}" is a special room reserved for special subjects. Subject "${entry.subjectName}" is a common subject.`);
+            }
+        }
+
+        // ============================================================================
+        // HARD CONSTRAINT: Room Capacity
+        // ============================================================================
+        // Room capacity must always be greater than or equal to section size
+        if (entry.sectionSize && checkRoom?.capacity) {
+            if (checkRoom.capacity < entry.sectionSize) {
+                conflicts.push(`Room "${checkRoom.name}" has capacity ${checkRoom.capacity}, but section "${entry.sectionName}" has ${entry.sectionSize} students. Room is too small.`);
+            }
+        }
 
         // Check room conflicts with details
         const roomConflicts = entries.filter(e => 
@@ -169,8 +250,9 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
             conflicts.push(`Section "${sectionName}" has another class: ${conflictDetails}`);
         }
 
-        // Check for tight scheduling (less than 10 minutes between classes for same teacher/section)
-        const MIN_GAP_MINUTES = 10;
+        // Check for tight scheduling (less than 0 minutes between classes for same teacher/section)
+        // 0 min gap is acceptable, so we only warn for negative gaps (impossible overlaps)
+        const MIN_GAP_MINUTES = 0;
         const checkStartMinutes = parseInt(checkStartTime.split(':')[0]) * 60 + parseInt(checkStartTime.split(':')[1]);
         const checkEndMinutes = parseInt(checkEndTime.split(':')[0]) * 60 + parseInt(checkEndTime.split(':')[1]);
 
@@ -264,8 +346,8 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         // Generate time slots and sort by proximity to original time
         const timeSlots: { startTime: string; endTime: string; distance: number }[] = [];
         for (let slot = 0; slot < TOTAL_SLOTS; slot++) {
-            const slotStartTime = formatTime(`${START_HOUR + Math.floor(slot / 2)}:${(slot % 2) * 30}`);
-            const slotEndTime = formatTime(`${START_HOUR + Math.floor((slot + duration / 30) / 2)}:${((slot + duration / 30) % 2) * 30}`);
+            const slotStartTime = formatTime(`${START_HOUR + Math.floor(slot / 2)}:${((slot % 2) * 30).toString().padStart(2, '0')}`);
+            const slotEndTime = formatTime(`${START_HOUR + Math.floor((slot + duration / 30) / 2)}:${(((slot + duration / 30) % 2) * 30).toString().padStart(2, '0')}`);
             
             if (slotStartTime === checkStartTime) continue; // Skip current time
 
@@ -328,10 +410,43 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         entry: ScheduleEntry,
         newDay?: string,
         newStartTime?: string,
-        newEndTime?: string
+        newEndTime?: string,
+        customRoomId?: string,
+        customSectionId?: string,
+        customTeacherId?: string
     ) => {
-        onUpdate(entry, newDay, newStartTime, newEndTime);
-    }, [onUpdate]);
+        // Find custom room, section, and teacher objects if provided
+        const customRoom = customRoomId ? rooms.find(r => r.id === customRoomId) : null;
+        const customSection = customSectionId ? sections.find(s => s.id === customSectionId) : null;
+        const customTeacher = customTeacherId ? teachers.find(t => t.id === customTeacherId) : null;
+
+        // Create updated entry with custom room/section/teacher if provided
+        const updatedEntry: ScheduleEntry = {
+            ...entry,
+            ...(newDay && { day: newDay }),
+            ...(newStartTime && { start: newStartTime }),
+            ...(newEndTime && { end: newEndTime }),
+            ...(customRoomId && { 
+                roomId: customRoomId, 
+                roomName: customRoom?.name || entry.roomName,
+                roomType: customRoom?.type as 'common' | 'special' | undefined,
+                capacity: customRoom?.capacity,
+                compatibleSubjectIds: customRoom?.compatible_subject_ids,
+            }),
+            ...(customSectionId && { 
+                sectionId: customSectionId, 
+                sectionName: customSection?.name || entry.sectionName,
+                sectionSize: customSection?.student_count,
+            }),
+            ...(customTeacherId && {
+                teacherId: customTeacherId,
+                teacherName: customTeacher?.full_name || entry.teacherName,
+            }),
+        };
+        
+        // Call onUpdate to persist the change
+        onUpdate(updatedEntry);
+    }, [onUpdate, rooms, sections, teachers]);
 
     // Handle drag start
     const handleDragStart = useCallback((e: React.DragEvent, entry: ScheduleEntry) => {
@@ -348,6 +463,12 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         }));
     }, [canEdit]);
 
+    // Handle drag end to clean up state
+    const handleDragEnd = useCallback(() => {
+        setDraggedEntry(null);
+        setHoveredSlot(null);
+    }, []);
+
     // Handle drop on a time slot
     const handleDrop = useCallback((e: React.DragEvent, day: string, startTime: string) => {
         e.preventDefault();
@@ -361,29 +482,34 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         const newStartMinutes = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
         const newEndMinutes = newStartMinutes + duration;
         
-        const newEndTime = formatTime(`${Math.floor(newEndMinutes / 60)}:${newEndMinutes % 60}`);
-
-        // Check for conflicts
-        const conflicts = checkConflicts(draggedEntry, day, startTime, newEndTime);
-        
-        if (conflicts.length > 0) {
-            // Show conflict warning with suggestions
-            const suggestions = generateSuggestions(draggedEntry, day, startTime);
-            setPendingMove({
-                entry: draggedEntry,
-                newDay: day,
-                newStartTime: startTime,
-                newEndTime,
-            });
-            setConflictDetails({ conflicts, suggestions });
-            setShowConflictWarning(true);
-        } else {
-            // Apply the move without conflicts
-            applyMove(draggedEntry, day, startTime, newEndTime);
+        // Validate that the new time slot is within bounds
+        const maxEndMinutes = (START_HOUR + TOTAL_SLOTS / 2) * 60;
+        if (newEndMinutes > maxEndMinutes) {
+            // Prevent drop if the slot is outside the valid time range
+            setDraggedEntry(null);
+            setHoveredSlot(null);
+            return;
         }
         
+        const newEndTime = formatTime(`${Math.floor(newEndMinutes / 60)}:${(newEndMinutes % 60).toString().padStart(2, '0')}`);
+
+        // Show customization modal first
+        setPendingMove({
+            entry: draggedEntry,
+            newDay: day,
+            newStartTime: startTime,
+            newEndTime,
+            customRoomId: draggedEntry.roomId,
+            customSectionId: draggedEntry.sectionId,
+            customTeacherId: draggedEntry.teacherId,
+        });
+        setSelectedCustomRoom(draggedEntry.roomId || rooms[0]?.id || '');
+        setSelectedCustomSection(draggedEntry.sectionId || sections[0]?.id || '');
+        setSelectedCustomTeacher(draggedEntry.teacherId || teachers[0]?.id || '');
+        setShowCustomizationModal(true);
+        
         setDraggedEntry(null);
-    }, [draggedEntry, checkConflicts, generateSuggestions, formatTime, applyMove, canEdit]);
+    }, [draggedEntry, formatTime, canEdit, START_HOUR, TOTAL_SLOTS, rooms, sections, teachers]);
 
     // Confirm the move despite conflicts
     const confirmMove = useCallback(() => {
@@ -392,19 +518,72 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
             pendingMove.entry,
             pendingMove.newDay,
             pendingMove.newStartTime,
-            pendingMove.newEndTime
+            pendingMove.newEndTime,
+            pendingMove.customRoomId,
+            pendingMove.customSectionId,
+            pendingMove.customTeacherId
         );
         setShowConflictWarning(false);
         setPendingMove(null);
         setConflictDetails(null);
     }, [pendingMove, applyMove]);
 
+    // Confirm the customization and proceed to check conflicts
+    const confirmCustomization = useCallback(() => {
+        if (!pendingMove) return;
+        
+        // Update pending move with custom selections
+        const updatedPendingMove = {
+            ...pendingMove,
+            customRoomId: selectedCustomRoom,
+            customSectionId: selectedCustomSection,
+            customTeacherId: selectedCustomTeacher,
+        };
+        
+        setShowCustomizationModal(false);
+        
+        // Check for conflicts with custom selections
+        const conflicts = checkConflicts(
+            pendingMove.entry, 
+            pendingMove.newDay, 
+            pendingMove.newStartTime, 
+            pendingMove.newEndTime,
+            selectedCustomRoom,
+            selectedCustomSection,
+            selectedCustomTeacher
+        );
+        
+        if (conflicts.length > 0) {
+            // Show conflict warning with suggestions
+            const suggestions = generateSuggestions(pendingMove.entry, pendingMove.newDay, pendingMove.newStartTime);
+            setPendingMove(updatedPendingMove);
+            setConflictDetails({ conflicts, suggestions });
+            setShowConflictWarning(true);
+        } else {
+            // Apply the move without conflicts
+            applyMove(
+                pendingMove.entry,
+                pendingMove.newDay,
+                pendingMove.newStartTime,
+                pendingMove.newEndTime,
+                selectedCustomRoom,
+                selectedCustomSection,
+                selectedCustomTeacher
+            );
+            setPendingMove(null);
+        }
+    }, [pendingMove, selectedCustomRoom, selectedCustomSection, selectedCustomTeacher, checkConflicts, generateSuggestions, applyMove]);
+
     // Cancel the move
     const cancelMove = useCallback(() => {
         setShowConflictWarning(false);
+        setShowCustomizationModal(false);
         setPendingMove(null);
         setConflictDetails(null);
         setDraggedEntry(null);
+        setSelectedCustomRoom('');
+        setSelectedCustomSection('');
+        setSelectedCustomTeacher('');
     }, []);
 
     return (
@@ -430,7 +609,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                             className="sm-cal-time"
                             style={{ gridColumn: 1, gridRow: slot + 2 }}
                         >
-                            {isHour ? formatTime(timeStr) : ''}
+                            {isHour ? formatTimeDisplay(timeStr, timeFormat) : ''}
                         </div>
                     );
                 })}
@@ -442,14 +621,43 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                             key={`bg-${day}-${slot}`}
                             className="sm-cal-cell sm-cal-slot"
                             style={{ gridColumn: di + 2, gridRow: slot + 2 }}
-                            onDragOver={(e) => canEdit && e.preventDefault()}
+                            onDragOver={(e) => {
+                                if (canEdit) {
+                                    e.preventDefault();
+                                    // Calculate span based on dragged entry duration
+                                    const span = draggedEntry 
+                                        ? Math.ceil((parseInt(draggedEntry.end.split(':')[0]) * 60 + parseInt(draggedEntry.end.split(':')[1]) - 
+                                                   (parseInt(draggedEntry.start.split(':')[0]) * 60 + parseInt(draggedEntry.start.split(':')[1]))) / 30)
+                                        : 1;
+                                    setHoveredSlot({ day, slot, span });
+                                }
+                            }}
+                            onDragLeave={() => setHoveredSlot(null)}
                             onDrop={(e) => {
+                                setHoveredSlot(null);
                                 if (!canEdit) return;
-                                const startTime = formatTime(`${START_HOUR + Math.floor(slot / 2)}:${(slot % 2) * 30}`);
+                                const startTime = formatTime(`${START_HOUR + Math.floor(slot / 2)}:${((slot % 2) * 30).toString().padStart(2, '0')}`);
                                 handleDrop(e, day, startTime);
                             }}
                         />
                     ))
+                )}
+
+                {/* Drag hover highlight showing full span */}
+                {hoveredSlot && draggedEntry && (
+                    <div
+                        className="sm-cal-cell"
+                        style={{
+                            gridColumn: dayOrder.indexOf(hoveredSlot.day) + 2,
+                            gridRow: `${hoveredSlot.slot + 2} / span ${hoveredSlot.span}`,
+                            backgroundColor: 'rgba(73, 136, 196, 0.2)',
+                            border: '2px dashed #4988C4',
+                            borderRadius: 4,
+                            pointerEvents: 'none',
+                            zIndex: 10,
+                            margin: '1px',
+                        }}
+                    />
                 )}
 
                 {/* Events with drag handlers */}
@@ -466,6 +674,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                             className="sm-cal-cell"
                             draggable={canEdit}
                             onDragStart={(e) => handleDragStart(e, ev.entry)}
+                            onDragEnd={handleDragEnd}
                             onContextMenu={onContextMenu ? (e) => onContextMenu(e, ev.entry) : undefined}
                             style={{
                                 gridColumn: ev.dayIdx + 2,
@@ -475,7 +684,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                         >
                             <div
                                 className={`sm-cal-event ${colorForKey(ev.entry.subjectName || ev.entry.sectionId)}`}
-                                title={`${ev.entry.subjectName}\n${viewMode === 'section' ? `${formatTeacherName(ev.entry.teacherName, teachers)} - ${ev.entry.roomName}` : viewMode === 'teacher' ? `${ev.entry.sectionName} - ${ev.entry.roomName}` : `${ev.entry.sectionName} - ${formatTeacherName(ev.entry.teacherName, teachers)}`}\n${formatTimeAMPM(ev.entry.start)} - ${formatTimeAMPM(ev.entry.end)}`}
+                                title={`${ev.entry.subjectName}\n${viewMode === 'section' ? `${formatTeacherName(ev.entry.teacherName, teachers)} - ${ev.entry.roomName}` : viewMode === 'teacher' ? `${ev.entry.sectionName} - ${ev.entry.roomName}` : `${ev.entry.sectionName} - ${formatTeacherName(ev.entry.teacherName, teachers)}`}\n${formatTimeDisplay(ev.entry.start, timeFormat)} - ${formatTimeDisplay(ev.entry.end, timeFormat)}`}
                                 style={{ fontSize: getFontSize() }}
                             >
                                 <div className="sm-cal-event-title" style={{ fontSize: getFontSize(), fontWeight: ev.span <= 1 ? 600 : 500 }}>
@@ -501,7 +710,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                                             )}
                                         </div>
                                         <div className="sm-cal-event-time" style={{ fontSize: getFontSize() }}>
-                                            {formatTimeAMPM(ev.entry.start)} - {formatTimeAMPM(ev.entry.end)}
+                                            {formatTimeDisplay(ev.entry.start, timeFormat)} - {formatTimeDisplay(ev.entry.end, timeFormat)}
                                         </div>
                                     </>
                                 )}
@@ -510,6 +719,186 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                     );
             })}
             </div>
+
+            {/* Customization Modal */}
+            {showCustomizationModal && pendingMove && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: 8,
+                        padding: 24,
+                        maxWidth: 500,
+                        width: '90%',
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+                        border: '1px solid var(--border-default)',
+                    }}>
+                        <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: 'var(--text-primary)' }}>
+                            Customize Schedule Move
+                        </h3>
+                        
+                        <div style={{ marginBottom: 16 }}>
+                            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                                Moving <strong>{pendingMove.entry.subjectName || pendingMove.entry.subjectCode || 'Unknown Subject'}</strong> to {pendingMove.newDay} at {formatTimeDisplay(pendingMove.newStartTime || '', timeFormat)} - {formatTimeDisplay(pendingMove.newEndTime || '', timeFormat)}
+                            </p>
+                            
+                            {/* Room selection for section/teacher views */}
+                            {(viewMode === 'section' || viewMode === 'teacher') && (
+                                <div style={{ marginBottom: 12 }}>
+                                    <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
+                                        Select Room:
+                                    </label>
+                                    <select
+                                        value={selectedCustomRoom}
+                                        onChange={(e) => setSelectedCustomRoom(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            borderRadius: 6,
+                                            border: '1px solid var(--border-default)',
+                                            backgroundColor: 'var(--bg-surface)',
+                                            color: 'var(--text-primary)',
+                                            fontSize: 14,
+                                        }}
+                                    >
+                                        {rooms.length === 0 ? (
+                                            <option value="">No rooms available</option>
+                                        ) : (
+                                            rooms.map(room => (
+                                                <option key={room.id} value={room.id}>
+                                                    {room.name} {room.building ? `(${room.building})` : ''} {room.capacity ? `- Cap: ${room.capacity}` : ''}
+                                                </option>
+                                            ))
+                                        )}
+                                    </select>
+                                </div>
+                            )}
+                            
+                            {/* Teacher selection for section view */}
+                            {viewMode === 'section' && (
+                                <div style={{ marginBottom: 12 }}>
+                                    <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
+                                        Select Teacher:
+                                    </label>
+                                    <select
+                                        value={selectedCustomTeacher}
+                                        onChange={(e) => setSelectedCustomTeacher(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            borderRadius: 6,
+                                            border: '1px solid var(--border-default)',
+                                            backgroundColor: 'var(--bg-surface)',
+                                            color: 'var(--text-primary)',
+                                            fontSize: 14,
+                                        }}
+                                    >
+                                        {teachers.filter(t => t.is_active !== false).length === 0 ? (
+                                            <option value="">No teachers available</option>
+                                        ) : (
+                                            teachers
+                                                .filter(teacher => teacher.is_active !== false) // Show only active teachers
+                                                .map(teacher => (
+                                                    <option key={teacher.id} value={teacher.id}>
+                                                        {teacher.full_name} {teacher.department ? `- ${teacher.department}` : ''}
+                                                    </option>
+                                                ))
+                                        )}
+                                    </select>
+                                </div>
+                            )}
+                            
+                            {/* Section selection for room view */}
+                            {viewMode === 'room' && (
+                                <div style={{ marginBottom: 12 }}>
+                                    <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
+                                        Select Section:
+                                    </label>
+                                    <select
+                                        value={selectedCustomSection}
+                                        onChange={(e) => setSelectedCustomSection(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            borderRadius: 6,
+                                            border: '1px solid var(--border-default)',
+                                            backgroundColor: 'var(--bg-surface)',
+                                            color: 'var(--text-primary)',
+                                            fontSize: 14,
+                                        }}
+                                    >
+                                        {sections.length === 0 ? (
+                                            <option value="">No sections available</option>
+                                        ) : (
+                                            sections.map(section => {
+                                                // Check if section name already contains program and year level (e.g., "MAWD-11a")
+                                                // For senior high school (years 11-12), just show the section name
+                                                const isSHS = section.year_level && (section.year_level >= 11 && section.year_level <= 12);
+                                                const nameContainsInfo = isSHS && /[A-Za-z]+-\d+[a-z]/i.test(section.name);
+
+                                                if (nameContainsInfo) {
+                                                    return (
+                                                        <option key={section.id} value={section.id}>
+                                                            {section.name}
+                                                        </option>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <option key={section.id} value={section.id}>
+                                                        {section.name} {section.program ? `- ${section.program}` : ''} {section.year_level ? `- Year ${section.year_level}` : ''}
+                                                    </option>
+                                                );
+                                            })
+                                        )}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={cancelMove}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: 6,
+                                    border: '1px solid var(--border-default)',
+                                    backgroundColor: 'var(--bg-surface)',
+                                    color: 'var(--text-primary)',
+                                    fontSize: 14,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmCustomization}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    backgroundColor: 'var(--accent-primary)',
+                                    color: 'white',
+                                    fontSize: 14,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Continue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Conflict Warning Modal */}
             {showConflictWarning && conflictDetails && (
@@ -526,12 +915,13 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                     zIndex: 1000,
                 }}>
                     <div style={{
-                        backgroundColor: 'var(--surface-primary)',
+                        backgroundColor: '#ffffff',
                         borderRadius: 8,
                         padding: 24,
                         maxWidth: 500,
                         width: '90%',
                         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+                        border: '1px solid var(--border-color)',
                     }}>
                         <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: 'var(--text-primary)' }}>
                             Schedule Conflict Detected
@@ -600,7 +990,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                                     padding: '8px 16px',
                                     borderRadius: 6,
                                     border: 'none',
-                                    backgroundColor: 'var(--color-primary)',
+                                    backgroundColor: 'var(--accent-primary)',
                                     color: 'white',
                                     fontSize: 14,
                                     cursor: 'pointer',

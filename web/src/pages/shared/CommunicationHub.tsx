@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Send, Users, Search, ArrowLeft, MessageSquare, KeyRound } from 'lucide-react';
@@ -44,25 +44,9 @@ const CommunicationHub: React.FC = () => {
     const [sending, setSending] = useState(false);
     const [sidebarTab, setSidebarTab] = useState<'conversations' | 'teachers' | 'resets'>('conversations');
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const isAdmin = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'].some(r => roles.includes(r as any));
+    const isAdmin = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'].some(r => roles.includes(r as 'admin' | 'power_admin' | 'system_admin' | 'schedule_admin' | 'schedule_manager'));
 
-    useEffect(() => {
-        fetchMessages();
-        fetchAllTeachers();
-
-        // Real-time subscription for instant message updates
-        const channel = supabase
-            .channel('comm-hub-messages')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_messages' }, () => {
-                fetchMessages();
-            })
-            .subscribe();
-
-        return () => { supabase.removeChannel(channel); };
-    }, [profile]);
-    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, selectedThread]);
-
-    const fetchAllTeachers = async () => {
+    const fetchAllTeachers = useCallback(async () => {
         let query = supabase
             .from('profiles')
             .select('id, full_name, avatar_url, role')
@@ -82,9 +66,9 @@ const CommunicationHub: React.FC = () => {
             // Filter out the current user
             setAllTeachers(data.filter(t => t.id !== profile?.id));
         }
-    };
+    }, [isAdmin, profile?.id]);
 
-    const fetchMessages = async () => {
+    const fetchMessages = useCallback(async () => {
         let query = supabase
             .from('admin_messages')
             .select('*')
@@ -104,7 +88,30 @@ const CommunicationHub: React.FC = () => {
             setMessages(data);
             await buildThreads(data);
         }
-    };
+    }, [isAdmin, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        fetchMessages();
+        fetchAllTeachers();
+
+        // Prevent body scrolling when CommunicationHub is mounted
+        document.body.style.overflow = 'hidden';
+
+        // Real-time subscription for instant message updates
+        const channel = supabase
+            .channel('comm-hub-messages')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_messages' }, () => {
+                fetchMessages();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+            // Restore body scrolling when unmounted
+            document.body.style.overflow = '';
+        };
+    }, [profile, fetchMessages, fetchAllTeachers]);
+    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, selectedThread]);
 
     const buildThreads = async (msgs: Message[]) => {
         const threadMap = new Map<string, Thread>();
@@ -217,110 +224,232 @@ const CommunicationHub: React.FC = () => {
     const threadMsgs = getThreadMessages();
 
     return (
-        <div className="dashboard fade-in" style={{ height: 'calc(100vh - 64px)', marginTop: '-32px', marginBottom: '-32px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div className="dashboard-header" style={{ flexShrink: 0, padding: '32px 0 16px 0' }}>
-                <div>
-                    <h1 className="dashboard-title">Messages</h1>
-                    <p className="dashboard-subtitle">
-                        {isAdmin ? `${threads.length} conversations • ${allTeachers.length} teachers` : `Chat with admin`}
-                    </p>
+        <div className="dashboard fade-in" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)' }}>
+            {/* Header */}
+            <div style={{
+                flexShrink: 0,
+                padding: '24px 32px 20px 32px',
+                borderBottom: '1px solid var(--border-subtle)',
+                background: 'var(--bg-primary)'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                        <h1 style={{ 
+                            fontSize: '28px', 
+                            fontWeight: 700, 
+                            color: 'var(--text-primary)',
+                            margin: 0,
+                            letterSpacing: '-0.5px'
+                        }}>Messages</h1>
+                        <p style={{ 
+                            fontSize: '14px', 
+                            color: 'var(--text-muted)',
+                            margin: '4px 0 0 0',
+                            fontWeight: 500
+                        }}>
+                            {isAdmin ? `${threads.length} conversations • ${allTeachers.length} teachers` : `Chat with admin`}
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', gap: 16, overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ flex: 1, display: 'flex', gap: 0, overflow: 'hidden', minHeight: 0 }}>
                 {/* Thread List / Teacher Directory */}
-                <div className="card" style={{
-                    width: selectedThread ? 300 : '100%',
-                    maxWidth: 380,
+                <div style={{
+                    width: selectedThread ? 360 : '100%',
+                    maxWidth: 400,
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
                     flexShrink: 0,
-                    transition: 'width 200ms ease',
+                    transition: 'none',
+                    borderRight: selectedThread ? '1px solid var(--border-subtle)' : 'none',
+                    background: 'var(--bg-primary)'
                 }}>
                     {/* Tab Switcher */}
-                    <div style={{ display: 'flex', padding: '8px 12px', gap: 4, borderBottom: '1px solid var(--border-default)', flexShrink: 0 }}>
+                    <div style={{
+                        display: 'flex',
+                        padding: '12px 16px',
+                        gap: 6,
+                        borderBottom: '1px solid var(--border-subtle)',
+                        flexShrink: 0,
+                        background: 'var(--bg-primary)'
+                    }}>
                         <button
                             onClick={() => setSidebarTab('conversations')}
-                            className="font-semibold text-sm"
                             style={{
-                                flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-                                background: sidebarTab === 'conversations' ? 'var(--accent-primary)' : 'var(--bg-secondary)',
-                                color: sidebarTab === 'conversations' ? '#fff' : 'var(--text-secondary)',
-                                transition: 'all 150ms ease',
+                                flex: 1, 
+                                padding: '10px 0', 
+                                borderRadius: 10, 
+                                border: 'none', 
+                                cursor: 'pointer',
+                                background: sidebarTab === 'conversations' ? 'var(--accent-primary)' : 'transparent',
+                                color: sidebarTab === 'conversations' ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+                                transition: 'all 200ms ease',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 6
                             }}
                         >
-                            <MessageSquare size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                            <MessageSquare size={15} />
                             Chats
                         </button>
                         <button
                             onClick={() => setSidebarTab('teachers')}
-                            className="font-semibold text-sm"
                             style={{
-                                flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-                                background: sidebarTab === 'teachers' ? 'var(--accent-primary)' : 'var(--bg-secondary)',
-                                color: sidebarTab === 'teachers' ? '#fff' : 'var(--text-secondary)',
-                                transition: 'all 150ms ease',
+                                flex: 1, 
+                                padding: '10px 0', 
+                                borderRadius: 10, 
+                                border: 'none', 
+                                cursor: 'pointer',
+                                background: sidebarTab === 'teachers' ? 'var(--accent-primary)' : 'transparent',
+                                color: sidebarTab === 'teachers' ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+                                transition: 'all 200ms ease',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 6
                             }}
                         >
-                            <Users size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                            <Users size={15} />
                             {isAdmin ? 'All Teachers' : 'Admins'}
                         </button>
                         {isAdmin && (
                             <button
                                 onClick={() => setSidebarTab('resets')}
-                                className="font-semibold text-sm"
                                 style={{
-                                    flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-                                    background: sidebarTab === 'resets' ? '#f59e0b' : 'var(--bg-secondary)',
-                                    color: sidebarTab === 'resets' ? '#fff' : 'var(--text-secondary)',
-                                    transition: 'all 150ms ease',
+                                    flex: 1, 
+                                    padding: '10px 0', 
+                                    borderRadius: 10, 
+                                    border: 'none', 
+                                    cursor: 'pointer',
+                                    background: sidebarTab === 'resets' ? 'var(--accent-warning)' : 'transparent',
+                                    color: sidebarTab === 'resets' ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+                                    transition: 'all 200ms ease',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 6
                                 }}
                             >
-                                <KeyRound size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                                <KeyRound size={15} />
                                 Resets
                             </button>
                         )}
                     </div>
 
                     {/* Search */}
-                    <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+                    <div style={{
+                        padding: '12px 16px',
+                        borderBottom: '1px solid var(--border-subtle)',
+                        flexShrink: 0,
+                        background: 'var(--bg-primary)'
+                    }}>
                         <div style={{ position: 'relative' }}>
-                            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                            <input className="input text-base" placeholder={sidebarTab === 'conversations' ? "Search conversations..." : (isAdmin ? "Search teachers..." : "Search admins...")} value={search} onChange={e => setSearch(e.target.value)}
-                                style={{ paddingLeft: 36, padding: '8px 12px 8px 36px' }} />
+                            <Search size={15} style={{ 
+                                position: 'absolute', 
+                                left: 14, 
+                                top: '50%', 
+                                transform: 'translateY(-50%)', 
+                                color: 'var(--text-muted)',
+                                strokeWidth: 2
+                            }} />
+                            <input 
+                                className="input" 
+                                placeholder={sidebarTab === 'conversations' ? "Search conversations..." : (isAdmin ? "Search teachers..." : "Search admins...")} 
+                                value={search} 
+                                onChange={e => setSearch(e.target.value)}
+                                style={{ 
+                                    paddingLeft: 40, 
+                                    padding: '10px 12px 10px 40px',
+                                    borderRadius: 10,
+                                    fontSize: '14px',
+                                    border: '1px solid var(--border-default)',
+                                    background: 'var(--bg-primary)'
+                                }} 
+                            />
                         </div>
                     </div>
 
                     {/* Content */}
-                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg-primary)' }}>
                         {sidebarTab === 'resets' && isAdmin ? (
                             <PasswordResetManager />
                         ) : sidebarTab === 'conversations' ? (
                             /* Conversations Tab */
                             filteredThreads.length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-                                    <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                                    <p className="text-base">No conversations yet</p>
-                                    <p className="text-xs" style={{ marginTop: 4 }}>Go to "{isAdmin ? 'All Teachers' : 'Admins'}" to start a chat</p>
+                                <div style={{ 
+                                    textAlign: 'center', 
+                                    padding: '60px 20px', 
+                                    color: 'var(--text-muted)' 
+                                }}>
+                                    <div style={{
+                                        width: 64,
+                                        height: 64,
+                                        borderRadius: '50%',
+                                        background: 'var(--bg-secondary)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 20px'
+                                    }}>
+                                        <MessageSquare size={28} style={{ opacity: 0.4 }} />
+                                    </div>
+                                    <p style={{ 
+                                        fontSize: '16px', 
+                                        fontWeight: 600,
+                                        color: 'var(--text-primary)',
+                                        margin: '0 0 8px 0'
+                                    }}>No conversations yet</p>
+                                    <p style={{ 
+                                        fontSize: '13px',
+                                        margin: 0
+                                    }}>Go to "{isAdmin ? 'All Teachers' : 'Admins'}" to start a chat</p>
                                 </div>
                             ) : filteredThreads.map(t => (
                                 <div key={t.senderId}
                                     onClick={() => { setSelectedThread(t.senderId); setSelectedRecipientName(t.senderName); }}
                                     style={{
-                                        padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)',
+                                        padding: '16px 20px', 
+                                        cursor: 'pointer', 
+                                        borderBottom: '1px solid var(--border-subtle)',
                                         background: selectedThread === t.senderId ? 'var(--bg-secondary)' : 'transparent',
-                                        transition: 'background 150ms ease',
-                                        display: 'flex', alignItems: 'center', gap: 12,
+                                        transition: 'all 150ms ease',
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: 14,
+                                        position: 'relative'
                                     }}
-                                    onMouseEnter={e => { if (selectedThread !== t.senderId) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                                    onMouseLeave={e => { if (selectedThread !== t.senderId) e.currentTarget.style.background = 'transparent'; }}
+                                    onMouseEnter={e => { 
+                                        if (selectedThread !== t.senderId) 
+                                            e.currentTarget.style.background = 'var(--bg-hover)'; 
+                                    }}
+                                    onMouseLeave={e => { 
+                                        if (selectedThread !== t.senderId) 
+                                            e.currentTarget.style.background = 'transparent'; 
+                                    }}
                                 >
                                     <div style={{
-                                        width: 40, height: 40, borderRadius: '50%',
-                                        background: 'rgba(99,102,241,0.15)', color: '#818cf8',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontWeight: 700, flexShrink: 0, overflow: 'hidden'
+                                        width: 48, 
+                                        height: 48, 
+                                        borderRadius: '50%',
+                                        background: 'linear-gradient(135deg, var(--brand-core), var(--brand-bright))', 
+                                        color: 'var(--text-on-accent)',
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center',
+                                        fontWeight: 700, 
+                                        flexShrink: 0, 
+                                        overflow: 'hidden',
+                                        fontSize: '18px',
+                                        boxShadow: '0 2px 8px rgba(99, 102, 241, 0.2)'
                                     }}>
                                         {t.avatarUrl ? (
                                             <img src={t.avatarUrl} alt={t.senderName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -329,32 +458,91 @@ const CommunicationHub: React.FC = () => {
                                         )}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                            <span className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>{t.senderName}</span>
-                                            <span className="text-xs" style={{ color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                            <span style={{ 
+                                                fontSize: '15px', 
+                                                fontWeight: 600,
+                                                color: 'var(--text-primary)' 
+                                            }}>{t.senderName}</span>
+                                            <span style={{ 
+                                                fontSize: '12px', 
+                                                color: 'var(--text-muted)', 
+                                                flexShrink: 0, 
+                                                marginLeft: 12,
+                                                fontWeight: 500
+                                            }}>
                                                 {new Date(t.lastTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span className="text-sm" style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                            <span style={{ 
+                                                fontSize: '13px', 
+                                                color: 'var(--text-muted)', 
+                                                overflow: 'hidden', 
+                                                textOverflow: 'ellipsis', 
+                                                whiteSpace: 'nowrap', 
+                                                flex: 1 
+                                            }}>
                                                 {t.lastMessage}
                                             </span>
                                             {t.unread > 0 && (
                                                 <span style={{
-                                                    background: 'var(--accent-primary)', color: '#fff', fontWeight: 700,
-                                                    width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8,
+                                                    background: 'var(--accent-primary)', 
+                                                    color: 'var(--text-on-accent)', 
+                                                    fontWeight: 700,
+                                                    minWidth: 22,
+                                                    height: 22, 
+                                                    borderRadius: '50%', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'center', 
+                                                    flexShrink: 0, 
+                                                    marginLeft: 12,
+                                                    fontSize: '12px',
+                                                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
                                                 }}>{t.unread}</span>
                                             )}
                                         </div>
                                     </div>
+                                    {selectedThread === t.senderId && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            left: 0,
+                                            top: 0,
+                                            bottom: 0,
+                                            width: 3,
+                                            background: 'var(--accent-primary)',
+                                            borderRadius: '0 2px 2px 0'
+                                        }} />
+                                    )}
                                 </div>
                             ))
                         ) : (
                             /* All Teachers Tab */
                             filteredTeachers.length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-                                    <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                                    <p className="text-base">{isAdmin ? 'No teachers found' : 'No admins found'}</p>
+                                <div style={{ 
+                                    textAlign: 'center', 
+                                    padding: '60px 20px', 
+                                    color: 'var(--text-muted)' 
+                                }}>
+                                    <div style={{
+                                        width: 64,
+                                        height: 64,
+                                        borderRadius: '50%',
+                                        background: 'var(--bg-secondary)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 20px'
+                                    }}>
+                                        <Users size={28} style={{ opacity: 0.4 }} />
+                                    </div>
+                                    <p style={{ 
+                                        fontSize: '16px', 
+                                        fontWeight: 600,
+                                        color: 'var(--text-primary)',
+                                        margin: '0 0 8px 0'
+                                    }}>{isAdmin ? 'No teachers found' : 'No admins found'}</p>
                                 </div>
                             ) : filteredTeachers.map(teacher => {
                                 const existingThread = threads.find(t => t.senderId === teacher.id);
@@ -363,20 +551,41 @@ const CommunicationHub: React.FC = () => {
                                     <div key={teacher.id}
                                         onClick={() => startChatWith(teacher)}
                                         style={{
-                                            padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)',
+                                            padding: '16px 20px', 
+                                            cursor: 'pointer', 
+                                            borderBottom: '1px solid var(--border-subtle)',
                                             background: selectedThread === teacher.id ? 'var(--bg-secondary)' : 'transparent',
-                                            transition: 'background 150ms ease',
-                                            display: 'flex', alignItems: 'center', gap: 12,
+                                            transition: 'all 150ms ease',
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: 14,
+                                            position: 'relative'
                                         }}
-                                        onMouseEnter={e => { if (selectedThread !== teacher.id) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                                        onMouseLeave={e => { if (selectedThread !== teacher.id) e.currentTarget.style.background = 'transparent'; }}
+                                        onMouseEnter={e => { 
+                                            if (selectedThread !== teacher.id) 
+                                                e.currentTarget.style.background = 'var(--bg-hover)'; 
+                                        }}
+                                        onMouseLeave={e => { 
+                                            if (selectedThread !== teacher.id) 
+                                                e.currentTarget.style.background = 'transparent'; 
+                                        }}
                                     >
                                         <div style={{
-                                            width: 40, height: 40, borderRadius: '50%',
-                                            background: isAdminRole ? 'rgba(239,68,68,0.15)' : 'rgba(99,102,241,0.15)',
-                                            color: isAdminRole ? '#ef4444' : '#818cf8',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontWeight: 700, flexShrink: 0, overflow: 'hidden'
+                                            width: 48, 
+                                            height: 48, 
+                                            borderRadius: '50%',
+                                            background: isAdminRole 
+                                                ? 'linear-gradient(135deg, var(--accent-error), var(--accent-error-hover))' 
+                                                : 'linear-gradient(135deg, var(--brand-core), var(--brand-bright))',
+                                            color: 'var(--text-on-accent)',
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center',
+                                            fontWeight: 700, 
+                                            flexShrink: 0, 
+                                            overflow: 'hidden',
+                                            fontSize: '18px',
+                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
                                         }}>
                                             {teacher.avatar_url ? (
                                                 <img src={teacher.avatar_url} alt={teacher.full_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -385,20 +594,47 @@ const CommunicationHub: React.FC = () => {
                                             )}
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>{teacher.full_name}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                                <span style={{ 
+                                                    fontSize: '15px', 
+                                                    fontWeight: 600,
+                                                    color: 'var(--text-primary)' 
+                                                }}>{teacher.full_name}</span>
                                                 {isAdminRole && (
-                                                    <span className="text-xs font-bold" style={{
-                                                        background: 'rgba(239,68,68,0.15)', color: '#ef4444',
-                                                        padding: '2px 6px', borderRadius: 4, letterSpacing: 0.5,
+                                                    <span style={{
+                                                        fontSize: '10px', 
+                                                        fontWeight: 700,
+                                                        background: 'var(--accent-error-subtle)', 
+                                                        color: 'var(--accent-error)',
+                                                        padding: '3px 8px', 
+                                                        borderRadius: 6, 
+                                                        letterSpacing: 0.5,
                                                     }}>ADMIN</span>
                                                 )}
                                             </div>
-                                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                                {existingThread ? `Last: ${existingThread.lastMessage.slice(0, 30)}...` : 'No messages yet - tap to start'}
+                                            <span style={{ 
+                                                fontSize: '13px', 
+                                                color: 'var(--text-muted)' 
+                                            }}>
+                                                {existingThread ? `Last: ${existingThread.lastMessage.slice(0, 35)}...` : 'No messages yet - tap to start'}
                                             </span>
                                         </div>
-                                        <MessageSquare size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                                        <MessageSquare size={18} style={{ 
+                                            color: 'var(--text-muted)', 
+                                            flexShrink: 0,
+                                            strokeWidth: 2
+                                        }} />
+                                        {selectedThread === teacher.id && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                left: 0,
+                                                top: 0,
+                                                bottom: 0,
+                                                width: 3,
+                                                background: 'var(--accent-primary)',
+                                                borderRadius: '0 2px 2px 0'
+                                            }} />
+                                        )}
                                     </div>
                                 );
                             })
@@ -408,13 +644,65 @@ const CommunicationHub: React.FC = () => {
 
                 {/* Chat Area */}
                 {selectedThread ? (
-                    <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        background: 'var(--bg-primary)'
+                    }}>
                         {/* Chat Header */}
-                        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setSelectedThread(null)}>
-                                <ArrowLeft size={18} />
+                        <div style={{
+                            padding: '16px 24px',
+                            borderBottom: '1px solid var(--border-subtle)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 16,
+                            flexShrink: 0,
+                            background: 'var(--bg-primary)',
+                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+                        }}>
+                            <button 
+                                onClick={() => setSelectedThread(null)}
+                                style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 10,
+                                    border: '1px solid var(--border-default)',
+                                    background: 'var(--bg-primary)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 150ms ease',
+                                    color: 'var(--text-secondary)'
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.background = 'var(--bg-hover)';
+                                    e.currentTarget.style.borderColor = 'var(--border-default)';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.background = 'var(--bg-primary)';
+                                    e.currentTarget.style.borderColor = 'var(--border-default)';
+                                }}
+                            >
+                                <ArrowLeft size={18} strokeWidth={2} />
                             </button>
-                            <div className="font-bold text-base" style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', overflow: 'hidden' }}>
+                            <div style={{
+                                width: 44, 
+                                height: 44, 
+                                borderRadius: '50%', 
+                                background: 'linear-gradient(135deg, var(--brand-core), var(--brand-bright))', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                color: 'var(--text-on-accent)',
+                                overflow: 'hidden',
+                                flexShrink: 0,
+                                boxShadow: '0 2px 8px rgba(99, 102, 241, 0.25)',
+                                fontSize: '18px',
+                                fontWeight: 700
+                            }}>
                                 {(() => {
                                     const thr = threads.find(t => t.senderId === selectedThread);
                                     const teacher = allTeachers.find(t => t.id === selectedThread);
@@ -423,34 +711,107 @@ const CommunicationHub: React.FC = () => {
                                     return resolvedThreadName.charAt(0).toUpperCase();
                                 })()}
                             </div>
-                            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{resolvedThreadName}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <span style={{ 
+                                    fontSize: '16px', 
+                                    fontWeight: 700,
+                                    color: 'var(--text-primary)',
+                                    display: 'block'
+                                }}>{resolvedThreadName}</span>
+                                <span style={{ 
+                                    fontSize: '12px',
+                                    color: 'var(--text-muted)',
+                                    fontWeight: 500
+                                }}>
+                                    {threadMsgs.length} messages
+                                </span>
+                            </div>
                         </div>
 
                         {/* Messages */}
-                        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ 
+                            flex: 1, 
+                            overflowY: 'auto', 
+                            padding: '24px', 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            gap: 16,
+                            background: 'var(--bg-primary)'
+                        }}>
                             {threadMsgs.length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-                                    <MessageSquare size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                                    <p className="text-md">No messages yet</p>
-                                    <p className="text-sm" style={{ marginTop: 4 }}>Start the conversation by sending a message below</p>
+                                <div style={{ 
+                                    textAlign: 'center', 
+                                    padding: '80px 20px', 
+                                    color: 'var(--text-muted)' 
+                                }}>
+                                    <div style={{
+                                        width: 72,
+                                        height: 72,
+                                        borderRadius: '50%',
+                                        background: 'var(--bg-secondary)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 24px'
+                                    }}>
+                                        <MessageSquare size={32} style={{ opacity: 0.3 }} />
+                                    </div>
+                                    <p style={{ 
+                                        fontSize: '18px', 
+                                        fontWeight: 600,
+                                        color: 'var(--text-primary)',
+                                        margin: '0 0 8px 0'
+                                    }}>No messages yet</p>
+                                    <p style={{ 
+                                        fontSize: '14px',
+                                        margin: 0
+                                    }}>Start the conversation by sending a message below</p>
                                 </div>
                             ) : threadMsgs.map(m => {
                                 const isMine = m.sender_id === profile?.id;
                                 return (
                                     <div key={m.id} style={{
-                                        maxWidth: '70%', alignSelf: isMine ? 'flex-end' : 'flex-start',
+                                        maxWidth: '75%', 
+                                        alignSelf: isMine ? 'flex-end' : 'flex-start',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: isMine ? 'flex-end' : 'flex-start'
                                     }}>
-                                        <div className="text-base" style={{
-                                            padding: '10px 14px', borderRadius: 12, lineHeight: 1.5,
-                                            background: isMine ? 'var(--accent-primary)' : 'var(--bg-secondary)',
-                                            color: isMine ? '#fff' : 'var(--text-primary)',
-                                            borderBottomRightRadius: isMine ? 4 : 12,
-                                            borderBottomLeftRadius: isMine ? 12 : 4,
+                                        <div style={{
+                                            padding: '14px 18px', 
+                                            borderRadius: 18, 
+                                            lineHeight: 1.6,
+                                            background: isMine 
+                                                ? 'linear-gradient(135deg, var(--brand-core), var(--brand-bright))' 
+                                                : 'var(--bg-surface)',
+                                            color: isMine ? 'var(--text-on-accent)' : 'var(--text-primary)',
+                                            borderBottomRightRadius: isMine ? 4 : 18,
+                                            borderBottomLeftRadius: isMine ? 18 : 4,
+                                            fontSize: '15px',
+                                            fontWeight: 500,
+                                            boxShadow: isMine 
+                                                ? '0 2px 8px rgba(99, 102, 241, 0.25)' 
+                                                : '0 1px 3px rgba(0, 0, 0, 0.1)',
+                                            border: isMine ? 'none' : '1px solid var(--border-subtle)'
                                         }}>
-                                            {!isMine && <div className="text-xs font-semibold" style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{m.sender_name}</div>}
+                                            {!isMine && (
+                                                <div style={{ 
+                                                    fontSize: '12px', 
+                                                    fontWeight: 700, 
+                                                    color: isMine ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)', 
+                                                    marginBottom: 8,
+                                                    letterSpacing: 0.3
+                                                }}>{m.sender_name}</div>
+                                            )}
                                             {m.message}
                                         </div>
-                                        <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 3, textAlign: isMine ? 'right' : 'left' }}>
+                                        <div style={{ 
+                                            fontSize: '11px', 
+                                            color: 'var(--text-muted)', 
+                                            marginTop: 6, 
+                                            fontWeight: 500,
+                                            letterSpacing: 0.3
+                                        }}>
                                             {new Date(m.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                                         </div>
                                     </div>
@@ -460,22 +821,106 @@ const CommunicationHub: React.FC = () => {
                         </div>
 
                         {/* Input */}
-                        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-default)', display: 'flex', gap: 8, flexShrink: 0 }}>
-                            <input className="input" placeholder="Type a message..."
-                                value={newMessage} onChange={e => setNewMessage(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                                style={{ flex: 1 }} />
-                            <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={!newMessage.trim() || sending}>
-                                <Send size={16} />
+                        <div style={{
+                            padding: '20px 24px',
+                            borderTop: '1px solid var(--border-subtle)',
+                            display: 'flex',
+                            gap: 12,
+                            flexShrink: 0,
+                            background: 'var(--bg-primary)'
+                        }}>
+                            <div style={{ 
+                                flex: 1, 
+                                position: 'relative',
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}>
+                                <input 
+                                    className="input" 
+                                    placeholder="Type a message..."
+                                    value={newMessage} 
+                                    onChange={e => setNewMessage(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                                    style={{ 
+                                        flex: 1,
+                                        padding: '14px 16px',
+                                        paddingRight: 50,
+                                        borderRadius: 24,
+                                        fontSize: '15px',
+                                        border: '1px solid var(--border-default)',
+                                        background: 'var(--bg-primary)',
+                                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+                                    }} 
+                                />
+                            </div>
+                            <button 
+                                onClick={handleSend} 
+                                disabled={!newMessage.trim() || sending}
+                                style={{
+                                    width: 48,
+                                    height: 48,
+                                    borderRadius: '50%',
+                                    border: 'none',
+                                    background: newMessage.trim() 
+                                        ? 'linear-gradient(135deg, var(--brand-core), var(--brand-bright))' 
+                                        : 'var(--bg-secondary)',
+                                    color: newMessage.trim() ? 'var(--text-on-accent)' : 'var(--text-muted)',
+                                    cursor: newMessage.trim() ? 'pointer' : 'not-allowed',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 200ms ease',
+                                    boxShadow: newMessage.trim() 
+                                        ? '0 4px 12px rgba(99, 102, 241, 0.3)' 
+                                        : 'none',
+                                    flexShrink: 0
+                                }}
+                                onMouseEnter={e => {
+                                    if (newMessage.trim()) {
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                    }
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                }}
+                            >
+                                <Send size={18} strokeWidth={2.5} />
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                            <Users size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-                            <p className="text-2xl font-semibold">Select a conversation</p>
-                            <p className="text-base" style={{ marginTop: 4 }}>Choose from existing chats or browse "{isAdmin ? 'All Teachers' : 'Admins'}" to start a new conversation</p>
+                    <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'var(--bg-primary)'
+                    }}>
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px' }}>
+                            <div style={{
+                                width: 96,
+                                height: 96,
+                                borderRadius: '50%',
+                                background: 'var(--bg-secondary)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '0 auto 28px'
+                            }}>
+                                <Users size={42} style={{ opacity: 0.3 }} />
+                            </div>
+                            <p style={{
+                                fontSize: '24px',
+                                fontWeight: 700,
+                                color: 'var(--text-primary)',
+                                margin: '0 0 12px 0'
+                            }}>Select a conversation</p>
+                            <p style={{
+                                fontSize: '15px',
+                                margin: 0,
+                                maxWidth: 400,
+                                lineHeight: 1.6
+                            }}>Choose from existing chats or browse "{isAdmin ? 'All Teachers' : 'Admins'}" to start a new conversation</p>
                         </div>
                     </div>
                 )}

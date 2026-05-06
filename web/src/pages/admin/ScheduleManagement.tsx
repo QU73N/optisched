@@ -1,19 +1,36 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, Scissors, Merge, X, Maximize, Minimize, CheckCircle, Send } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { scheduleVersionService } from '../../services/scheduleVersionService';
 import { ADMIN_ROLES } from '../../types/database';
 import type { DayOfWeek, ScheduleStatus } from '../../types/database';
-import { useAuth } from '../../contexts/AuthContext';
+import type { ScheduleEntry } from '../../components/ScheduleDragDrop';
+import { ScheduleDragDrop } from '../../components/ScheduleDragDrop';
+
+import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, Scissors, Merge, X, Maximize, Minimize, CheckCircle, Send } from 'lucide-react';
+
 // Temporarily disabled audit logging - log_audit RPC function doesn't exist
 // import { scheduleAudit, logAudit } from '../../services/auditService';
 import '../admin/Dashboard.css';
 import ScheduleVersionHistory from './ScheduleVersionHistory';
-import { ScheduleDragDrop } from '../../components/ScheduleDragDrop';
-import { PublishOverwriteConfirm } from '../../components/PublishOverwriteConfirm';
 
 type Category = 'sections' | 'teachers' | 'rooms';
+
+interface VersionSnapshot {
+    id: string;
+    subject_id: string;
+    section_id: string;
+    teacher_id: string;
+    room_id: string;
+    day_of_week: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+    semester: string;
+    academic_year: string;
+    batch_id?: string;
+}
 
 interface ScheduleRow {
     id: string;
@@ -23,10 +40,28 @@ interface ScheduleRow {
     status: string;
     semester: string;
     academic_year: string;
-    subject: { name: string; code: string } | null;
+    subject: { 
+        id?: string;
+        name: string; 
+        code: string;
+        type?: 'common' | 'special';
+        compatible_room_ids?: string[];
+    } | null;
     teacher: { id: string; profile: { full_name: string } | null } | null;
-    room: { id: string; name: string; building: string | null } | null;
-    section: { id: string; name: string; program: string | null } | null;
+    room: { 
+        id: string; 
+        name: string; 
+        building: string | null;
+        type?: 'common' | 'special';
+        capacity?: number | null;
+        compatible_subject_ids?: string[];
+    } | null;
+    section: { 
+        id: string; 
+        name: string; 
+        program: string | null;
+        student_count?: number;
+    } | null;
     batch_id?: string;
 }
 
@@ -57,15 +92,10 @@ const slotIndex = (t: string) => {
     return Math.max(0, Math.min(TOTAL_SLOTS, Math.round(mins / SLOT_MINUTES)));
 };
 
-const formatTime = (t: string) => {
+// Always return 24-hour format for internal use (e.g., passing to ScheduleDragDrop)
+const formatTime24Hour = (t: string) => {
     if (!t) return '';
-    const timeFormat = localStorage.getItem('optisched-time-format') || '24h';
     const [h, m] = t.split(':').map(Number);
-    if (timeFormat === '12h') {
-        const period = h >= 12 ? 'PM' : 'AM';
-        const hour = h % 12 || 12;
-        return `${hour}:${m.toString().padStart(2, '0')} ${period}`;
-    }
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
 
@@ -93,23 +123,15 @@ const ScheduleManagement: React.FC = () => {
     const [category, setCategory] = useState<Category>('sections');
     const [selected, setSelected] = useState<Entity | null>(null);
     const [search, setSearch] = useState('');
-    const [sections, setSections] = useState<{ id: string; name: string; program: string | null; year_level: number | null }[]>([]);
-    const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
-    const [rooms, setRooms] = useState<{ id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null }[]>([]);
+    const [sections, setSections] = useState<{ id: string; name: string; program: string | null; year_level: number | null; student_count?: number }[]>([]);
+    const [teachers, setTeachers] = useState<{ id: string; full_name: string; department: string; is_active: boolean }[]>([]);
+    const [rooms, setRooms] = useState<{ id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null; compatible_subject_ids?: string[] }[]>([]);
     const [versionName, setVersionName] = useState<string | null>(null);
     const [versionStatus, setVersionStatus] = useState<{
         change_type: string;
         is_active: boolean;
         schedules_status: string;
         batch_id: string | null;
-    } | null>(null);
-    const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
-    const [currentScheduleSummary, setCurrentScheduleSummary] = useState<{
-        exists: boolean;
-        version?: string;
-        timestamp?: string;
-        sessionCount?: number;
-        score?: number;
     } | null>(null);
 
     // Initialize scheduleVersionService
@@ -131,36 +153,81 @@ const ScheduleManagement: React.FC = () => {
                     .select('*')
                     .eq('id', versionId)
                     .single();
-                
-                if (version) {
-                    setVersionName(`Version ${version.version_number} (${version.change_type})`);
-                    
-                    // We will reconstruct the schedules after fetching the related entities
-                    // so we wait until secRes, tchRes, roomRes, and subRes are loaded.
-                }
-                
-                // Still load sections, teachers, rooms, and subjects for filtering and reconstruction
-                const [secRes, tchRes, roomRes, subRes] = await Promise.all([
-                    supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
-                    supabase.rpc('get_teachers_with_profiles'),
-                    supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
-                    supabase.from('subjects').select('id, name, code'),
-                ]);
-                
-                const loadedSections = (secRes.data as unknown as typeof sections) || [];
-                const loadedTeachers = ((tchRes.data as unknown as { id: string; full_name: string }[]) || [])
-                    .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed' }));
-                const loadedRooms = (roomRes.data as unknown as typeof rooms) || [];
-                const loadedSubjects = (subRes.data as any[]) || [];
-                
-                setSections(loadedSections);
-                setTeachers(loadedTeachers);
-                setRooms(loadedRooms);
 
                 if (version) {
-                    const snapshot = version.snapshot as any;
+                    const formattedChangeType = version.change_type.charAt(0).toUpperCase() + version.change_type.slice(1);
+                    setVersionName(`Version ${version.version_number} (${formattedChangeType})`);
+
+                    // Load sections, teachers, rooms, and subjects for filtering
+                    // Use RPC for rooms and subjects to bypass RLS issues
+                    const [secRes, tchRes, roomRes, subRes] = await Promise.all([
+                        supabase.from('sections').select('id, name, program, year_level, student_count').order('program').order('year_level').order('name'),
+                        supabase.rpc('get_teachers_with_profiles'),
+                        supabase.rpc('get_rooms_with_details'),
+                        supabase.rpc('get_subjects_with_details'),
+                    ]);
+
+                    const loadedSections = (secRes.data as unknown as typeof sections) || [];
+                    const loadedTeachers = ((tchRes.data as unknown as { id: string; full_name: string; department: string; is_active: boolean }[]) || [])
+                        .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed', department: t.department || '', is_active: t.is_active ?? true }));
+                    // Map RPC room data to Room interface
+                    const loadedRooms = ((roomRes.data as unknown as Array<{
+                        id: string;
+                        name: string;
+                        building: string;
+                        type: string;
+                        capacity: number;
+                        floor: number;
+                        subject_compatibility: unknown;
+                        equipment: unknown;
+                        is_available: boolean;
+                        weight: number;
+                        priority_note: string;
+                        room_facility_type: string;
+                        is_special_room: boolean;
+                    }>) || []).map(r => ({
+                        id: r.id,
+                        name: r.name,
+                        building: r.building,
+                        type: r.type as 'common' | 'special',
+                        capacity: r.capacity,
+                        floor: r.floor,
+                        is_available: r.is_available ?? true,
+                        weight: r.weight,
+                        priority_note: r.priority_note,
+                        compatible_subject_ids: r.subject_compatibility ? (typeof r.subject_compatibility === 'string' ? JSON.parse(r.subject_compatibility) : r.subject_compatibility) : [],
+                    }));
+                    // Map RPC subject data to Subject interface
+                    const loadedSubjects = ((subRes.data as unknown as Array<{
+                        id: string;
+                        name: string;
+                        code: string;
+                        type: string;
+                        units: number;
+                        duration_hours: number;
+                        program: string;
+                        year_level: number;
+                        requires_lab: boolean;
+                        teacher_id: string;
+                        weight: number;
+                        priority_note: string;
+                        requires_special_room: boolean;
+                    }>) || []).map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        code: s.code,
+                        type: s.type as 'common' | 'special',
+                        compatible_room_ids: [], // Not available in current schema
+                    }));
+
+                    setSections(loadedSections);
+                    setTeachers(loadedTeachers);
+                    setRooms(loadedRooms);
+
+                    // Reconstruct schedules from snapshot with fallback to RPC data if IDs are missing
+                    const snapshot = version.snapshot as VersionSnapshot[];
                     const schedulesFromVersion: ScheduleRow[] = [];
-                    
+
                     if (snapshot && Array.isArray(snapshot)) {
                         for (const sched of snapshot) {
                             // Find related entities to reconstruct objects
@@ -178,10 +245,28 @@ const ScheduleManagement: React.FC = () => {
                                 semester: sched.semester,
                                 academic_year: sched.academic_year,
                                 batch_id: sched.batch_id,
-                                subject: subject ? { name: subject.name, code: subject.code } : null,
-                                teacher: teacher ? { id: teacher.id, profile: { full_name: teacher.full_name } } : null,
-                                room: room ? { id: room.id, name: room.name, building: room.building } : null,
-                                section: section ? { id: section.id, name: section.name, program: section.program } : null,
+                                subject: subject ? {
+                                    id: subject.id,
+                                    name: subject.name,
+                                    code: subject.code,
+                                    type: subject.type as 'common' | 'special' | undefined,
+                                    compatible_room_ids: subject.compatible_room_ids,
+                                } : { id: sched.subject_id, name: 'Unknown Subject', code: '', type: undefined, compatible_room_ids: undefined },
+                                teacher: teacher ? { id: teacher.id, profile: { full_name: teacher.full_name } } : { id: sched.teacher_id, profile: { full_name: 'Unknown Teacher' } },
+                                room: room ? {
+                                    id: room.id,
+                                    name: room.name,
+                                    building: room.building,
+                                    type: room.type as 'common' | 'special' | undefined,
+                                    capacity: room.capacity,
+                                    compatible_subject_ids: room.compatible_subject_ids,
+                                } : { id: sched.room_id, name: 'Unknown Room', building: '', type: undefined, capacity: undefined, compatible_subject_ids: undefined },
+                                section: section ? {
+                                    id: section.id,
+                                    name: section.name,
+                                    program: section.program,
+                                    student_count: section.student_count,
+                                } : { id: sched.section_id, name: 'Unknown Section', program: '', student_count: undefined },
                             });
                         }
                     }
@@ -198,17 +283,19 @@ const ScheduleManagement: React.FC = () => {
             }
         } else {
             // Load current schedules
-            const [schedRes, secRes, tchRes, roomRes] = await Promise.all([
+            const [schedRes, secRes, tchRes, roomRes, subjRes] = await Promise.all([
                 supabase.rpc('get_schedules_with_details'),
-                supabase.from('sections').select('id, name, program, year_level').order('program').order('year_level').order('name'),
+                supabase.from('sections').select('id, name, program, year_level, student_count').order('program').order('year_level').order('name'),
                 supabase.rpc('get_teachers_with_profiles'),
-                supabase.from('rooms').select('id, name, building, type, capacity, floor').order('name'),
+                supabase.rpc('get_rooms_with_details'),
+                supabase.rpc('get_subjects_with_details'),
             ]);
             
             if (schedRes.error) console.error('Schedules error:', schedRes.error);
             if (tchRes.error) console.error('Teachers error:', tchRes.error);
             if (secRes.error) console.error('Sections error:', secRes.error);
             if (roomRes.error) console.error('Rooms error:', roomRes.error);
+            if (subjRes.error) console.error('Subjects error:', subjRes.error);
             
             // Map RPC response to ScheduleRow format
             const schedulesData = (schedRes.data as unknown as Array<{
@@ -231,27 +318,112 @@ const ScheduleManagement: React.FC = () => {
                 section_name: string;
                 section_program: string;
             }>) || [];
-            
-            setSchedules(schedulesData.map(s => ({
+
+            // Map RPC room data to Room interface
+            const loadedRooms = ((roomRes.data as unknown as Array<{
+                id: string;
+                name: string;
+                building: string;
+                type: string;
+                capacity: number;
+                floor: number;
+                subject_compatibility: unknown;
+                equipment: unknown;
+                is_available: boolean;
+                weight: number;
+                priority_note: string;
+                room_facility_type: string;
+                is_special_room: boolean;
+            }>) || []).map(r => ({
+                id: r.id,
+                name: r.name,
+                building: r.building,
+                type: r.type as 'common' | 'special',
+                capacity: r.capacity,
+                floor: r.floor,
+                is_available: r.is_available ?? true,
+                weight: r.weight,
+                priority_note: r.priority_note,
+                compatible_subject_ids: r.subject_compatibility ? (typeof r.subject_compatibility === 'string' ? JSON.parse(r.subject_compatibility) : r.subject_compatibility) : [],
+            }));
+            // Map RPC subject data to Subject interface
+            const loadedSubjects = ((subjRes.data as unknown as Array<{
+                id: string;
+                name: string;
+                code: string;
+                type: string;
+                units: number;
+                duration_hours: number;
+                program: string;
+                year_level: number;
+                requires_lab: boolean;
+                teacher_id: string;
+                weight: number;
+                priority_note: string;
+                requires_special_room: boolean;
+            }>) || []).map(s => ({
                 id: s.id,
-                day_of_week: s.day_of_week as DayOfWeek,
-                start_time: s.start_time,
-                end_time: s.end_time,
-                status: s.status as ScheduleStatus,
-                semester: s.semester,
-                academic_year: s.academic_year,
-                subject: { name: s.subject_name, code: s.subject_code },
-                teacher: { id: s.teacher_id, profile: { full_name: s.teacher_name } },
-                room: { id: s.room_id, name: s.room_name, building: s.room_building },
-                section: { id: s.section_id, name: s.section_name, program: s.section_program },
-            })));
+                name: s.name,
+                code: s.code,
+                type: s.type as 'common' | 'special',
+                compatible_room_ids: [], // Not available in current schema
+            }));
+            const loadedSections = (secRes.data as unknown as typeof sections) || [];
+
+            setSchedules(schedulesData.map(s => {
+                const subject = loadedSubjects.find(sub => sub.id === s.subject_id);
+                const room = loadedRooms.find(r => r.id === s.room_id);
+                const section = loadedSections.find(sec => sec.id === s.section_id);
+                
+                return {
+                    id: s.id,
+                    day_of_week: s.day_of_week as DayOfWeek,
+                    start_time: s.start_time,
+                    end_time: s.end_time,
+                    status: s.status as ScheduleStatus,
+                    semester: s.semester,
+                    academic_year: s.academic_year,
+                    subject: { 
+                        id: subject?.id,
+                        name: s.subject_name, 
+                        code: s.subject_code,
+                        type: subject?.type as 'common' | 'special' | undefined,
+                        compatible_room_ids: subject?.compatible_room_ids,
+                    },
+                    teacher: { id: s.teacher_id, profile: { full_name: s.teacher_name } },
+                    room: { 
+                        id: s.room_id, 
+                        name: s.room_name, 
+                        building: s.room_building,
+                        type: room?.type as 'common' | 'special' | undefined,
+                        capacity: room?.capacity,
+                        compatible_subject_ids: room?.compatible_subject_ids,
+                    },
+                    section: { 
+                        id: s.section_id, 
+                        name: s.section_name, 
+                        program: s.section_program,
+                        student_count: section?.student_count,
+                    },
+                };
+            }));
             
             setSections((secRes.data as unknown as typeof sections) || []);
             setTeachers(
-                ((tchRes.data as unknown as { id: string; full_name: string }[]) || [])
-                    .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed' }))
+                ((tchRes.data as unknown as { id: string; full_name: string; department: string; is_active: boolean }[]) || [])
+                    .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed', department: t.department || '', is_active: t.is_active ?? true }))
             );
             setRooms((roomRes.data as unknown as typeof rooms) || []);
+
+            // Set versionStatus for current schedules to enable correct button display
+            if (schedulesData.length > 0) {
+                setVersionStatus({
+                    change_type: 'published',
+                    is_active: true,
+                    schedules_status: schedulesData[0]?.status || 'published',
+                    batch_id: null, // Current schedules don't have a batch_id
+                });
+            }
         }
         
         setLoading(false);
@@ -273,10 +445,10 @@ const ScheduleManagement: React.FC = () => {
                 let res = await scheduleVersionService.submitSchedule(versionStatus.batch_id, { changeReason: 'Submitted from schedule management' });
                 if (!res.success) throw new Error(res.message);
                 
-                res = await (scheduleVersionService as any).approveSchedule(versionStatus.batch_id, { changeReason: 'Auto-approved by admin' });
+                res = await (scheduleVersionService as any).approveSchedule(versionStatus.batch_id, { changeReason: 'Auto-approved by admin' }); // eslint-disable-line @typescript-eslint/no-explicit-any
                 if (!res.success) throw new Error(res.message);
                 
-                res = await (scheduleVersionService as any).publishApprovedSchedule(versionStatus.batch_id, { changeReason: 'Auto-published by admin' });
+                res = await (scheduleVersionService as any).publishApprovedSchedule(versionStatus.batch_id, { changeReason: 'Auto-published by admin' }); // eslint-disable-line @typescript-eslint/no-explicit-any
                 if (!res.success) throw new Error(res.message);
                 
                 alert('Successfully published schedule.');
@@ -304,33 +476,17 @@ const ScheduleManagement: React.FC = () => {
     const handleApprovePublishVersion = async () => {
         if (!versionStatus?.batch_id) return;
         
-        // Check for existing active schedule before approving
-        try {
-            const summary = await scheduleVersionService.getActiveScheduleSummary();
-            setCurrentScheduleSummary(summary);
-
-            if (summary && summary.exists) {
-                // Show overwrite confirmation modal
-                setShowOverwriteConfirm(true);
-                return;
-            }
-        } catch (error) {
-            console.error('[APPROVE] Error checking active schedule:', error);
-            // Continue with approval even if check fails
-        }
-
-        // If no existing schedule, proceed directly with approval
+        // Proceed directly with approval
         await performApprovePublish();
     };
 
     const performApprovePublish = async () => {
         if (!versionStatus?.batch_id) return;
-        setShowOverwriteConfirm(false);
         
         try {
-            let res = await (scheduleVersionService as any).approveSchedule(versionStatus.batch_id, { changeReason: 'Approved from schedule management' });
+            let res = await (scheduleVersionService as any).approveSchedule(versionStatus.batch_id, { changeReason: 'Approved from schedule management' }); // eslint-disable-line @typescript-eslint/no-explicit-any
             if (!res.success) throw new Error(res.message);
-            res = await (scheduleVersionService as any).publishApprovedSchedule(versionStatus.batch_id, { changeReason: 'Published from schedule management' });
+            res = await (scheduleVersionService as any).publishApprovedSchedule(versionStatus.batch_id, { changeReason: 'Published from schedule management' }); // eslint-disable-line @typescript-eslint/no-explicit-any
             if (!res.success) throw new Error(res.message);
             alert('Successfully approved and published schedule.');
             if (res.active_version_id) {
@@ -342,11 +498,6 @@ const ScheduleManagement: React.FC = () => {
             console.error(err);
             alert(`Failed to approve & publish: ${err instanceof Error ? err.message : String(err)}`);
         }
-    };
-
-    const handleOverwriteCancel = () => {
-        setShowOverwriteConfirm(false);
-        setCurrentScheduleSummary(null);
     };
 
     const handlePublishPreviousVersion = async () => {
@@ -362,7 +513,7 @@ const ScheduleManagement: React.FC = () => {
             if (!v || !v.snapshot) throw new Error('Could not find version snapshot');
             
             const rawSchedules = Array.isArray(v.snapshot) ? v.snapshot : [v.snapshot];
-            const mappedSchedules = rawSchedules.map((s: any) => ({
+            const mappedSchedules = rawSchedules.map((s: VersionSnapshot) => ({
                 id: crypto.randomUUID(),
                 subject_id: s.subject_id,
                 teacher_id: s.teacher_id,
@@ -378,7 +529,8 @@ const ScheduleManagement: React.FC = () => {
                 created_by: user?.id,
             }));
 
-            const res = await scheduleVersionService.publishSchedule(mappedSchedules as any, {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const res = await scheduleVersionService.publishSchedule(mappedSchedules as unknown as any[], {
                 academic_year: mappedSchedules[0]?.academic_year || '2025-2026',
                 semester: mappedSchedules[0]?.semester || '1st Semester',
                 changeReason: 'Restored from previous version',
@@ -402,37 +554,8 @@ const ScheduleManagement: React.FC = () => {
         }
 
         try {
-            // Get the version to extract schedule IDs
-            const { data: version } = await supabase
-                .from('schedule_versions')
-                .select('*')
-                .eq('id', versionId)
-                .single();
-
-            if (version && version.snapshot) {
-                const snapshot = version.snapshot as any;
-                const schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
-                
-                // Get schedule IDs from the snapshot
-                const scheduleIds = schedules
-                    .map((s: any) => s.id)
-                    .filter((id: string) => id);
-
-                if (scheduleIds.length > 0) {
-                    // Update schedules to draft status (unpublish from distribution)
-                    await supabase
-                        .from('schedules')
-                        .update({ status: 'draft' })
-                        .in('id', scheduleIds);
-
-                    // Log audit for each schedule
-                    // for (const scheduleId of scheduleIds) {
-                    //     await scheduleAudit.deleted(scheduleId, { reason: 'Version deleted' });
-                    // }
-                }
-            }
-
-            // Delete the version
+            // Delete the version only - do not modify schedules
+            // Deleting a version should only remove the version record, not affect current schedules
             const { error } = await supabase
                 .from('schedule_versions')
                 .delete()
@@ -452,6 +575,36 @@ const ScheduleManagement: React.FC = () => {
         } catch (err: unknown) {
             console.error('Failed to delete version:', err);
             alert('Failed to delete version');
+        }
+    };
+
+    const handleUnpublishCurrentSchedule = async () => {
+        if (!confirm('Are you sure you want to unpublish the current schedule? It will become a draft and students/teachers will not see it.')) {
+            return;
+        }
+
+        try {
+            // Update all published schedules to draft
+            const { error } = await supabase
+                .from('schedules')
+                .update({ status: 'draft' })
+                .eq('status', 'published');
+
+            if (error) throw error;
+
+            // Update versionStatus to reflect the change
+            setVersionStatus({
+                change_type: 'created',
+                is_active: false,
+                schedules_status: 'draft',
+                batch_id: null,
+            });
+
+            alert('Successfully unpublished current schedule.');
+            fetchData();
+        } catch (err: unknown) {
+            console.error('Failed to unpublish:', err);
+            alert(`Failed to unpublish: ${err instanceof Error ? err.message : String(err)}`);
         }
     };
 
@@ -478,12 +631,12 @@ const ScheduleManagement: React.FC = () => {
                     .eq('id', versionId);
 
                 if (version.snapshot) {
-                    const snapshot = version.snapshot as any;
+                    const snapshot = version.snapshot as VersionSnapshot[];
                     const schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
                     
                     // Get schedule IDs from the snapshot
                     const scheduleIds = schedules
-                        .map((s: any) => s.id)
+                        .map((s: VersionSnapshot) => s.id)
                         .filter((id: string) => id);
 
                     if (scheduleIds.length > 0) {
@@ -591,22 +744,6 @@ const ScheduleManagement: React.FC = () => {
         return scheduleMap.size;
     }, [schedules, category]);
 
-    // Count unique schedules (entity + semester + academic_year) per entity
-    const getScheduleCount = (entityId: string, entityType: Category) => {
-        const entitySchedules = schedules.filter(s => {
-            if (entityType === 'sections') return s.section?.id === entityId;
-            if (entityType === 'teachers') return s.teacher?.id === entityId;
-            if (entityType === 'rooms') return s.room?.id === entityId;
-            return false;
-        });
-        
-        // Count unique (semester, academic_year) combinations
-        const uniqueSchedules = new Set(
-            entitySchedules.map(s => `${s.semester}|${s.academic_year}`)
-        );
-        return uniqueSchedules.size;
-    };
-
     const selectedSchedules = useMemo(() => {
         if (!selected) return [] as ScheduleRow[];
         // When an entity is selected, show all sessions for that entity
@@ -639,24 +776,24 @@ const ScheduleManagement: React.FC = () => {
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    {versionName && (
+                    {versionName ? (
                         <>
-                            {versionStatus?.schedules_status === 'published' && versionStatus?.is_active && (
+                            {versionStatus?.change_type === 'publish' && versionStatus?.is_active && (
                                 <button onClick={handleUnpublishVersion} className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                     <Download size={16} /> Unpublish
                                 </button>
                             )}
-                            {versionStatus?.schedules_status === 'published' && !versionStatus?.is_active && (
+                            {versionStatus?.change_type === 'publish' && !versionStatus?.is_active && (
                                 <button onClick={handlePublishPreviousVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                     <CheckCircle size={16} /> Publish
                                 </button>
                             )}
-                            {versionStatus?.schedules_status === 'submitted' && canApprove && (
+                            {versionStatus?.change_type === 'status_change' && versionStatus?.schedules_status === 'submitted' && canApprove && (
                                 <button onClick={handleApprovePublishVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                     <CheckCircle size={16} /> Approve & Publish
                                 </button>
                             )}
-                            {versionStatus?.schedules_status === 'draft' && (
+                            {versionStatus?.change_type === 'created' && (
                                 <button onClick={handleSubmitVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                     <Send size={16} /> Submit
                                 </button>
@@ -676,12 +813,14 @@ const ScheduleManagement: React.FC = () => {
                             >
                                 <Trash2 size={16} /> Delete
                             </button>
-                            {!(versionStatus?.schedules_status === 'published' && versionStatus?.is_active) && (
-                                <Link to="/admin/schedules/current" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                    <ArrowLeft size={16} /> Back to Current
-                                </Link>
-                            )}
                         </>
+                    ) : (
+                        // Current schedules (no versionId) - show unpublish if published
+                        versionStatus?.schedules_status === 'published' && (
+                            <button onClick={handleUnpublishCurrentSchedule} className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <Download size={16} /> Unpublish
+                            </button>
+                        )
                     )}
                     <Link to="/admin/schedules/versions" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                         <History size={16} /> View Versions
@@ -743,7 +882,6 @@ const ScheduleManagement: React.FC = () => {
                     ) : (
                         <div className="sm-entity-grid">
                             {filteredEntities.map(e => {
-                                const count = getScheduleCount(e.id, category);
                                 return (
                                     <button
                                         key={e.id}
@@ -761,10 +899,6 @@ const ScheduleManagement: React.FC = () => {
                                         ) : (
                                             e.sub && <div className="sm-entity-sub">{e.sub}</div>
                                         )}
-                                        <div className="sm-entity-meta">
-                                            <span className="sm-entity-meta-dot" />
-                                            {count} {count === 1 ? 'schedule' : 'schedules'}
-                                        </div>
                                     </button>
                                 );
                             })}
@@ -781,9 +915,9 @@ interface ScheduleDetailProps {
     schedules: ScheduleRow[];
     onBack: () => void;
     onUpdate?: () => void;
-    rooms: { id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null }[];
-    teachers: { id: string; full_name: string }[];
-    sections: { id: string; name: string; program: string | null; year_level: number | null }[];
+    rooms: { id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null; compatible_subject_ids?: string[] }[];
+    teachers: { id: string; full_name: string; department: string; is_active: boolean }[];
+    sections: { id: string; name: string; program: string | null; year_level: number | null; student_count?: number }[];
     category: Category;
 }
 
@@ -811,7 +945,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
     const scheduleEntries = useMemo(() => {
         return schedules.map(s => ({
             key: s.id,
-            subjectId: s.subject?.code || 'unknown',
+            subjectId: s.subject?.id || 'unknown',
             sectionId: s.section?.id || 'unknown',
             teacherId: s.teacher?.id || 'unknown',
             roomId: s.room?.id || 'unknown',
@@ -822,6 +956,14 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
             teacherName: s.teacher?.profile?.full_name || '',
             roomName: s.room?.name || '',
             sectionName: s.section?.name || '',
+            subjectCode: s.subject?.code,
+            // Hard constraint fields
+            subjectType: s.subject?.type,
+            roomType: s.room?.type,
+            sectionSize: s.section?.student_count,
+            capacity: s.room?.capacity,
+            compatibleRoomIds: s.subject?.compatible_room_ids,
+            compatibleSubjectIds: s.room?.compatible_subject_ids,
         }));
     }, [schedules]);
 
@@ -835,16 +977,28 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
     }, [scheduleEntries]);
 
     // Handle schedule update from drag-and-drop
-    const handleScheduleUpdate = async (entry: typeof scheduleEntries[0], newDay?: string, newStartTime?: string, newEndTime?: string) => {
-        if (!newDay && !newStartTime && !newEndTime) return;
-
+    const handleScheduleUpdate = async (updatedEntry: ScheduleEntry) => {
         try {
-            const updateData: any = {};
-            if (newDay) updateData.day_of_week = newDay;
-            if (newStartTime) updateData.start_time = newStartTime;
-            if (newEndTime) updateData.end_time = newEndTime;
+            const updateData: Record<string, string> = {};
+            
+            // Only include fields that have changed from the original entry
+            const originalEntry = schedules.find(s => s.id === updatedEntry.key);
+            
+            if (!originalEntry) {
+                console.error('Original entry not found:', updatedEntry.key);
+                return;
+            }
 
-            await supabase.from('schedules').update(updateData).eq('id', entry.key);
+            if (updatedEntry.day !== originalEntry.day_of_week) updateData.day_of_week = updatedEntry.day;
+            if (updatedEntry.start !== originalEntry.start_time) updateData.start_time = updatedEntry.start;
+            if (updatedEntry.end !== originalEntry.end_time) updateData.end_time = updatedEntry.end;
+            if (updatedEntry.teacherId !== originalEntry.teacher?.id) updateData.teacher_id = updatedEntry.teacherId;
+            if (updatedEntry.roomId !== originalEntry.room?.id) updateData.room_id = updatedEntry.roomId;
+            if (updatedEntry.sectionId !== originalEntry.section?.id) updateData.section_id = updatedEntry.sectionId;
+
+            if (Object.keys(updateData).length === 0) return;
+
+            await supabase.from('schedules').update(updateData).eq('id', updatedEntry.key);
             onUpdate?.();
         } catch (err) {
             console.error('Error updating schedule:', err);
@@ -853,7 +1007,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
     };
 
     // Context menu handler for ScheduleDragDrop
-    const handleContextMenu = (e: React.MouseEvent, entry: typeof scheduleEntries[0]) => {
+    const handleContextMenu = (e: React.MouseEvent, entry: ScheduleEntry) => {
         if (!canEdit) return;
         e.preventDefault();
         
@@ -1002,37 +1156,25 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                             is_available: true, 
                             weight: 0, 
                             priority_note: null 
-                        }) as any)}
+                        }))}
                         teachers={teachers.map(t => ({ 
                             id: t.id, 
-                            name: t.full_name, 
-                            full_name: t.full_name, 
-                            max_hours: 40, 
-                            weight: 0, 
-                            priority_note: null, 
-                            profile: { full_name: t.full_name } 
-                        }) as any)}
-                        sections={sections.map(s => ({ 
-                            id: s.id, 
-                            name: s.name, 
-                            year_level: s.year_level || 0, 
-                            program: s.program || '', 
-                            student_count: 0, 
-                            parent_id: null, 
-                            weight: 0, 
-                            priority_note: null, 
-                            path: '' 
-                        }) as any)}
+                            full_name: t.full_name,
+                            department: t.department,
+                            is_active: t.is_active
+                        }))}
+                        sections={sections as any[]} // eslint-disable-line @typescript-eslint/no-explicit-any
                         onUpdate={handleScheduleUpdate}
                         dayOrder={dayOrder}
                         START_HOUR={START_HOUR}
                         TOTAL_SLOTS={TOTAL_SLOTS}
-                        formatTime={formatTime}
+                        formatTime={formatTime24Hour}
                         colorForKey={colorForKey}
                         viewMode={category === 'sections' ? 'section' : category === 'teachers' ? 'teacher' : 'room'}
                         events={dragDropEvents}
                         canEdit={canEdit}
                         onContextMenu={handleContextMenu}
+                        timeFormat={(localStorage.getItem('optisched-time-format') as '12h' | '24h') || '24h'}
                     />
 
                     {/* Context Menu */}
@@ -1142,19 +1284,6 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
                                 />
                             </div>
                         </div>
-                    )}
-
-                    {/* Overwrite Confirmation Modal */}
-                    {showOverwriteConfirm && currentScheduleSummary && (
-                        <PublishOverwriteConfirm
-                            isOpen={showOverwriteConfirm}
-                            currentSchedule={currentScheduleSummary}
-                            newSchedule={{
-                                sessionCount: schedules.length,
-                            }}
-                            onConfirm={performApprovePublish}
-                            onCancel={handleOverwriteCancel}
-                        />
                     )}
                 </div>
             )}

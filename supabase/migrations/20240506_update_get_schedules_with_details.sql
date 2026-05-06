@@ -1,6 +1,11 @@
--- Drop and recreate get_schedules_with_details to include IDs and remove status filter
+-- Update get_schedules_with_details to include foreign key IDs and is_active
+-- This fixes the issue where subject names show as "Unknown" and room names aren't shown
+-- Also fixes faculty load and room utilization showing 0 by including is_active column
+
+-- Drop the existing function
 DROP FUNCTION IF EXISTS get_schedules_with_details();
 
+-- Recreate with foreign key IDs and is_active included
 CREATE OR REPLACE FUNCTION get_schedules_with_details()
 RETURNS TABLE (
     id uuid,
@@ -53,7 +58,8 @@ AS $$
     LEFT JOIN public.teachers t ON t.id = s.teacher_id
     LEFT JOIN public.profiles p ON p.id = t.profile_id
     LEFT JOIN public.rooms r ON r.id = s.room_id
-    LEFT JOIN public.sections sec ON sec.id = s.section_id;
+    LEFT JOIN public.sections sec ON sec.id = s.section_id
+    WHERE s.status IN ('published', 'draft') AND s.is_active = true;
 $$;
 
 -- Verify the function works

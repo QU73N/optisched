@@ -649,6 +649,19 @@ const wouldExceedMaxClassesPerDay = (
     return dayCount >= maxClasses;
 };
 
+/** Check if placing this session would exceed teacher's max_hours_per_day (daily limit). */
+const wouldExceedMaxHoursPerDay = (
+    teacherId: string,
+    day: string,
+    currentEntries: PlacedEntry[],
+    teacher: Teacher,
+    sessionMinutes: number,
+): boolean => {
+    const maxHoursPerDay = teacher.max_hours_per_day || 8;
+    const dayHours = (currentEntries.filter(e => e.teacherId === teacherId && e.day === day).length * sessionMinutes) / 60;
+    return dayHours >= maxHoursPerDay;
+};
+
 /** Check if placing this session would exceed teacher's max_hours (total weekly). */
 const wouldExceedMaxHours = (
     teacherId: string,
@@ -1024,7 +1037,7 @@ const normalizeData = (
         qualified_subjects: qualifiedSubjectsByTeacher.get(t.id) || [],
         role_based_load_limits: {
             max_hours_per_week: t.max_hours || 40,
-            max_hours_per_day: 8,
+            max_hours_per_day: t.max_hours_per_day || 8,
             max_consecutive_hours: 4,
         },
         shared_assignment_flag: t.shared_assignment || false,
@@ -1269,23 +1282,9 @@ const constructDomains = (
                         }
                     }
 
-                    // IMPROVEMENT: Better time-of-day scoring based on subject type
-                    const slotHour = parseInt(slot.start.split(':')[0]);
-                    if (sub.type === 'special') {
-                        // Special subjects prefer morning slots (8 AM - 11 AM)
-                        if (slotHour >= 8 && slotHour <= 11) {
-                            lcvScore += 15;
-                        } else if (slotHour >= 13 && slotHour <= 15) {
-                            lcvScore += 10; // Afternoon also acceptable
-                        }
-                    } else {
-                        // Common subjects prefer morning slots
-                        if (slotHour >= 8 && slotHour <= 11) {
-                            lcvScore += 12;
-                        } else if (slotHour >= 14 && slotHour <= 16) {
-                            lcvScore += 8; // Late afternoon acceptable
-                        }
-                    }
+                    // REMOVED: Hardcoded time-of-day preferences (8 AM - 11 AM bonuses)
+                    // This was not in the PRD and was causing 07:00 slots to be avoided
+                    // TODO: Implement using teacher_preferences table for actual preferences
 
                     // IMPROVEMENT: Add day preference for special room subjects
                     // Prefer weekdays for special room subjects to balance load
@@ -1920,6 +1919,11 @@ export const optimizeSchedule = (
                 return false;
             }
             
+            // Check max hours per day (PRD Section 13.1: Maximum daily teaching hours)
+            if (teacher && wouldExceedMaxHoursPerDay(entry.teacherId, entry.day, candidateEntries.filter(e => e !== entry), teacher, config.sessionMinutes)) {
+                return false;
+            }
+            
             // Check max hours
             if (teacher && wouldExceedMaxHours(entry.teacherId, candidateEntries.filter(e => e !== entry), teacher, config.sessionMinutes)) {
                 return false;
@@ -2313,20 +2317,9 @@ const calculateSoftConstraintScore = (
     maxScore += 100 * (softWeights.compactSchedule / 100);
 
     // Teacher preferred time score
-    // For now, prefer middle-day times (08:30-14:30) over early/late
-    // In future, use teacher_preferences table for actual preferences
-    let preferredTimeMatches = 0;
-    for (const entry of placed) {
-        const startMin = timeToMinutes(entry.start);
-        // Preferred window: 08:30 (510 min) to 14:30 (870 min) = full points
-        // Acceptable window: 07:00 (420 min) to 17:30 (1050 min) = half points
-        if (startMin >= 510 && startMin <= 870) {
-            preferredTimeMatches += 1; // Full point for ideal window
-        } else if (startMin >= 420 && startMin <= 1050) {
-            preferredTimeMatches += 0.5; // Half point for acceptable window
-        }
-    }
-    const preferredTimeScore = placed.length > 0 ? (preferredTimeMatches / placed.length) * 100 : 0;
+    // Disabled for now - always gives full points regardless of time
+    // TODO: Implement using teacher_preferences table for actual preferences
+    const preferredTimeScore = 100;
     breakdown.teacherPreferredTime = preferredTimeScore;
     totalScore += preferredTimeScore * (softWeights.teacherPreferredTime / 100);
     maxScore += 100 * (softWeights.teacherPreferredTime / 100);
@@ -3254,6 +3247,8 @@ export async function runGenerator(
                     if (placed) break;
                     // Hard: check max_classes_per_day constraint
                     if (wouldExceedMaxClassesPerDay(currentTeacher.id, day, entries, currentTeacher, classifiedConstraints.hard)) continue;
+                    // Hard: check max_hours_per_day constraint (PRD Section 13.1)
+                    if (wouldExceedMaxHoursPerDay(currentTeacher.id, day, entries, currentTeacher, config.sessionMinutes)) continue;
 
                     // Use pre-filtered rooms from domain
                     const compat: Room[] = [];

@@ -340,7 +340,8 @@ const ScheduleVersions: React.FC = () => {
                                     transition: 'transform 150ms ease, box-shadow 150ms ease',
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    gap: 12
+                                    gap: 12,
+                                    position: 'relative'
                                 }}
                                 onClick={() => handleViewVersion(version)}
                                 onMouseEnter={(e) => {
@@ -352,11 +353,21 @@ const ScheduleVersions: React.FC = () => {
                                     e.currentTarget.style.boxShadow = 'none';
                                 }}
                             >
+                                {isGloballyActive && (
+                                    <CheckCircle 
+                                        size={16} 
+                                        style={{ 
+                                            color: 'var(--accent-success)',
+                                            position: 'absolute',
+                                            top: '20px',
+                                            right: '20px'
+                                        }} 
+                                    />
+                                )}
                                 {/* Version Label */}
                                 <div style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'space-between',
                                     marginBottom: 4
                                 }}>
                                     <div style={{
@@ -370,9 +381,6 @@ const ScheduleVersions: React.FC = () => {
                                     }}>
                                         {versionLabel}
                                     </div>
-                                    {isGloballyActive && (
-                                        <CheckCircle size={16} style={{ color: 'var(--accent-success)' }} />
-                                    )}
                                 </div>
 
                                 {/* Name */}

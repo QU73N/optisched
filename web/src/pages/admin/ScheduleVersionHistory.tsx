@@ -204,7 +204,7 @@ const ScheduleVersionHistory: React.FC<ScheduleVersionHistoryProps> = ({ schedul
             case 'publish':
                 return 'Published';
             case 'overwrite':
-                return 'Overwritten';
+                return 'Overwrite';
             case 'restore':
                 return 'Restored';
             default:

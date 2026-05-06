@@ -471,9 +471,9 @@ const DataManagement: React.FC = () => {
                                             <td style={{ fontWeight: 600 }}>{r.name}</td>
                                             <td>{r.building}</td>
                                             <td>{r.floor}</td>
-                                            <td><span className="badge" style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>{r.type?.charAt(0).toUpperCase() + r.type?.slice(1).toLowerCase()}</span></td>
+                                            <td><span className="badge" style={{ background: 'var(--accent-primary-subtle)', color: 'var(--accent-primary)' }}>{r.type?.charAt(0).toUpperCase() + r.type?.slice(1).toLowerCase()}</span></td>
                                             <td>{r.capacity}</td>
-                                            <td><span className="badge" style={{ background: r.is_available ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: r.is_available ? '#34d399' : '#ef4444' }}>{r.is_available ? 'AVAILABLE' : 'UNAVAILABLE'}</span></td>
+                                            <td><span className="badge" style={{ background: r.is_available ? 'var(--accent-success-subtle)' : 'var(--accent-error-subtle)', color: r.is_available ? 'var(--accent-success)' : 'var(--accent-error)' }}>{r.is_available ? 'AVAILABLE' : 'UNAVAILABLE'}</span></td>
                                             <td>
                                                 {canEdit ? (
                                                     <div style={{ display: 'flex', gap: 4 }}>

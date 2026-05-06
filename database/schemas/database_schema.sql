@@ -640,6 +640,7 @@ CREATE TABLE public.teachers (
   department text NOT NULL,
   employment_type text NOT NULL CHECK (employment_type = ANY (ARRAY['full-time'::text, 'part-time'::text])),
   max_hours integer NOT NULL DEFAULT 40,
+  max_hours_per_day integer NOT NULL DEFAULT 8,
   current_load_percentage numeric DEFAULT 0,
   is_active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),

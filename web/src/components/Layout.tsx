@@ -227,7 +227,7 @@ const Layout: React.FC = () => {
     }, [notificationsOpen]);
 
     return (
-        <div className={`layout ${siderailOpen ? 'siderail-open-layout' : ''}`}>
+        <div className="layout">
             <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
                 <button className="mobile-close-btn" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
                     <Menu size={18} />
@@ -308,10 +308,10 @@ const Layout: React.FC = () => {
                             </span>
                         )}
                     </button>
-                    <button className="topbar-btn" onClick={() => window.open('https://github.com/your-repo/optisched/wiki', '_blank')} aria-label="Open help documentation">
+                    <button className="topbar-btn" onClick={() => navigate('/help')} aria-label="Open help documentation">
                         <HelpCircle size={18} />
                     </button>
-                    <button className="topbar-btn" onClick={() => navigate(`/${role}/settings`)} aria-label="Settings">
+                    <button className="topbar-btn" onClick={() => navigate(isAnyAdmin ? '/admin/settings' : `/${role}/settings`)} aria-label="Settings">
                         <Settings size={18} />
                     </button>
                 </div>
@@ -404,35 +404,36 @@ const Layout: React.FC = () => {
                 </div>
             )}
 
-            <div className="main-wrapper">
-                <main className="main-content">
-                    <Outlet />
-                </main>
-            </div>
+            <div className="content-area">
+                <div className="main-wrapper">
+                    <main className="main-content">
+                        <Outlet />
+                    </main>
+                </div>
 
-            <aside className={`siderail ${siderailOpen ? 'siderail-open' : ''}`}>
-                <div className="siderail-content">
+                <aside className={`siderail ${siderailOpen ? 'siderail-open' : ''}`}>
+                    <div className="siderail-content">
                     <div className="siderail-section">
                         <h4>Quick Actions</h4>
                         <div className="siderail-grid">
                             {isAnyAdmin && (
-                                <button className="siderail-action" onClick={() => navigate(`/${role}/generate`)} aria-label="Generate Schedule">
+                                <button className="siderail-action" onClick={() => navigate('/admin/generate')} aria-label="Generate Schedule">
                                     <Sparkles size={18} />
                                     <span>Generate</span>
                                 </button>
                             )}
-                            <button className="siderail-action" onClick={() => navigate(`/${role}/schedules`)} aria-label="View Schedules">
+                            <button className="siderail-action" onClick={() => navigate(isAnyAdmin ? '/admin/schedules/versions' : `/${role}/schedule`)} aria-label="View Schedules">
                                 <CalendarDays size={18} />
                                 <span>Schedules</span>
                             </button>
                             {isAnyAdmin && (
-                                <button className="siderail-action" onClick={() => navigate(`/${role}/users`)} aria-label="Manage Users">
+                                <button className="siderail-action" onClick={() => navigate('/admin/users')} aria-label="Manage Users">
                                     <Users size={18} />
                                     <span>Users</span>
                                 </button>
                             )}
                             {isAnyAdmin && (
-                                <button className="siderail-action" onClick={() => navigate(`/${role}/data`)} aria-label="View Data">
+                                <button className="siderail-action" onClick={() => navigate('/admin/data')} aria-label="View Data">
                                     <Database size={18} />
                                     <span>Data</span>
                                 </button>
@@ -444,6 +445,7 @@ const Layout: React.FC = () => {
                     <LoadByDay />
                 </div>
             </aside>
+            </div>
 
             <FloatingOptiBot />
 

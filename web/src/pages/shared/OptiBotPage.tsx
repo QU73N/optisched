@@ -13,7 +13,7 @@ interface ChatMessage {
 }
 
 const OptiBotPage: React.FC = () => {
-    const { profile } = useAuth();
+    const { profile, roles } = useAuth();
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: '1', isBot: true, timestamp: new Date(),
@@ -112,6 +112,7 @@ const OptiBotPage: React.FC = () => {
                 full_name: profile?.full_name ?? undefined,
                 role: profile?.role ?? undefined,
                 email: profile?.email ?? undefined,
+                roles: roles,
             });
             conversationHistoryRef.current.push(
                 { role: 'user', parts: [{ text: text.trim() }] },

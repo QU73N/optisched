@@ -4,14 +4,14 @@ import { supabase } from '../../lib/supabase';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../types/database';
 import type {
     ChangeRequest, Announcement, CustomEvent, ResetRequest,
-    ConflictsTrend, DashboardStats, DashboardDeltas, AdminMessage, DashboardRoom
+    ConflictsTrend, DashboardStats, DashboardDeltas, DashboardRoom
 } from '../../types/dashboard';
 import { DASHBOARD_CONFIG } from '../../config/dashboard';
 import {
-    Activity, BarChart3, CalendarDays, CalendarPlus, CheckCircle, Clock, Inbox, Megaphone, MessageSquare, TrendingUp, XCircle, AlertTriangle, Edit3, Trash2, X, Loader2, Users, BookOpen, LayoutDashboard, Shield
+    Activity, CalendarDays, CalendarPlus, CheckCircle, Clock, Inbox, Megaphone, TrendingUp, XCircle, AlertTriangle, Edit3, Trash2, X, Loader2, Users, BookOpen, LayoutDashboard, Shield
 } from 'lucide-react';
 import {
-    LineChart, Line, BarChart, Bar, Cell,
+    LineChart, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { ChartTooltip } from '../../components/ChartTooltip';
@@ -24,8 +24,6 @@ const AdminDashboard: React.FC = () => {
     const [deltas, setDeltas] = useState<DashboardDeltas>({ schedules: 0, conflicts: 0, requests: 0 });
     // Chart datasets, all derived from real data
     const [conflictsTrend, setConflictsTrend] = useState<ConflictsTrend[]>([]);
-    const [roomLoad, setRoomLoad] = useState<{ name: string; count: number }[]>([]);
-    const [requestFunnel, setRequestFunnel] = useState({ approved: 0, rejected: 0, pending: 0 });
     
     // System activity and audit event trends (for all admins)
 
@@ -54,7 +52,7 @@ const AdminDashboard: React.FC = () => {
     const [showAnnModal, setShowAnnModal] = useState(false);
     const [annTitle, setAnnTitle] = useState('');
     const [annContent, setAnnContent] = useState('');
-    const [annPriority, setAnnPriority] = useState<'normal' | 'important' | 'urgent'>('normal');
+    const [annPriority, setAnnPriority] = useState<'normal' | 'important'>('normal');
     const [annSection, setAnnSection] = useState('All Sections');
     const [sections, setSections] = useState<string[]>([]);
     const [postingAnn, setPostingAnn] = useState(false);
@@ -67,13 +65,11 @@ const AdminDashboard: React.FC = () => {
     const [evDesc, setEvDesc] = useState('');
     const [evDate, setEvDate] = useState(new Date().toISOString().split('T')[0]);
     const [evStart, setEvStart] = useState('08:00');
-    const [evEnd, setEvEnd] = useState('09:00');
+    const [evEnd, setEvEnd] = useState('10:00'); // Changed from '09:00' to '10:00'
     const [evRoom, setEvRoom] = useState('');
     const [rooms, setRooms] = useState<DashboardRoom[]>([]);
     const [postingEvent, setPostingEvent] = useState(false);
-
-    // Messages
-    const [recentMessages, setRecentMessages] = useState<AdminMessage[]>([]);
+    const [editingEvent, setEditingEvent] = useState<CustomEvent | null>(null);
 
     // Password resets
     const [resetRequests, setResetRequests] = useState<ResetRequest[]>([]);
@@ -81,7 +77,7 @@ const AdminDashboard: React.FC = () => {
     const fetchAll = () => {
         fetchStats(); fetchRequests(); fetchAnnouncements();
         fetchEvents(); fetchSections(); fetchRooms();
-        fetchMessages(); fetchResetRequests();
+        fetchResetRequests();
     };
 
     const fetchStats = async () => {
@@ -89,21 +85,139 @@ const AdminDashboard: React.FC = () => {
             const sevenDaysAgo = new Date(Date.now() - DASHBOARD_CONFIG.TIME.DAYS_7_MS).toISOString();
             const fourteenDaysAgo = new Date(Date.now() - DASHBOARD_CONFIG.TIME.DAYS_14_MS).toISOString();
             
+            console.log('[AdminDashboard] Fetching stats...');
+            
             // Fetch all data needed for stats
-            const [profiles, schedules, conflicts, roomsR, schedulesRecent, conflictsRecent, requestsRecent, scanResults14Days, schedulesFull, roomsFull] = await Promise.all([
+            const [profiles, schedules, conflicts, roomsR, schedulesRecent, conflictsRecent, requestsRecent, scanResults14Days] = await Promise.all([
                 supabase.from('profiles').select('role'),
                 supabase.from('schedules').select('id', { count: 'exact' }),
-                supabase.from('conflicts').select('id', { count: 'exact' }).eq('is_resolved', false),
+                // Count conflicts only for published schedules
+                supabase.from('conflicts').select('id, schedule_a_id, schedule_b_id').eq('is_resolved', false),
                 supabase.from('rooms').select('id', { count: 'exact' }),
                 supabase.from('schedules').select('id', { count: 'exact' }).gte('created_at', sevenDaysAgo),
                 supabase.from('conflicts').select('id', { count: 'exact' }).gte('created_at', sevenDaysAgo),
                 supabase.from('schedule_change_requests').select('id', { count: 'exact' }).gte('created_at', sevenDaysAgo),
                 // 14-day scan results from scan_results table (from ConflictsAlerts scans)
                 supabase.from('scan_results').select('*').gte('scanned_at', fourteenDaysAgo).order('scanned_at', { ascending: true }),
-                // Schedules grouped by day_of_week + room_id
-                supabase.from('schedules').select('day_of_week, room_id'),
-                supabase.from('rooms').select('id, name'),
             ]);
+            
+            console.log('[AdminDashboard] Unresolved conflicts fetched:', conflicts.data?.length || 0);
+            console.log('[AdminDashboard] Conflict sample:', conflicts.data?.slice(0, 3));
+            
+            // Filter conflicts to only those associated with published schedules
+            let publishedConflictCount = 0;
+            if (conflicts.data && conflicts.data.length > 0) {
+                const conflictScheduleIds = new Set<string>();
+                conflicts.data.forEach((c: { schedule_a_id?: string; schedule_b_id?: string }) => {
+                    if (c.schedule_a_id) conflictScheduleIds.add(c.schedule_a_id);
+                    if (c.schedule_b_id) conflictScheduleIds.add(c.schedule_b_id);
+                });
+                
+                console.log('[AdminDashboard] Unique schedule IDs in conflicts:', conflictScheduleIds.size);
+                console.log('[AdminDashboard] Schedule IDs:', Array.from(conflictScheduleIds).slice(0, 10));
+                
+                if (conflictScheduleIds.size > 0) {
+                    const { data: publishedSchedules, error: pubError } = await supabase
+                        .from('schedules')
+                        .select('id, status')
+                        .in('id', Array.from(conflictScheduleIds));
+                    
+                    if (pubError) {
+                        console.error('[AdminDashboard] Error fetching published schedules:', pubError);
+                    }
+                    
+                    console.log('[AdminDashboard] All schedules found:', publishedSchedules?.length || 0);
+                    console.log('[AdminDashboard] Schedule statuses:', publishedSchedules?.map((s: { id: string; status: string }) => ({ id: s.id.slice(0, 8), status: s.status })));
+                    
+                    // Count by status
+                    const statusCounts: Record<string, number> = {};
+                    publishedSchedules?.forEach((s: { status: string }) => {
+                        statusCounts[s.status] = (statusCounts[s.status] || 0) + 1;
+                    });
+                    console.log('[AdminDashboard] Status breakdown:', statusCounts);
+                    
+                    // Also check for current published version set
+                    const { data: activeVersionSet, error: versionError } = await supabase
+                        .from('schedule_version_sets')
+                        .select('id, is_active')
+                        .eq('is_active', true)
+                        .maybeSingle();
+                    
+                    if (versionError) {
+                        console.error('[AdminDashboard] Error fetching active version set:', versionError);
+                    }
+                    console.log('[AdminDashboard] Active version set:', activeVersionSet);
+                    
+                    if (activeVersionSet) {
+                        const { data: versionSetItems } = await supabase
+                            .from('schedule_version_set_items')
+                            .select('schedule_id')
+                            .eq('version_set_id', activeVersionSet.id);
+                        
+                        const activeScheduleIds = new Set(versionSetItems?.map((i: { schedule_id: string }) => i.schedule_id) || []);
+                        console.log('[AdminDashboard] Schedules in active version set:', activeScheduleIds.size);
+                        
+                        publishedConflictCount = conflicts.data.filter((c: { schedule_a_id?: string; schedule_b_id?: string }) => 
+                            // Count conflicts where BOTH schedules are in the current active version set
+                            c.schedule_a_id && c.schedule_b_id && 
+                            activeScheduleIds.has(c.schedule_a_id) && 
+                            activeScheduleIds.has(c.schedule_b_id)
+                        ).length;
+                        
+                        console.log('[AdminDashboard] Conflicts in active version set:', publishedConflictCount);
+                    } else {
+                        // Fallback to status-based filtering if no active version set
+                        const publishedIds = new Set(publishedSchedules?.filter((s: { status: string }) => s.status === 'published').map((s: { id: string }) => s.id) || []);
+                        const draftIds = new Set(publishedSchedules?.filter((s: { status: string }) => s.status === 'draft').map((s: { id: string }) => s.id) || []);
+                        
+                        // Try: conflicts where at least one schedule is published
+                        const atLeastOnePublished = conflicts.data.filter((c: { schedule_a_id?: string; schedule_b_id?: string }) => 
+                            (c.schedule_a_id && publishedIds.has(c.schedule_a_id)) || 
+                            (c.schedule_b_id && publishedIds.has(c.schedule_b_id))
+                        ).length;
+                        
+                        // Try: conflicts where both are published
+                        const bothPublished = conflicts.data.filter((c: { schedule_a_id?: string; schedule_b_id?: string }) => 
+                            c.schedule_a_id && c.schedule_b_id && 
+                            publishedIds.has(c.schedule_a_id) && 
+                            publishedIds.has(c.schedule_b_id)
+                        ).length;
+                        
+                        // Try: conflicts where one is published and one is draft
+                        const publishedWithDraft = conflicts.data.filter((c: { schedule_a_id?: string; schedule_b_id?: string }) => {
+                            const aPublished = c.schedule_a_id && publishedIds.has(c.schedule_a_id);
+                            const bPublished = c.schedule_b_id && publishedIds.has(c.schedule_b_id);
+                            const aDraft = c.schedule_a_id && draftIds.has(c.schedule_a_id);
+                            const bDraft = c.schedule_b_id && draftIds.has(c.schedule_b_id);
+                            return (aPublished && bDraft) || (aDraft && bPublished);
+                        }).length;
+                        
+                        console.log('[AdminDashboard] At least one published:', atLeastOnePublished);
+                        console.log('[AdminDashboard] Both published:', bothPublished);
+                        console.log('[AdminDashboard] Published with draft:', publishedWithDraft);
+                        
+                        // Try using scan_results table for current conflict count
+                        // The latest scan result should reflect the current published version's conflicts
+                        const { data: latestScan } = await supabase
+                            .from('scan_results')
+                            .select('hard_violations_count, scanned_at')
+                            .order('scanned_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        
+                        console.log('[AdminDashboard] Latest scan result:', latestScan);
+                        
+                        if (latestScan && latestScan.hard_violations_count !== undefined) {
+                            publishedConflictCount = latestScan.hard_violations_count;
+                            console.log('[AdminDashboard] Using latest scan count:', publishedConflictCount);
+                        } else {
+                            // Fallback to at least one published if no scan results
+                            publishedConflictCount = atLeastOnePublished;
+                            console.log('[AdminDashboard] No scan results, using at least one published:', publishedConflictCount);
+                        }
+                    }
+                }
+            }
             
             const all = profiles.data || [];
             const totalUsers = all.length;
@@ -113,7 +227,7 @@ const AdminDashboard: React.FC = () => {
                 teachers: all.filter((p: { role: string }) => p.role === 'teacher').length,
                 students: all.filter((p: { role: string }) => p.role === 'student').length,
                 schedules: schedules.count || 0,
-                conflicts: conflicts.count || 0,
+                conflicts: publishedConflictCount,
                 rooms: roomsR.count || 0,
             });
             
@@ -122,6 +236,8 @@ const AdminDashboard: React.FC = () => {
                 conflicts: conflictsRecent.count || 0,
                 requests: requestsRecent.count || 0,
             });
+            
+            console.log('[AdminDashboard] Stats updated:', { conflicts: publishedConflictCount });
             
             // Build 14-day conflicts trend from scan_results table (actual scan results from ConflictsAlerts)
             const trendMap: Record<string, number> = {};
@@ -132,7 +248,7 @@ const AdminDashboard: React.FC = () => {
             }
             
             // Use scan results - each scan gives us the conflict count for that day
-            (scanResults14Days.data || []).forEach((scan: any) => {
+            (scanResults14Days.data || []).forEach((scan: { scanned_at?: string; hard_violations_count?: number }) => {
                 if (!scan.scanned_at) return;
                 const d = new Date(scan.scanned_at);
                 const key = `${d.getMonth() + 1}/${d.getDate()}`;
@@ -143,30 +259,14 @@ const AdminDashboard: React.FC = () => {
             });
             
             setConflictsTrend(Object.entries(trendMap).map(([date, count]) => ({ date, count })));
-            // Room load (top 8)
-            const roomMap: Record<string, number> = {};
-            (schedulesFull.data || []).forEach((s: { room_id: string }) => {
-                if (s.room_id) roomMap[s.room_id] = (roomMap[s.room_id] || 0) + 1;
-            });
-            const roomNameById: Record<string, string> = {};
-            (roomsFull.data || []).forEach((r: { id: string; name: string }) => { roomNameById[r.id] = r.name; });
-            const loadList = Object.entries(roomMap)
-                .map(([id, count]) => ({ name: roomNameById[id] || 'Room', count }))
-                .sort((a, b) => b.count - a.count)
-                .slice(0, DASHBOARD_CONFIG.QUERY_LIMITS.ROOM_LOAD);
-            setRoomLoad(loadList);
         } catch (error) {
-            console.error('Error fetching stats:', error);
+            console.error('Error fetching stats:', error instanceof Error ? error.message : String(error));
         }
     };
 
     const fetchRequests = async () => {
         try {
-            const thirtyDaysAgo = new Date(Date.now() - DASHBOARD_CONFIG.TIME.DAYS_30_MS).toISOString();
-            const [recentList, funnelAll] = await Promise.all([
-                supabase.from('schedule_change_requests').select('*').order('created_at', { ascending: false }).limit(DASHBOARD_CONFIG.QUERY_LIMITS.REQUESTS),
-                supabase.from('schedule_change_requests').select('status').gte('created_at', thirtyDaysAgo),
-            ]);
+            const recentList = await supabase.from('schedule_change_requests').select('*').order('created_at', { ascending: false }).limit(DASHBOARD_CONFIG.QUERY_LIMITS.REQUESTS);
             const data = recentList.data;
             if (data) {
                 const ids = [...new Set(data.map(r => r.teacher_id).filter(Boolean))];
@@ -177,14 +277,6 @@ const AdminDashboard: React.FC = () => {
                 }
                 setRequests(data.map(r => ({ ...r, teacher_name: map[r.teacher_id] || 'Teacher' })));
             }
-            // Funnel last 30 days
-            const f = { approved: 0, rejected: 0, pending: 0 };
-            (funnelAll.data || []).forEach((r: { status: string }) => {
-                if (r.status === 'approved') f.approved++;
-                else if (r.status === 'rejected') f.rejected++;
-                else f.pending++;
-            });
-            setRequestFunnel(f);
         } catch (error) {
             console.error('Error fetching requests:', error);
         }
@@ -211,18 +303,6 @@ const AdminDashboard: React.FC = () => {
         setRooms((data || []) as DashboardRoom[]);
     };
 
-    const fetchMessages = async () => {
-        const { data } = await supabase.from('admin_messages')
-            .select('*')
-            .eq('direction', 'teacher_to_admin')
-            .or('recipient_id.is.null')
-            .order('created_at', { ascending: false })
-            .limit(DASHBOARD_CONFIG.QUERY_LIMITS.MESSAGES);
-        // Filter messages for current admin on client side (safe since profile.id is from auth)
-        const filtered = (data || []).filter(m => m.recipient_id === null || m.recipient_id === profile?.id);
-        setRecentMessages(filtered);
-    };
-
     const fetchResetRequests = async () => {
         const { data } = await supabase.from('password_reset_requests').select('*').eq('status', 'pending').order('requested_at', { ascending: false });
         setResetRequests((data || []) as ResetRequest[]);
@@ -234,8 +314,9 @@ const AdminDashboard: React.FC = () => {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_change_requests' }, () => fetchRequests())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => fetchAnnouncements())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_events' }, () => fetchEvents())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_messages' }, () => fetchMessages())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'password_reset_requests' }, () => fetchResetRequests())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'conflicts' }, () => fetchStats())
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'schedules' }, () => fetchStats())
             .subscribe();
         return () => { supabase.removeChannel(ch); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -266,14 +347,19 @@ const AdminDashboard: React.FC = () => {
             }
             setShowAnnModal(false); setAnnTitle(''); setAnnContent(''); setAnnPriority('normal'); setAnnSection('All Sections'); setEditingAnn(null);
             fetchAnnouncements();
-        } catch (e: any) { alert('Error: ' + e.message); }
+        } catch (e: unknown) { alert('Error: ' + (e instanceof Error ? e.message : String(e))); }
         setPostingAnn(false);
     };
 
     const handleDeleteAnn = async (id: string) => {
         if (!window.confirm('Delete announcement?')) return;
-        await supabase.from('announcements').delete().eq('id', id);
-        fetchAnnouncements();
+        try {
+            const { error } = await supabase.from('announcements').delete().eq('id', id);
+            if (error) throw error;
+            fetchAnnouncements();
+        } catch (e: unknown) {
+            alert('Failed to delete: ' + (e instanceof Error ? e.message : String(e)));
+        }
     };
 
     const openEditAnn = (ann: Announcement) => {
@@ -281,7 +367,7 @@ const AdminDashboard: React.FC = () => {
         const title = ann.title.replace(/^\[.*?\]\s*/, '');
         setAnnTitle(title);
         setAnnContent(ann.content);
-        setAnnPriority(ann.priority as 'normal' | 'important' | 'urgent');
+        setAnnPriority(ann.priority);
         setAnnSection(ann.target_section || 'All Sections');
         setShowAnnModal(true);
     };
@@ -290,15 +376,43 @@ const AdminDashboard: React.FC = () => {
         if (!evTitle.trim()) return;
         setPostingEvent(true);
         try {
-            await supabase.from('custom_events').insert({
-                title: evTitle, description: evDesc, event_date: evDate,
-                start_time: evStart, end_time: evEnd,
-                room_name: evRoom || null, created_by: profile?.id,
-            });
-            setShowEventModal(false); setEvTitle(''); setEvDesc('');
+            if (editingEvent) {
+                await supabase.from('custom_events').update({
+                    title: evTitle, description: evDesc, event_date: evDate,
+                    start_time: evStart, end_time: evEnd, room_name: evRoom
+                }).eq('id', editingEvent.id);
+            } else {
+                await supabase.from('custom_events').insert({
+                    title: evTitle, description: evDesc, event_date: evDate,
+                    start_time: evStart, end_time: evEnd, room_name: evRoom
+                });
+            }
+            setShowEventModal(false); setEvTitle(''); setEvDesc(''); setEvDate(new Date().toISOString().split('T')[0]); setEvStart('08:00'); setEvEnd('10:00'); setEvRoom(''); setEditingEvent(null);
             fetchEvents();
-        } catch (e: any) { alert('Error: ' + e.message); }
+        } catch (e: unknown) { alert('Error: ' + (e instanceof Error ? e.message : String(e))); }
         setPostingEvent(false);
+    };
+
+    const handleDeleteEvent = async (id: string) => {
+        if (!window.confirm('Delete event?')) return;
+        try {
+            const { error } = await supabase.from('custom_events').delete().eq('id', id);
+            if (error) throw error;
+            fetchEvents();
+        } catch (e: unknown) {
+            alert('Failed to delete: ' + (e instanceof Error ? e.message : String(e)));
+        }
+    };
+
+    const openEditEvent = (ev: CustomEvent) => {
+        setEditingEvent(ev);
+        setEvTitle(ev.title);
+        setEvDesc(ev.description || '');
+        setEvDate(ev.event_date);
+        setEvStart(ev.start_time || '08:00');
+        setEvEnd(ev.end_time || '10:00');
+        setEvRoom(ev.room_name || '');
+        setShowEventModal(true);
     };
 
     const pendingRequests = requests.filter(r => r.status === 'pending');
@@ -306,6 +420,7 @@ const AdminDashboard: React.FC = () => {
         urgent: { bg: 'rgba(239,68,68,0.12)', color: '#ef4444' },
         important: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
         normal: { bg: 'rgba(59,130,246,0.12)', color: '#3b82f6' },
+// ... (rest of the code remains the same)
     };
 
     // Build stat cards based on role, with deltas (state plus recent change)
@@ -348,10 +463,6 @@ const AdminDashboard: React.FC = () => {
                 : isScheduleManager ? 'Schedule creation and data management'
                     : 'Overview';
 
-    // Funnel total + percentages for compact stacked bar
-    const funnelTotal = requestFunnel.approved + requestFunnel.rejected + requestFunnel.pending;
-
-
     return (
         <div className="dashboard fade-in">
             {/* ===== HEADER ===== */}
@@ -371,7 +482,7 @@ const AdminDashboard: React.FC = () => {
                         </button>
                     )}
                     {canCreateEvents && (
-                        <button className="btn btn-secondary" onClick={() => setShowEventModal(true)}>
+                        <button className="btn btn-secondary" onClick={() => { setEditingEvent(null); setEvTitle(''); setEvDesc(''); setEvDate(new Date().toISOString().split('T')[0]); setEvStart('08:00'); setEvEnd('10:00'); setEvRoom(''); setShowEventModal(true); }}>
                             <CalendarPlus size={14} /> Add Event
                         </button>
                     )}
@@ -412,7 +523,7 @@ const AdminDashboard: React.FC = () => {
                             <div className="dash-card-header">
                                 <div className="dash-card-title"><Activity size={16} /> Conflicts Last 14 Days</div>
                                 <span className="dash-card-badge" style={{ background: stats.conflicts > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)', color: stats.conflicts > 0 ? '#ef4444' : '#22c55e' }}>
-                                    {stats.conflicts > 0 ? `${stats.conflicts} open` : 'All clear'}
+                                    {stats.conflicts > 0 ? `${stats.conflicts} Open` : 'All clear'}
                                 </span>
                             </div>
                             <div className="dash-chart-wrap" role="img" aria-label={`Conflicts trend, last 14 days, ${conflictsTrend.reduce((s, d) => s + d.count, 0)} total discovered`} style={{ flex: 1 }}>
@@ -495,12 +606,14 @@ const AdminDashboard: React.FC = () => {
                                             <div className="dash-header-row">
                                                 <div className="dash-list-item-title">{ann.title}</div>
                                                 <div className="dash-icon-group">
+                                                    {ann.priority !== 'normal' && (
+                                                        <span className="dash-status-badge" style={{ background: prio.bg, color: prio.color, fontSize: 10 }}>{ann.priority.toUpperCase()}</span>
+                                                    )}
                                                     <button className="dash-icon-btn" onClick={() => openEditAnn(ann)}><Edit3 size={13} /></button>
                                                     <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => handleDeleteAnn(ann.id)}><Trash2 size={13} /></button>
                                                 </div>
                                             </div>
                                             <div className="dash-list-item-desc">{ann.content}</div>
-                                            <span className="dash-status-badge" style={{ background: prio.bg, color: prio.color, fontSize: 10 }}>{ann.priority.toUpperCase()}</span>
                                         </div>
                                     </div>
                                 );
@@ -523,11 +636,14 @@ const AdminDashboard: React.FC = () => {
                                 {events.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(ev => (
                                     <div key={ev.id} className="dash-list-item">
                                         <div className="dash-list-item-accent dash-accent-success" />
-                                        <div className="dash-list-item-icon" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
-                                            <CalendarDays size={14} />
-                                        </div>
-                                        <div className="dash-list-item-body">
-                                            <div className="dash-list-item-title">{ev.title}</div>
+                                        <div className="dash-list-item-body dash-list-item-body--compact">
+                                            <div className="dash-header-row">
+                                                <div className="dash-list-item-title">{ev.title}</div>
+                                                <div className="dash-icon-group">
+                                                    <button className="dash-icon-btn" onClick={() => openEditEvent(ev)}><Edit3 size={13} /></button>
+                                                    <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => handleDeleteEvent(ev.id)}><Trash2 size={13} /></button>
+                                                </div>
+                                            </div>
                                             <div className="dash-list-item-meta">
                                                 {new Date(ev.event_date).toLocaleDateString()} · {ev.start_time?.slice(0, 5)} to {ev.end_time?.slice(0, 5)}
                                             </div>
@@ -539,88 +655,6 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
 
-                {/* Messages */}
-                <div className="dash-card dash-stagger">
-                    <div className="dash-card-header">
-                        <div className="dash-card-title"><MessageSquare size={16} /> Messages</div>
-                        {recentMessages.length > 0 && <span className="dash-card-badge dash-badge-info">{recentMessages.length}</span>}
-                    </div>
-                    {recentMessages.length === 0 ? (
-                        <div className="dash-empty"><MessageSquare size={28} /><div>No messages</div></div>
-                    ) : (
-                        <div className="dash-list">
-                            {recentMessages.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(m => (
-                                <div key={m.id} className="dash-list-item">
-                                    <div className="dash-list-item-accent dash-accent-info" />
-                                    <div className="dash-list-item-body dash-list-item-body--compact">
-                                        <div className="dash-list-item-title">{m.sender_name}</div>
-                                        <div className="dash-list-item-desc">{m.message?.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.MESSAGE_TRUNCATION)}{m.message?.length > DASHBOARD_CONFIG.DISPLAY_LIMITS.MESSAGE_TRUNCATION ? '…' : ''}</div>
-                                    </div>
-                                </div>
-                            ))}
-                            <a href="/admin/messages" className="btn btn-secondary dash-view-all-link">View All</a>
-                        </div>
-                    )}
-                </div>
-
-                {/* Request Funnel */}
-                {canSeeRequests && (
-                    <div className="dash-card dash-stagger">
-                        <div className="dash-card-header">
-                            <div className="dash-card-title"><TrendingUp size={16} /> Requests Last 30 Days</div>
-                            <span className="dash-card-badge" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>{funnelTotal}</span>
-                        </div>
-                        {funnelTotal === 0 ? (
-                            <div className="dash-empty" style={{ padding: '20px 0' }}><Inbox size={26} /><div>No requests in 30 days</div></div>
-                        ) : (
-                            <>
-                                <div className="dash-funnel-bar" role="img" aria-label={`${requestFunnel.approved} approved, ${requestFunnel.rejected} rejected, ${requestFunnel.pending} pending`}>
-                                    <div style={{ width: `${(requestFunnel.approved / funnelTotal) * 100}%`, background: '#22c55e' }} title={`Approved: ${requestFunnel.approved}`} />
-                                    <div style={{ width: `${(requestFunnel.rejected / funnelTotal) * 100}%`, background: '#ef4444' }} title={`Rejected: ${requestFunnel.rejected}`} />
-                                    <div style={{ width: `${(requestFunnel.pending / funnelTotal) * 100}%`, background: '#f59e0b' }} title={`Pending: ${requestFunnel.pending}`} />
-                                </div>
-                                <div className="dash-funnel-legend">
-                                    <div><CheckCircle size={12} color="#22c55e" /> Approved <strong>{requestFunnel.approved}</strong> <span>({Math.round((requestFunnel.approved / funnelTotal) * 100)}%)</span></div>
-                                    <div><XCircle size={12} color="#ef4444" /> Rejected <strong>{requestFunnel.rejected}</strong> <span>({Math.round((requestFunnel.rejected / funnelTotal) * 100)}%)</span></div>
-                                    <div><Clock size={12} color="#f59e0b" /> Pending <strong>{requestFunnel.pending}</strong> <span>({Math.round((requestFunnel.pending / funnelTotal) * 100)}%)</span></div>
-                                </div>
-                                {requestFunnel.pending > 0 && (
-                                    <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <AlertTriangle size={11} /> {requestFunnel.pending} awaiting decision
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                )}
-
-                {/* Top Rooms by Load */}
-                {canSeeScheduleStats && roomLoad.length > 0 && (
-                    <div className="dash-card dash-stagger">
-                        <div className="dash-card-header">
-                            <div className="dash-card-title"><BarChart3 size={16} /> Top Rooms by Load</div>
-                            <span className="dash-card-badge" style={{ background: 'rgba(6,182,212,0.12)', color: '#06b6d4' }}>{stats.rooms}</span>
-                        </div>
-                        <div className="dash-chart-wrap" role="img" aria-label="Top rooms by scheduled class count">
-                            <ResponsiveContainer width="100%" height={200}>
-                                <BarChart data={roomLoad} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" horizontal={false} />
-                                    <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} width={70} />
-                                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-elevated)', opacity: 0.4 }} />
-                                    <Bar dataKey="count" name="Classes" radius={[0, 4, 4, 0]}>
-                                        {roomLoad.map((entry, i) => {
-                                            const max = Math.max(...roomLoad.map(r => r.count), 1);
-                                            const ratio = entry.count / max;
-                                            const color = ratio > 0.85 ? '#ef4444' : ratio > 0.6 ? '#f59e0b' : '#06b6d4';
-                                            return <Cell key={i} fill={color} />;
-                                        })}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* ===== MODALS ===== */}
@@ -639,9 +673,9 @@ const AdminDashboard: React.FC = () => {
                             <textarea className="input" value={annContent} onChange={e => setAnnContent(e.target.value)} placeholder="Announcement content..." rows={3} />
                             <label>Priority</label>
                             <div className="dash-btn-group">
-                                {(['normal', 'important', 'urgent'] as const).map(p => (
-                                    <button key={p} className={`dash-btn-tab ${annPriority === p ? 'dash-btn-tab-active' : ''}`}
-                                        onClick={() => setAnnPriority(p)}>{p}</button>
+                                {(['Normal', 'Important'] as const).map(p => (
+                                    <button key={p} className={`dash-btn-tab ${annPriority === p.toLowerCase() ? 'active' : ''}`}
+                                        onClick={() => setAnnPriority(p.toLowerCase() as 'normal' | 'important')}>{p}</button>
                                 ))}
                             </div>
                             <label>Target Section</label>
@@ -659,11 +693,11 @@ const AdminDashboard: React.FC = () => {
 
             {/* Event Modal */}
             {showEventModal && (
-                <div className="modal-overlay" onClick={() => setShowEventModal(false)}>
+                <div className="modal-overlay" onClick={() => { setShowEventModal(false); setEditingEvent(null); }}>
                     <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
                         <div className="dash-modal-header">
-                            <h3>Create Event</h3>
-                            <button className="dash-modal-close" onClick={() => setShowEventModal(false)}><X size={16} /></button>
+                            <h3>{editingEvent ? 'Edit Event' : 'Create Event'}</h3>
+                            <button className="dash-modal-close" onClick={() => { setShowEventModal(false); setEditingEvent(null); }}><X size={16} /></button>
                         </div>
                         <div className="dash-modal-body">
                             <label>Title</label>
@@ -682,7 +716,7 @@ const AdminDashboard: React.FC = () => {
                                 {rooms.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                             </select>
                             <button className="dash-modal-btn dash-modal-btn-primary" onClick={handleCreateEvent} disabled={postingEvent}>
-                                {postingEvent ? <><Loader2 size={14} className="spin" /> Creating...</> : 'Create Event'}
+                                {postingEvent ? <><Loader2 size={14} className="spin" /> Saving...</> : editingEvent ? 'Save Changes' : 'Create Event'}
                             </button>
                         </div>
                     </div>

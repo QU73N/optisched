@@ -8,7 +8,7 @@ import './FloatingOptiBot.css';
 interface ChatMsg { role: 'user' | 'bot'; text: string; }
 
 const FloatingOptiBot: React.FC = () => {
-    const { profile } = useAuth();
+    const { profile, roles } = useAuth();
     const [open, setOpen] = useState(false);
     const [messages, setMessages] = useState<ChatMsg[]>([
         { role: 'bot', text: 'Hi! I\'m OptiBot, your AI scheduling assistant. How can I help you today?' }
@@ -41,7 +41,31 @@ const FloatingOptiBot: React.FC = () => {
                 return;
             }
 
-            // Test connectivity with a simple request to the first available provider
+            // Test connectivity with Groq first (since it's the primary fallback)
+            if (GROQ_API_KEY && !GROQ_API_KEY.includes('YOUR_')) {
+                try {
+                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'Authorization': `Bearer ${GROQ_API_KEY}` 
+                        },
+                        body: JSON.stringify({
+                            model: 'llama-3.3-70b-versatile',
+                            messages: [{ role: 'user', content: 'ping' }],
+                            max_tokens: 1
+                        }),
+                    });
+                    if (response.ok) {
+                        setIsOnline(true);
+                        return;
+                    }
+                } catch {
+                    // Fall through to check other providers
+                }
+            }
+
+            // Test connectivity with Gemini
             try {
                 if (GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_')) {
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
@@ -153,6 +177,7 @@ const FloatingOptiBot: React.FC = () => {
                 full_name: profile?.full_name,
                 role: profile?.role,
                 email: profile?.email,
+                roles: roles,
             });
 
             historyRef.current.push(

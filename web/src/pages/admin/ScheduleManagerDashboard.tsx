@@ -333,7 +333,7 @@ const ScheduleManagerDashboard: React.FC = () => {
                                         <div className="dash-list-item-body dash-list-item-body--compact">
                                             <div className="dash-list-item-title">{c.conflict_type}</div>
                                             <div className="dash-list-item-meta">
-                                                {c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}
+                                                {c.created_at ? new Date(c.created_at).toLocaleDateString() : 'N/A'}
                                             </div>
                                         </div>
                                     </div>
