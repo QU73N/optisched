@@ -1,24 +1,20 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RefreshCw, AlertTriangle, CheckCircle, AlertOctagon, AlertCircle, Info, Zap, Wrench, Search, Clock, ArrowLeft } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle, AlertOctagon, AlertCircle, Info, Search, Clock, ArrowLeft } from 'lucide-react';
 import { type HardConstraintViolation, type ScanResult, scanAllConstraints } from './ConflictsAlerts/conflictScanner';
-import { type FixOption, generateFixOptions, applyFix, applyAutonomousFixes, type FixMode } from './ConflictsAlerts/fixingEngine';
-import { createConflictAlert, createConflictResolutionNotification } from '../../services/notificationService';
 import { useToast } from '../../contexts/ToastContext';
 import { scheduleStateManager } from '../../services/scheduleStateManager';
-import { scheduleLogger } from '../../services/scheduleLogger';
-import { scheduleValidation } from '../../services/scheduleValidation';
-import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 
 interface DetectedConflict {
     id: string;
-    type: 'room_conflict' | 'teacher_overlap' | 'section_overlap';
-    severity: 'high' | 'medium';
+    type: string;
+    severity: string;
     title: string;
     description: string;
     day: string;
     scheduleIds: string[];
+    source: 'live' | 'db';
 }
 
 interface ConflictRow {
@@ -33,12 +29,10 @@ interface ConflictRow {
     is_resolved: boolean;
     created_at: string;
     resolved_at: string | null;
-    resolved_by?: string;
 }
 
 const ConflictsAlerts: React.FC = () => {
     const { showToast } = useToast();
-    const { profile } = useAuth();
     const { versionId } = useParams<{ versionId: string }>();
     const navigate = useNavigate();
     const [dbConflicts, setDbConflicts] = useState<ConflictRow[]>([]);
@@ -49,33 +43,18 @@ const ConflictsAlerts: React.FC = () => {
     const [filterType, setFilterType] = useState<string>('all');
     const [sortBy, setSortBy] = useState<string>('severity');
     const [expandedConflicts, setExpandedConflicts] = useState<Set<string>>(new Set());
-    
-    // Version selection state - only used if no versionId is provided
-    const [selectedVersion] = useState<'published' | 'draft' | 'all'>('all');
-    
-    // New state for comprehensive scanning and fixing
     const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-    const [fixMode, setFixMode] = useState<FixMode | null>(null);
-    const [selectedViolation, setSelectedViolation] = useState<HardConstraintViolation | null>(null);
-    const [fixOptions, setFixOptions] = useState<FixOption[]>([]);
-    const [fixing, setFixing] = useState(false);
-    const [fixProgress, setFixProgress] = useState({ current: 0, total: 0, currentViolation: '', overallProgress: 0 });
-    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-    const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
     const [showSoftScoreModal, setShowSoftScoreModal] = useState(false);
-    const [confirmDialogViolationCount, setConfirmDialogViolationCount] = useState(0);
+    const [fixProgress, setFixProgress] = useState({ current: 0, total: 0, currentViolation: '', overallProgress: 0 });
     const isMountedRef = useRef(true);
     const [hasScanResults, setHasScanResults] = useState(false);
     const [scanResultLock, setScanResultLock] = useState<string | null>(null);
 
-    // Track state changes
     useEffect(() => {
         console.log('[STATE CHANGE] hasScanResults:', hasScanResults, 'lock:', scanResultLock);
     }, [hasScanResults, scanResultLock]);
 
-    // Fetch from conflicts table and populate detected conflicts
     const fetchDbConflicts = useCallback(async () => {
-        // CRITICAL: Block overwrite if scan results are active or locked
         if (hasScanResults || scanResultLock) {
             console.log('[FETCH DB] BLOCKED - scan state protected', { hasScanResults, scanResultLock });
             return;
@@ -91,14 +70,13 @@ const ConflictsAlerts: React.FC = () => {
                 .single();
             
             if (versionData?.snapshot) {
-                const snapshot = versionData.snapshot as { id: string }[] | { id: string };
-                const schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
-                scheduleIds = new Set(schedules.map(s => s.id).filter((id): id is string => !!id));
+                const snapshot = versionData.snapshot as { id: string }[] | { schedules: { id: string }[] };
+                const schedules = Array.isArray(snapshot) ? snapshot : (snapshot.schedules || []);
+                scheduleIds = new Set(schedules.map((s: { id: string }) => s.id).filter((id: string): id is string => !!id));
             }
         } else {
-            const statusFilter = selectedVersion === 'all' ? ['published', 'draft'] : [selectedVersion];
-            const { data: schedules } = await supabase.from('schedules').select('id').in('status', statusFilter);
-            scheduleIds = new Set((schedules || []).map(s => s.id));
+            const { data: schedules } = await supabase.from('schedules').select('id').eq('is_active', true);
+            scheduleIds = new Set((schedules || []).map((s: { id: string }) => s.id));
         }
         
         if (scheduleIds.size === 0) {
@@ -119,34 +97,19 @@ const ConflictsAlerts: React.FC = () => {
             const unresolved = (data || []).filter((c: ConflictRow) => !c.is_resolved);
             const conflicts: DetectedConflict[] = unresolved.map((c: ConflictRow) => ({
                 id: c.conflict_original_id || c.id,
-                type: c.type as any,
-                severity: c.severity as any,
+                type: c.type,
+                severity: c.severity,
                 title: c.title,
                 description: c.description,
                 day: 'Multiple',
                 scheduleIds: c.schedule_a_id ? [c.schedule_a_id] : [],
+                source: 'db'
             }));
             setDetectedConflicts(conflicts);
         }
-    }, [selectedVersion, versionId, hasScanResults, scanResultLock]);
+    }, [versionId, hasScanResults, scanResultLock]);
 
-    // Load last scan result from database
-    const fetchLastScanResult = useCallback(async () => {
-        const { data } = await supabase
-            .from('scan_results')
-            .select('*')
-            .order('scanned_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-        
-        if (data) {
-            console.log('Last scan result loaded:', data);
-        }
-    }, []);
-
-    // Comprehensive scan using the new conflict scanner
     const runComprehensiveScan = useCallback(async () => {
-        const scanStartTime = Date.now();
         const currentLockId = crypto.randomUUID();
         
         console.log('[SCAN START] Acquiring lock:', currentLockId);
@@ -155,7 +118,7 @@ const ConflictsAlerts: React.FC = () => {
         setFixProgress({ current: 0, total: 14, currentViolation: 'Initializing scan...', overallProgress: 0 });
         
         try {
-            let schedules: any[] = [];
+            let schedulesToScan: Record<string, unknown>[] = [];
             
             if (versionId) {
                 const { data: versionData } = await supabase
@@ -165,13 +128,12 @@ const ConflictsAlerts: React.FC = () => {
                     .single();
                 
                 if (versionData?.snapshot) {
-                    const snapshot = versionData.snapshot as any[] | any;
-                    schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
+                    const snapshot = versionData.snapshot as { id: string }[] | { schedules: { id: string }[] };
+                    schedulesToScan = Array.isArray(snapshot) ? snapshot : (snapshot.schedules || []);
                 }
             } else {
-                const statusFilter = selectedVersion === 'all' ? ['published', 'draft'] : [selectedVersion];
-                const { data: schedulesData } = await supabase.from('schedules').select('*').in('status', statusFilter);
-                schedules = schedulesData || [];
+                const { data: schedulesData } = await supabase.from('schedules').select('*').eq('is_active', true);
+                schedulesToScan = schedulesData || [];
             }
             
             const [teachersData, roomsData, sectionsData, subjectsData, breaksData] = await Promise.all([
@@ -183,7 +145,7 @@ const ConflictsAlerts: React.FC = () => {
             ]);
 
             const result = await scanAllConstraints(
-                schedules, 
+                schedulesToScan as any, 
                 teachersData.data || [], 
                 roomsData.data || [], 
                 sectionsData.data || [], 
@@ -193,9 +155,9 @@ const ConflictsAlerts: React.FC = () => {
                     maxDailyHours: 8,
                     maxDailyClasses: 6,
                     maxWeeklyHours: 40,
-                    breakWindows: (breaksData.data || []).map(b => ({ start: b.start_time, end: b.end_time })),
+                    breakWindows: (breaksData.data || []).map((b: { start_time: string; end_time: string }) => ({ start: b.start_time, end: b.end_time })),
                 },
-                (progress) => {
+                (progress: { current: number; total: number; currentPhase: string }) => {
                     if (isMountedRef.current) {
                         setFixProgress({
                             current: progress.current,
@@ -211,31 +173,32 @@ const ConflictsAlerts: React.FC = () => {
             
             const scanConflicts: DetectedConflict[] = result.hardViolations.map((v: HardConstraintViolation) => ({
                 id: v.id,
-                type: v.type as any,
-                severity: v.severity as any,
+                type: v.type,
+                severity: v.severity,
                 title: v.title,
                 description: v.description,
                 day: v.day || 'Multiple',
                 scheduleIds: v.scheduleIds,
+                source: 'live'
             }));
             
             setDetectedConflicts(scanConflicts);
 
             const { data: dbExisting } = await supabase.from('conflicts').select('id, conflict_original_id');
-            const existingIds = new Set((dbExisting || []).map(c => c.conflict_original_id).filter((id): id is string => !!id));
-            const detectedIds = new Set(result.hardViolations.map(v => v.id));
+            const existingIds = new Set((dbExisting || []).map((c: { conflict_original_id?: string }) => c.conflict_original_id).filter((id): id is string => !!id));
+            const detectedIds = new Set(result.hardViolations.map((v: HardConstraintViolation) => v.id));
             
             const { data: dbUnresolved } = await supabase.from('conflicts').select('id, conflict_original_id').eq('is_resolved', false);
-            const unresolvedIds = new Set((dbUnresolved || []).map(c => c.conflict_original_id).filter((id): id is string => id !== undefined));
+            const unresolvedIds = new Set((dbUnresolved || []).map((c: { conflict_original_id?: string }) => c.conflict_original_id).filter((id): id is string => !!id));
             const resolvedIds = [...unresolvedIds].filter(id => !detectedIds.has(id));
             
             if (resolvedIds.length > 0) {
                 await supabase.from('conflicts').update({ is_resolved: true, resolved_at: new Date().toISOString() }).in('conflict_original_id', resolvedIds);
             }
             
-            const newConflicts = result.hardViolations.filter(v => !existingIds.has(v.id));
+            const newConflicts = result.hardViolations.filter((v: HardConstraintViolation) => !existingIds.has(v.id));
             if (newConflicts.length > 0) {
-                const conflictInserts = newConflicts.map(v => ({
+                const conflictInserts = newConflicts.map((v: HardConstraintViolation) => ({
                     id: crypto.randomUUID(),
                     conflict_original_id: v.id,
                     type: v.type,
@@ -250,7 +213,13 @@ const ConflictsAlerts: React.FC = () => {
                 await supabase.from('conflicts').insert(conflictInserts);
             }
             
-            await saveScanResult(result, Date.now() - scanStartTime);
+            // Save scan result to scan_results table for AdminDashboard to read
+            await supabase.from('scan_results').insert({
+                hard_violations_count: result.hardViolations.length,
+                soft_score: result.softScore.totalScore,
+                scanned_at: new Date().toISOString(),
+            });
+            
             setHasScanResults(true);
             
             showToast({
@@ -269,151 +238,7 @@ const ConflictsAlerts: React.FC = () => {
                 setFixProgress({ current: 0, total: 0, currentViolation: '', overallProgress: 0 });
             }
         }
-    }, [versionId, selectedVersion, profile?.id, saveScanResult, showToast]);
-
-    // Handle autonomous fixing
-    const handleAutonomousFix = useCallback(async () => {
-        if (!scanResult) return;
-        
-        console.log('[CONFLICT ENGINE] Starting autonomous fix process');
-        console.log('[CONFLICT ENGINE] Initial conflict count:', scanResult.hardViolations.length);
-        console.log('[CONFLICT ENGINE] Initial soft score:', scanResult.softScore.totalScore);
-        
-        // Store the violation count when opening dialog to prevent race conditions
-        setConfirmDialogViolationCount(scanResult.hardViolations.length);
-        
-        // Show confirmation dialog
-        setShowConfirmDialog(true);
-        setConfirmAction(() => async () => {
-            if (!isMountedRef.current) return;
-            setShowConfirmDialog(false);
-            setFixing(true);
-            setFixProgress({ current: 0, total: scanResult.hardViolations.length, currentViolation: 'Initializing...', overallProgress: 0 }); // Start at 0 for full pipeline
-            
-            console.log('[CONFLICT ENGINE] User confirmed fix operation');
-            
-            try {
-                // Fetch fresh schedules from database to ensure we have the latest committed state
-                console.log('[CONFLICT ENGINE] Fetching fresh schedules from database');
-                const [schedulesData, teachersData, roomsData, sectionsData, subjectsData] = await Promise.all([
-                    supabase.from('schedules').select('*').in('status', ['published', 'draft']),
-                    supabase.from('teachers').select('*, profile:profiles(*)'),
-                    supabase.from('rooms').select('*'),
-                    supabase.from('sections').select('*'),
-                    supabase.from('subjects').select('*'),
-                ]);
-                
-                console.log('[CONFLICT ENGINE] Fetched', schedulesData.data?.length || 0, 'schedules from database');
-                
-                // Invalidate scan result state to ensure we don't use stale data
-                console.log('[CONFLICT ENGINE] Invalidating scan result state');
-                setScanResult(null);
-                setHasScanResults(false);
-                console.log('[CONFLICT ENGINE] Set hasScanResults to false (fix mode)');
-
-                const result = await applyAutonomousFixes(
-                    scanResult,
-                    schedulesData.data || [],
-                    teachersData.data || [],
-                    roomsData.data || [],
-                    sectionsData.data || [],
-                    subjectsData.data || [],
-                    supabase,
-                    {
-                        maxIterations: 5,
-                        autoRescan: true,
-                        includeScanPhase: false, // Scan was already done, just fix
-                        onProgress: (progress) => {
-                            if (isMountedRef.current) {
-                                console.log('[CONFLICT ENGINE] Progress:', progress.phase, Math.round(progress.overallProgress) + '%', '-', progress.currentViolation);
-                                setFixProgress({
-                                    current: progress.current,
-                                    total: progress.total,
-                                    currentViolation: progress.currentViolation,
-                                    overallProgress: progress.overallProgress,
-                                });
-                            }
-                        },
-                    }
-                );
-                
-                console.log('[CONFLICT ENGINE] Fix process completed');
-                console.log('[CONFLICT ENGINE] Success:', result.success);
-                console.log('[CONFLICT ENGINE] Applied fixes:', result.appliedFixes.length);
-                console.log('[CONFLICT ENGINE] Remaining violations:', result.remainingViolations.length);
-                console.log('[CONFLICT ENGINE] Warnings:', result.warnings?.length || 0);
-                
-                // Log fix completion
-                if (result.appliedFixes.length > 0) {
-                    scheduleLogger.conflicts.fixApplied(
-                        scheduleStateManager.getVersion()?.version || 0,
-                        `Applied ${result.appliedFixes.length} autonomous fixes`,
-                        scanResult.hardViolations.length,
-                        result.remainingViolations.length
-                    );
-                }
-                
-                // Update canonical state with the latest schedules after fixes
-                const { data: updatedSchedules } = await supabase
-                    .from('schedules')
-                    .select('*')
-                    .in('status', ['published', 'draft']);
-                
-                if (updatedSchedules) {
-                    const version = await scheduleStateManager.updateState(
-                        updatedSchedules,
-                        'conflicts',
-                        {
-                            conflictCount: result.remainingViolations.length,
-                            softScore: 0, // Will be updated by rescan
-                            changeDescription: `Applied ${result.appliedFixes.length} fixes`,
-                        }
-                    );
-                    scheduleLogger.conflicts.fixPersisted(version.version, 'conflicts-tab');
-                    scheduleLogger.conflicts.stateUpdated(version.version, version.hash);
-                }
-                
-                if (isMountedRef.current) {
-                    showToast({
-                        type: result.success ? 'success' : 'warning',
-                        title: result.success ? 'Fixes Applied' : 'Fix Completed with Warnings',
-                        message: result.message,
-                    });
-                    
-                    // Auto-rescan after fixing to update the UI with the latest state
-                    if (result.appliedFixes.length > 0) {
-                        console.log('[CONFLICT ENGINE] Running comprehensive scan to verify changes');
-                        await runComprehensiveScan();
-                        
-                        // Create resolution notification after rescan
-                        if (scanResult) {
-                            await createConflictResolutionNotification(
-                                result.conflictsResolvedInLastPass || result.appliedFixes.length,
-                                scanResult.hardViolations.length
-                            );
-                        }
-                    } else {
-                        console.log('[CONFLICT ENGINE] No fixes were applied, skipping rescan');
-                    }
-                }
-            } catch (error) {
-                console.error('[CONFLICT ENGINE] Autonomous fix failed:', error);
-                if (isMountedRef.current) {
-                    showToast({
-                        type: 'error',
-                        title: 'Fix Application Failed',
-                        message: error instanceof Error ? error.message : 'An unknown error occurred.',
-                    });
-                }
-            } finally {
-                if (isMountedRef.current) {
-                    setFixing(false);
-                    setFixProgress({ current: 0, total: 0, currentViolation: '', overallProgress: 0 });
-                    console.log('[CONFLICT ENGINE] Fix process finished');
-                }
-            }
-        });
-    }, [showToast, runComprehensiveScan, scanResult]);
+    }, [versionId, showToast]);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -433,7 +258,6 @@ const ConflictsAlerts: React.FC = () => {
         const init = async () => {
             setLoading(true);
             await fetchDbConflicts();
-            await fetchLastScanResult();
             if (isMountedRef.current) setLoading(false);
         };
         
@@ -442,9 +266,8 @@ const ConflictsAlerts: React.FC = () => {
             unsubscribe();
             isMountedRef.current = false;
         };
-    }, [fetchDbConflicts, fetchLastScanResult, runComprehensiveScan]);
+    }, [fetchDbConflicts, runComprehensiveScan]);
 
-    // Refetch conflicts when version changes
     useEffect(() => {
         if (!hasScanResults && !scanResultLock) {
             setScanResult(null);
@@ -473,12 +296,22 @@ const ConflictsAlerts: React.FC = () => {
         if (hasScanResults || scanResultLock) {
             return detectedConflicts.map(c => ({ ...c, source: 'live' as const, is_resolved: false, created_at: new Date().toISOString() }));
         }
-        return dbConflicts.map(c => ({ ...c, source: 'db' as const, scheduleIds: [] as string[], day: '' }));
+        return dbConflicts.map(c => ({ 
+            id: c.id,
+            type: c.type,
+            severity: c.severity,
+            title: c.title,
+            description: c.description,
+            is_resolved: c.is_resolved,
+            created_at: c.created_at,
+            source: 'db' as const, 
+            scheduleIds: [] as string[], 
+            day: '' 
+        }));
     }, [detectedConflicts, dbConflicts, hasScanResults, scanResultLock]);
 
     const unresolvedCount = useMemo(() => allConflicts.filter(c => !c.is_resolved).length, [allConflicts]);
     
-    // Filter and sort conflicts
     const filteredConflicts = useMemo(() => allConflicts.filter(c => {
         if (!showResolved && c.is_resolved) return false;
         if (filterType !== 'all' && c.type !== filterType) return false;
@@ -577,7 +410,6 @@ const ConflictsAlerts: React.FC = () => {
                 </button>
             </div>
 
-            {/* Stats */}
             <div className="stats-grid" style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
                 <div className="stat-card">
                     <div className="stat-number">
@@ -616,7 +448,6 @@ const ConflictsAlerts: React.FC = () => {
                 </div>
             </div>
 
-            {/* Scanning Progress */}
             {scanning && (
                 <div className="card" style={{ marginBottom: 24, padding: '16px 20px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -646,234 +477,6 @@ const ConflictsAlerts: React.FC = () => {
                 </div>
             )}
 
-            {/* Fixing Controls */}
-            {scanResult && scanResult.hardViolations.length > 0 && (
-                <div className="card" style={{ marginBottom: 24, padding: '16px 20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <h3 style={{ color: 'var(--text-primary)', margin: 0, fontSize: 16 }}>Conflict Resolution</h3>
-                    </div>
-                    
-                    {fixing && fixProgress.total > 0 && (
-                        <div style={{ marginBottom: 12, padding: 12, background: 'rgba(73, 136, 196, 0.1)', borderRadius: 8 }} role="status" aria-live="polite">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                                    {fixProgress.currentViolation || 'Processing...'} ({fixProgress.current} / {fixProgress.total})
-                                </span>
-                                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }} aria-hidden="true">
-                                    {Math.round(fixProgress.overallProgress)}%
-                                </span>
-                            </div>
-                            <div style={{ height: 6, background: 'rgba(73, 136, 196, 0.2)', borderRadius: 3, overflow: 'hidden' }} aria-hidden="true">
-                                <div 
-                                    style={{ 
-                                        height: '100%', 
-                                        background: '#4988C4', 
-                                        borderRadius: 3,
-                                        transition: 'width 0.3s ease',
-                                        width: `${fixProgress.overallProgress}%`
-                                    }} 
-                                />
-                            </div>
-                        </div>
-                    )}
-                    
-                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                        <button
-                            className="btn btn-primary"
-                            onClick={() => handleStartFixing('autonomous')}
-                            disabled={fixing}
-                            aria-label={fixing ? 'Fixing conflicts automatically' : 'Automatically fix all conflicts'}
-                        >
-                            {fixing ? (
-                                <>
-                                    <RefreshCw size={14} className="spinning" style={{ marginRight: 6 }} aria-hidden="true" />
-                                    Fixing...
-                                </>
-                            ) : (
-                                <>
-                                    <Zap size={14} style={{ marginRight: 6 }} aria-hidden="true" />
-                                    Auto-Fix All
-                                </>
-                            )}
-                        </button>
-                        <button
-                            className="btn btn-secondary"
-                            onClick={() => handleStartFixing('interactive')}
-                            disabled={fixing}
-                            aria-label="Enter manual fix mode"
-                        >
-                            <Wrench size={14} style={{ marginRight: 6 }} aria-hidden="true" />
-                            Manual Fixes
-                        </button>
-                    </div>
-                    {fixMode === 'interactive' && selectedViolation && fixOptions.length > 0 && (
-                        <div style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
-                            <h4 style={{ color: 'var(--text-primary)', margin: '0 0 12px', fontSize: 14 }}>
-                                Fix Options for {selectedViolation.title}
-                            </h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                {fixOptions.map(option => (
-                                    <div
-                                        key={option.id}
-                                        className="card"
-                                        style={{
-                                            padding: 12,
-                                            border: '1px solid var(--border-color)',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        <div>
-                                            <div style={{ fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>
-                                                {option.title}
-                                            </div>
-                                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                                                {option.description}
-                                            </div>
-                                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                                Impact: {option.estimatedSoftScoreImpact} • Effort: {option.effort}
-                                            </div>
-                                        </div>
-                                        <button
-                                            className="btn btn-primary"
-                                            onClick={() => handleApplyFix(option)}
-                                            disabled={fixing}
-                                            style={{ fontSize: 12, padding: '6px 12px' }}
-                                            aria-label={`Apply fix: ${option.title}`}
-                                        >
-                                            Apply
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Confirmation Dialog - Inline Card */}
-            {showConfirmDialog && (
-                <div className="card" style={{ padding: 24, maxWidth: 800, margin: '0 auto 24px auto', border: '2px solid var(--accent-warning)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <h3 style={{ color: 'var(--text-primary)', margin: 0, fontSize: 18 }}>
-                            Confirm Auto-Fix
-                        </h3>
-                        <button
-                            onClick={() => setShowConfirmDialog(false)}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--text-secondary)',
-                                cursor: 'pointer',
-                                fontSize: 20,
-                            }}
-                        >
-                            ×
-                        </button>
-                    </div>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
-                        This will automatically apply fixes to {confirmDialogViolationCount} conflict(s). 
-                        The system will make decisions about which fixes to apply based on severity and impact.
-                        <br /><br />
-                        <strong>Warning:</strong> This will modify your schedule data. Consider creating a backup first.
-                    </p>
-                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                        <button
-                            className="btn btn-secondary"
-                            onClick={() => setShowConfirmDialog(false)}
-                            aria-label="Cancel auto-fix operation"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="btn btn-primary"
-                            onClick={() => confirmAction?.()}
-                            aria-label="Confirm and apply automatic fixes"
-                        >
-                            Confirm and Fix
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Soft Score Breakdown - Inline Card */}
-            {showSoftScoreModal && scanResult?.softScore && (
-                <div className="card" style={{ padding: 24, maxWidth: 800, margin: '0 auto 24px auto' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <h3 style={{ color: 'var(--text-primary)', margin: 0, fontSize: 18 }}>
-                            Soft Score Breakdown
-                        </h3>
-                        <button
-                            onClick={() => setShowSoftScoreModal(false)}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--text-secondary)',
-                                cursor: 'pointer',
-                                fontSize: 20,
-                            }}
-                            aria-label="Close soft score breakdown"
-                        >
-                            ×
-                        </button>
-                    </div>
-                    <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
-                            Total Score: {scanResult.softScore.totalScore}
-                        </div>
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                            Lower is better. This score represents overall schedule quality based on soft constraints.
-                        </div>
-                    </div>
-                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
-                        <h4 style={{ color: 'var(--text-primary)', margin: '0 0 12px', fontSize: 14 }}>
-                            Score Components
-                        </h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Balanced Load</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.balancedLoad.score} / {scanResult.softScore.breakdown.balancedLoad.max}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Compact Schedule</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.compactSchedule.score} / {scanResult.softScore.breakdown.compactSchedule.max}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Minimize Room Switch</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.minimizeRoomSwitch.score} / {scanResult.softScore.breakdown.minimizeRoomSwitch.max}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Teacher Preferred Time</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.teacherPreferredTime.score} / {scanResult.softScore.breakdown.teacherPreferredTime.max}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Daily Load Balance</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.dailyLoadBalance.score} / {scanResult.softScore.breakdown.dailyLoadBalance.max}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Workload Fairness</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.workloadFairness.score} / {scanResult.softScore.breakdown.workloadFairness.max}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Subject Spacing</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.subjectSpacing.score} / {scanResult.softScore.breakdown.subjectSpacing.max}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Room Utilization</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{scanResult.softScore.breakdown.roomUtilization.score} / {scanResult.softScore.breakdown.roomUtilization.max}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div style={{ marginTop: 16, padding: 12, background: 'rgba(73, 136, 196, 0.1)', borderRadius: 8 }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                            <strong>Tip:</strong> Use the fixing engine to reduce this score by resolving conflicts and optimizing schedule preferences.
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Filter */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>
                     <input type="checkbox" checked={showResolved} onChange={e => setShowResolved(e.target.checked)} id="show-resolved" />
@@ -901,13 +504,6 @@ const ConflictsAlerts: React.FC = () => {
                         <option value="room_overlap">Room Conflict</option>
                         <option value="section_overlap">Section Overlap</option>
                         <option value="room_capacity_exceeded">Capacity Exceeded</option>
-                        <option value="room_subject_incompatible">Qualification Mismatch</option>
-                        <option value="teacher_unqualified">Qualification Mismatch</option>
-                        <option value="max_consecutive_hours">Workload Limit</option>
-                        <option value="max_daily_hours">Workload Limit</option>
-                        <option value="max_daily_classes">Workload Limit</option>
-                        <option value="max_weekly_hours">Workload Limit</option>
-                        <option value="break_violation">Break Violation</option>
                     </select>
                 </div>
                 
@@ -966,14 +562,6 @@ const ConflictsAlerts: React.FC = () => {
                                     borderLeftColor: severity.color,
                                     opacity: c.is_resolved ? 0.6 : 1,
                                     padding: '16px 20px',
-                                    cursor: fixMode === 'interactive' ? 'pointer' : 'default',
-                                }}
-                                onClick={() => fixMode === 'interactive' && handleSelectViolation(convertToHardConstraintViolation(c))}
-                                tabIndex={fixMode === 'interactive' ? 0 : undefined}
-                                onKeyPress={(e) => {
-                                    if (fixMode === 'interactive' && (e.key === 'Enter' || e.key === ' ')) {
-                                        handleSelectViolation(convertToHardConstraintViolation(c));
-                                    }
                                 }}
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
@@ -1083,7 +671,7 @@ const ConflictsAlerts: React.FC = () => {
                                                             <strong>Affected Schedules ({c.scheduleIds.length}):</strong>
                                                         </div>
                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                                            {c.scheduleIds.map((scheduleId) => (
+                                                            {c.scheduleIds.map((scheduleId: string) => (
                                                                 <div key={scheduleId} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: 4 }}>
                                                                     <span>{scheduleId}</span>
                                                                     <button
@@ -1137,9 +725,41 @@ const ConflictsAlerts: React.FC = () => {
                 </div>
             )}
 
+            {showSoftScoreModal && scanResult?.softScore && (
+                <div className="dash-modal-overlay" onClick={() => setShowSoftScoreModal(false)}>
+                    <div className="dash-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
+                        <div className="dash-modal-header">
+                            <h3 className="dash-modal-title">Soft Score Breakdown</h3>
+                            <button className="dash-modal-close" onClick={() => setShowSoftScoreModal(false)}>×</button>
+                        </div>
+                        <div className="dash-modal-body">
+                            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                                <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)' }}>{scanResult.softScore.totalScore}</div>
+                                <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Total Quality Score (Lower is better)</div>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                {Object.entries(scanResult.softScore.breakdown).map(([key, value]: [string, { score: number; max: number }]) => (
+                                    <div key={key} className="stat-card" style={{ padding: 12 }}>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'capitalize' }}>{key.replace(/([A-Z])/g, ' $1')}</div>
+                                        <div style={{ fontSize: 18, fontWeight: 600 }}>{value.score} / {value.max}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <style>{`
                 .spinning { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
+                .badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+                .dash-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+                .dash-modal { background: var(--card-bg); border-radius: 12px; width: 100%; box-shadow: var(--shadow-lg); overflow: hidden; }
+                .dash-modal-header { padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+                .dash-modal-title { margin: 0; font-size: 18px; font-weight: 600; }
+                .dash-modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+                .dash-modal-body { padding: 24px; }
             `}</style>
         </div>
     );
