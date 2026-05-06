@@ -13,13 +13,14 @@
  * - Only one schedule can be active at a time (is_active = true)
  * - All operations go through canonical state manager
  * - All operations are logged and verifiable
- * 
+ */
+/**
  * Version Workflow:
  * 1. saveDraft() - Creates new schedules and a new version (change_type: 'created')
  * 2. submitSchedule() - Changes status from 'draft' to 'submitted' (change_type: 'status_change')
  * 3. approveSchedule() - Changes status from 'submitted' to 'approved' (change_type: 'status_change')
  * 4. publishApprovedSchedule() - Changes status from 'approved' to 'published' (change_type: 'overwrite' or 'publish')
- * 5. unpublishSchedule() - Changes status from 'published' back to 'draft' (change_type: 'status_change')
+ * 5. unpublishSchedule() - Changes status from 'published' back to 'draft', version marked as inactive (becomes "previous")
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -831,7 +832,7 @@ class ScheduleVersionService {
     /**
      * Unpublish a published schedule
      * Transitions a published schedule back to 'draft' status.
-     * This only changes the status of the existing schedules and version metadata - no new schedules or versions are created.
+     * The version is marked as inactive and becomes a "previous" version.
      */
     async unpublishSchedule(
         batchId: string,
@@ -856,12 +857,12 @@ class ScheduleVersionService {
                 .eq('batch_id', batchId).eq('is_active', true);
             if (updateError) throw updateError;
 
-            // Update the existing active version to reflect the status change
+            // Update the existing active version to mark it as inactive (becomes "previous")
             const { error: versionUpdateError } = await this.supabase
                 .from('schedule_versions')
                 .update({
-                    change_type: 'status_change',
-                    change_summary: 'Unpublished schedule',
+                    is_active: false, // Mark as inactive so it shows as "previous"
+                    change_summary: 'Unpublished schedule (now previous)',
                     change_reason: options.changeReason || 'Schedule unpublish',
                     changed_by: this.currentUserId,
                     changed_at: new Date().toISOString(),
@@ -875,7 +876,7 @@ class ScheduleVersionService {
             }
             
             scheduleLogger.system.workflowCompleted('Schedule unpublish', Date.now(), true);
-            return { success: true, message: 'Schedule unpublished successfully', version_set_id: batchId, version_count: 1, active_version_id: activeVersion[0].id };
+            return { success: true, message: 'Schedule unpublished successfully (now marked as previous)', version_set_id: batchId, version_count: 1, active_version_id: activeVersion[0].id };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             scheduleLogger.system.error('generate', 'persistence', 'Schedule unpublish failed', error);
