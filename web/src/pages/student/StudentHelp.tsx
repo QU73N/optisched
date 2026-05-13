@@ -110,10 +110,10 @@ const StudentHelp: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="admin-dash-right">
+                <div className="admin-dash-right" style={{ marginLeft: 16 }}>
                     <div className="dash-card dash-stagger">
                         <div className="dash-card-header">
-                            <div className="dash-card-title"><HelpCircle size={16} /> Quick answers</div>
+                            <div className="dash-card-title"><HelpCircle size={16} /> Frequently Asked Questions</div>
                         </div>
                         <div className="dash-list" style={{ gap: 8 }}>
                             {FAQS.map((f, i) => (

@@ -174,20 +174,34 @@ const StudentSchedule: React.FC = () => {
             ) : viewMode === 'timeline' ? (
                 <>
                     {/* Day Navigator */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                         <button className="btn btn-ghost btn-icon" onClick={() => navigateDay(-1)}><ChevronLeft size={20} /></button>
-                        <div style={{ display: 'flex', gap: 6, flex: 1, justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', gap: 4, flex: 1, justifyContent: 'center' }}>
                             {dayOrder.map(day => {
                                 const count = groupedByDay[day]?.length || 0;
                                 const isActive = day === selectedDay;
                                 return (
-                                    <button key={day} onClick={() => setSelectedDay(day)} className={isActive ? 'font-semibold' : 'font-normal'} style={{
-                                        padding: '8px 16px', borderRadius: 10, border: isActive ? '1px solid var(--brand-primary)' : '1px solid var(--border-default)',
-                                        background: isActive ? 'rgba(59,130,246,0.12)' : 'transparent', color: isActive ? 'var(--brand-primary)' : 'var(--text-secondary)',
-                                        cursor: 'pointer', transition: 'all 0.2s'
-                                    }}>
-                                        {day.slice(0, 3)}
-                                        {count > 0 && <span className="text-xs" style={{ display: 'block', color: 'var(--text-muted)' }}>{count}</span>}
+                                    <button 
+                                        key={day} 
+                                        onClick={() => setSelectedDay(day)} 
+                                        className={isActive ? 'font-semibold' : 'font-normal'}
+                                        style={{
+                                            padding: '10px 18px',
+                                            borderRadius: 8,
+                                            border: isActive ? '1px solid #1C4D8D' : '1px solid #D7E3F1',
+                                            background: isActive ? '#1C4D8D' : 'transparent',
+                                            color: isActive ? '#FFFFFF' : '#475569',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            fontSize: 14,
+                                            fontWeight: isActive ? 600 : 400,
+                                            minWidth: 70,
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                            <span>{day.slice(0, 3)}</span>
+                                            {count > 0 && <span style={{ fontSize: 11, color: isActive ? 'rgba(255,255,255,0.8)' : '#64748B' }}>{count}</span>}
+                                        </div>
                                     </button>
                                 );
                             })}
@@ -205,36 +219,38 @@ const StudentSchedule: React.FC = () => {
                     {daySchedules.length === 0 ? (
                         <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No classes on {selectedDay}</div>
                     ) : (
-                        <div className="card" style={{ padding: '0 0 0 60px', position: 'relative', overflow: 'hidden' }}>
-                            {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => (
-                                <div key={i} style={{ position: 'absolute', left: 0, right: 0, top: i * HOUR_HEIGHT, height: HOUR_HEIGHT, borderTop: '1px solid rgba(255,255,255,0.04)', zIndex: 0 }}>
-                                    <span className="text-xs" style={{ position: 'absolute', left: 8, top: -8, color: 'var(--text-muted)', width: 44, textAlign: 'right' }}>
-                                        {formatTime12(`${START_HOUR + i}:00`).replace(':00 ', ' ')}
-                                    </span>
-                                </div>
-                            ))}
-                            <div style={{ position: 'relative', height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT, marginLeft: 4 }}>
-                                {daySchedules.map((s, i) => {
-                                    const [sh, sm] = s.start_time.split(':').map(Number);
-                                    const [eh, em] = s.end_time.split(':').map(Number);
-                                    const topPx = ((sh - START_HOUR) + sm / 60) * HOUR_HEIGHT;
-                                    const heightPx = ((eh - START_HOUR) + em / 60) * HOUR_HEIGHT - topPx;
-                                    const color = colors[i % colors.length];
-                                    return (
-                                        <div key={s.id} style={{
-                                            position: 'absolute', left: 8, right: 16, top: topPx, height: Math.max(heightPx, 32),
-                                            background: `${color}18`, border: `1px solid ${color}50`, borderLeft: `4px solid ${color}`,
-                                            borderRadius: 10, padding: '8px 12px', zIndex: 1, overflow: 'hidden',
-                                        }}>
-                                            <div className="font-semibold text-base">{(s.subject as any)?.code} - {(s.subject as any)?.name}</div>
-                                            <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 2, display: 'flex', gap: 12 }}>
-                                                <span><Clock size={10} /> {formatTime12(s.start_time)} – {formatTime12(s.end_time)}</span>
-                                                <span><MapPin size={10} /> {(s.room as any)?.name}</span>
+                        <div className="card" style={{ padding: '0 0 0 60px', position: 'relative', overflow: 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
+                            <div style={{ position: 'relative', height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT, marginLeft: 4, paddingBottom: 20 }}>
+                                {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => (
+                                    <div key={i} style={{ position: 'absolute', left: 0, right: 0, top: i * HOUR_HEIGHT, height: HOUR_HEIGHT, borderTop: '1px solid rgba(255,255,255,0.04)', zIndex: 0 }}>
+                                        <span className="text-xs" style={{ position: 'absolute', left: 8, top: -8, color: 'var(--text-muted)', width: 44, textAlign: 'right' }}>
+                                            {formatTime12(`${START_HOUR + i}:00`).replace(':00 ', ' ')}
+                                        </span>
+                                    </div>
+                                ))}
+                                <div style={{ position: 'relative', height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT }}>
+                                    {daySchedules.map((s, i) => {
+                                        const [sh, sm] = s.start_time.split(':').map(Number);
+                                        const [eh, em] = s.end_time.split(':').map(Number);
+                                        const topPx = ((sh - START_HOUR) + sm / 60) * HOUR_HEIGHT;
+                                        const heightPx = ((eh - START_HOUR) + em / 60) * HOUR_HEIGHT - topPx;
+                                        const color = colors[i % colors.length];
+                                        return (
+                                            <div key={s.id} style={{
+                                                position: 'absolute', left: 8, right: 16, top: topPx, height: Math.max(heightPx, 32),
+                                                background: `${color}18`, border: `1px solid ${color}50`, borderLeft: `4px solid ${color}`,
+                                                borderRadius: 10, padding: '8px 12px', zIndex: 1, overflow: 'hidden',
+                                            }}>
+                                                <div className="font-semibold text-base">{(s.subject as any)?.code} - {(s.subject as any)?.name}</div>
+                                                <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 2, display: 'flex', gap: 12 }}>
+                                                    <span><Clock size={10} /> {formatTime12(s.start_time)} – {formatTime12(s.end_time)}</span>
+                                                    <span><MapPin size={10} /> {(s.room as any)?.name}</span>
+                                                </div>
+                                                <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 2 }}>{(s.teacher as any)?.profile?.full_name || 'TBA'}</div>
                                             </div>
-                                            <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 2 }}>{(s.teacher as any)?.profile?.full_name || 'TBA'}</div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     )}

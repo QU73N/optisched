@@ -224,7 +224,7 @@ const StudentUpcoming: React.FC = () => {
                     )}
                 </div>
 
-                <div className="admin-dash-right">
+                <div className="admin-dash-right" style={{ marginLeft: 16 }}>
                     <div className="dash-card dash-stagger">
                         <div className="dash-card-header">
                             <div className="dash-card-title"><Calendar size={16} /> Today's schedule</div>
