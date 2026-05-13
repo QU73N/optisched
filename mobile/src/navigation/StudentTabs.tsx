@@ -1,29 +1,40 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
-import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 
 import StudentDashboard from '../screens/student/StudentDashboard';
 import ScheduleView from '../screens/shared/ScheduleView';
 import OptiBotChat from '../screens/shared/OptiBotChat';
+import HelpScreen from '../screens/shared/HelpScreen';
 import AppSettings from '../screens/shared/AppSettings';
 
 export type StudentTabParamList = {
     Home: undefined;
     Schedule: undefined;
     OptiBot: undefined;
+    Help: undefined;
     Profile: undefined;
 };
 
 const Tab = createBottomTabNavigator<StudentTabParamList>();
 
+// Per-tab accent colors
+const TAB_COLORS: Record<string, string> = {
+    Home: '#4988C4',
+    Schedule: '#10b981',
+    OptiBot: '#f59e0b',
+    Help: '#06b6d4',
+    Profile: '#8b5cf6',
+};
+
 const StudentTabs: React.FC = () => {
     const { colors } = useTheme();
     return (
         <Tab.Navigator
-            screenOptions={{
+            screenOptions={({ route }) => ({
                 headerShown: false,
                 tabBarStyle: {
                     backgroundColor: colors.surface,
@@ -43,7 +54,7 @@ const StudentTabs: React.FC = () => {
                     right: 0,
                     zIndex: 1000,
                 },
-                tabBarActiveTintColor: colors.accentPrimary,
+                tabBarActiveTintColor: TAB_COLORS[route.name] || colors.accentPrimary,
                 tabBarInactiveTintColor: colors.textMuted,
                 tabBarLabelStyle: {
                     fontSize: Platform.OS === 'web' ? 12 : 11,
@@ -53,18 +64,16 @@ const StudentTabs: React.FC = () => {
                 tabBarIconStyle: {
                     marginBottom: 4,
                 },
-            }}
+            })}
         >
             <Tab.Screen
                 name="Home"
                 component={StudentDashboard}
                 options={{
                     tabBarIcon: ({ color, size, focused }) => (
-                        <MaterialIcons 
-                            name="home" 
-                            size={focused ? size + 2 : size} 
-                            color={color} 
-                        />
+                        <View style={focused ? { backgroundColor: color + '18', borderRadius: 12, padding: 4 } : { padding: 4 }}>
+                            <MaterialIcons name="home" size={focused ? size + 2 : size} color={color} />
+                        </View>
                     ),
                 }}
             />
@@ -73,11 +82,9 @@ const StudentTabs: React.FC = () => {
                 component={ScheduleView}
                 options={{
                     tabBarIcon: ({ color, size, focused }) => (
-                        <MaterialIcons 
-                            name="calendar-today" 
-                            size={focused ? size + 2 : size} 
-                            color={color} 
-                        />
+                        <View style={focused ? { backgroundColor: color + '18', borderRadius: 12, padding: 4 } : { padding: 4 }}>
+                            <MaterialIcons name="calendar-today" size={focused ? size + 2 : size} color={color} />
+                        </View>
                     ),
                 }}
             />
@@ -86,13 +93,22 @@ const StudentTabs: React.FC = () => {
                 component={OptiBotChat}
                 options={{
                     tabBarIcon: ({ color, size, focused }) => (
-                        <MaterialIcons 
-                            name="smart-toy" 
-                            size={focused ? size + 2 : size} 
-                            color={color} 
-                        />
+                        <View style={focused ? { backgroundColor: color + '18', borderRadius: 12, padding: 4 } : { padding: 4 }}>
+                            <MaterialIcons name="smart-toy" size={focused ? size + 2 : size} color={color} />
+                        </View>
                     ),
                     tabBarLabel: 'AI Chat',
+                }}
+            />
+            <Tab.Screen
+                name="Help"
+                component={HelpScreen}
+                options={{
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <View style={focused ? { backgroundColor: color + '18', borderRadius: 12, padding: 4 } : { padding: 4 }}>
+                            <MaterialIcons name="help-outline" size={focused ? size + 2 : size} color={color} />
+                        </View>
+                    ),
                 }}
             />
             <Tab.Screen
@@ -100,11 +116,9 @@ const StudentTabs: React.FC = () => {
                 component={AppSettings}
                 options={{
                     tabBarIcon: ({ color, size, focused }) => (
-                        <MaterialIcons 
-                            name="person" 
-                            size={focused ? size + 2 : size} 
-                            color={color} 
-                        />
+                        <View style={focused ? { backgroundColor: color + '18', borderRadius: 12, padding: 4 } : { padding: 4 }}>
+                            <MaterialIcons name="person" size={focused ? size + 2 : size} color={color} />
+                        </View>
                     ),
                 }}
             />
