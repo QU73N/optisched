@@ -1324,6 +1324,40 @@ const FinalCTA: React.FC<{ onLogin: () => void }> = ({ onLogin }) => (
    Pricing Section
    ============================================================ */
 const PricingSection: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+    const pricingData = [
+        {
+            tier: 'Standard',
+            description: 'Essential scheduling infrastructure',
+            scales: [
+                { name: 'Small Scale', price: 'PHP 24,900' },
+                { name: 'Mid Scale', price: 'PHP 39,900' },
+                { name: 'Large Scale', price: 'PHP 59,900' },
+                { name: 'University Scale', price: 'Custom Quote' },
+            ],
+        },
+        {
+            tier: 'Premium',
+            description: 'Intelligent scheduling optimization',
+            isPopular: true,
+            scales: [
+                { name: 'Small Scale', price: 'PHP 39,900' },
+                { name: 'Mid Scale', price: 'PHP 63,900' },
+                { name: 'Large Scale', price: 'PHP 95,900' },
+                { name: 'University Scale', price: 'Custom Quote' },
+            ],
+        },
+        {
+            tier: 'Enterprise',
+            description: 'Tailored for your institution',
+            scales: [
+                { name: 'Small Scale', price: 'Custom Quote' },
+                { name: 'Mid Scale', price: 'Custom Quote' },
+                { name: 'Large Scale', price: 'Custom Quote' },
+                { name: 'University Scale', price: 'Custom Quote' },
+            ],
+        },
+    ];
+
     return (
         <section className="lp-section landing-container">
             <div className="lp-section-head">
@@ -1333,108 +1367,47 @@ const PricingSection: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
                 </p>
             </div>
 
-            <div className="pricing-grid">
-                {/* Standard */}
-                <div className="pricing-card pricing-card-standard">
-                    <div className="pricing-card-header">
-                        <h3 className="pricing-tier-name">Standard</h3>
-                        <p className="pricing-tier-sub">Essential scheduling infrastructure</p>
-                    </div>
-                    <div className="pricing-tier-price">
-                        <span className="pricing-currency">$</span>
-                        <span className="pricing-amount">299</span>
-                        <span className="pricing-period">/month</span>
-                    </div>
-                    <button className="lp-btn lp-btn-secondary lp-btn-lg" onClick={onLogin}>
-                        Select Plan
-                    </button>
-                    <div className="pricing-features">
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>Role-based access control</span>
-                        </div>
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>Automated conflict detection</span>
-                        </div>
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>Schedule versioning</span>
-                        </div>
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>Digital distribution</span>
-                        </div>
-                    </div>
-                </div>
+            <div className="pricing-table-container">
+                <table className="pricing-table">
+                    <thead>
+                        <tr>
+                            <th className="pricing-table-header-tier">Tier</th>
+                            <th className="pricing-table-header-scale">Small Scale</th>
+                            <th className="pricing-table-header-scale">Mid Scale</th>
+                            <th className="pricing-table-header-scale">Large Scale</th>
+                            <th className="pricing-table-header-scale">University Scale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pricingData.map((row) => (
+                            <tr key={row.tier} className={`pricing-table-row ${row.isPopular ? 'pricing-table-row-popular' : ''}`}>
+                                <td className="pricing-table-cell-tier">
+                                    {row.isPopular && (
+                                        <div className="pricing-popular-badge-inline">
+                                            <Sparkles size={12} /> Most Popular
+                                        </div>
+                                    )}
+                                    <div className="pricing-tier-name">{row.tier}</div>
+                                    <div className="pricing-tier-sub">{row.description}</div>
+                                </td>
+                                {row.scales.map((scale) => (
+                                    <td key={`${row.tier}-${scale.name}`} className="pricing-table-cell-price">
+                                        {scale.price}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
 
-                {/* Premium */}
-                <div className="pricing-card pricing-card-premium">
-                    <div className="pricing-popular-badge">
-                        <Sparkles size={14} />
-                        Most Popular
-                    </div>
-                    <div className="pricing-card-header">
-                        <h3 className="pricing-tier-name">Premium</h3>
-                        <p className="pricing-tier-sub">Intelligent scheduling optimization</p>
-                    </div>
-                    <div className="pricing-tier-price">
-                        <span className="pricing-currency">$</span>
-                        <span className="pricing-amount">599</span>
-                        <span className="pricing-period">/month</span>
-                    </div>
-                    <button className="lp-btn lp-btn-primary lp-btn-lg" onClick={onLogin}>
-                        Select Plan
-                    </button>
-                    <div className="pricing-features">
-                        <div className="pricing-features-include">
-                            Everything in Standard, plus:
-                        </div>
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>NLP for structured data entry</span>
-                        </div>
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>Room utilization heatmaps</span>
-                        </div>
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>Workload density analytics</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Enterprise */}
-                <div className="pricing-card pricing-card-enterprise">
-                    <div className="pricing-card-header">
-                        <h3 className="pricing-tier-name">Enterprise</h3>
-                        <p className="pricing-tier-sub">Tailored for your institution</p>
-                    </div>
-                    <div className="pricing-tier-price">
-                        <span className="pricing-amount">Contact Us</span>
-                    </div>
-                    <button className="lp-btn lp-btn-secondary lp-btn-lg" onClick={() => window.location.href = 'mailto:sales@optisched.edu'}>
-                        Contact Sales
-                    </button>
-                    <div className="pricing-features">
-                        <div className="pricing-features-include">
-                            Everything in Premium, plus:
-                        </div>
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>API integration with existing SIS</span>
-                        </div>
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>Custom UI</span>
-                        </div>
-                        <div className="pricing-feature">
-                            <Check size={16} className="pricing-feature-icon" />
-                            <span>Custom service-level agreements</span>
-                        </div>
-                    </div>
-                </div>
+            <div className="pricing-cta">
+                <button className="lp-btn lp-btn-primary lp-btn-lg" onClick={onLogin}>
+                    Get Started <ArrowRight size={16} />
+                </button>
+                <a href="mailto:sales@optisched.edu" className="lp-btn lp-btn-secondary lp-btn-lg">
+                    <Mail size={16} /> Contact Sales
+                </a>
             </div>
         </section>
     );

@@ -1975,6 +1975,16 @@
 @media (max-width: 768px) {
   .lp-final-aurora { padding: 80px 0 64px; }
   .pricing-grid { grid-template-columns: 1fr; gap: 24px; }
+  .pricing-table-container { overflow-x: auto; }
+  .pricing-table { font-size: 14px; }
+  .pricing-table-header-tier,
+  .pricing-table-header-scale { padding: 12px 16px; font-size: 11px; }
+  .pricing-table-cell-tier { padding: 16px; }
+  .pricing-table-cell-price { padding: 16px; font-size: 14px; }
+  .pricing-tier-name { font-size: 18px; }
+  .pricing-tier-sub { font-size: 13px; }
+  .pricing-cta { flex-direction: column; }
+  .pricing-cta .lp-btn { width: 100%; }
 }
 
 @media (max-width: 1024px) {
@@ -2236,21 +2246,16 @@
   animation-delay: 100ms;
 }
 
-.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-card {
+.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-table-container {
   opacity: 0;
   animation: fadeInUp 450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-card:nth-child(1) {
   animation-delay: 180ms;
 }
 
-.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-card:nth-child(2) {
+.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-cta {
+  opacity: 0;
+  animation: fadeInUp 450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
   animation-delay: 260ms;
-}
-
-.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-card:nth-child(3) {
-  animation-delay: 340ms;
 }
 
 /* Animation for landing sections when becoming visible */
@@ -2353,6 +2358,118 @@
   text-transform: uppercase;
   border-radius: 999px;
   box-shadow: 0 4px 16px -6px rgba(28, 77, 141, 0.4);
+}
+
+/* ============ PRICING TABLE ============ */
+.pricing-table-container {
+  margin-top: 48px;
+  overflow-x: auto;
+  border-radius: var(--lp-r-lg);
+  border: 1px solid var(--lp-border);
+  background: var(--lp-surface);
+}
+
+.pricing-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+.pricing-table thead {
+  background: var(--lp-surface-2);
+  border-bottom: 2px solid var(--lp-border);
+}
+
+.pricing-table-header-tier,
+.pricing-table-header-scale {
+  padding: 16px 20px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--lp-ink-dim);
+}
+
+.pricing-table-header-tier {
+  width: 25%;
+  border-right: 1px solid var(--lp-border);
+}
+
+.pricing-table-header-scale {
+  width: 18.75%;
+  text-align: center;
+  border-right: 1px solid var(--lp-border);
+}
+
+.pricing-table-header-scale:last-child {
+  border-right: none;
+}
+
+.pricing-table-row {
+  border-bottom: 1px solid var(--lp-border);
+  transition: background 200ms var(--lp-ease);
+}
+
+.pricing-table-row:hover {
+  background: var(--lp-surface-2);
+}
+
+.pricing-table-row-popular {
+  background: linear-gradient(180deg, rgba(28, 77, 141, 0.05) 0%, rgba(47, 103, 170, 0.05) 100%);
+}
+
+.pricing-table-row-popular:hover {
+  background: linear-gradient(180deg, rgba(28, 77, 141, 0.1) 0%, rgba(47, 103, 170, 0.1) 100%);
+}
+
+.pricing-table-cell-tier {
+  padding: 24px 20px;
+  vertical-align: top;
+  border-right: 1px solid var(--lp-border);
+}
+
+.pricing-table-cell-price {
+  padding: 24px 20px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--lp-ink);
+  border-right: 1px solid var(--lp-border);
+}
+
+.pricing-table-cell-price:last-child {
+  border-right: none;
+}
+
+.pricing-popular-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #1c4d8d, #2f67aa);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.pricing-cta {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 40px;
+  flex-wrap: wrap;
+}
+
+.pricing-cta a {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .pricing-card-header {
