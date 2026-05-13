@@ -433,15 +433,16 @@ const AdminManageUsers: React.FC = () => {
         setEditError(null);
         setShowEditModal(true);
         
-        // Load additional_roles from auth metadata via Edge Function
-        try {
-            const { data, error } = await supabase.functions.invoke('get-additional-roles', {
-                body: { userId: user.id }
-            });
-            if (error) throw error;
-            setEditAdditionalRoles(data?.additional_roles || []);
-        } catch (err) {
-            console.error('Error loading additional roles:', err);
+        // Load additional_roles from auth metadata
+        if (supabaseAdmin) {
+            try {
+                const { data: authData } = await supabaseAdmin.auth.admin.getUserById(user.id);
+                setEditAdditionalRoles(authData?.user?.user_metadata?.additional_roles || []);
+            } catch (err) {
+                console.warn('Could not load additional roles:', err);
+                setEditAdditionalRoles([]);
+            }
+        } else {
             setEditAdditionalRoles([]);
         }
         
@@ -610,23 +611,15 @@ const AdminManageUsers: React.FC = () => {
                 }
             }
 
-            // Update additional_roles via Edge Function (requires service role)
-            if (editForm.role === 'teacher') {
-                const { error: rolesError } = await supabase.functions.invoke('set-additional-roles', {
-                    body: { userId: editUser.id, additionalRoles: editAdditionalRoles }
+            // Update additional_roles in auth metadata
+            if (supabaseAdmin) {
+                const newMeta = editForm.role === 'teacher'
+                    ? { additional_roles: editAdditionalRoles }
+                    : { additional_roles: [] };
+                const { error: metaError } = await supabaseAdmin.auth.admin.updateUserById(editUser.id, {
+                    user_metadata: newMeta,
                 });
-                if (rolesError) {
-                    console.error('Error updating additional roles:', rolesError);
-                    // Don't fail the entire save if additional roles fail, just log it
-                }
-            } else {
-                // Clear additional roles if primary role is not teacher
-                const { error: clearError } = await supabase.functions.invoke('set-additional-roles', {
-                    body: { userId: editUser.id, additionalRoles: [] }
-                });
-                if (clearError) {
-                    console.error('Error clearing additional roles:', clearError);
-                }
+                if (metaError) console.warn('Could not update additional roles:', metaError);
             }
 
             setShowEditModal(false);
