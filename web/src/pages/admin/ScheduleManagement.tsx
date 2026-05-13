@@ -477,7 +477,7 @@ const ScheduleManagement: React.FC = () => {
                         return;
                     }
 
-                    const res = await scheduleVersionService.submitSchedule(versionStatus.batch_id, { changeReason: 'Submitted from schedule management' });
+                    const res = await scheduleVersionService.submitSchedule(versionStatus!.batch_id!, { changeReason: 'Submitted from schedule management' });
                     if (!res.success) throw new Error(res.message);
                     showToast({ title: 'Submitted', type: 'success' });
                     if (res.active_version_id) {

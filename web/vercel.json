@@ -33,14 +33,6 @@
     }
   ],
   "env": {
-    "VITE_SUPABASE_URL": "@supabase-url",
-    "VITE_SUPABASE_ANON_KEY": "@supabase-anon-key",
-    "VITE_API_URL": "@api-url",
-    "VITE_LOG_LEVEL": "@log-level",
-    "VITE_GEMINI_API_KEY": "@gemini-api-key",
-    "VITE_GROQ_API_KEY": "@groq-api-key",
-    "VITE_OPENROUTER_API_KEY": "@openrouter-api-key",
-    "VITE_ENABLE_OPTIBOT": "@enable-optibot",
-    "VITE_ENABLE_ANALYTICS": "@enable-analytics"
+    "VITE_SUPABASE_URL": "https://xrcvngpvmauywlgcbbjo.supabase.co"
   }
 }

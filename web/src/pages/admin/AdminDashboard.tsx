@@ -437,7 +437,8 @@ const AdminDashboard: React.FC = () => {
                 return;
             }
             // Resolve the auth user ID — may be missing for forgot-password requests from login
-            let authUserId = req.user_id;
+            // `ResetRequest` shape can vary; cast to `any` to access optional `user_id` safely
+            let authUserId = (req as any).user_id;
             if (!authUserId) {
                 // Look up user by email in profiles table
                 const { data: profileData } = await supabase.from('profiles').select('id').eq('email', req.email).maybeSingle();

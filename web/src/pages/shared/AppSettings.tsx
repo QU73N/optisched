@@ -4,7 +4,7 @@ import { useUserPreferences } from '../../contexts/UserPreferencesContext';
 import { supabase } from '../../lib/supabase';
 import {
     Settings, User, Shield, Moon, Sun, Bell, LogOut,
-    Lock, Save, CheckCircle, Loader2, Layers,
+    Lock, Save, CheckCircle, Loader2, Layers, Mail,
     Camera, Upload, X
 } from 'lucide-react';
 
