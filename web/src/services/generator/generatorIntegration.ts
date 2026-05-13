@@ -27,11 +27,17 @@ import type {
  */
 function convertLegacyConfig(legacyConfig: LegacyGenerationConfig): GeneratorConfig {
   // Convert break windows to new format with days field
-  const breakWindows = legacyConfig.breaks.map(b => ({
-    start: b.start,
-    end: b.end,
-    days: legacyConfig.days, // Apply to all days
-  }));
+  const breakWindows: { start: string; end: string; days: string[] }[] = [];
+  
+  if (legacyConfig.breakMode === 'fixed') {
+    // For fixed breaks, use the fixedBreak config
+    breakWindows.push({
+      start: legacyConfig.fixedBreak.start,
+      end: legacyConfig.fixedBreak.end,
+      days: legacyConfig.days,
+    });
+  }
+  // Variable breaks would need more complex conversion logic
 
   return {
     mode: legacyConfig.mode as GeneratorConfig['mode'],
@@ -40,7 +46,7 @@ function convertLegacyConfig(legacyConfig: LegacyGenerationConfig): GeneratorCon
       teachers: [],
       rooms: [],
       subjects: [],
-      target: legacyConfig.clearExisting ? 'full' : 'partial',
+      target: !legacyConfig.partialTarget ? 'full' : 'partial',
       protectedElements: [],
     },
     schedule_window: {

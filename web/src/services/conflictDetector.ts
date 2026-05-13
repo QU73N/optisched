@@ -22,8 +22,16 @@ const timeRangesOverlap = (s1: string | null, e1: string | null, s2: string | nu
  * Checks for overlapping schedules, capacity issues, and unassigned slots.
  */
 export const detectConflicts = (schedules: any[]): DetectedConflict[] => {
+    console.log('[conflictDetector] DETECT CONFLICTS START:', { scheduleCount: schedules.length });
     const conflicts: DetectedConflict[] = [];
     let conflictId = 0;
+
+    const conflictCounts = {
+        room_conflict: 0,
+        teacher_overlap: 0,
+        capacity_exceeded: 0,
+        unassigned: 0
+    };
 
     for (let i = 0; i < schedules.length; i++) {
         for (let j = i + 1; j < schedules.length; j++) {
@@ -35,6 +43,7 @@ export const detectConflicts = (schedules: any[]): DetectedConflict[] => {
 
             // Room conflict
             if (a.room_id === b.room_id) {
+                conflictCounts.room_conflict++;
                 conflicts.push({
                     id: `conflict-${conflictId++}`,
                     type: 'room_conflict',
@@ -49,6 +58,7 @@ export const detectConflicts = (schedules: any[]): DetectedConflict[] => {
 
             // Teacher overlap
             if (a.teacher_id === b.teacher_id) {
+                conflictCounts.teacher_overlap++;
                 conflicts.push({
                     id: `conflict-${conflictId++}`,
                     type: 'teacher_overlap',
@@ -67,6 +77,7 @@ export const detectConflicts = (schedules: any[]): DetectedConflict[] => {
     for (const schedule of schedules) {
         if (schedule.room && schedule.section) {
             if ((schedule.section.student_count || 0) > (schedule.room.capacity || 0) && schedule.room.capacity > 0) {
+                conflictCounts.capacity_exceeded++;
                 conflicts.push({
                     id: `conflict-${conflictId++}`,
                     type: 'capacity_exceeded',
@@ -84,6 +95,7 @@ export const detectConflicts = (schedules: any[]): DetectedConflict[] => {
     // Unassigned
     for (const schedule of schedules) {
         if (!schedule.room_id || !schedule.teacher_id) {
+            conflictCounts.unassigned++;
             conflicts.push({
                 id: `conflict-${conflictId++}`,
                 type: 'unassigned',
@@ -97,6 +109,16 @@ export const detectConflicts = (schedules: any[]): DetectedConflict[] => {
         }
     }
 
+    console.log('[conflictDetector] CONFLICTS DETECTED:', {
+        total: conflicts.length,
+        byType: conflictCounts,
+        bySeverity: {
+            high: conflicts.filter(c => c.severity === 'high').length,
+            medium: conflicts.filter(c => c.severity === 'medium').length,
+            low: conflicts.filter(c => c.severity === 'low').length
+        }
+    });
+
     return conflicts;
 };
 
@@ -106,27 +128,39 @@ export const detectConflicts = (schedules: any[]): DetectedConflict[] => {
 export const subscribeToConflicts = (
     onConflictsDetected: (conflicts: DetectedConflict[]) => void
 ) => {
+    console.log('[conflictDetector] SUBSCRIBE TO CONFLICTS START');
     const subscription = supabase
         .channel('schedule-changes-conflicts')
         .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'schedules' },
-            async () => {
-                const { data } = await supabase
+            async (payload) => {
+                console.log('[conflictDetector] SCHEDULE CHANGE DETECTED:', payload);
+                const { data, error } = await supabase
                     .from('schedules')
                     .select('*, subject:subjects(*), teacher:teachers(*, profile_id:profiles(*)), room:rooms(*), section:sections(*)')
                     .eq('status', 'published')
                     .eq('is_active', true);
 
+                if (error) {
+                    console.error('[conflictDetector] FAILED TO FETCH SCHEDULES FOR CONFLICT CHECK:', error);
+                    return;
+                }
+
+                console.log('[conflictDetector] FETCHED SCHEDULES FOR CONFLICT CHECK:', { count: data?.length || 0 });
                 if (data) {
                     const conflicts = detectConflicts(data);
+                    console.log('[conflictDetector] TRIGGERING CONFLICT CALLBACK:', { conflictCount: conflicts.length });
                     onConflictsDetected(conflicts);
                 }
             }
         )
         .subscribe();
 
+    console.log('[conflictDetector] SUBSCRIBED TO SCHEDULE CHANGES');
+
     return () => {
+        console.log('[conflictDetector] UNSUBSCRIBING FROM SCHEDULE CHANGES');
         supabase.removeChannel(subscription);
     };
 };

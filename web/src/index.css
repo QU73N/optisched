@@ -6,6 +6,9 @@
 /* Import print stylesheet */
 @import './styles/print.css';
 
+/* Import skeleton system for instant UI rendering */
+@import './components/skeletons/SkeletonSystem.css';
+
 /* Tailwind (preflight disabled in tailwind.config.js to protect existing custom CSS) */
 /* stylelint-disable */
 @tailwind base;

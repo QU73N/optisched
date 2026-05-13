@@ -58,7 +58,8 @@
     font-size: var(--d-text-base);
     line-height: 1.5;
     overflow-x: hidden;
-    overflow-y: hidden;
+    overflow-y: auto;
+    max-height: 100vh;
 }
 
 .dashboard.fade-in { animation: dashFadeIn 240ms var(--ease-out) both; }
@@ -112,6 +113,12 @@
     border: 1px solid var(--border-default);
     border-radius: var(--d-radius-lg);
     margin-bottom: 20px;
+}
+
+/* More compact for student dashboard */
+.dashboard .dash-greeting {
+    padding: 16px 20px;
+    margin-bottom: 16px;
 }
 
 [data-theme="light"] .dash-greeting {
@@ -173,6 +180,12 @@
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--d-grid-gap);
     margin-bottom: 24px;
+}
+
+/* More compact for student dashboard */
+.dashboard .stats-grid {
+    margin-bottom: 16px;
+    gap: 12px;
 }
 
 .stat-card {
@@ -347,6 +360,11 @@
 
 .dash-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 
+/* More compact for student dashboard */
+.dashboard .dash-col {
+    gap: 16px;
+}
+
 /* ============================================================
    Card primitive
    ============================================================ */
@@ -420,6 +438,11 @@
     margin-bottom: 10px;
 }
 
+/* More compact for student dashboard */
+.dashboard .dash-section-header {
+    margin-bottom: 8px;
+}
+
 .dash-section-header h3 {
     margin: 0;
     font-family: var(--font-display);
@@ -464,6 +487,12 @@
     min-height: 80px;
 }
 
+/* More compact for dashboard to fit more classes */
+.dashboard .dash-schedule-panel {
+    padding: 10px;
+    gap: 6px;
+}
+
 [data-theme="light"] .dash-schedule-panel {
     background: var(--bg-secondary);
     box-shadow: var(--shadow-xs);
@@ -489,6 +518,16 @@
     border: 1px solid var(--border-default);
     border-radius: var(--d-radius-md);
     transition: background 160ms var(--ease-out), border-color 160ms var(--ease-out);
+}
+
+/* Compact version for student dashboard to fit more classes */
+.dashboard .dash-class-card {
+    padding: 10px 12px;
+    gap: 10px;
+}
+
+.dashboard .dash-class-details {
+    gap: 4px 10px;
 }
 
 [data-theme="light"] .dash-class-card { background: var(--bg-inset); }
@@ -565,6 +604,11 @@
     background: var(--bg-inset);
     border-radius: 2px;
     overflow: hidden;
+}
+
+/* More compact for student dashboard */
+.dashboard .dash-progress {
+    margin-top: 6px;
 }
 
 .dash-progress-fill {
@@ -717,6 +761,11 @@
     border: 1px solid var(--border-default);
     border-radius: var(--d-radius-md);
     padding: 14px 16px;
+}
+
+/* More compact for student dashboard */
+.dashboard .dash-chart-card {
+    padding: 12px 14px;
 }
 
 .dash-chart-card + .dash-chart-card { margin-top: 8px; }
@@ -1778,6 +1827,9 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
     padding: 18px 20px;
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .sg-stage-card.sg-compact {
@@ -2067,20 +2119,19 @@
     transform: translateX(-50%);
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    padding: 10px 14px;
-    min-width: 200px;
-    max-width: 300px;
-    box-shadow: var(--shadow-lg);
+    border-radius: 6px;
+    padding: 8px 12px;
+    width: 240px;
+    max-width: 90vw;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    font-weight: normal;
+    text-align: left;
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.2s ease, visibility 0.2s ease;
-    font-size: 11px;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    font-weight: normal;
-    text-align: left;
 }
 
 .sg-break-tooltip::before {
@@ -2117,10 +2168,6 @@
 }
 
 .sg-field-tooltip {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);
@@ -2129,41 +2176,12 @@
     max-width: 350px;
     box-shadow: var(--shadow-lg);
     z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.2s ease, visibility 0.2s ease;
     font-size: 11px;
     line-height: 1.5;
     color: var(--text-secondary);
     text-align: left;
     white-space: pre-wrap;
     font-weight: normal;
-}
-
-.sg-field-tooltip::before {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: var(--bg-elevated);
-}
-
-.sg-field-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 7px solid transparent;
-    border-top-color: var(--border-default);
-    margin-top: -1px;
-}
-
-.sg-field-tooltip-wrapper:hover .sg-field-tooltip {
-    opacity: 1;
-    visibility: visible;
 }
 
 .sg-sep { font-size: 12px; color: var(--text-muted); }

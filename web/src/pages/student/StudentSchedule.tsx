@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { CalendarDays, Clock, MapPin, ChevronLeft, ChevronRight, List, LayoutGrid, Timer, Download } from 'lucide-react';
@@ -15,32 +15,76 @@ interface ScheduleItem {
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const HOUR_HEIGHT = 64;
 const START_HOUR = 7;
-const END_HOUR = 21;
+const END_HOUR = 20; // Changed from 21 to 20
 const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#f97316'];
 
 const StudentSchedule: React.FC = () => {
     const { profile } = useAuth();
-    const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
+    const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
+    const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'timeline' | 'grid' | 'table'>('timeline');
     const [selectedDay, setSelectedDay] = useState(() => {
         const d = new Date().getDay();
         return d === 0 ? 'Monday' : dayOrder[d - 1] || 'Monday';
     });
 
+    const fetchStudentSection = useCallback(async () => {
+        try {
+            // Fix: Use a simpler query without !inner join to avoid 406 error
+            const { data: studentData, error: studentError } = await supabase
+                .from('students')
+                .select('section_id')
+                .eq('profile_id', profile?.id)
+                .eq('is_active', true)
+                .single();
+
+            if (studentError) {
+                console.error('[StudentSchedule] Failed to fetch student section:', studentError);
+                setLoading(false);
+                return;
+            }
+
+            if (studentData) {
+                setStudentSectionId(studentData.section_id);
+                // Fetch section name separately
+                const { data: sectionData } = await supabase
+                    .from('sections')
+                    .select('name')
+                    .eq('id', studentData.section_id)
+                    .single();
+                setStudentSectionName(sectionData?.name || null);
+                fetchSchedules();
+            } else {
+                console.warn('[StudentSchedule] No student record found for profile');
+                setLoading(false);
+            }
+        } catch (err) {
+            console.error('[StudentSchedule] Error fetching student section:', err);
+            setLoading(false);
+        }
+    }, [profile?.id]);
+
     useEffect(() => {
-        if (profile?.section) fetchSchedules();
-        else setLoading(false);
-    }, [profile]);
+        if (profile) {
+            fetchStudentSection();
+        } else {
+            setLoading(false);
+        }
+    }, [profile, fetchStudentSection]);
 
     const fetchSchedules = async () => {
+        if (!studentSectionId) {
+            setLoading(false);
+            return;
+        }
         try {
             const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
             if (rpcError) { console.error('[StudentSchedule] RPC error:', rpcError); setLoading(false); return; }
-            // Filter to this student's section + published
-            const sectionName = (profile!.section || '').toLowerCase();
+            // Filter to this student's section + published + active
             const filtered = (rpcData || [])
-                .filter((s: any) => s.status === 'published' && (s.section_name || '').toLowerCase() === sectionName)
+                .filter((s: any) => s.status === 'published' && s.is_active === true && s.section_id === studentSectionId)
                 .map((s: any) => ({
                     id: s.id,
                     day_of_week: s.day_of_week,
@@ -100,7 +144,7 @@ const StudentSchedule: React.FC = () => {
             <div className="dashboard-header">
                 <div>
                     <h1 className="dashboard-title">My Schedule</h1>
-                    <p className="dashboard-subtitle">{profile?.program && profile?.section ? `${profile.program} - Section ${profile.section}` : 'Class schedule'}</p>
+                    <p className="dashboard-subtitle">{profile?.program && studentSectionName ? `${profile.program} - Section ${studentSectionName}` : 'Class schedule'}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <button className="btn btn-secondary btn-sm" onClick={exportCSV} disabled={schedules.length === 0}>

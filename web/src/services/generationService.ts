@@ -42,11 +42,16 @@ export interface SaveGenerationMetadataInput {
  * Uses system_rules table instead of institutional_policies
  */
 export async function getSystemRules(): Promise<SystemRule[]> {
+    console.log('[generationService] GET SYSTEM RULES START');
     const { data, error } = await supabase
         .from('system_rules')
         .select('*');
 
-    if (error) throw error;
+    if (error) {
+        console.error('[generationService] GET SYSTEM RULES FAILED:', error);
+        throw error;
+    }
+    console.log('[generationService] GET SYSTEM RULES SUCCESS:', { count: data?.length || 0 });
     return data || [];
 }
 
@@ -56,14 +61,19 @@ export async function getSystemRules(): Promise<SystemRule[]> {
  * @returns The rule value or null if not found
  */
 export async function getRuleValue(key: string): Promise<unknown> {
+    console.log('[generationService] GET RULE VALUE START:', { key });
     const { data, error } = await supabase
         .from('system_rules')
         .select('rule_value')
         .eq('rule_key', key)
         .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+        console.error('[generationService] GET RULE VALUE FAILED:', error);
+        throw error;
+    }
 
+    console.log('[generationService] GET RULE VALUE SUCCESS:', { found: !!data, value: data?.rule_value });
     return data?.rule_value ?? null;
 }
 
@@ -72,6 +82,7 @@ export async function getRuleValue(key: string): Promise<unknown> {
  * @returns Record of rule_key -> rule_value
  */
 export async function getRulesAsRecord(): Promise<Record<string, unknown>> {
+    console.log('[generationService] GET RULES AS RECORD START');
     const rules = await getSystemRules();
     const record: Record<string, unknown> = {};
 
@@ -79,10 +90,18 @@ export async function getRulesAsRecord(): Promise<Record<string, unknown>> {
         record[rule.rule_key] = rule.rule_value;
     }
 
+    console.log('[generationService] GET RULES AS RECORD SUCCESS:', { count: Object.keys(record).length });
     return record;
 }
 
 export async function saveGenerationMetadata(input: SaveGenerationMetadataInput): Promise<string | null> {
+    console.log('[generationService] SAVE GENERATION METADATA START:', {
+        mode: input.mode,
+        totalSessions: input.total_sessions,
+        placedSessions: input.placed_sessions,
+        score: input.score,
+        status: input.status
+    });
     try {
         const { data, error } = await supabase
             .from('generation_runs')
@@ -106,11 +125,15 @@ export async function saveGenerationMetadata(input: SaveGenerationMetadataInput)
             .select('id')
             .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+            console.error('[generationService] SAVE GENERATION METADATA FAILED:', error);
+            throw error;
+        }
+        console.log('[generationService] SAVE GENERATION METADATA SUCCESS:', { id: data?.id });
         return data?.id || null;
     } catch (error) {
         // Log error but don't fail generation
-        console.error('Failed to save generation metadata:', error);
+        console.error('[generationService] SAVE GENERATION METADATA ERROR:', error);
         return null;
     }
 }
@@ -126,7 +149,11 @@ export async function notifyStudentsOfScheduleChanges(
     status: 'draft' | 'submitted' | 'approved' | 'published',
     isUpdate: boolean = false
 ): Promise<void> {
-    if (sectionIds.length === 0) return;
+    console.log('[generationService] NOTIFY STUDENTS START:', { sectionIds: sectionIds.length, status, isUpdate });
+    if (sectionIds.length === 0) {
+        console.log('[generationService] NOTIFY STUDENTS: No sections to notify');
+        return;
+    }
 
     try {
         // Get all active students in the affected sections
@@ -137,13 +164,16 @@ export async function notifyStudentsOfScheduleChanges(
             .eq('is_active', true);
 
         if (studentsError) {
-            console.error('Failed to fetch students for notification:', studentsError);
+            console.error('[generationService] NOTIFY STUDENTS: Failed to fetch students:', studentsError);
             return;
         }
 
         if (!students || students.length === 0) {
+            console.log('[generationService] NOTIFY STUDENTS: No students found in sections');
             return; // No students to notify
         }
+
+        console.log('[generationService] NOTIFY STUDENTS: Found students:', { count: students.length });
 
         // Group students by profile_id to avoid duplicate notifications
         const studentMap = new Map<string, string[]>();
@@ -153,6 +183,8 @@ export async function notifyStudentsOfScheduleChanges(
             }
             studentMap.get(student.profile_id)?.push(student.section_id);
         }
+
+        console.log('[generationService] NOTIFY STUDENTS: Unique students to notify:', studentMap.size);
 
         // Create notifications for each unique student
         const notificationPromises = Array.from(studentMap.entries()).map(async ([profileId, affectedSectionIds]) => {
@@ -173,14 +205,14 @@ export async function notifyStudentsOfScheduleChanges(
                     168 // 7 days
                 );
             } catch (error) {
-                console.error(`Failed to create notification for student ${profileId}:`, error);
+                console.error(`[generationService] NOTIFY STUDENTS: Failed for student ${profileId}:`, error);
             }
         });
 
         await Promise.all(notificationPromises);
-        console.log(`Notified ${studentMap.size} students of schedule changes`);
+        console.log(`[generationService] NOTIFY STUDENTS: Notified ${studentMap.size} students successfully`);
     } catch (error) {
-        console.error('Failed to notify students of schedule changes:', error);
+        console.error('[generationService] NOTIFY STUDENTS: Error:', error);
     }
 }
 
@@ -189,6 +221,7 @@ export async function notifyStudentsOfScheduleChanges(
  * @param sectionIds - Array of section IDs that were published
  */
 export async function notifyStudentsOfSchedulePublication(sectionIds: string[]): Promise<void> {
+    console.log('[generationService] NOTIFY PUBLICATION START:', { sectionIds: sectionIds.length });
     await notifyStudentsOfScheduleChanges(sectionIds, 'published', false);
 }
 

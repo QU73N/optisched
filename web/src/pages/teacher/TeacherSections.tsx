@@ -34,7 +34,7 @@ const TeacherSections: React.FC = () => {
                     .from('schedules')
                     .select('section_id, section:sections(id, name, program, year_level, student_count), subject:subjects(code)')
                     .eq('teacher_id', t.id)
-                    .eq('status', 'published')
+                    .eq('status', 'published').neq('status', 'archived')
                     .eq('is_active', true);
 
                 const map = new Map<string, Row>();

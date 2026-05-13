@@ -169,8 +169,10 @@
 
 /* ============ NAVIGATION ============ */
 .lp-nav {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 50;
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
@@ -399,6 +401,13 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  line-height: 1.4;
+}
+
+.lp-eyebrow svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
 .lp-eyebrow-dot {
@@ -533,11 +542,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  line-height: 1.4;
 }
 
 .lp-hero-meta-item svg {
   color: var(--lp-accent);
   flex-shrink: 0;
+  width: 13px;
+  height: 13px;
 }
 
 /* ============ HERO VISUAL (Command Center) ============ */
@@ -962,6 +974,9 @@
 
 .lp-trust-pill svg {
   color: var(--lp-accent);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 /* ============ SECTION BASE ============ */
@@ -1944,7 +1959,7 @@
 .lp-final {
   position: relative;
   z-index: 1;
-  padding: 0;
+  padding: 96px 0 64px;
 }
 
 .lp-final-aurora {
@@ -1959,6 +1974,11 @@
 
 @media (max-width: 768px) {
   .lp-final-aurora { padding: 80px 0 64px; }
+  .pricing-grid { grid-template-columns: 1fr; gap: 24px; }
+}
+
+@media (max-width: 1024px) {
+  .pricing-grid { grid-template-columns: 1fr 1fr; gap: 24px; }
 }
 
 .lp-final-card {
@@ -2020,6 +2040,13 @@
   text-transform: uppercase;
   color: #bde8f5;
   margin-bottom: 22px;
+  line-height: 1.4;
+}
+
+.lp-final-eyebrow svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
 .lp-final-title {
@@ -2093,8 +2120,8 @@
 
 .lp-footer-top {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1fr;
-  gap: 40px;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
+  gap: 32px;
   padding-bottom: 28px;
   border-bottom: 1px solid var(--lp-border);
 }
@@ -2135,6 +2162,112 @@
   color: var(--lp-accent);
 }
 
+.lp-nav-link-active {
+  color: var(--lp-accent) !important;
+}
+
+.lp-footer-link-active {
+  color: var(--lp-accent) !important;
+}
+
+/* View transitions */
+.lp-main-content {
+  position: relative;
+  min-height: calc(100vh - 200px);
+  padding-top: 68px;
+}
+
+.lp-view-container {
+  position: relative;
+  min-height: 100vh;
+}
+
+.lp-view-landing-content,
+.lp-view-pricing-content {
+  transition: opacity 350ms cubic-bezier(0.4, 0, 0.2, 1), transform 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: opacity, transform;
+}
+
+.lp-view-visible {
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  position: relative !important;
+}
+
+.lp-view-hidden {
+  opacity: 0 !important;
+  transform: translateY(16px) scale(0.98) !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  visibility: hidden !important;
+}
+
+.lp-view-landing {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.lp-view-pricing {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Animation for entering pricing */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(32px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Only apply animations when animations are enabled and view is visible */
+.animations-enabled.lp-view-visible.lp-view-pricing-content > section > .lp-section-head {
+  opacity: 0;
+  animation: fadeInUp 450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation-delay: 100ms;
+}
+
+.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-card {
+  opacity: 0;
+  animation: fadeInUp 450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-card:nth-child(1) {
+  animation-delay: 180ms;
+}
+
+.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-card:nth-child(2) {
+  animation-delay: 260ms;
+}
+
+.animations-enabled.lp-view-visible.lp-view-pricing-content .pricing-card:nth-child(3) {
+  animation-delay: 340ms;
+}
+
+/* Animation for landing sections when becoming visible */
+.animations-enabled.lp-view-visible.lp-view-landing-content > section {
+  opacity: 1 !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+/* Disable reveal animations when view is visible to prevent conflicts */
+.lp-view-visible.lp-view-landing-content > section.reveal,
+.lp-view-visible.lp-view-landing-content > section.reveal-stage {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
+
 .lp-footer-bottom {
   display: flex;
   justify-content: space-between;
@@ -2155,10 +2288,232 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  line-height: 1.4;
 }
 
 .lp-footer-trust svg {
   color: var(--lp-accent);
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+/* ============ PRICING GRID ============ */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  margin-top: 48px;
+}
+
+.pricing-card {
+  position: relative;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-r-lg);
+  padding: 36px 28px;
+  transition:
+    transform 350ms var(--lp-ease),
+    border-color 300ms var(--lp-ease),
+    box-shadow 400ms var(--lp-ease),
+    background 300ms var(--lp-ease);
+  display: flex;
+  flex-direction: column;
+}
+
+.pricing-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--lp-accent);
+  box-shadow: var(--lp-shadow-md), 0 34px 70px -24px var(--lp-glow);
+}
+
+.pricing-card-premium {
+  background: linear-gradient(180deg, var(--lp-surface) 0%, var(--lp-surface-2) 100%);
+  border-color: var(--lp-border-strong);
+}
+
+.pricing-card-enterprise {
+  background: linear-gradient(180deg, var(--lp-surface-2) 0%, var(--lp-surface-3) 100%);
+}
+
+.pricing-popular-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #1c4d8d, #2f67aa);
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  box-shadow: 0 4px 16px -6px rgba(28, 77, 141, 0.4);
+}
+
+.pricing-card-header {
+  margin-bottom: 24px;
+}
+
+.pricing-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--lp-surface-3);
+  border: 1px solid var(--lp-border);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lp-ink-dim);
+  margin-bottom: 16px;
+}
+
+.pricing-tier-badge-premium {
+  background: var(--lp-accent-soft);
+  border-color: var(--lp-accent);
+  color: var(--lp-accent);
+}
+
+.pricing-tier-badge-enterprise {
+  background: rgba(189, 232, 245, 0.15);
+  border-color: rgba(189, 232, 245, 0.3);
+  color: #7fb0db;
+}
+
+.pricing-tier-name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--lp-ink);
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+.pricing-tier-sub {
+  font-size: 14px;
+  color: var(--lp-ink-soft);
+  line-height: 1.5;
+}
+
+.pricing-tier-price {
+  margin-bottom: 24px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.pricing-currency {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--lp-ink);
+}
+
+.pricing-amount {
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 700;
+  color: var(--lp-ink);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.pricing-period {
+  font-size: 14px;
+  color: var(--lp-ink-dim);
+  font-weight: 500;
+}
+
+.pricing-features {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex-grow: 1;
+}
+
+.pricing-features-include {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lp-accent);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.pricing-feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--lp-ink-soft);
+  line-height: 1.5;
+}
+
+.pricing-feature-icon {
+  color: var(--lp-accent);
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+/* Social media icons */
+.lp-footer-socials {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.lp-footer-socials a {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--lp-surface-2);
+  border: 1px solid var(--lp-border);
+  display: grid;
+  place-items: center;
+  color: var(--lp-ink-soft);
+  transition:
+    transform 200ms var(--lp-ease),
+    background 200ms var(--lp-ease),
+    border-color 200ms var(--lp-ease),
+    color 200ms var(--lp-ease),
+    scale 200ms var(--lp-ease);
+}
+
+.lp-footer-socials a:hover {
+  transform: translateY(-2px);
+  background: var(--lp-accent-soft);
+  border-color: var(--lp-accent);
+  color: var(--lp-accent);
+  scale: 1.08;
+}
+
+.lp-footer-socials a:active {
+  scale: 0.98;
+  transition-duration: 100ms;
+}
+
+/* Contact links with icons */
+.lp-footer-contact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  line-height: 1.4;
+}
+
+.lp-footer-contact svg {
+  color: var(--lp-accent);
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
 /* ============ LOGIN MODAL ============ */
@@ -2594,6 +2949,7 @@
   .landing-container { padding: 0 20px; }
   .lp-nav-inner { padding: 0 20px; height: 60px; }
   .lp-nav-links { display: none; }
+  .lp-main-content { padding-top: 60px; }
 
   .lp-section { padding: 72px 0; }
   .lp-section-head { margin-bottom: 40px; }
@@ -2612,11 +2968,11 @@
   .lp-bento-card { padding: 22px 20px; }
 
   .lp-footer-top {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 28px;
   }
   .lp-footer-about {
-    grid-column: span 2;
+    grid-column: span 3;
   }
 }
 
@@ -2634,7 +2990,7 @@
   .lp-roles { grid-template-columns: 1fr; }
   .lp-workflow-track { grid-template-columns: 1fr; gap: 28px; }
 
-  .lp-final { padding: 80px 0 64px; }
+  .lp-final { padding: 64px 0 64px; }
   .lp-final-actions { flex-direction: column; align-items: stretch; }
   .lp-final-actions .lp-btn { width: 100%; }
 

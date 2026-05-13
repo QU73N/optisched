@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 
 import { Send, Wand2, Loader2, RotateCcw } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { sendToOptiBot } from '../../services/optibotService';
 import type { GeminiMessage } from '../../services/optibotService';
 
@@ -135,7 +136,7 @@ const OptiBotPage: React.FC = () => {
     };
 
     const renderMarkdown = (text: string) => {
-        return text
+        const html = text
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`(.*?)`/g, '<code>$1</code>')
@@ -144,6 +145,7 @@ const OptiBotPage: React.FC = () => {
             .replace(/^# (.*)$/gm, '<h2>$1</h2>')
             .replace(/^[-•*] (.*)$/gm, '<li>$1</li>')
             .replace(/\n/g, '<br/>');
+        return DOMPurify.sanitize(html);
     };
 
     return (

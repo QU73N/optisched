@@ -373,6 +373,10 @@ class ScheduleVersionService {
             changeReason?: string;
         }
     ): Promise<PublishResult> {
+        console.log('[scheduleVersionService] SAVE DRAFT START:', {
+            scheduleCount: schedules.length,
+            options
+        });
         if (!this.supabase || !this.currentUserId) {
             throw new Error('Version service not initialized');
         }
@@ -385,6 +389,7 @@ class ScheduleVersionService {
         let insertedScheduleIds: string[] = [];
 
         if (!schedules || schedules.length === 0) {
+            console.warn('[scheduleVersionService] SAVE DRAFT: No schedules provided');
             return {
                 success: false,
                 message: 'No schedules provided to save. Draft cannot be empty.',
@@ -396,8 +401,32 @@ class ScheduleVersionService {
         }
 
         try {
+            // Check for existing active drafts before creating new one
+            const { data: existingDrafts } = await this.supabase
+                .from('schedules')
+                .select('batch_id, status, is_active')
+                .eq('status', 'draft')
+                .eq('is_active', true);
+
+            console.log('[scheduleVersionService] SAVE DRAFT: Existing active drafts:', {
+                count: existingDrafts?.length || 0,
+                batchIds: [...new Set(existingDrafts?.map(d => d.batch_id) || [])]
+            });
+
+            // Check for active versions across all batches
+            const { data: allActiveVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, batch_id, is_active, change_type')
+                .eq('is_active', true);
+
+            console.log('[scheduleVersionService] SAVE DRAFT: All active versions before save:', {
+                total: allActiveVersions?.length || 0,
+                versions: allActiveVersions?.map(v => ({ id: v.id, batch_id: v.batch_id, change_type: v.change_type }))
+            });
+
             // Compute state hash for the new schedules
             const stateHash = scheduleValidation.computeStateHash(schedules);
+            console.log('[scheduleVersionService] SAVE DRAFT: State hash computed:', stateHash);
 
             // Step 1 - Create new batch for the draft
             const { data: newBatch, error: batchError } = await this.supabase
@@ -410,13 +439,15 @@ class ScheduleVersionService {
                 });
 
             if (batchError) {
+                console.error('[scheduleVersionService] SAVE DRAFT: Failed to create batch:', batchError);
                 throw new Error(`Failed to create batch: ${batchError.message}`);
             }
 
             createdBatchId = newBatch;
-            console.log(`[VERSION SERVICE] Created draft batch ${createdBatchId}`);
+            console.log(`[scheduleVersionService] SAVE DRAFT: Created draft batch ${createdBatchId}`);
 
             // Step 2 - Deactivate existing draft schedules (keep only one active draft)
+            console.log('[scheduleVersionService] SAVE DRAFT: Deactivating existing draft schedules');
             const { error: deactivateError } = await this.supabase
                 .from('schedules')
                 .update({ is_active: false })
@@ -424,8 +455,10 @@ class ScheduleVersionService {
                 .eq('is_active', true);
 
             if (deactivateError) {
-                console.warn('[VERSION SERVICE] Failed to deactivate previous drafts:', deactivateError);
+                console.warn('[scheduleVersionService] SAVE DRAFT: Failed to deactivate previous drafts:', deactivateError);
                 // Continue anyway
+            } else {
+                console.log('[scheduleVersionService] SAVE DRAFT: Existing drafts deactivated successfully');
             }
 
             // Step 3 - Insert new draft schedules with batch_id
@@ -445,21 +478,25 @@ class ScheduleVersionService {
                 created_by: this.currentUserId,
             }));
 
+            console.log('[scheduleVersionService] SAVE DRAFT: Inserting schedules:', { count: inserts.length });
+
             const { data: insertedSchedules, error: insertError } = await this.supabase
                 .from('schedules')
                 .insert(inserts)
                 .select('id');
 
             if (insertError) {
+                console.error('[scheduleVersionService] SAVE DRAFT: Insert failed:', insertError);
                 // ROLLBACK: Clean up
                 await this.supabase.from('schedule_batches').delete().eq('id', createdBatchId);
                 throw new Error(`Insert failed: ${insertError.message}`);
             }
 
             insertedScheduleIds = (insertedSchedules || []).map(s => s.id);
-            console.log(`[VERSION SERVICE] Inserted ${insertedScheduleIds.length} draft schedules into batch ${createdBatchId}`);
+            console.log(`[scheduleVersionService] SAVE DRAFT: Inserted ${insertedScheduleIds.length} draft schedules into batch ${createdBatchId}`);
 
             // Step 4 - Create batch-level version for the draft
+            console.log('[scheduleVersionService] SAVE DRAFT: Creating batch version');
             const { data: version, error: versionError } = await this.supabase
                 .rpc('create_batch_version', {
                     p_batch_id: createdBatchId,
@@ -474,6 +511,7 @@ class ScheduleVersionService {
                 });
 
             if (versionError) {
+                console.error('[scheduleVersionService] SAVE DRAFT: Version creation failed:', versionError);
                 // ROLLBACK: Clean up
                 await this.supabase.from('schedules').delete().in('id', insertedScheduleIds);
                 await this.supabase.from('schedule_batches').delete().eq('id', createdBatchId);
@@ -481,9 +519,10 @@ class ScheduleVersionService {
             }
 
             createdVersionId = version;
-            console.log(`[VERSION SERVICE] Created draft version ${createdVersionId}`);
+            console.log(`[scheduleVersionService] SAVE DRAFT: Created draft version ${createdVersionId}`);
 
             // Step 5 - Activate the draft batch and version
+            console.log('[scheduleVersionService] SAVE DRAFT: Activating batch and version');
             await this.supabase
                 .from('schedule_batches')
                 .update({ is_active: true })
@@ -500,12 +539,18 @@ class ScheduleVersionService {
                 .eq('is_active', true);
 
             if (!verifiedSchedules || verifiedSchedules.length !== schedules.length) {
+                console.error('[scheduleVersionService] SAVE DRAFT: Schedule count mismatch:', {
+                    expected: schedules.length,
+                    actual: verifiedSchedules?.length || 0,
+                });
                 scheduleLogger.system.error('system', 'persistence', 'Schedule count mismatch', {
                     expected: schedules.length,
                     actual: verifiedSchedules?.length || 0,
                 });
                 throw new Error(`Persistence verification failed: Schedule count mismatch (expected ${schedules.length}, got ${verifiedSchedules?.length || 0})`);
             }
+
+            console.log('[scheduleVersionService] SAVE DRAFT: Schedule count verified:', verifiedSchedules.length);
 
             // NORMALIZE FETCHED DATA: Remove server-generated fields before hash comparison
             // The database INSERT adds id, created_at, updated_at fields not present in input
@@ -526,7 +571,7 @@ class ScheduleVersionService {
             }));
 
             const verifiedHash = scheduleValidation.computeStateHash(normalizedFetched as unknown as Schedule[]);
-            console.log('[VERSION SERVICE] Hash verification:', {
+            console.log('[scheduleVersionService] SAVE DRAFT: Hash verification:', {
                 expected: stateHash,
                 actual: verifiedHash,
                 scheduleCount: verifiedSchedules.length,
@@ -543,8 +588,26 @@ class ScheduleVersionService {
                     firstFetchedFields: verifiedSchedules[0] ? Object.keys(verifiedSchedules[0]).sort() : [],
                     firstNormalizedFields: normalizedFetched[0] ? Object.keys(normalizedFetched[0]).sort() : [],
                 };
+                console.error('[scheduleVersionService] SAVE DRAFT: State hash mismatch:', debugInfo);
                 scheduleLogger.system.error('system', 'persistence', 'State hash mismatch - data normalization debugging', debugInfo);
                 throw new Error('Persistence verification failed: State hash mismatch after normalization');
+            }
+
+            console.log('[scheduleVersionService] SAVE DRAFT: Hash verified successfully');
+
+            // Verify no duplicate active versions after save
+            const { data: finalActiveVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, batch_id, is_active, change_type')
+                .eq('is_active', true);
+
+            console.log('[scheduleVersionService] SAVE DRAFT: Final active versions:', {
+                total: finalActiveVersions?.length || 0,
+                versions: finalActiveVersions?.map(v => ({ id: v.id, batch_id: v.batch_id, change_type: v.change_type }))
+            });
+
+            if (finalActiveVersions && finalActiveVersions.length > 1) {
+                console.error('[scheduleVersionService] SAVE DRAFT: WARNING - Multiple active versions detected!');
             }
 
             // Update canonical state manager
@@ -558,7 +621,7 @@ class ScheduleVersionService {
                         changeDescription: `Saved draft with ${verifiedSchedules.length} sessions`,
                     }
                 );
-                console.log(`[VERSION SERVICE] State manager updated: ${version}`);
+                console.log(`[scheduleVersionService] SAVE DRAFT: State manager updated: ${version}`);
             }
 
             scheduleLogger.system.workflowCompleted('Schedule save draft', Date.now(), true);
@@ -573,6 +636,7 @@ class ScheduleVersionService {
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error('[scheduleVersionService] SAVE DRAFT: Error:', error);
             scheduleLogger.system.error('generate', 'persistence', 'Draft save failed', error);
             scheduleLogger.system.workflowCompleted('Schedule save draft', Date.now() - startTime, false);
 
@@ -599,6 +663,7 @@ class ScheduleVersionService {
             changeReason?: string;
         }
     ): Promise<PublishResult> {
+        console.log('[scheduleVersionService] SUBMIT SCHEDULE START:', { batchId, options });
         if (!this.supabase || !this.currentUserId) {
             throw new Error('Version service not initialized');
         }
@@ -615,8 +680,11 @@ class ScheduleVersionService {
                 .single();
 
             if (batchError || !batch) {
+                console.error('[scheduleVersionService] SUBMIT: Batch not found:', batchError);
                 throw new Error('Draft batch not found');
             }
+
+            console.log('[scheduleVersionService] SUBMIT: Batch found:', { id: batch.id, name: batch.name, status: batch.status });
 
             // Get the schedules in this batch
             const { data: schedules, error: schedulesError } = await this.supabase
@@ -626,8 +694,11 @@ class ScheduleVersionService {
                 .eq('is_active', true);
 
             if (schedulesError || !schedules) {
+                console.error('[scheduleVersionService] SUBMIT: Failed to fetch schedules:', schedulesError);
                 throw new Error('Failed to fetch schedules from batch');
             }
+
+            console.log('[scheduleVersionService] SUBMIT: Schedules fetched:', { count: schedules.length, statuses: [...new Set(schedules.map(s => s.status))] });
 
             if (schedules.length === 0) {
                 throw new Error('Cannot submit an empty schedule');
@@ -637,25 +708,34 @@ class ScheduleVersionService {
             const { data: activeVersion } = await this.supabase
                 .rpc('get_active_batch_version', { p_batch_id: batchId });
 
+            console.log('[scheduleVersionService] SUBMIT: Active version check:', {
+                found: !!(activeVersion && activeVersion.length > 0),
+                version: activeVersion && activeVersion.length > 0 ? { id: activeVersion[0].id, change_type: activeVersion[0].change_type, is_active: activeVersion[0].is_active } : null
+            });
+
             // Use existing active version, otherwise promote latest existing version (no creation)
             let versionId: string | null = activeVersion && activeVersion.length > 0 ? activeVersion[0].id : null;
 
             if (!versionId) {
                 const { data: latestVersion, error: latestError } = await this.supabase
                     .from('schedule_versions')
-                    .select('id, is_active')
+                    .select('id, is_active, change_type')
                     .eq('batch_id', batchId)
                     .order('changed_at', { ascending: false })
                     .limit(1)
                     .maybeSingle();
 
                 if (latestError) {
+                    console.error('[scheduleVersionService] SUBMIT: Failed to find latest version:', latestError);
                     throw new Error(`Failed to find version for submit: ${latestError.message}`);
                 }
+
+                console.log('[scheduleVersionService] SUBMIT: Latest version found:', latestVersion);
 
                 if (latestVersion?.id) {
                     versionId = latestVersion.id;
                     if (!latestVersion.is_active) {
+                        console.log('[scheduleVersionService] SUBMIT: Activating latest version:', versionId);
                         await this.supabase
                             .from('schedule_versions')
                             .update({ is_active: true })
@@ -665,13 +745,29 @@ class ScheduleVersionService {
             }
 
             if (!versionId) {
+                console.error('[scheduleVersionService] SUBMIT: No version exists for batch');
                 throw new Error('No version exists for this draft batch; cannot submit without an existing version');
             }
 
+            console.log('[scheduleVersionService] SUBMIT: Using version ID:', versionId);
+
+            // Check for duplicate active versions in this batch before update
+            const { data: allVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, is_active, change_type, changed_at')
+                .eq('batch_id', batchId);
+
+            console.log('[scheduleVersionService] SUBMIT: All versions in batch:', {
+                total: allVersions?.length || 0,
+                active: allVersions?.filter(v => v.is_active).length || 0,
+                versions: allVersions?.map(v => ({ id: v.id, is_active: v.is_active, change_type: v.change_type }))
+            });
+
             // Update schedules to submitted status
+            console.log('[scheduleVersionService] SUBMIT: Updating schedules to submitted status');
             const { error: updateError } = await this.supabase
                 .from('schedules')
-                .update({ 
+                .update({
                     status: 'submitted',
                     submitted_at: new Date().toISOString(),
                 })
@@ -679,11 +775,15 @@ class ScheduleVersionService {
                 .eq('is_active', true);
 
             if (updateError) {
+                console.error('[scheduleVersionService] SUBMIT: Failed to update schedules:', updateError);
                 throw new Error(`Failed to update status: ${updateError.message}`);
             }
 
+            console.log('[scheduleVersionService] SUBMIT: Schedules updated successfully');
+
             // Update the version to reflect the status change
             // If we created a new version, update it; if we used an existing one, update that one
+            console.log('[scheduleVersionService] SUBMIT: Updating version metadata to status_change');
             const { error: versionUpdateError } = await this.supabase
                 .from('schedule_versions')
                 .update({
@@ -696,6 +796,7 @@ class ScheduleVersionService {
                 .eq('id', versionId);
 
             if (versionUpdateError) {
+                console.error('[scheduleVersionService] SUBMIT: Version update failed, rolling back:', versionUpdateError);
                 // ROLLBACK: Revert status back to draft
                 await this.supabase
                     .from('schedules')
@@ -703,6 +804,24 @@ class ScheduleVersionService {
                     .eq('batch_id', batchId)
                     .eq('is_active', true);
                 throw new Error(`Version update failed: ${versionUpdateError.message}. Status has been reverted.`);
+            }
+
+            console.log('[scheduleVersionService] SUBMIT: Version updated successfully');
+
+            // Verify no duplicate active versions after update
+            const { data: finalVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, is_active, change_type')
+                .eq('batch_id', batchId);
+
+            console.log('[scheduleVersionService] SUBMIT: Final version state:', {
+                total: finalVersions?.length || 0,
+                active: finalVersions?.filter(v => v.is_active).length || 0,
+                versions: finalVersions?.map(v => ({ id: v.id, is_active: v.is_active, change_type: v.change_type }))
+            });
+
+            if (finalVersions && finalVersions.filter(v => v.is_active).length > 1) {
+                console.error('[scheduleVersionService] SUBMIT: WARNING - Multiple active versions detected!');
             }
 
             scheduleLogger.system.workflowCompleted('Schedule submit', Date.now(), true);
@@ -716,6 +835,7 @@ class ScheduleVersionService {
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error('[scheduleVersionService] SUBMIT: Error:', error);
             scheduleLogger.system.error('generate', 'persistence', 'Schedule submission failed', error);
             scheduleLogger.system.workflowCompleted('Schedule submit', Date.now() - startTime, false);
 
@@ -739,6 +859,7 @@ class ScheduleVersionService {
         batchId: string,
         options: { changeReason?: string } = {}
     ): Promise<PublishResult> {
+        console.log('[scheduleVersionService] APPROVE SCHEDULE START:', { batchId, options });
         if (!this.supabase || !this.currentUserId) throw new Error('Version service not initialized');
         const startTime = Date.now();
         scheduleLogger.system.workflowStarted('Schedule approve');
@@ -746,20 +867,56 @@ class ScheduleVersionService {
         try {
             // Get active version (required)
             const { data: activeVersion } = await this.supabase.rpc('get_active_batch_version', { p_batch_id: batchId });
-            if (!activeVersion || activeVersion.length === 0) throw new Error('No active version found');
+            if (!activeVersion || activeVersion.length === 0) {
+                console.error('[scheduleVersionService] APPROVE: No active version found');
+                throw new Error('No active version found');
+            }
+
+            console.log('[scheduleVersionService] APPROVE: Active version:', {
+                id: activeVersion[0].id,
+                change_type: activeVersion[0].change_type,
+                is_active: activeVersion[0].is_active
+            });
 
             // Get schedules
             const { data: schedules } = await this.supabase.from('schedules').select('*').eq('batch_id', batchId).eq('is_active', true);
-            if (!schedules) throw new Error('Failed to fetch schedules');
+            if (!schedules) {
+                console.error('[scheduleVersionService] APPROVE: Failed to fetch schedules');
+                throw new Error('Failed to fetch schedules');
+            }
+
+            console.log('[scheduleVersionService] APPROVE: Schedules fetched:', {
+                count: schedules.length,
+                statuses: [...new Set(schedules.map(s => s.status))]
+            });
+
+            // Check for duplicate active versions before update
+            const { data: allVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, is_active, change_type')
+                .eq('batch_id', batchId);
+
+            console.log('[scheduleVersionService] APPROVE: All versions in batch before update:', {
+                total: allVersions?.length || 0,
+                active: allVersions?.filter(v => v.is_active).length || 0,
+                versions: allVersions?.map(v => ({ id: v.id, is_active: v.is_active, change_type: v.change_type }))
+            });
 
             // Update schedules
+            console.log('[scheduleVersionService] APPROVE: Updating schedules to approved status');
             const { error: updateError } = await this.supabase.from('schedules')
                 .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: this.currentUserId })
                 .eq('batch_id', batchId).eq('is_active', true);
-            if (updateError) throw updateError;
+            if (updateError) {
+                console.error('[scheduleVersionService] APPROVE: Failed to update schedules:', updateError);
+                throw updateError;
+            }
+
+            console.log('[scheduleVersionService] APPROVE: Schedules updated successfully');
 
             // Update the existing active version to reflect the status change
             // Instead of creating a new version, we update the current version's metadata
+            console.log('[scheduleVersionService] APPROVE: Updating version metadata to status_change');
             const { error: versionUpdateError } = await this.supabase
                 .from('schedule_versions')
                 .update({
@@ -772,15 +929,35 @@ class ScheduleVersionService {
                 .eq('id', activeVersion[0].id);
 
             if (versionUpdateError) {
+                console.error('[scheduleVersionService] APPROVE: Version update failed, rolling back:', versionUpdateError);
                 // Rollback
                 await this.supabase.from('schedules').update({ status: 'submitted', approved_at: null, approved_by: null }).eq('batch_id', batchId).eq('is_active', true);
                 throw new Error(`Version update failed: ${versionUpdateError.message}. Status has been reverted.`);
+            }
+
+            console.log('[scheduleVersionService] APPROVE: Version updated successfully');
+
+            // Verify no duplicate active versions after update
+            const { data: finalVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, is_active, change_type')
+                .eq('batch_id', batchId);
+
+            console.log('[scheduleVersionService] APPROVE: Final version state:', {
+                total: finalVersions?.length || 0,
+                active: finalVersions?.filter(v => v.is_active).length || 0,
+                versions: finalVersions?.map(v => ({ id: v.id, is_active: v.is_active, change_type: v.change_type }))
+            });
+
+            if (finalVersions && finalVersions.filter(v => v.is_active).length > 1) {
+                console.error('[scheduleVersionService] APPROVE: WARNING - Multiple active versions detected!');
             }
 
             scheduleLogger.system.workflowCompleted('Schedule approve', Date.now(), true);
             return { success: true, message: 'Schedule approved successfully', version_set_id: batchId, version_count: 1, active_version_id: activeVersion[0].id };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error('[scheduleVersionService] APPROVE: Error:', error);
             scheduleLogger.system.error('generate', 'persistence', 'Schedule approval failed', error);
             scheduleLogger.system.workflowCompleted('Schedule approve', Date.now() - startTime, false);
             return { success: false, message: errorMessage, version_set_id: null, version_count: 0, active_version_id: null, warnings: [] };
@@ -796,18 +973,24 @@ class ScheduleVersionService {
         batchId: string,
         options: { changeReason?: string } = {}
     ): Promise<PublishResult> {
+        console.log('[scheduleVersionService] PUBLISH APPROVED SCHEDULE START:', { batchId, options });
         if (!this.supabase || !this.currentUserId) throw new Error('Version service not initialized');
         const startTime = Date.now();
         scheduleLogger.system.workflowStarted('Schedule publish');
         
         try {
-            // Deactivate existing published schedules
+            // Check if there's an active published schedule
             const hasActive = await this.hasActiveSchedule();
+            console.log('[scheduleVersionService] PUBLISH: Has active published schedule:', hasActive);
+
+            // Deactivate existing published schedules
             if (hasActive) {
+                console.log('[scheduleVersionService] PUBLISH: Deactivating existing published schedules');
                 await this.supabase.from('schedules').update({ is_active: false }).eq('status', 'published').eq('is_active', true);
                 
                 // Deactivate ALL old active versions from other batches (not just publish/overwrite/restore)
                 // This ensures status_change versions are also deactivated
+                console.log('[scheduleVersionService] PUBLISH: Deactivating old active versions from other batches');
                 await this.supabase.from('schedule_versions')
                     .update({ is_active: false })
                     .neq('batch_id', batchId)
@@ -816,24 +999,61 @@ class ScheduleVersionService {
 
             // Get active version
             const { data: activeVersion } = await this.supabase.rpc('get_active_batch_version', { p_batch_id: batchId });
-            if (!activeVersion || activeVersion.length === 0) throw new Error('No active version found');
+            if (!activeVersion || activeVersion.length === 0) {
+                console.error('[scheduleVersionService] PUBLISH: No active version found');
+                throw new Error('No active version found');
+            }
+
+            console.log('[scheduleVersionService] PUBLISH: Active version:', {
+                id: activeVersion[0].id,
+                change_type: activeVersion[0].change_type,
+                is_active: activeVersion[0].is_active
+            });
 
             // Get schedules
             const { data: schedules } = await this.supabase.from('schedules').select('*').eq('batch_id', batchId).eq('is_active', true);
-            if (!schedules) throw new Error('Failed to fetch schedules');
+            if (!schedules) {
+                console.error('[scheduleVersionService] PUBLISH: Failed to fetch schedules');
+                throw new Error('Failed to fetch schedules');
+            }
+
+            console.log('[scheduleVersionService] PUBLISH: Schedules fetched:', {
+                count: schedules.length,
+                statuses: [...new Set(schedules.map(s => s.status))]
+            });
+
+            // Check for duplicate active versions before update
+            const { data: allVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, is_active, change_type')
+                .eq('batch_id', batchId);
+
+            console.log('[scheduleVersionService] PUBLISH: All versions in batch before update:', {
+                total: allVersions?.length || 0,
+                active: allVersions?.filter(v => v.is_active).length || 0,
+                versions: allVersions?.map(v => ({ id: v.id, is_active: v.is_active, change_type: v.change_type }))
+            });
 
             // Update schedules
+            console.log('[scheduleVersionService] PUBLISH: Updating schedules to published status');
             const { error: updateError } = await this.supabase.from('schedules')
                 .update({ status: 'published' })
                 .eq('batch_id', batchId).eq('is_active', true);
-            if (updateError) throw updateError;
+            if (updateError) {
+                console.error('[scheduleVersionService] PUBLISH: Failed to update schedules:', updateError);
+                throw updateError;
+            }
+
+            console.log('[scheduleVersionService] PUBLISH: Schedules updated successfully');
 
             // Update the existing active version to reflect the status change
             // Instead of creating a new version, we update the current version's metadata
+            const newChangeType = hasActive ? 'overwrite' : 'publish';
+            console.log('[scheduleVersionService] PUBLISH: Updating version metadata to', newChangeType);
             const { error: versionUpdateError } = await this.supabase
                 .from('schedule_versions')
                 .update({
-                    change_type: hasActive ? 'overwrite' : 'publish',
+                    change_type: newChangeType,
                     change_summary: 'Published schedule',
                     change_reason: options.changeReason || 'Publish approved schedule',
                     changed_by: this.currentUserId,
@@ -842,18 +1062,54 @@ class ScheduleVersionService {
                 .eq('id', activeVersion[0].id);
 
             if (versionUpdateError) {
+                console.error('[scheduleVersionService] PUBLISH: Version update failed, rolling back:', versionUpdateError);
                 // Rollback
                 await this.supabase.from('schedules').update({ status: 'approved' }).eq('batch_id', batchId).eq('is_active', true);
                 throw new Error(`Version update failed: ${versionUpdateError.message}. Status has been reverted.`);
             }
+
+            console.log('[scheduleVersionService] PUBLISH: Version updated successfully');
             
             // Activate the batch
+            console.log('[scheduleVersionService] PUBLISH: Activating batch');
             await this.supabase.from('schedule_batches').update({ is_active: true }).eq('id', batchId);
+
+            // Verify no duplicate active versions after update
+            const { data: finalVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, is_active, change_type')
+                .eq('batch_id', batchId);
+
+            console.log('[scheduleVersionService] PUBLISH: Final version state:', {
+                total: finalVersions?.length || 0,
+                active: finalVersions?.filter(v => v.is_active).length || 0,
+                versions: finalVersions?.map(v => ({ id: v.id, is_active: v.is_active, change_type: v.change_type }))
+            });
+
+            if (finalVersions && finalVersions.filter(v => v.is_active).length > 1) {
+                console.error('[scheduleVersionService] PUBLISH: WARNING - Multiple active versions detected!');
+            }
+
+            // Verify global active versions (across all batches)
+            const { data: globalActiveVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, batch_id, is_active, change_type')
+                .eq('is_active', true);
+
+            console.log('[scheduleVersionService] PUBLISH: Global active versions:', {
+                total: globalActiveVersions?.length || 0,
+                versions: globalActiveVersions?.map(v => ({ id: v.id, batch_id: v.batch_id, change_type: v.change_type }))
+            });
+
+            if (globalActiveVersions && globalActiveVersions.length > 1) {
+                console.error('[scheduleVersionService] PUBLISH: WARNING - Multiple active versions across all batches!');
+            }
             
             scheduleLogger.system.workflowCompleted('Schedule publish', Date.now(), true);
             return { success: true, message: 'Schedule published successfully', version_set_id: batchId, version_count: 1, active_version_id: activeVersion[0].id };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error('[scheduleVersionService] PUBLISH: Error:', error);
             scheduleLogger.system.error('generate', 'persistence', 'Schedule publish failed', error);
             scheduleLogger.system.workflowCompleted('Schedule publish', Date.now() - startTime, false);
             return { success: false, message: errorMessage, version_set_id: null, version_count: 0, active_version_id: null, warnings: [] };
@@ -869,6 +1125,7 @@ class ScheduleVersionService {
         batchId: string,
         options: { changeReason?: string } = {}
     ): Promise<PublishResult> {
+        console.log('[scheduleVersionService] UNPUBLISH SCHEDULE START:', { batchId, options });
         if (!this.supabase || !this.currentUserId) throw new Error('Version service not initialized');
         const startTime = Date.now();
         scheduleLogger.system.workflowStarted('Schedule unpublish');
@@ -876,19 +1133,55 @@ class ScheduleVersionService {
         try {
             // Get active version
             const { data: activeVersion } = await this.supabase.rpc('get_active_batch_version', { p_batch_id: batchId });
-            if (!activeVersion || activeVersion.length === 0) throw new Error('No active version found');
+            if (!activeVersion || activeVersion.length === 0) {
+                console.error('[scheduleVersionService] UNPUBLISH: No active version found');
+                throw new Error('No active version found');
+            }
+
+            console.log('[scheduleVersionService] UNPUBLISH: Active version:', {
+                id: activeVersion[0].id,
+                change_type: activeVersion[0].change_type,
+                is_active: activeVersion[0].is_active
+            });
 
             // Get schedules
             const { data: schedules } = await this.supabase.from('schedules').select('*').eq('batch_id', batchId).eq('is_active', true);
-            if (!schedules) throw new Error('Failed to fetch schedules');
+            if (!schedules) {
+                console.error('[scheduleVersionService] UNPUBLISH: Failed to fetch schedules');
+                throw new Error('Failed to fetch schedules');
+            }
+
+            console.log('[scheduleVersionService] UNPUBLISH: Schedules fetched:', {
+                count: schedules.length,
+                statuses: [...new Set(schedules.map(s => s.status))]
+            });
+
+            // Check for duplicate active versions before update
+            const { data: allVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, is_active, change_type')
+                .eq('batch_id', batchId);
+
+            console.log('[scheduleVersionService] UNPUBLISH: All versions in batch before update:', {
+                total: allVersions?.length || 0,
+                active: allVersions?.filter(v => v.is_active).length || 0,
+                versions: allVersions?.map(v => ({ id: v.id, is_active: v.is_active, change_type: v.change_type }))
+            });
 
             // Update schedules back to draft status
+            console.log('[scheduleVersionService] UNPUBLISH: Updating schedules to draft status');
             const { error: updateError } = await this.supabase.from('schedules')
                 .update({ status: 'draft', published_at: null })
                 .eq('batch_id', batchId).eq('is_active', true);
-            if (updateError) throw updateError;
+            if (updateError) {
+                console.error('[scheduleVersionService] UNPUBLISH: Failed to update schedules:', updateError);
+                throw updateError;
+            }
+
+            console.log('[scheduleVersionService] UNPUBLISH: Schedules updated successfully');
 
             // Update the existing active version to mark it as inactive (becomes "previous")
+            console.log('[scheduleVersionService] UNPUBLISH: Marking version as inactive');
             const { error: versionUpdateError } = await this.supabase
                 .from('schedule_versions')
                 .update({
@@ -901,15 +1194,35 @@ class ScheduleVersionService {
                 .eq('id', activeVersion[0].id);
 
             if (versionUpdateError) {
+                console.error('[scheduleVersionService] UNPUBLISH: Version update failed, rolling back:', versionUpdateError);
                 // Rollback
                 await this.supabase.from('schedules').update({ status: 'published' }).eq('batch_id', batchId).eq('is_active', true);
                 throw new Error(`Version update failed: ${versionUpdateError.message}. Status has been reverted.`);
+            }
+
+            console.log('[scheduleVersionService] UNPUBLISH: Version marked as inactive successfully');
+
+            // Verify no duplicate active versions after update
+            const { data: finalVersions } = await this.supabase
+                .from('schedule_versions')
+                .select('id, is_active, change_type')
+                .eq('batch_id', batchId);
+
+            console.log('[scheduleVersionService] UNPUBLISH: Final version state:', {
+                total: finalVersions?.length || 0,
+                active: finalVersions?.filter(v => v.is_active).length || 0,
+                versions: finalVersions?.map(v => ({ id: v.id, is_active: v.is_active, change_type: v.change_type }))
+            });
+
+            if (finalVersions && finalVersions.filter(v => v.is_active).length > 0) {
+                console.error('[scheduleVersionService] UNPUBLISH: WARNING - Active versions still exist after unpublish!');
             }
             
             scheduleLogger.system.workflowCompleted('Schedule unpublish', Date.now(), true);
             return { success: true, message: 'Schedule unpublished successfully (now marked as previous)', version_set_id: batchId, version_count: 1, active_version_id: activeVersion[0].id };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error('[scheduleVersionService] UNPUBLISH: Error:', error);
             scheduleLogger.system.error('generate', 'persistence', 'Schedule unpublish failed', error);
             scheduleLogger.system.workflowCompleted('Schedule unpublish', Date.now() - startTime, false);
             return { success: false, message: errorMessage, version_set_id: null, version_count: 0, active_version_id: null, warnings: [] };

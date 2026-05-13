@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
 // Temporarily disabled audit logging - log_audit RPC function doesn't exist
 // import { logAudit } from '../../hooks/useActivityLogger';
@@ -32,6 +33,7 @@ interface SubmittedVersion {
 const ApprovalsPage: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const perms = usePermissions();
     const [loading, setLoading] = useState(true);
     const [acting, setActing] = useState<string | null>(null);
@@ -145,7 +147,7 @@ const ApprovalsPage: React.FC = () => {
             setItems(prev => prev.filter(i => i.id !== id));
         } catch (err) {
             console.error('[Approvals] approve failed', err);
-            alert('Failed to approve. Check console.');
+            showToast({ title: 'Failed to approve', message: 'Check console for details', type: 'error' });
         } finally {
             setActing(null);
         }
@@ -153,7 +155,7 @@ const ApprovalsPage: React.FC = () => {
 
     const reject = async (id: string) => {
         if (!rejectReason.trim()) {
-            alert('Please provide a rejection reason.');
+            showToast({ title: 'Rejection reason required', message: 'Please provide a rejection reason.', type: 'warning' });
             return;
         }
         setActing(id);
@@ -195,7 +197,7 @@ const ApprovalsPage: React.FC = () => {
             setItems(prev => prev.filter(i => i.id !== id));
         } catch (err) {
             console.error('[Approvals] reject failed', err);
-            alert('Failed to reject. Check console.');
+            showToast({ title: 'Failed to reject', message: 'Check console for details', type: 'error' });
         } finally {
             setActing(null);
             setShowRejectFor(null);
@@ -314,7 +316,7 @@ const ApprovalsPage: React.FC = () => {
                                 ) : (
                                     <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
                                         <button className="btn btn-primary" onClick={() => approve(item.id)} disabled={isActing}>
-                                            {isActing ? <Loader2 className="spin" size={14} /> : <CheckCircle size={14} />} Publish
+                                            {isActing ? <Loader2 className="spin" size={14} /> : <CheckCircle size={14} />} Approve
                                         </button>
                                         <button className="btn btn-secondary" onClick={() => setShowRejectFor(item.id)} disabled={isActing}>
                                             <XCircle size={14} /> Reject

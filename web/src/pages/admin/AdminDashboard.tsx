@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { supabase } from '../../lib/supabase';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../types/database';
 import type {
@@ -15,10 +16,20 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { ChartTooltip } from '../../components/ChartTooltip';
+import { ConfirmDialog } from '../../components/states/ConfirmDialog';
 import './Dashboard.css';
 
 const AdminDashboard: React.FC = () => {
     const { profile, roles } = useAuth();
+    const { showToast } = useToast();
+    
+    // Confirmation dialog state
+    const [confirmDialog, setConfirmDialog] = useState<{
+        open: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ open: false, title: '', message: '', onConfirm: () => {} });
     const [stats, setStats] = useState<DashboardStats>({ totalUsers: 0, teachers: 0, students: 0, schedules: 0, conflicts: 0, rooms: 0 });
     // Deltas: change vs ~7 days ago (positive = growth/increase)
     const [deltas, setDeltas] = useState<DashboardDeltas>({ schedules: 0, conflicts: 0, requests: 0 });
@@ -325,41 +336,53 @@ const AdminDashboard: React.FC = () => {
     const handleRequestAction = async (id: string, status: 'approved' | 'rejected', notes: string) => {
         setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
         const { error } = await supabase.from('schedule_change_requests').update({ status, admin_notes: notes }).eq('id', id);
-        if (error) { setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'pending' } : r)); alert('Error: ' + error.message); }
+        if (error) { setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'pending' } : r)); showToast({ title: 'Error', message: error.message, type: 'error' }); }
         setResolvingRequest(null);
         setResolveNotes('');
     };
 
     const handlePostAnnouncement = async () => {
-        if (!annTitle.trim()) return;
+        if (!annTitle.trim() || !annContent.trim()) return;
         setPostingAnn(true);
         try {
-            const prefix = annSection === 'All Sections' ? '[All Sections]' : `[${annSection}]`;
             if (editingAnn) {
-                await supabase.from('announcements').update({ title: `${prefix} ${annTitle}`, content: annContent, priority: annPriority, target_section: annSection }).eq('id', editingAnn.id);
+                await supabase.from('announcements').update({
+                    title: annPriority === 'important' ? `[${annPriority.toUpperCase()}] ${annTitle}` : annTitle,
+                    content: annContent,
+                    priority: annPriority,
+                    target_section: annSection === 'All Sections' ? null : annSection
+                }).eq('id', editingAnn.id);
             } else {
-                const { error } = await supabase.from('announcements').insert({
-                    title: `${prefix} ${annTitle}`, content: annContent, priority: annPriority,
-                    target_section: annSection, author_id: profile?.id,
-                    author_name: profile?.full_name || 'Admin',
+                await supabase.from('announcements').insert({
+                    title: annPriority === 'important' ? `[${annPriority.toUpperCase()}] ${annTitle}` : annTitle,
+                    content: annContent,
+                    priority: annPriority,
+                    target_section: annSection === 'All Sections' ? null : annSection
                 });
-                if (error) { alert('Failed to post: ' + error.message); setPostingAnn(false); return; }
             }
             setShowAnnModal(false); setAnnTitle(''); setAnnContent(''); setAnnPriority('normal'); setAnnSection('All Sections'); setEditingAnn(null);
             fetchAnnouncements();
-        } catch (e: unknown) { alert('Error: ' + (e instanceof Error ? e.message : String(e))); }
+            showToast({ title: 'Announcement saved', type: 'success' });
+        } catch (e: unknown) { showToast({ title: 'Error', message: e instanceof Error ? e.message : String(e), type: 'error' }); }
         setPostingAnn(false);
     };
 
     const handleDeleteAnn = async (id: string) => {
-        if (!window.confirm('Delete announcement?')) return;
-        try {
-            const { error } = await supabase.from('announcements').delete().eq('id', id);
-            if (error) throw error;
-            fetchAnnouncements();
-        } catch (e: unknown) {
-            alert('Failed to delete: ' + (e instanceof Error ? e.message : String(e)));
-        }
+        setConfirmDialog({
+            open: true,
+            title: 'Delete Announcement',
+            message: 'Are you sure you want to delete this announcement?',
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase.from('announcements').delete().eq('id', id);
+                    if (error) throw error;
+                    fetchAnnouncements();
+                    showToast({ title: 'Announcement deleted', type: 'success' });
+                } catch (e: unknown) {
+                    showToast({ title: 'Failed to delete', message: e instanceof Error ? e.message : String(e), type: 'error' });
+                }
+            }
+        });
     };
 
     const openEditAnn = (ann: Announcement) => {
@@ -389,19 +412,27 @@ const AdminDashboard: React.FC = () => {
             }
             setShowEventModal(false); setEvTitle(''); setEvDesc(''); setEvDate(new Date().toISOString().split('T')[0]); setEvStart('08:00'); setEvEnd('10:00'); setEvRoom(''); setEditingEvent(null);
             fetchEvents();
-        } catch (e: unknown) { alert('Error: ' + (e instanceof Error ? e.message : String(e))); }
+            showToast({ title: 'Event saved', type: 'success' });
+        } catch (e: unknown) { showToast({ title: 'Error', message: e instanceof Error ? e.message : String(e), type: 'error' }); }
         setPostingEvent(false);
     };
 
     const handleDeleteEvent = async (id: string) => {
-        if (!window.confirm('Delete event?')) return;
-        try {
-            const { error } = await supabase.from('custom_events').delete().eq('id', id);
-            if (error) throw error;
-            fetchEvents();
-        } catch (e: unknown) {
-            alert('Failed to delete: ' + (e instanceof Error ? e.message : String(e)));
-        }
+        setConfirmDialog({
+            open: true,
+            title: 'Delete Event',
+            message: 'Are you sure you want to delete this event?',
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase.from('custom_events').delete().eq('id', id);
+                    if (error) throw error;
+                    fetchEvents();
+                    showToast({ title: 'Event deleted', type: 'success' });
+                } catch (e: unknown) {
+                    showToast({ title: 'Failed to delete', message: e instanceof Error ? e.message : String(e), type: 'error' });
+                }
+            }
+        });
     };
 
     const openEditEvent = (ev: CustomEvent) => {
@@ -668,7 +699,7 @@ const AdminDashboard: React.FC = () => {
                             <label>Title</label>
                             <input className="input" value={annTitle} onChange={e => setAnnTitle(e.target.value)} placeholder="Announcement title" />
                             <label>Content</label>
-                            <textarea className="input" value={annContent} onChange={e => setAnnContent(e.target.value)} placeholder="Announcement content..." rows={3} />
+                            <textarea className="input" value={annContent} onChange={e => setAnnContent(e.target.value)} placeholder="Announcement content..." rows={3} style={{ height: '120px', overflowY: 'auto', resize: 'none' }} />
                             <label>Priority</label>
                             <div className="dash-btn-group">
                                 {(['Normal', 'Important'] as const).map(p => (
@@ -744,6 +775,15 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={confirmDialog.open}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
+                confirmVariant="danger"
+            />
 
             {/* Modal + spin styles are now defined globally in index.css */}
         </div>

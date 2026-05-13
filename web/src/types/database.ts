@@ -132,6 +132,9 @@ export interface Room {
     is_public: boolean;
     shared_with: string[];
     created_at: string;
+    room_facility_type?: string;
+    is_special_room?: boolean;
+    subject_compatibility?: Record<string, unknown>;
 }
 
 export interface Subject {
@@ -208,15 +211,19 @@ export interface Schedule {
 
 export interface ScheduleVersion {
     id: string;
-    schedule_id: string;
+    batch_id: string;
     version_number: number;
     snapshot: Record<string, unknown>;
-    change_type: 'created' | 'updated' | 'deleted' | 'status_change' | 'checkpoint';
+    change_type: 'created' | 'updated' | 'deleted' | 'status_change' | 'checkpoint' | 'publish' | 'overwrite' | 'restore';
     change_summary: string | null;
     change_reason: string | null;
     changed_by: string;
     changed_at: string;
     previous_version_id: string | null;
+    is_active: boolean;
+    state_hash?: string;
+    soft_score?: number;
+    conflict_count?: number;
 }
 
 export interface ScheduleVersionSet {

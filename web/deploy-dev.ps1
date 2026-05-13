@@ -13,9 +13,13 @@ if (-not (Test-Path ".env.development")) {
 Write-Host "Setting up environment..." -ForegroundColor Yellow
 Copy-Item ".env.development" ".env.local" -Force
 
-# Install dependencies
-Write-Host "Installing dependencies..." -ForegroundColor Yellow
-npm ci
+# Install dependencies (skip if node_modules exists)
+if (-not (Test-Path "node_modules")) {
+    Write-Host "Installing dependencies..." -ForegroundColor Yellow
+    npm ci
+} else {
+    Write-Host "Dependencies already installed, skipping..." -ForegroundColor Yellow
+}
 
 # Build the application
 Write-Host "Building application..." -ForegroundColor Yellow

@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import { History, CheckCircle, AlertTriangle, ArrowRight, FileText, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
+import { ConfirmDialog } from '../../components/states/ConfirmDialog';
 // Temporarily disabled audit logging - log_audit RPC function doesn't exist
 // import { logAudit } from '../../services/auditService';
 import '../admin/Dashboard.css';
@@ -31,9 +33,18 @@ type LabeledVersion = ScheduleVersion & { label?: string };
 
 const ScheduleVersions: React.FC = () => {
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const { role, roles } = useAuth();
     const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
     const isPowerAdmin = allRoles.some(r => r === 'admin' || r === 'power_admin');
+    
+    // Confirmation dialog state
+    const [confirmDialog, setConfirmDialog] = useState<{
+        open: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
     const [versions, setVersions] = useState<LabeledVersion[]>([]);
     const [loading, setLoading] = useState(true);
@@ -183,59 +194,58 @@ const ScheduleVersions: React.FC = () => {
 
     const handleDeleteAllSchedules = async () => {
         if (!isPowerAdmin) {
-            alert('Only Power Admin can delete all schedules.');
+            showToast({ title: 'Permission denied', message: 'Only Power Admin can delete all schedules', type: 'error' });
             return;
         }
 
-        if (!confirm('⚠️ DANGER: This will delete ALL schedules and ALL versions. This action cannot be undone. Are you absolutely sure?')) {
-            return;
-        }
+        setConfirmDialog({
+            open: true,
+            title: '⚠️ DANGER: Delete All Schedules',
+            message: 'This will permanently delete ALL schedules and ALL versions including all historical data. This action cannot be undone. Are you absolutely sure?',
+            onConfirm: async () => {
+                setIsDeletingAll(true);
 
-        if (!confirm('FINAL WARNING: This will permanently delete all schedule data including all historical versions. Type "DELETE" to confirm.')) {
-            return;
-        }
+                try {
+                    // Log audit before deletion
+                    // await logAudit('delete_all', 'schedules', null, {
+                    //     deleted_by: user?.id,
+                    //     reason: 'Power Admin deleted all schedules'
+                    // });
 
-        setIsDeletingAll(true);
+                    // Delete all schedule versions first (due to foreign key constraints)
+                    const { error: versionsError } = await supabase
+                        .from('schedule_versions')
+                        .delete()
+                        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
 
-        try {
-            // Log audit before deletion
-            // await logAudit('delete_all', 'schedules', null, {
-            //     deleted_by: user?.id,
-            //     reason: 'Power Admin deleted all schedules'
-            // });
+                    if (versionsError) {
+                        console.error('Error deleting schedule versions:', versionsError);
+                        throw versionsError;
+                    }
 
-            // Delete all schedule versions first (due to foreign key constraints)
-            const { error: versionsError } = await supabase
-                .from('schedule_versions')
-                .delete()
-                .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+                    // Delete all schedules
+                    const { error: schedulesError } = await supabase
+                        .from('schedules')
+                        .delete()
+                        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
 
-            if (versionsError) {
-                console.error('Error deleting schedule versions:', versionsError);
-                throw versionsError;
+                    if (schedulesError) {
+                        console.error('Error deleting schedules:', schedulesError);
+                        throw schedulesError;
+                    }
+
+                    showToast({ title: 'All schedules deleted', type: 'success' });
+                    
+                    // Refresh the versions
+                    loadVersions();
+                } catch (err: unknown) {
+                    console.error('Failed to delete all schedules:', err);
+                    showToast({ title: 'Failed to delete', message: err instanceof Error ? err.message : String(err), type: 'error' });
+                } finally {
+                    setIsDeletingAll(false);
+                }
             }
-
-            // Delete all schedules
-            const { error: schedulesError } = await supabase
-                .from('schedules')
-                .delete()
-                .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
-
-            if (schedulesError) {
-                console.error('Error deleting schedules:', schedulesError);
-                throw schedulesError;
-            }
-
-            alert('✅ All schedules and versions have been deleted successfully.');
-            
-            // Refresh the versions
-            loadVersions();
-        } catch (err: unknown) {
-            console.error('Failed to delete all schedules:', err);
-            alert(`Failed to delete all schedules: ${err instanceof Error ? err.message : String(err)}`);
-        } finally {
-            setIsDeletingAll(false);
-        }
+        });
     };
 
     return (
@@ -538,8 +548,15 @@ const ScheduleVersions: React.FC = () => {
                     })}
                 </div>
             )}
+            
+            <ConfirmDialog
+                open={confirmDialog.open}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
+                confirmVariant="danger"
+            />
         </div>
     );
 };
-
-export default ScheduleVersions;

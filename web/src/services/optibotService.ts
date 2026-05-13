@@ -235,7 +235,7 @@ async function getScheduleContext(): Promise<string> {
     const db = supabase;
     try {
         const [schedulesRes, teachersRes, roomsRes, conflictsRes, eventsRes, usersRes, subjectsRes, sectionsRes, announcementsRes] = await Promise.all([
-            db.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile_id:profiles(full_name)), room:rooms(name, capacity), section:sections(name)').eq('status', 'published').eq('is_active', true).limit(20),
+            db.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile_id:profiles(full_name)), room:rooms(name, capacity), section:sections(name)').eq('status', 'published').neq('status', 'archived').eq('is_active', true).limit(20),
             db.from('teachers').select('*, profile_id:profiles(full_name)').eq('is_active', true).limit(30),
             db.from('rooms').select('*').limit(30),
             db.from('conflicts').select('*').eq('is_resolved', false).limit(10),
@@ -675,15 +675,15 @@ async function executeAction(action: string, params: ActionParams): Promise<{ su
 
                 // Conflict detection
                 if (room_id) {
-                    const { data: conflicts } = await dbClient.from('schedules').select('*, subject:subjects(name)').eq('room_id', room_id).eq('day_of_week', day_of_week).eq('status', 'published').eq('is_active', true).lt('start_time', end_time).gt('end_time', start_time);
+                    const { data: conflicts } = await dbClient.from('schedules').select('*, subject:subjects(name)').eq('room_id', room_id).eq('day_of_week', day_of_week).eq('status', 'published').neq('status', 'archived').eq('is_active', true).lt('start_time', end_time).gt('end_time', start_time);
                     if (conflicts && conflicts.length > 0) {
-                        return { success: false, message: `ROOM CONFLICT: Room "${room_name}" already booked on ${day_of_week} ${conflicts[0].start_time}-${conflicts[0].end_time}.` };
+                        return { success: false, message: `Room conflict: ${room_name} has ${conflicts.length} existing class(es) during ${start_time}-${end_time} on ${day_of_week}.` };
                     }
                 }
                 if (teacher_id) {
-                    const { data: conflicts } = await dbClient.from('schedules').select('*, subject:subjects(name)').eq('teacher_id', teacher_id).eq('day_of_week', day_of_week).eq('status', 'published').eq('is_active', true).lt('start_time', end_time).gt('end_time', start_time);
-                    if (conflicts && conflicts.length > 0) {
-                        return { success: false, message: `TEACHER CONFLICT: "${teacher_name}" already teaching on ${day_of_week} ${conflicts[0].start_time}-${conflicts[0].end_time}.` };
+                    const { data: teacherConflicts } = await dbClient.from('schedules').select('*, subject:subjects(name)').eq('teacher_id', teacher_id).eq('day_of_week', day_of_week).eq('status', 'published').neq('status', 'archived').eq('is_active', true).lt('start_time', end_time).gt('end_time', start_time);
+                    if (teacherConflicts && teacherConflicts.length > 0) {
+                        return { success: false, message: `TEACHER CONFLICT: "${teacher_name}" already teaching on ${day_of_week} ${teacherConflicts[0].start_time}-${teacherConflicts[0].end_time}.` };
                     }
                 }
 

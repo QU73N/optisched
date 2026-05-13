@@ -82,7 +82,7 @@ export function useSchedules(filters?: {
 
             const { data: result, error: fetchError } = await query;
             if (fetchError) throw fetchError;
-            
+
             // Map RPC response to expected format
             const mappedData = (result || []).map((s: any) => ({
                 id: s.id,

@@ -251,7 +251,7 @@ const ConflictsAlerts: React.FC = () => {
                 setScanResult(null);
                 setHasScanResults(false);
                 setScanResultLock(null);
-                runComprehensiveScan().catch(() => {});
+                runComprehensiveScan().catch(err => console.error('[ConflictsAlerts] Scan failed:', err));
             }
         });
         

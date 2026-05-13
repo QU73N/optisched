@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { CREATABLE_ROLES, ROLE_DISPLAY_NAMES, POWER_ADMIN_ROLES, SELECTABLE_ROLE_DISPLAY, TEACHER_ADDABLE_ROLES } from '../../types/database';
 import type { UserRole } from '../../types/database';
 import { UserPlus, Trash2, Search, X, Loader2, Edit3, ChevronUp, ChevronDown } from 'lucide-react';
+import { ConfirmDialog } from '../../components/states/ConfirmDialog';
 import '../admin/Dashboard.css';
 
 interface UserProfile {
@@ -95,7 +97,16 @@ const DEPARTMENT_OPTIONS = [
 
 const AdminManageUsers: React.FC = () => {
     const { role: currentRole, user: currentUser } = useAuth();
+    const { showToast } = useToast();
     const { canEditUser: canEditUserByRole } = usePermissions();
+    
+    // Confirmation dialog state
+    const [confirmDialog, setConfirmDialog] = useState<{
+        open: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ open: false, title: '', message: '', onConfirm: () => {} });
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -392,7 +403,7 @@ const AdminManageUsers: React.FC = () => {
     const openEditModal = async (user: UserProfile) => {
         // Prevent users from editing their own profile administratively
         if (user.id === currentUser?.id) {
-            alert('You cannot edit your own profile through the admin interface. Use Settings instead.');
+            showToast({ title: 'Cannot edit own profile', message: 'Use Settings instead', type: 'warning' });
             return;
         }
         setEditUser(user);
@@ -617,19 +628,23 @@ const AdminManageUsers: React.FC = () => {
     // ── DELETE ──
     const handleDelete = async (user: UserProfile) => {
         if (['admin', 'power_admin'].includes(user.role)) {
-            alert('Cannot delete the Power Admin account.');
+            showToast({ title: 'Cannot delete Power Admin', message: 'This account is protected', type: 'error' });
             return;
         }
-        if (!confirm(`Delete ${user.full_name || user.email}? This cannot be undone.`)) return;
-        try {
-            // NOTE: Deleting auth user requires service role - move to Edge Function
-            // For now, only delete profile (auth user remains orphaned)
-            await supabase.from('teachers').delete().eq('profile_id', user.id);
-            await supabase.from('profiles').delete().eq('id', user.id);
-            fetchUsers();
-        } catch {
-            alert('Failed to delete user.');
-        }
+        setConfirmDialog({
+            open: true,
+            title: 'Delete User',
+            message: `Delete ${user.full_name || user.email}? This cannot be undone.`,
+            onConfirm: async () => {
+                try {
+                    await supabase.from('profiles').delete().eq('id', user.id);
+                    fetchUsers();
+                    showToast({ title: 'User deleted', type: 'success' });
+                } catch {
+                    showToast({ title: 'Failed to delete user', type: 'error' });
+                }
+            }
+        });
     };
 
     const getBadgeClass = (role: string) => {
@@ -1299,6 +1314,15 @@ const AdminManageUsers: React.FC = () => {
                 .role-btn-active { background: var(--accent-primary); border-color: var(--accent-primary); color: white; }
                 .spin { animation: spin 1s linear infinite; }
             `}</style>
+            
+            <ConfirmDialog
+                open={confirmDialog.open}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
+                confirmVariant="danger"
+            />
         </div>
     );
 };

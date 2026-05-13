@@ -17,7 +17,7 @@ import type { Schedule } from '../types/database';
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ScheduleVersion {
+export interface InMemoryScheduleVersion {
     id: string;
     version: number;
     scheduleId: string | null; // null if not yet saved
@@ -33,14 +33,14 @@ export interface ScheduleVersion {
 
 export interface ScheduleState {
     schedules: Schedule[];
-    version: ScheduleVersion;
+    version: InMemoryScheduleVersion;
     lastModified: number;
     source: 'generate' | 'conflicts' | 'manual';
 }
 
 export interface StateChangeEvent {
     type: 'schedule_updated' | 'version_created' | 'cache_invalidated';
-    version: ScheduleVersion;
+    version: InMemoryScheduleVersion;
     source: 'generate' | 'conflicts' | 'manual';
     timestamp: number;
 }
@@ -70,8 +70,9 @@ class ScheduleStateManager {
      * Initialize the state manager with Supabase client
      */
     initialize(supabase: SupabaseClient): void {
+        console.log('[scheduleStateManager] INITIALIZE START');
         this.supabase = supabase;
-        console.log('[STATE MANAGER] Initialized');
+        console.log('[scheduleStateManager] INITIALIZED');
     }
     
     /**
@@ -102,12 +103,20 @@ class ScheduleStateManager {
             softScore: number;
             changeDescription: string;
         }
-    ): Promise<ScheduleVersion> {
+    ): Promise<InMemoryScheduleVersion> {
+        console.log('[scheduleStateManager] UPDATE STATE START:', {
+            scheduleCount: schedules.length,
+            source,
+            conflictCount: metadata.conflictCount,
+            softScore: metadata.softScore,
+            description: metadata.changeDescription
+        });
+        
         const hash = this.computeHash(schedules);
         const now = Date.now();
         
         // Create new version
-        const version: ScheduleVersion = {
+        const version: InMemoryScheduleVersion = {
             id: crypto.randomUUID(),
             version: this.currentState ? this.currentState.version.version + 1 : 1,
             scheduleId: null, // Will be set when persisted
@@ -125,8 +134,9 @@ class ScheduleStateManager {
             source,
         };
         
-        console.log('[STATE MANAGER] State updated:', {
+        console.log('[scheduleStateManager] STATE UPDATED:', {
             version: version.version,
+            versionId: version.id,
             source,
             hash,
             conflictCount: metadata.conflictCount,
@@ -149,29 +159,44 @@ class ScheduleStateManager {
      * Get the current canonical state
      */
     getCurrentState(): ScheduleState | null {
-        return this.currentState;
+        const state = this.currentState;
+        console.log('[scheduleStateManager] GET CURRENT STATE:', {
+            hasState: !!state,
+            version: state?.version.version || 0,
+            source: state?.source,
+            scheduleCount: state?.schedules.length || 0
+        });
+        return state;
     }
     
     /**
      * Get the current schedules
      */
     getSchedules(): Schedule[] {
-        return this.currentState?.schedules || [];
+        const schedules = this.currentState?.schedules || [];
+        console.log('[scheduleStateManager] GET SCHEDULES:', { count: schedules.length });
+        return schedules;
     }
     
     /**
      * Get the current version
      */
-    getVersion(): ScheduleVersion | null {
+    getVersion(): InMemoryScheduleVersion | null {
         return this.currentState?.version || null;
     }
     
     /**
      * Check if state has changed since a given version
      */
-    hasChangedSince(version: ScheduleVersion): boolean {
+    hasChangedSince(version: InMemoryScheduleVersion): boolean {
         if (!this.currentState) return false;
-        return this.currentState.version.version > version.version;
+        const changed = this.currentState.version.version > version.version;
+        console.log('[scheduleStateManager] HAS CHANGED SINCE:', {
+            compareVersion: version.version,
+            currentVersion: this.currentState.version.version,
+            changed
+        });
+        return changed;
     }
     
     /**
@@ -179,7 +204,7 @@ class ScheduleStateManager {
      * This should be called whenever the schedule is modified
      */
     invalidateCache(): void {
-        console.log('[STATE MANAGER] Cache invalidated');
+        console.log('[scheduleStateManager] INVALIDATE CACHE START');
         this.emit({
             type: 'cache_invalidated',
             version: this.currentState?.version || {
@@ -194,6 +219,7 @@ class ScheduleStateManager {
             source: this.currentState?.source || 'manual',
             timestamp: Date.now(),
         });
+        console.log('[scheduleStateManager] CACHE INVALIDATED');
     }
     
     /**
@@ -201,12 +227,12 @@ class ScheduleStateManager {
      */
     subscribe(listener: StateChangeListener): () => void {
         this.listeners.add(listener);
-        console.log('[STATE MANAGER] Listener registered, total:', this.listeners.size);
+        console.log('[scheduleStateManager] LISTENER REGISTERED:', { totalListeners: this.listeners.size });
         
         // Return unsubscribe function
         return () => {
             this.listeners.delete(listener);
-            console.log('[STATE MANAGER] Listener unsubscribed, total:', this.listeners.size);
+            console.log('[scheduleStateManager] LISTENER UNREGISTERED:', { totalListeners: this.listeners.size });
         };
     }
     
@@ -214,14 +240,20 @@ class ScheduleStateManager {
      * Emit a state change event to all listeners
      */
     private emit(event: StateChangeEvent): void {
-        console.log('[STATE MANAGER] Emitting event:', event.type, 'to', this.listeners.size, 'listeners');
+        console.log('[scheduleStateManager] EMIT EVENT START:', {
+            type: event.type,
+            version: event.version.version,
+            source: event.source,
+            listenerCount: this.listeners.size
+        });
         this.listeners.forEach(listener => {
             try {
                 listener(event);
             } catch (error) {
-                console.error('[STATE MANAGER] Error in listener:', error);
+                console.error('[scheduleStateManager] LISTENER ERROR:', error);
             }
         });
+        console.log('[scheduleStateManager] EMIT EVENT COMPLETED');
     }
     
     /**
@@ -229,12 +261,11 @@ class ScheduleStateManager {
      * This ensures the state manager is in sync with the database
      */
     async syncWithDatabase(): Promise<void> {
+        console.log('[scheduleStateManager] SYNC WITH DATABASE START');
         if (!this.supabase) {
-            console.warn('[STATE MANAGER] Supabase not initialized, cannot sync with database');
+            console.warn('[scheduleStateManager] SYNC: Supabase not initialized');
             return;
         }
-        
-        console.log('[STATE MANAGER] Syncing with database...');
         
         const { data: schedules, error } = await this.supabase
             .from('schedules')
@@ -242,7 +273,7 @@ class ScheduleStateManager {
             .in('status', ['published', 'draft']);
         
         if (error) {
-            console.error('[STATE MANAGER] Error syncing with database:', error);
+            console.error('[scheduleStateManager] SYNC: Database error:', error);
             return;
         }
         
@@ -257,7 +288,7 @@ class ScheduleStateManager {
                 }
             );
             
-            console.log('[STATE MANAGER] Synced', schedules.length, 'schedules from database');
+            console.log('[scheduleStateManager] SYNC COMPLETED:', { scheduleCount: schedules.length });
         }
     }
     
@@ -266,12 +297,11 @@ class ScheduleStateManager {
      * Compares local state hash with database state hash
      */
     async verifyConsistency(): Promise<boolean> {
+        console.log('[scheduleStateManager] VERIFY CONSISTENCY START');
         if (!this.supabase || !this.currentState) {
-            console.warn('[STATE MANAGER] Cannot verify consistency: missing supabase or current state');
+            console.warn('[scheduleStateManager] VERIFY: Cannot verify - missing supabase or current state');
             return false;
         }
-        
-        console.log('[STATE MANAGER] Verifying state consistency...');
         
         const { data: dbSchedules, error } = await this.supabase
             .from('schedules')
@@ -279,7 +309,7 @@ class ScheduleStateManager {
             .in('status', ['published', 'draft']);
         
         if (error) {
-            console.error('[STATE MANAGER] Error verifying consistency:', error);
+            console.error('[scheduleStateManager] VERIFY: Database error:', error);
             return false;
         }
         
@@ -288,7 +318,13 @@ class ScheduleStateManager {
             const localHash = this.currentState.version.hash;
             
             const consistent = dbHash === localHash;
-            console.log('[STATE MANAGER] Consistency check:', consistent, 'DB hash:', dbHash, 'Local hash:', localHash);
+            console.log('[scheduleStateManager] VERIFY RESULT:', {
+                consistent,
+                dbHash,
+                localHash,
+                dbScheduleCount: dbSchedules.length,
+                localScheduleCount: this.currentState.schedules.length
+            });
             
             return consistent;
         }
@@ -300,9 +336,10 @@ class ScheduleStateManager {
      * Reset the state manager (for testing or logout)
      */
     reset(): void {
+        console.log('[scheduleStateManager] RESET START');
         this.currentState = null;
         this.listeners.clear();
-        console.log('[STATE MANAGER] Reset');
+        console.log('[scheduleStateManager] RESET COMPLETED');
     }
 }
 
