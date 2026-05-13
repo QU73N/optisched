@@ -423,16 +423,10 @@ const AdminDashboard: React.FC = () => {
     const handleResetApprove = async (req: ResetRequest) => {
         setProcessingResetId(req.id);
         try {
-            const { data: userData } = await supabase.from('profiles').select('id, full_name').eq('email', req.email).single();
-            if (!userData) { showToast({ title: 'User not found', type: 'error' }); setProcessingResetId(null); return; }
-
-            const emailLocal = req.email.split('@')[0] || '';
-            const parts = emailLocal.split('.');
-            const surname = parts[0]?.toLowerCase() || (userData.full_name || '').split(' ').pop()?.toLowerCase() || 'user';
-            const idFromEmail = parts[1] || userData.id.slice(-6);
-            const newPassword = `${surname}.${idFromEmail}`;
-
-            const { error } = await supabase.auth.admin.updateUserById(userData.id, { password: newPassword });
+            // Send a password reset email to the user (works with anon key)
+            const { error } = await supabase.auth.resetPasswordForEmail(req.email, {
+                redirectTo: `${window.location.origin}/login`,
+            });
             if (error) throw error;
 
             await supabase.from('password_reset_requests').update({
@@ -440,9 +434,9 @@ const AdminDashboard: React.FC = () => {
             }).eq('id', req.id);
 
             fetchResetRequests();
-            showToast({ title: 'Password reset', message: `New password: ${newPassword}`, type: 'success' });
+            showToast({ title: 'Reset email sent', message: `A password reset link has been sent to ${req.email}`, type: 'success' });
         } catch {
-            showToast({ title: 'Error', message: 'Failed to reset password. You may need admin service role key.', type: 'error' });
+            showToast({ title: 'Error', message: 'Failed to send reset email. Please try again.', type: 'error' });
         }
         setProcessingResetId(null);
     };
