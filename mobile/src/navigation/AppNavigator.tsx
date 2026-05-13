@@ -15,6 +15,7 @@ import StudentTabs from './StudentTabs';
 import OptiBotChat from '../screens/shared/OptiBotChat';
 import ScheduleView from '../screens/shared/ScheduleView';
 import AppSettings from '../screens/shared/AppSettings';
+import HelpScreen from '../screens/shared/HelpScreen';
 
 export type RootStackParamList = {
     Login: undefined;
@@ -24,6 +25,7 @@ export type RootStackParamList = {
     OptiBot: undefined;
     ScheduleView: undefined;
     AppSettings: undefined;
+    Help: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -94,6 +96,7 @@ const AppNavigator: React.FC = () => {
                         <Stack.Screen name="OptiBot" component={OptiBotChat} />
                         <Stack.Screen name="ScheduleView" component={ScheduleView} />
                         <Stack.Screen name="AppSettings" component={AppSettings} />
+                        <Stack.Screen name="Help" component={HelpScreen} />
                     </>
                 )}
             </Stack.Navigator>

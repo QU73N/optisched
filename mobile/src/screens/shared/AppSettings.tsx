@@ -1,5 +1,6 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
 import {
     View, Text, ScrollView, StyleSheet,
     Switch, Alert, TextInput, Modal, ActivityIndicator, Linking, Image,
@@ -16,6 +17,7 @@ import { decode } from 'base64-arraybuffer';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 
 const AppSettings: React.FC = () => {
+    const navigation = useNavigation<any>();
     const { signOut, profile, refreshProfile } = useAuth();
     const [scheduleNotif, setScheduleNotif] = useState(true);
     const { themeMode, setThemeMode, colors } = useTheme();
@@ -323,6 +325,16 @@ const AppSettings: React.FC = () => {
                     </View>
                 </View>
 
+                {/* Support */}
+                <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SUPPORT</Text>
+                <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
+                    <AnimatedPressable style={styles.listItem} onPress={() => navigation.navigate('Help')}>
+                        <MaterialIcons name="help-outline" size={20} color={colors.textSecondary} />
+                        <Text style={[styles.listTitle, { color: colors.textPrimary, flex: 1, marginLeft: 12 }]}>Help Center</Text>
+                        <MaterialIcons name="chevron-right" size={20} color={colors.textMuted} />
+                    </AnimatedPressable>
+                </View>
+
                 {/* Legal */}
                 <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LEGAL</Text>
                 <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
@@ -356,8 +368,7 @@ const AppSettings: React.FC = () => {
                 </View>
 
                 <Text style={[styles.version, { color: colors.textMuted }]}>OptiSched v1.0 · STI College Meycauayan</Text>
-                <View style={{ height: 80 }} />
-            </ScrollView>
+                <View style={{ height: 80 }} /></ScrollView>
 
             {/* Password Reset Request Modal */}
             <Modal visible={showPasswordModal} animationType="slide" transparent>

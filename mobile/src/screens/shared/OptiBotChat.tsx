@@ -14,7 +14,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { supabase } from '../../config/supabase';
 
 // Tab bar height constant to offset content above it
-const TAB_BAR_HEIGHT = Platform.OS === 'web' ? 70 : 80;
+const TAB_BAR_HEIGHT = Platform.OS === 'web' ? 64 : 72;
 
 const OptiBotChat: React.FC = () => {
     const { profile } = useAuth();
@@ -320,7 +320,7 @@ const OptiBotChat: React.FC = () => {
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 keyboardVerticalOffset={TAB_BAR_HEIGHT + 10}
             >
-                <View style={[styles.inputArea, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+                <View style={[styles.inputArea, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Platform.OS === 'ios' ? 8 : 12 }]}>
                     <View style={styles.inputRow}>
                         <TextInput
                             style={[styles.input, { backgroundColor: colors.elevated, color: colors.textPrimary, borderColor: colors.border }]}
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     onlineText: { fontSize: 11, color: Colors.slate400 },
 
     messagesArea: { flex: 1 },
-    messagesContent: { paddingHorizontal: 16, paddingVertical: 16, gap: 16 },
+    messagesContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 16 },
 
     messageBubble: { flexDirection: 'row', gap: 8 },
     botBubble: { alignSelf: 'flex-start', maxWidth: '85%' },

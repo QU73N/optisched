@@ -335,25 +335,25 @@ const TeacherDashboard: React.FC = () => {
                     <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                         <View style={styles.summaryRow}>
                             <View style={styles.summaryItem}>
-                                <MaterialIcons name="school" size={18} color={colors.textMuted} style={{ marginBottom: 6 }} />
+                                <MaterialIcons name="school" size={18} color="#3b82f6" style={{ marginBottom: 6 }} />
                                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{loading ? '-' : todaySchedule.length}</Text>
                                 <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Classes</Text>
                             </View>
                             <View style={styles.summaryDivider} />
                             <View style={styles.summaryItem}>
-                                <MaterialIcons name="check-circle" size={18} color={colors.textMuted} style={{ marginBottom: 6 }} />
+                                <MaterialIcons name="check-circle" size={18} color="#10b981" style={{ marginBottom: 6 }} />
                                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{todaySchedule.filter(s => s.status === 'finished').length}</Text>
                                 <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Done</Text>
                             </View>
                             <View style={styles.summaryDivider} />
                             <View style={styles.summaryItem}>
-                                <MaterialIcons name="people" size={18} color={colors.textMuted} style={{ marginBottom: 6 }} />
+                                <MaterialIcons name="people" size={18} color="#8b5cf6" style={{ marginBottom: 6 }} />
                                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{allSchedules.length}</Text>
                                 <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total</Text>
                             </View>
                             <View style={styles.summaryDivider} />
                             <View style={styles.summaryItem}>
-                                <MaterialIcons name="campaign" size={18} color={colors.textMuted} style={{ marginBottom: 6 }} />
+                                <MaterialIcons name="campaign" size={18} color="#f59e0b" style={{ marginBottom: 6 }} />
                                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{announcements.length}</Text>
                                 <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Alerts</Text>
                             </View>
