@@ -219,37 +219,39 @@ const StudentSchedule: React.FC = () => {
                     {daySchedules.length === 0 ? (
                         <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No classes on {selectedDay}</div>
                     ) : (
-                        <div className="card" style={{ padding: '0 0 0 60px', position: 'relative', overflow: 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
-                            <div style={{ position: 'relative', height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT, marginLeft: 4, paddingBottom: 20 }}>
-                                {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => (
-                                    <div key={i} style={{ position: 'absolute', left: 0, right: 0, top: i * HOUR_HEIGHT, height: HOUR_HEIGHT, borderTop: '1px solid rgba(255,255,255,0.04)', zIndex: 0 }}>
-                                        <span className="text-xs" style={{ position: 'absolute', left: 8, top: -8, color: 'var(--text-muted)', width: 44, textAlign: 'right' }}>
-                                            {formatTime12(`${START_HOUR + i}:00`).replace(':00 ', ' ')}
-                                        </span>
-                                    </div>
-                                ))}
-                                <div style={{ position: 'relative', height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT }}>
-                                    {daySchedules.map((s, i) => {
-                                        const [sh, sm] = s.start_time.split(':').map(Number);
-                                        const [eh, em] = s.end_time.split(':').map(Number);
-                                        const topPx = ((sh - START_HOUR) + sm / 60) * HOUR_HEIGHT;
-                                        const heightPx = ((eh - START_HOUR) + em / 60) * HOUR_HEIGHT - topPx;
-                                        const color = colors[i % colors.length];
-                                        return (
-                                            <div key={s.id} style={{
-                                                position: 'absolute', left: 8, right: 16, top: topPx, height: Math.max(heightPx, 32),
-                                                background: `${color}18`, border: `1px solid ${color}50`, borderLeft: `4px solid ${color}`,
-                                                borderRadius: 10, padding: '8px 12px', zIndex: 1, overflow: 'hidden',
-                                            }}>
-                                                <div className="font-semibold text-base">{(s.subject as any)?.code} - {(s.subject as any)?.name}</div>
-                                                <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 2, display: 'flex', gap: 12 }}>
-                                                    <span><Clock size={10} /> {formatTime12(s.start_time)} – {formatTime12(s.end_time)}</span>
-                                                    <span><MapPin size={10} /> {(s.room as any)?.name}</span>
+                        <div className="card" style={{ padding: 0, position: 'relative', overflow: 'hidden' }}>
+                            <div style={{ position: 'relative', height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT, overflowY: 'auto', overflowX: 'hidden' }}>
+                                <div style={{ position: 'relative', minHeight: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT, paddingBottom: 20 }}>
+                                    {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => (
+                                        <div key={i} style={{ position: 'absolute', left: 0, right: 0, top: i * HOUR_HEIGHT, height: HOUR_HEIGHT, borderTop: '1px solid rgba(255,255,255,0.04)', zIndex: 0 }}>
+                                            <span className="text-xs" style={{ position: 'absolute', left: 8, top: -7, color: 'var(--text-muted)', width: 44, textAlign: 'right' }}>
+                                                {formatTime12(`${START_HOUR + i}:00`).replace(':00 ', ' ')}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    <div style={{ position: 'relative', height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT, marginLeft: 4 }}>
+                                        {daySchedules.map((s, i) => {
+                                            const [sh, sm] = s.start_time.split(':').map(Number);
+                                            const [eh, em] = s.end_time.split(':').map(Number);
+                                            const topPx = ((sh - START_HOUR) + sm / 60) * HOUR_HEIGHT;
+                                            const heightPx = ((eh - START_HOUR) + em / 60) * HOUR_HEIGHT - topPx;
+                                            const color = colors[i % colors.length];
+                                            return (
+                                                <div key={s.id} style={{
+                                                    position: 'absolute', left: 8, right: 16, top: topPx, height: Math.max(heightPx, 32),
+                                                    background: `${color}18`, border: `1px solid ${color}50`, borderLeft: `4px solid ${color}`,
+                                                    borderRadius: 10, padding: '8px 12px', zIndex: 1, overflow: 'hidden',
+                                                }}>
+                                                    <div className="font-semibold text-base">{(s.subject as any)?.code} - {(s.subject as any)?.name}</div>
+                                                    <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 2, display: 'flex', gap: 12 }}>
+                                                        <span><Clock size={10} /> {formatTime12(s.start_time)} – {formatTime12(s.end_time)}</span>
+                                                        <span><MapPin size={10} /> {(s.room as any)?.name}</span>
+                                                    </div>
+                                                    <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 2 }}>{(s.teacher as any)?.profile?.full_name || 'TBA'}</div>
                                                 </div>
-                                                <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 2 }}>{(s.teacher as any)?.profile?.full_name || 'TBA'}</div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </div>
                         </div>
