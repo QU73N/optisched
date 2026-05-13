@@ -52,6 +52,23 @@ const StudentDashboard: React.FC = () => {
     const { announcements: allAnnouncements } = useAnnouncements();
     const { events: upcomingEvents } = useCustomEvents(undefined, true);
 
+    // DEBUG: Log schedules to understand the data
+    console.log('[StudentDashboard DEBUG]', {
+        dayIndex,
+        isOffDay,
+        scheduleDayName,
+        allSchedulesCount: allSchedules.length,
+        allSchedules: allSchedules.map(s => ({
+            id: s.id,
+            day_of_week: s.day_of_week,
+            subject: s.subject?.name,
+            section: s.section?.name,
+            section_id: s.section_id,
+            is_active: s.is_active,
+            status: s.status
+        }))
+    });
+
     const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
     const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
 
@@ -115,9 +132,23 @@ const StudentDashboard: React.FC = () => {
     // Filter schedules for student's section
     const schedules = useMemo(() => {
         if (!studentSectionId) return allSchedules;
-        return allSchedules.filter((s: any) => {
+        const filtered = allSchedules.filter((s: any) => {
             return s.section_id === studentSectionId;
         });
+        console.log('[StudentDashboard DEBUG] After section filter:', {
+            studentSectionId,
+            beforeFilter: allSchedules.length,
+            afterFilter: filtered.length,
+            filtered: filtered.map(s => ({
+                id: s.id,
+                day_of_week: s.day_of_week,
+                subject: s.subject?.name,
+                section: s.section?.name,
+                section_id: s.section_id,
+                is_active: s.is_active
+            }))
+        });
+        return filtered;
     }, [allSchedules, studentSectionId]);
 
     // Filter announcements for student's section
