@@ -115,6 +115,12 @@
     margin-bottom: 20px;
 }
 
+/* More compact for student dashboard */
+.dashboard .dash-greeting {
+    padding: 16px 20px;
+    margin-bottom: 16px;
+}
+
 [data-theme="light"] .dash-greeting {
     background: var(--bg-secondary);
     box-shadow: var(--shadow-xs);
@@ -174,6 +180,12 @@
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--d-grid-gap);
     margin-bottom: 24px;
+}
+
+/* More compact for student dashboard */
+.dashboard .stats-grid {
+    margin-bottom: 16px;
+    gap: 12px;
 }
 
 .stat-card {
@@ -348,6 +360,11 @@
 
 .dash-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 
+/* More compact for student dashboard */
+.dashboard .dash-col {
+    gap: 16px;
+}
+
 /* ============================================================
    Card primitive
    ============================================================ */
@@ -421,6 +438,11 @@
     margin-bottom: 10px;
 }
 
+/* More compact for student dashboard */
+.dashboard .dash-section-header {
+    margin-bottom: 8px;
+}
+
 .dash-section-header h3 {
     margin: 0;
     font-family: var(--font-display);
@@ -465,6 +487,12 @@
     min-height: 80px;
 }
 
+/* More compact for dashboard to fit more classes */
+.dashboard .dash-schedule-panel {
+    padding: 10px;
+    gap: 6px;
+}
+
 [data-theme="light"] .dash-schedule-panel {
     background: var(--bg-secondary);
     box-shadow: var(--shadow-xs);
@@ -490,6 +518,16 @@
     border: 1px solid var(--border-default);
     border-radius: var(--d-radius-md);
     transition: background 160ms var(--ease-out), border-color 160ms var(--ease-out);
+}
+
+/* Compact version for student dashboard to fit more classes */
+.dashboard .dash-class-card {
+    padding: 10px 12px;
+    gap: 10px;
+}
+
+.dashboard .dash-class-details {
+    gap: 4px 10px;
 }
 
 [data-theme="light"] .dash-class-card { background: var(--bg-inset); }
@@ -566,6 +604,11 @@
     background: var(--bg-inset);
     border-radius: 2px;
     overflow: hidden;
+}
+
+/* More compact for student dashboard */
+.dashboard .dash-progress {
+    margin-top: 6px;
 }
 
 .dash-progress-fill {
@@ -718,6 +761,11 @@
     border: 1px solid var(--border-default);
     border-radius: var(--d-radius-md);
     padding: 14px 16px;
+}
+
+/* More compact for student dashboard */
+.dashboard .dash-chart-card {
+    padding: 12px 14px;
 }
 
 .dash-chart-card + .dash-chart-card { margin-top: 8px; }
