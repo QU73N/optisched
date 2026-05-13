@@ -31,6 +31,30 @@ const StudentUpcoming: React.FC = () => {
         return () => clearInterval(t);
     }, []);
 
+    const fetchSchedules = useCallback(async () => {
+        if (!studentSectionId) {
+            setLoading(false);
+            return;
+        }
+        try {
+            const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
+            if (rpcError) { console.error('[StudentUpcoming] RPC error:', rpcError); setLoading(false); return; }
+            const list = (rpcData || [])
+                .filter((s: any) => s.status === 'published' && s.is_active === true && s.section_id === studentSectionId)
+                .map((s: any) => ({
+                    id: s.id,
+                    day_of_week: s.day_of_week,
+                    start_time: s.start_time,
+                    end_time: s.end_time,
+                    subject: s.subject_name,
+                    room: s.room_name,
+                    teacher: s.teacher_name,
+                }));
+            setWeekly(list);
+        } catch (err) { console.error(err); }
+        finally { setLoading(false); }
+    }, [studentSectionId]);
+
     const fetchStudentSection = useCallback(async () => {
         try {
             // Fix: Use a simpler query without !inner join to avoid 406 error
@@ -49,7 +73,6 @@ const StudentUpcoming: React.FC = () => {
 
             if (studentData) {
                 setStudentSectionId(studentData.section_id);
-                fetchSchedules();
             } else {
                 console.warn('[StudentUpcoming] No student record found for profile');
                 setLoading(false);
@@ -68,32 +91,11 @@ const StudentUpcoming: React.FC = () => {
         }
     }, [profile, fetchStudentSection]);
 
-    const fetchSchedules = async () => {
-        if (!studentSectionId) {
-            setLoading(false);
-            return;
+    useEffect(() => {
+        if (studentSectionId) {
+            fetchSchedules();
         }
-        try {
-            const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
-            if (rpcError) { console.error('[StudentUpcoming] RPC error:', rpcError); setLoading(false); return; }
-            const list = (rpcData || [])
-                .filter((s: any) => s.status === 'published' && s.is_active === true && s.section_id === studentSectionId)
-                .map((s: any) => ({
-                    id: s.id,
-                    day_of_week: s.day_of_week,
-                    start_time: s.start_time,
-                    end_time: s.end_time,
-                    subject: { name: s.subject_name, code: s.subject_code },
-                    room: { name: s.room_name },
-                    teacher: { profile: { full_name: s.teacher_name } },
-                }));
-            setWeekly(list as ScheduleRow[]);
-        } catch (err) {
-            console.error('[StudentUpcoming] load failed', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [studentSectionId, fetchSchedules]);
 
     const minutesNow = now.getHours() * 60 + now.getMinutes();
     const todayName = DAYS[now.getDay()];
