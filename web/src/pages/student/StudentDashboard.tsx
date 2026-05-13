@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSchedules, useAnnouncements } from '../../hooks/useSupabase';
 import { useCustomEvents } from '../../hooks/useCustomEvents';
-import { Calendar, Clock, BookOpen, Megaphone, MapPin, Users, PieChart as PieIcon, Bot, List } from 'lucide-react';
+import { Calendar, Clock, BookOpen, Megaphone, MapPin, Users, PieChart as PieIcon } from 'lucide-react';
 import {
     Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie
@@ -18,10 +17,11 @@ interface ScheduleItem {
     start_time: string;
     end_time: string;
     status: string;
-    subject?: { name: string }[];
-    section?: { name: string }[];
+    subject?: { name: string; code: string };
+    section?: { name: string; program: string };
     teacher?: { profile?: { full_name: string }; full_name?: string };
-    room?: { name: string };
+    room?: { name: string; building: string };
+    section_id?: string;
 }
 
 interface AnnouncementItem {
@@ -44,7 +44,6 @@ interface EventItem {
 
 const StudentDashboard: React.FC = () => {
     const { profile } = useAuth();
-    const navigate = useNavigate();
 
     const dayIndex = new Date().getDay();
     const isOffDay = dayIndex === 0;
@@ -93,20 +92,30 @@ const StudentDashboard: React.FC = () => {
     useEffect(() => {
         if (!studentSectionId) return;
         (async () => {
-            const { data } = await supabase
-                .from('schedules')
-                .select('id, day_of_week, start_time, end_time, status, subject:subjects(name), section:sections(name), section_id')
-                .eq('status', 'published')
-                .eq('is_active', true);
-            const mine = (data || []).filter((s: ScheduleItem & { section_id?: string }) => s.section_id === studentSectionId);
-            setWeekSectionSchedules(mine);
+            const { data: rpcData } = await supabase.rpc('get_schedules_with_details');
+            if (rpcData) {
+                const mappedData = rpcData.map((s: any) => ({
+                    id: s.id,
+                    day_of_week: s.day_of_week,
+                    start_time: s.start_time,
+                    end_time: s.end_time,
+                    status: s.status,
+                    subject: { name: s.subject_name, code: s.subject_code },
+                    section: { name: s.section_name, program: s.section_program },
+                    teacher: { profile: { full_name: s.teacher_name } },
+                    room: { name: s.room_name, building: s.room_building },
+                    section_id: s.section_id,
+                }));
+                const mine = mappedData.filter((s: any) => s.section_id === studentSectionId);
+                setWeekSectionSchedules(mine);
+            }
         })();
     }, [studentSectionId]);
 
     // Filter schedules for student's section
     const schedules = useMemo(() => {
         if (!studentSectionId) return allSchedules;
-        return allSchedules.filter((s: ScheduleItem & { section_id?: string }) => {
+        return allSchedules.filter((s: any) => {
             return s.section_id === studentSectionId;
         });
     }, [allSchedules, studentSectionId]);
@@ -159,7 +168,7 @@ const StudentDashboard: React.FC = () => {
 
             return {
                 id: s.id,
-                subject: s.subject?.[0]?.name || 'Unknown',
+                subject: s.subject?.name || 'Unknown',
                 teacher: s.teacher?.profile?.full_name || s.teacher?.full_name || 'TBA',
                 room: s.room?.name || 'TBA',
                 time: `${formatTime(startH, startM)} – ${formatTime(endH, endM)}`,
@@ -180,8 +189,8 @@ const StudentDashboard: React.FC = () => {
     // S3: Subject distribution by total weekly hours (top 5)
     const subjectDistribution = useMemo(() => {
         const hours: Record<string, number> = {};
-        weekSectionSchedules.forEach((s: ScheduleItem) => {
-            const name = s.subject?.[0]?.name || 'Other';
+        weekSectionSchedules.forEach((s: any) => {
+            const name = s.subject?.name || 'Other';
             const [sh, sm] = (s.start_time || '0:0').split(':').map(Number);
             const [eh, em] = (s.end_time || '0:0').split(':').map(Number);
             const dur = Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
@@ -206,18 +215,6 @@ const StudentDashboard: React.FC = () => {
                     <p>{ongoingClass ? `${ongoingClass.subject} with ${ongoingClass.teacher} in ${ongoingClass.room}` : nextClass ? `Next class: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}` : studentSectionName ? `Section ${studentSectionName}` : 'Your daily schedule overview'}</p>
                 </div>
                 <span className="dash-day-badge">{isOffDay ? 'Tomorrow: Monday' : scheduleDayName}</span>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="dash-quick-actions" style={{ marginBottom: 24 }}>
-                <button className="dash-action-btn" onClick={() => navigate('/schedule')}>
-                    <div className="dash-action-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><List size={16} color="#60a5fa" /></div>
-                    View Full Schedule
-                </button>
-                <button className="dash-action-btn" onClick={() => navigate('/optibot')}>
-                    <div className="dash-action-icon" style={{ background: 'rgba(139,92,246,0.1)' }}><Bot size={16} color="#a78bfa" /></div>
-                    Open OptiBot
-                </button>
             </div>
 
             {/* Stats */}
