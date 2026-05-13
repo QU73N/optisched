@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { CalendarDays, Clock, MapPin, ChevronLeft, ChevronRight, List, LayoutGrid, Timer, Download } from 'lucide-react';
+import { CalendarDays, Clock, MapPin, List, LayoutGrid, CalendarRange, Download } from 'lucide-react';
 import { toCsv, downloadCsv } from '../../utils/csv';
 import '../admin/Dashboard.css';
 
@@ -13,10 +13,25 @@ interface ScheduleItem {
 }
 
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const HOUR_HEIGHT = 64;
+const DAY_LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const START_HOUR = 7;
-const END_HOUR = 20; // Changed from 21 to 20
-const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#f97316'];
+const END_HOUR = 19;
+const SLOT_MINUTES = 30;
+const TOTAL_SLOTS = ((END_HOUR - START_HOUR) * 60) / SLOT_MINUTES;
+const EVENT_COLORS = ['c-navy', 'c-core', 'c-bright', 'c-ice'] as const;
+
+const slotFromTime = (t: string): number => {
+    if (!t) return 0;
+    const [h, m] = t.split(':').map(Number);
+    const mins = (h * 60 + m) - START_HOUR * 60;
+    return Math.max(0, Math.min(TOTAL_SLOTS, Math.round(mins / SLOT_MINUTES)));
+};
+
+const colorForKey = (key: string): string => {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = key.charCodeAt(i) + ((hash << 5) - hash);
+    return EVENT_COLORS[Math.abs(hash) % EVENT_COLORS.length];
+};
 
 const StudentSchedule: React.FC = () => {
     const { profile } = useAuth();
@@ -25,10 +40,6 @@ const StudentSchedule: React.FC = () => {
     const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
     const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'timeline' | 'grid' | 'table'>('timeline');
-    const [selectedDay, setSelectedDay] = useState(() => {
-        const d = new Date().getDay();
-        return d === 0 ? 'Monday' : dayOrder[d - 1] || 'Monday';
-    });
 
     const fetchSchedules = useCallback(async () => {
         if (!studentSectionId) {
@@ -114,15 +125,6 @@ const StudentSchedule: React.FC = () => {
         return acc;
     }, {} as Record<string, ScheduleItem[]>), [sorted]);
 
-    const daySchedules = useMemo(() => groupedByDay[selectedDay] || [], [groupedByDay, selectedDay]);
-    const amCount = daySchedules.filter(s => parseInt(s.start_time) < 12).length;
-    const pmCount = daySchedules.filter(s => parseInt(s.start_time) >= 12).length;
-
-    const navigateDay = (dir: number) => {
-        const idx = dayOrder.indexOf(selectedDay);
-        setSelectedDay(dayOrder[(idx + dir + dayOrder.length) % dayOrder.length]);
-    };
-
     const formatTime12 = (t: string) => {
         const [h, m] = t.split(':').map(Number);
         return `${h > 12 ? h - 12 : h === 0 ? 12 : h}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
@@ -156,7 +158,7 @@ const StudentSchedule: React.FC = () => {
                         <Download size={14} /> Export
                     </button>
                     <div style={{ display: 'flex', gap: 2, background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', padding: 3, border: '1px solid var(--border-default)' }}>
-                        {[{ key: 'timeline', icon: <Timer size={14} /> }, { key: 'grid', icon: <LayoutGrid size={14} /> }, { key: 'table', icon: <List size={14} /> }].map(v => (
+                        {[{ key: 'timeline', icon: <CalendarRange size={14} /> }, { key: 'grid', icon: <LayoutGrid size={14} /> }, { key: 'table', icon: <List size={14} /> }].map(v => (
                             <button key={v.key} className={`btn ${viewMode === v.key ? 'btn-primary' : 'btn-ghost'} btn-xs`} onClick={() => setViewMode(v.key as any)}>{v.icon}</button>
                         ))}
                     </div>
@@ -172,91 +174,95 @@ const StudentSchedule: React.FC = () => {
                     <p style={{ color: 'var(--text-muted)' }}>{profile?.section ? 'Schedule not published for your section yet.' : 'Section not assigned. Contact admin.'}</p>
                 </div>
             ) : viewMode === 'timeline' ? (
-                <>
-                    {/* Day Navigator */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                        <button className="btn btn-ghost btn-icon" onClick={() => navigateDay(-1)}><ChevronLeft size={20} /></button>
-                        <div style={{ display: 'flex', gap: 4, flex: 1, justifyContent: 'center' }}>
-                            {dayOrder.map(day => {
-                                const count = groupedByDay[day]?.length || 0;
-                                const isActive = day === selectedDay;
-                                return (
-                                    <button 
-                                        key={day} 
-                                        onClick={() => setSelectedDay(day)} 
-                                        className={isActive ? 'font-semibold' : 'font-normal'}
-                                        style={{
-                                            padding: '10px 18px',
-                                            borderRadius: 8,
-                                            border: isActive ? '1px solid #1C4D8D' : '1px solid #D7E3F1',
-                                            background: isActive ? '#1C4D8D' : 'transparent',
-                                            color: isActive ? '#FFFFFF' : '#475569',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease',
-                                            fontSize: 14,
-                                            fontWeight: isActive ? 600 : 400,
-                                            minWidth: 70,
-                                        }}
+                <div className="sm-calendar">
+                    <div
+                        className="sm-cal-grid"
+                        style={{ gridTemplateRows: `auto repeat(${TOTAL_SLOTS}, 22px)` }}
+                    >
+                        {/* Header row */}
+                        <div className="sm-cal-head" style={{ gridColumn: 1, gridRow: 1 }} />
+                        {DAY_LABELS.map((d, i) => (
+                            <div key={d} className="sm-cal-head" style={{ gridColumn: i + 2, gridRow: 1 }}>{d}</div>
+                        ))}
+
+                        {/* Time labels (every hour) */}
+                        {Array.from({ length: TOTAL_SLOTS }).map((_, slot) => {
+                            const mins = START_HOUR * 60 + slot * SLOT_MINUTES;
+                            const h = Math.floor(mins / 60);
+                            const m = mins % 60;
+                            const isHour = m === 0;
+                            return (
+                                <div
+                                    key={`time-${slot}`}
+                                    className="sm-cal-time"
+                                    style={{ gridColumn: 1, gridRow: slot + 2 }}
+                                >
+                                    {isHour ? formatTime12(`${h}:00`).replace(':00 ', ' ') : ''}
+                                </div>
+                            );
+                        })}
+
+                        {/* Background grid cells */}
+                        {Array.from({ length: TOTAL_SLOTS }).flatMap((_, slot) =>
+                            dayOrder.map((day, di) => (
+                                <div
+                                    key={`bg-${day}-${slot}`}
+                                    className="sm-cal-cell sm-cal-slot"
+                                    style={{ gridColumn: di + 2, gridRow: slot + 2 }}
+                                />
+                            ))
+                        )}
+
+                        {/* Events */}
+                        {sorted.map(s => {
+                            const dayIdx = dayOrder.indexOf(s.day_of_week);
+                            if (dayIdx < 0) return null;
+                            const startSlot = slotFromTime(s.start_time);
+                            const endSlot = slotFromTime(s.end_time);
+                            const span = Math.max(1, endSlot - startSlot);
+                            const subject = (s.subject as any);
+                            const room = (s.room as any);
+                            const teacher = (s.teacher as any);
+                            const colorClass = colorForKey(subject?.code || subject?.name || s.id);
+                            const getFontSize = () => {
+                                if (span <= 1) return '10px';
+                                if (span <= 2) return '11px';
+                                return '12px';
+                            };
+                            return (
+                                <div
+                                    key={s.id}
+                                    className="sm-cal-cell"
+                                    style={{
+                                        gridColumn: dayIdx + 2,
+                                        gridRow: `${startSlot + 2} / span ${span}`,
+                                        padding: 0,
+                                    }}
+                                >
+                                    <div
+                                        className={`sm-cal-event ${colorClass}`}
+                                        title={`${subject?.name || ''}\n${teacher?.profile?.full_name || 'TBA'} - ${room?.name || 'TBA'}\n${formatTime12(s.start_time)} - ${formatTime12(s.end_time)}`}
+                                        style={{ fontSize: getFontSize() }}
                                     >
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                            <span>{day.slice(0, 3)}</span>
-                                            {count > 0 && <span style={{ fontSize: 11, color: isActive ? 'rgba(255,255,255,0.8)' : '#64748B' }}>{count}</span>}
+                                        <div className="sm-cal-event-title" style={{ fontSize: getFontSize(), fontWeight: span <= 1 ? 600 : 500 }}>
+                                            {subject?.code || subject?.name || 'Class'}
                                         </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <button className="btn btn-ghost btn-icon" onClick={() => navigateDay(1)}><ChevronRight size={20} /></button>
-                    </div>
-
-                    {/* AM/PM chips */}
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                        <span className="badge" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa' }}>{amCount} AM</span>
-                        <span className="badge" style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa' }}>{pmCount} PM</span>
-                        <span className="badge" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>{daySchedules.length} total</span>
-                    </div>
-
-                    {daySchedules.length === 0 ? (
-                        <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No classes on {selectedDay}</div>
-                    ) : (
-                        <div className="card" style={{ padding: 0, position: 'relative', overflow: 'hidden' }}>
-                            <div style={{ position: 'relative', height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT, overflowY: 'auto', overflowX: 'hidden' }}>
-                                <div style={{ position: 'relative', minHeight: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT, paddingBottom: 20 }}>
-                                    {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => (
-                                        <div key={i} style={{ position: 'absolute', left: 0, right: 0, top: i * HOUR_HEIGHT, height: HOUR_HEIGHT, borderTop: '1px solid rgba(255,255,255,0.04)', zIndex: 0 }}>
-                                            <span className="text-xs" style={{ position: 'absolute', left: 8, top: -7, color: 'var(--text-muted)', width: 44, textAlign: 'right' }}>
-                                                {formatTime12(`${START_HOUR + i}:00`).replace(':00 ', ' ')}
-                                            </span>
-                                        </div>
-                                    ))}
-                                    <div style={{ position: 'relative', height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT, marginLeft: 4 }}>
-                                        {daySchedules.map((s, i) => {
-                                            const [sh, sm] = s.start_time.split(':').map(Number);
-                                            const [eh, em] = s.end_time.split(':').map(Number);
-                                            const topPx = ((sh - START_HOUR) + sm / 60) * HOUR_HEIGHT;
-                                            const heightPx = ((eh - START_HOUR) + em / 60) * HOUR_HEIGHT - topPx;
-                                            const color = colors[i % colors.length];
-                                            return (
-                                                <div key={s.id} style={{
-                                                    position: 'absolute', left: 8, right: 16, top: topPx, height: Math.max(heightPx, 32),
-                                                    background: `${color}18`, border: `1px solid ${color}50`, borderLeft: `4px solid ${color}`,
-                                                    borderRadius: 10, padding: '8px 12px', zIndex: 1, overflow: 'hidden',
-                                                }}>
-                                                    <div className="font-semibold text-base">{(s.subject as any)?.code} - {(s.subject as any)?.name}</div>
-                                                    <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 2, display: 'flex', gap: 12 }}>
-                                                        <span><Clock size={10} /> {formatTime12(s.start_time)} – {formatTime12(s.end_time)}</span>
-                                                        <span><MapPin size={10} /> {(s.room as any)?.name}</span>
-                                                    </div>
-                                                    <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 2 }}>{(s.teacher as any)?.profile?.full_name || 'TBA'}</div>
+                                        {span > 1 && (
+                                            <>
+                                                <div className="sm-cal-event-sub" style={{ fontSize: getFontSize() }}>
+                                                    {teacher?.profile?.full_name || 'TBA'} · {room?.name || 'TBA'}
                                                 </div>
-                                            );
-                                        })}
+                                                <div className="sm-cal-event-time" style={{ fontSize: getFontSize() }}>
+                                                    {formatTime12(s.start_time)} – {formatTime12(s.end_time)}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    )}
-                </>
+                            );
+                        })}
+                    </div>
+                </div>
             ) : viewMode === 'grid' ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
                     {dayOrder.filter(d => groupedByDay[d]?.length > 0).map(day => (
