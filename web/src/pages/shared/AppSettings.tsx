@@ -129,8 +129,6 @@ const AppSettings: React.FC = () => {
             const { error } = await supabase.from('password_reset_requests').insert({
                 user_id: profile?.id,
                 email: session?.user?.email || '',
-                user_name: profile?.full_name || '',
-                reason: resetReason.trim() || 'User requested password reset',
                 status: 'pending',
                 requested_at: new Date().toISOString(),
             });
@@ -140,7 +138,7 @@ const AppSettings: React.FC = () => {
                 await supabase.from('notifications').insert({
                     user_id: profile?.id,
                     title: 'Password Reset Request',
-                    message: `${profile?.full_name || 'A user'} (${session?.user?.email || ''}) has requested a password reset. Reason: ${resetReason.trim() || 'Not specified'}`,
+                    message: `${profile?.full_name || 'A user'} (${session?.user?.email || ''}) has requested a password reset.`,
                     type: 'password_reset',
                     is_read: false,
                 });

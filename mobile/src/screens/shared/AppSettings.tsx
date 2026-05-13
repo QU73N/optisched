@@ -147,10 +147,9 @@ const AppSettings: React.FC = () => {
         try {
             const { error } = await supabase.from('password_reset_requests').insert({
                 user_id: profile?.id,
-                user_email: profile?.email || '',
-                user_name: profile?.full_name || '',
-                reason: requestReason.trim() || 'User requested password reset',
+                email: profile?.email || '',
                 status: 'pending',
+                requested_at: new Date().toISOString(),
             });
             if (error) {
                 // If table doesn't exist, create a notification instead
@@ -159,7 +158,7 @@ const AppSettings: React.FC = () => {
                 await supabase.from('notifications').insert({
                     user_id: profile?.id,
                     title: 'Password Reset Request',
-                    message: `${profile?.full_name || 'A user'} (${profile?.email || ''}) has requested a password reset. Reason: ${requestReason.trim() || 'Not specified'}`,
+                    message: `${profile?.full_name || 'A user'} (${profile?.email || ''}) has requested a password reset.`,
                     type: 'password_reset',
                     is_read: false,
                 });
