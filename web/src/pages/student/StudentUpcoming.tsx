@@ -76,7 +76,7 @@ const StudentUpcoming: React.FC = () => {
             const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
             if (rpcError) { console.error('[StudentUpcoming] RPC error:', rpcError); setLoading(false); return; }
             const list = (rpcData || [])
-                .filter((s: any) => s.status === 'published' && s.section_id === studentSectionId)
+                .filter((s: any) => s.status === 'published' && s.is_active === true && s.section_id === studentSectionId)
                 .map((s: any) => ({
                     id: s.id,
                     day_of_week: s.day_of_week,

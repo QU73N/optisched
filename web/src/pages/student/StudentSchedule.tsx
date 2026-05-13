@@ -15,13 +15,13 @@ interface ScheduleItem {
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const HOUR_HEIGHT = 64;
 const START_HOUR = 7;
-const END_HOUR = 21;
+const END_HOUR = 20; // Changed from 21 to 20
 const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#f97316'];
 
 const StudentSchedule: React.FC = () => {
     const { profile } = useAuth();
-    const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
     const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
     const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'timeline' | 'grid' | 'table'>('timeline');
@@ -76,9 +76,9 @@ const StudentSchedule: React.FC = () => {
         try {
             const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
             if (rpcError) { console.error('[StudentSchedule] RPC error:', rpcError); setLoading(false); return; }
-            // Filter to this student's section + published
+            // Filter to this student's section + published + active
             const filtered = (rpcData || [])
-                .filter((s: any) => s.status === 'published' && s.section_id === studentSectionId)
+                .filter((s: any) => s.status === 'published' && s.is_active === true && s.section_id === studentSectionId)
                 .map((s: any) => ({
                     id: s.id,
                     day_of_week: s.day_of_week,

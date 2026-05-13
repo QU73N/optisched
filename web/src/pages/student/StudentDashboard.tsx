@@ -48,7 +48,7 @@ const StudentDashboard: React.FC = () => {
     const dayIndex = new Date().getDay();
     const isOffDay = dayIndex === 0;
     const scheduleDayName = isOffDay ? 'Monday' : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
-    const { schedules: allSchedules, loading } = useSchedules({ dayOfWeek: scheduleDayName, status: 'published' });
+    const { schedules: allSchedules, loading } = useSchedules({ dayOfWeek: scheduleDayName, status: 'published', isActive: true });
     const { announcements: allAnnouncements } = useAnnouncements();
     const { events: upcomingEvents } = useCustomEvents(undefined, true);
 
