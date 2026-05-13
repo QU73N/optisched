@@ -338,19 +338,19 @@ const AppSettings: React.FC = () => {
                 {/* Legal */}
                 <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LEGAL</Text>
                 <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
-                    <AnimatedPressable style={styles.listItem} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/privacy.html')}>
+                    <AnimatedPressable style={styles.listItem} onPress={() => Linking.openURL('https://optisched-legal-info.vercel.app/privacy.html')}>
                         <MaterialIcons name="policy" size={20} color={colors.textSecondary} />
                         <Text style={[styles.listTitle, { color: colors.textPrimary, flex: 1, marginLeft: 12 }]}>Privacy Policy</Text>
                         <MaterialIcons name="open-in-new" size={14} color={colors.textMuted} />
                     </AnimatedPressable>
                     <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <AnimatedPressable style={styles.listItem} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/terms.html')}>
+                    <AnimatedPressable style={styles.listItem} onPress={() => Linking.openURL('https://optisched-legal-info.vercel.app/terms.html')}>
                         <MaterialIcons name="description" size={20} color={colors.textSecondary} />
                         <Text style={[styles.listTitle, { color: colors.textPrimary, flex: 1, marginLeft: 12 }]}>Terms of Service</Text>
                         <MaterialIcons name="open-in-new" size={14} color={colors.textMuted} />
                     </AnimatedPressable>
                     <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <AnimatedPressable style={styles.listItem} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/about.html')}>
+                    <AnimatedPressable style={styles.listItem} onPress={() => Linking.openURL('https://optisched-legal-info.vercel.app/about.html')}>
                         <MaterialIcons name="info-outline" size={20} color={colors.textSecondary} />
                         <Text style={[styles.listTitle, { color: colors.textPrimary, flex: 1, marginLeft: 12 }]}>About OptiSched</Text>
                         <MaterialIcons name="open-in-new" size={14} color={colors.textMuted} />
@@ -359,12 +359,12 @@ const AppSettings: React.FC = () => {
 
                 {/* Sign Out — clean, professional */}
                 <View style={{ marginTop: 24 }}>
-                    <View style={[styles.separator, { backgroundColor: colors.border, marginHorizontal: 0 }]} />
+                    <View style={[styles.separator, { backgroundColor: colors.border, marginLeft: 0, marginRight: 0 }]} />
                     <AnimatedPressable style={styles.signOutBtn} onPress={handleSignOut}>
                         <MaterialIcons name="logout" size={18} color="#dc2626" />
                         <Text style={styles.signOutText}>Sign Out</Text>
                     </AnimatedPressable>
-                    <View style={[styles.separator, { backgroundColor: colors.border, marginHorizontal: 0 }]} />
+                    <View style={[styles.separator, { backgroundColor: colors.border, marginLeft: 0, marginRight: 0 }]} />
                 </View>
 
                 <Text style={[styles.version, { color: colors.textMuted }]}>OptiSched v1.0 · STI College Meycauayan</Text>
@@ -520,6 +520,9 @@ const styles = StyleSheet.create({
     signOutBtn: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
         paddingVertical: 14,
+        width: '100%',
+        alignSelf: 'stretch',
+        paddingHorizontal: 0,
     },
     signOutText: { color: '#dc2626', fontSize: 15, fontWeight: '500' },
 
