@@ -159,7 +159,7 @@ const AppSettings: React.FC = () => {
                     user_id: profile?.id,
                     title: 'Password Reset Request',
                     message: `${profile?.full_name || 'A user'} (${profile?.email || ''}) has requested a password reset.`,
-                    type: 'password_reset',
+                    type: 'system',
                     is_read: false,
                 });
                 Alert.alert('Request Sent', 'Your password reset request has been sent to the administrator. You will be notified once it has been processed.');

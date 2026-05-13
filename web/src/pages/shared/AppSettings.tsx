@@ -139,7 +139,7 @@ const AppSettings: React.FC = () => {
                     user_id: profile?.id,
                     title: 'Password Reset Request',
                     message: `${profile?.full_name || 'A user'} (${session?.user?.email || ''}) has requested a password reset.`,
-                    type: 'password_reset',
+                    type: 'system',
                     is_read: false,
                 });
             }
