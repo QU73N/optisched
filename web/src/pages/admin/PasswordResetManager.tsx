@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
+import { ConfirmDialog } from '../../components/states/ConfirmDialog';
 import { supabase } from '../../lib/supabase';
 import { KeyRound, Check, X, Loader2, ShieldCheck } from 'lucide-react';
 
@@ -13,6 +15,16 @@ interface ResetRequest {
 
 const PasswordResetManager: React.FC = () => {
     const { profile } = useAuth();
+    const { showToast } = useToast();
+    
+    // Confirmation dialog state
+    const [confirmDialog, setConfirmDialog] = useState<{
+        open: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ open: false, title: '', message: '', onConfirm: () => {} });
+    
     const [requests, setRequests] = useState<ResetRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -52,33 +64,38 @@ const PasswordResetManager: React.FC = () => {
     }, []);
 
     const handleApprove = async (req: ResetRequest) => {
-        if (!window.confirm(`Reset password for ${req.email}?\nNew password will be: surname + last digits of their ID.`)) return;
-        setProcessingId(req.id);
-        try {
-            const { data: userData } = await supabase.from('profiles').select('id, full_name').eq('email', req.email).single();
-            if (!userData) { window.alert('User not found'); setProcessingId(null); return; }
+        setConfirmDialog({
+            open: true,
+            title: 'Reset Password',
+            message: `Reset password for ${req.email}?\nNew password will be: surname + last digits of their ID.`,
+            onConfirm: async () => {
+                setProcessingId(req.id);
+                try {
+                    const { data: userData } = await supabase.from('profiles').select('id, full_name').eq('email', req.email).single();
+                    if (!userData) { showToast({ title: 'User not found', type: 'error' }); setProcessingId(null); return; }
 
-            const emailLocal = req.email.split('@')[0] || '';
-            const parts = emailLocal.split('.');
-            const surname = parts[0]?.toLowerCase() || (userData.full_name || '').split(' ').pop()?.toLowerCase() || 'user';
-            const idFromEmail = parts[1] || userData.id.slice(-6);
-            const newPassword = `${surname}.${idFromEmail}`;
+                    const emailLocal = req.email.split('@')[0] || '';
+                    const parts = emailLocal.split('.');
+                    const surname = parts[0]?.toLowerCase() || (userData.full_name || '').split(' ').pop()?.toLowerCase() || 'user';
+                    const idFromEmail = parts[1] || userData.id.slice(-6);
+                    const newPassword = `${surname}.${idFromEmail}`;
 
-            // Try admin reset
-            const { error } = await supabase.auth.admin.updateUserById(userData.id, { password: newPassword });
-            if (error) throw error;
+                    // Try admin reset
+                    const { error } = await supabase.auth.admin.updateUserById(userData.id, { password: newPassword });
+                    if (error) throw error;
 
-            await supabase.from('password_reset_requests').update({
-                status: 'approved', resolved_at: new Date().toISOString(), resolved_by: profile?.id
-            }).eq('id', req.id);
+                    await supabase.from('password_reset_requests').update({
+                        status: 'approved', resolved_at: new Date().toISOString(), resolved_by: profile?.id
+                    }).eq('id', req.id);
 
-            fetchRequests();
-            window.alert(`Password reset to: ${newPassword}\nPlease inform the user.`);
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Failed to reset';
-            window.alert('Error: ' + message);
-        }
-        setProcessingId(null);
+                    fetchRequests();
+                    showToast({ title: 'Password reset', message: `New password: ${newPassword}\nPlease inform the user.`, type: 'success' });
+                } catch {
+                    showToast({ title: 'Error', message: 'Failed to reset password', type: 'error' });
+                }
+                setProcessingId(null);
+            }
+        });
     };
 
     const handleDeny = async (req: ResetRequest) => {
@@ -168,6 +185,15 @@ const PasswordResetManager: React.FC = () => {
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .spin { animation: spin 1s linear infinite; }
             `}</style>
+            
+            <ConfirmDialog
+                open={confirmDialog.open}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
+                confirmVariant="danger"
+            />
         </div>
         </div>
     );

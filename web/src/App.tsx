@@ -3,9 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { UserPreferencesProvider } from './contexts/UserPreferencesContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { PerformanceProvider } from './contexts/PerformanceContext';
 import Layout from './components/Layout';
 import LandingPage from './pages/LandingPage';
-import PricingPage from './pages/PricingPage';
 const AdminDashboardDispatcher = lazy(() => import('./pages/admin/AdminDashboardDispatcher'));
 const AdminManageUsers = lazy(() => import('./pages/admin/AdminManageUsers'));
 const AddUser = lazy(() => import('./pages/admin/AddUser'));
@@ -111,17 +111,17 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <UserPreferencesProvider>
-          <ToastProvider>
-            <Routes>
-          {/* Public */}
-          <Route path="/" element={<LandingGuard />} />
-          <Route path="/login" element={<LandingGuard />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/help" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><HelpPage /></Suspense>} />
+        <PerformanceProvider>
+          <UserPreferencesProvider>
+            <ToastProvider>
+              <Routes>
+            {/* Public */}
+            <Route path="/" element={<LandingGuard />} />
+            <Route path="/login" element={<LandingGuard />} />
+            <Route path="/help" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><HelpPage /></Suspense>} />
 
-          {/* Admin routes - accessible by all admin sub-roles */}
-          <Route path="/admin" element={<ProtectedRoute allowedRoles={adminRoles}><Layout /></ProtectedRoute>}>
+            {/* Admin routes - accessible by all admin sub-roles */}
+            <Route path="/admin" element={<ProtectedRoute allowedRoles={adminRoles}><Layout /></ProtectedRoute>}>
             <Route index element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminDashboardDispatcher /></Suspense>} />
             <Route path="broadcasts" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AnnouncementsPage /></Suspense>} />
             <Route path="users" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AdminManageUsers /></Suspense>} />
@@ -208,8 +208,9 @@ function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-          </ToastProvider>
-        </UserPreferencesProvider>
+            </ToastProvider>
+          </UserPreferencesProvider>
+        </PerformanceProvider>
       </AuthProvider>
     </BrowserRouter>
   );

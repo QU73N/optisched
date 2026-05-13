@@ -812,7 +812,7 @@ const ScheduleGenerate: React.FC = () => {
                         </button>
                     ) : stage === 'outcome' ? (
                         <button className="btn btn-primary" onClick={() => setStage('save')} disabled={!result || result.entries.length === 0}>
-                            Continue to save <ArrowRight size={14} />
+                            Continue <ArrowRight size={14} />
                         </button>
                     ) : stage === 'save' ? null : (
                         <button className="btn btn-primary" onClick={goNext} disabled={!canAdvance(stage)}>
@@ -2029,7 +2029,7 @@ const OutcomeStage: React.FC<{
                             </button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginBottom: 20 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginBottom: 20, maxHeight: 'calc(100vh - 350px)', overflowY: 'auto' }}>
                             {viewMode === 'section' && sections.filter(s => (groupedBySection[s.id]?.length || 0) > 0).map(section => (
                                 <button
                                     key={section.id}

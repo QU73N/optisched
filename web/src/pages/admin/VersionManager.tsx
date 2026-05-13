@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 import { History, Save, Trash2, Layers, Clock, Eye, RotateCcw, CheckCircle } from 'lucide-react';
 import '../admin/Dashboard.css';
 
@@ -15,6 +16,7 @@ interface VersionSnapshot {
 const STORAGE_KEY = 'optisched_versions';
 
 const VersionManager: React.FC = () => {
+    const { showToast } = useToast();
     const [versions, setVersions] = useState<VersionSnapshot[]>([]);
     const [schedules, setSchedules] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -86,9 +88,9 @@ const VersionManager: React.FC = () => {
                 if (error) throw error;
             }
             await fetchSchedules();
-            alert('Schedule restored successfully.');
+            showToast({ title: 'Schedule restored', type: 'success' });
         } catch (err: any) {
-            alert('Error: ' + (err.message || 'Failed to restore'));
+            showToast({ title: 'Error', message: err.message || 'Failed to restore', type: 'error' });
         } finally {
             setRestoring(false);
         }

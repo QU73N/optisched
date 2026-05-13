@@ -132,7 +132,7 @@ async function checkSupabaseConfig(): Promise<VerificationResult> {
 
 async function checkDatabaseConnection(): Promise<VerificationResult> {
     try {
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('profiles')
             .select('count', { count: 'exact', head: true })
             .limit(1);
@@ -159,7 +159,7 @@ async function checkDatabaseConnection(): Promise<VerificationResult> {
 
 async function checkCurrentSession(): Promise<VerificationResult> {
     try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
 
         const passed = !!session;
 
@@ -409,7 +409,7 @@ async function checkRoleData(): Promise<VerificationResult> {
             };
         }
 
-        const { data: profile, error } = await supabase
+        const { data: profile } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', session.user.id)
@@ -591,4 +591,4 @@ function getStatusEmoji(status: string): string {
 }
 
 // Export for testing
-export { VerificationResult, AuthAuditReport };
+export type { VerificationResult, AuthAuditReport };

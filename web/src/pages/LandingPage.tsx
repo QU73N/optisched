@@ -9,9 +9,11 @@ import {
     BookOpen, Gauge, TrendingUp, AlertCircle,
     FileCheck, ShieldCheck, UserCog, Send, Smartphone,
     Clock, Scale, KeyRound, Workflow, Check,
-    FolderTree, Building2, ArrowUp,
+    FolderTree, Building2, ArrowUp, Facebook, Linkedin, Twitter,
+    Instagram, Youtube, Phone, MapPin, Globe,
 } from 'lucide-react';
 import { AuroraBackground } from '@/components/ui/aurora-background';
+import FloatingOptiBot from '../components/FloatingOptiBot';
 import './LandingPage.css';
 
 /* ============================================================
@@ -375,14 +377,16 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, theme }) => {
    ============================================================ */
 interface NavProps {
     onLogin: () => void;
-    onScrollTo: (id: string) => void;
-    theme: string;
+    theme: 'dark' | 'light';
     onToggleTheme: () => void;
     animationsEnabled: boolean;
     onToggleAnimations: () => void;
+    activeView: 'landing' | 'pricing';
+    onSwitchToLanding: (sectionId?: string) => void;
+    onSwitchToPricing: () => void;
 }
 
-const Navigation: React.FC<NavProps> = ({ onLogin, onScrollTo, theme, onToggleTheme, animationsEnabled, onToggleAnimations }) => {
+const Navigation: React.FC<NavProps> = ({ onLogin, theme, onToggleTheme, animationsEnabled, onToggleAnimations, activeView, onSwitchToLanding, onSwitchToPricing }) => {
     const [scrolled, setScrolled] = useState(false);
 
     useEffect(() => {
@@ -401,10 +405,11 @@ const Navigation: React.FC<NavProps> = ({ onLogin, onScrollTo, theme, onToggleTh
                 </a>
 
                 <div className="lp-nav-links">
-                    <button className="lp-nav-link" onClick={() => onScrollTo('features')}>Features</button>
-                    <button className="lp-nav-link" onClick={() => onScrollTo('workflow')}>Workflow</button>
-                    <button className="lp-nav-link" onClick={() => onScrollTo('roles')}>Roles</button>
-                    <button className="lp-nav-link" onClick={() => onScrollTo('security')}>Security</button>
+                    <button className="lp-nav-link" onClick={() => onSwitchToLanding()}>Features</button>
+                    <button className="lp-nav-link" onClick={() => onSwitchToLanding('workflow')}>Workflow</button>
+                    <button className="lp-nav-link" onClick={() => onSwitchToLanding('roles')}>Roles</button>
+                    <button className="lp-nav-link" onClick={() => onSwitchToLanding('security')}>Security</button>
+                    <button className={`lp-nav-link ${activeView === 'pricing' ? 'lp-nav-link-active' : ''}`} onClick={onSwitchToPricing}>Pricing</button>
                 </div>
 
                 <div className="lp-nav-right">
@@ -469,13 +474,13 @@ const HeroVisual: React.FC = () => {
     const row930: Slot[] = [
         { subject: 'Chemistry', room: 'Lab 2', tone: 'blue', span: 2 },
         { subject: 'Calculus', room: 'Room 302', tone: 'navy' },
-        null,
+        { subject: 'History', room: 'Room 207', tone: 'sky' },
         { subject: 'Programming', room: 'Room 108', tone: 'teal' },
         { subject: 'Literature', room: 'Room 211', tone: 'sky' },
     ];
     // Monday 11:00 is occupied by the span-2 Chemistry above
     const row11: Slot[] = [
-        { subject: 'History', room: 'Room 207', tone: 'sky' },
+        null,
         null,
         { subject: 'Calculus', room: 'Room 302', tone: 'navy' },
         { subject: 'Physics', room: 'Lab 1', tone: 'blue' },
@@ -596,7 +601,7 @@ const HeroVisual: React.FC = () => {
 /* ============================================================
    Hero Section
    ============================================================ */
-const HeroSection: React.FC<{ onLogin: () => void; onScrollTo: (id: string) => void }> = ({ onLogin, onScrollTo }) => (
+const HeroSection: React.FC<{ onLogin: () => void }> = ({ onLogin }) => (
     <section className="lp-hero landing-container" id="top">
         <div className="lp-hero-inner">
             <div className="lp-hero-copy">
@@ -613,7 +618,7 @@ const HeroSection: React.FC<{ onLogin: () => void; onScrollTo: (id: string) => v
                     <button className="lp-btn lp-btn-primary lp-btn-lg" onClick={onLogin}>
                         Sign in to dashboard <ArrowRight size={16} />
                     </button>
-                    <button className="lp-btn lp-btn-secondary lp-btn-lg" onClick={() => onScrollTo('features')}>
+                    <button className="lp-btn lp-btn-secondary lp-btn-lg" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
                         Explore the platform
                     </button>
                 </div>
@@ -1316,9 +1321,137 @@ const FinalCTA: React.FC<{ onLogin: () => void }> = ({ onLogin }) => (
 );
 
 /* ============================================================
+   Pricing Section
+   ============================================================ */
+const PricingSection: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+    return (
+        <section className="lp-section landing-container">
+            <div className="lp-section-head">
+                <h1 className="lp-section-title">Invest in Scheduling Excellence</h1>
+                <p className="lp-section-sub">
+                    Choose the tier that matches your institution's ambition.
+                </p>
+            </div>
+
+            <div className="pricing-grid">
+                {/* Standard */}
+                <div className="pricing-card pricing-card-standard">
+                    <div className="pricing-card-header">
+                        <h3 className="pricing-tier-name">Standard</h3>
+                        <p className="pricing-tier-sub">Essential scheduling infrastructure</p>
+                    </div>
+                    <div className="pricing-tier-price">
+                        <span className="pricing-currency">$</span>
+                        <span className="pricing-amount">299</span>
+                        <span className="pricing-period">/month</span>
+                    </div>
+                    <button className="lp-btn lp-btn-secondary lp-btn-lg" onClick={onLogin}>
+                        Select Plan
+                    </button>
+                    <div className="pricing-features">
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>Role-based access control</span>
+                        </div>
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>Automated conflict detection</span>
+                        </div>
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>Schedule versioning</span>
+                        </div>
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>Digital distribution</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Premium */}
+                <div className="pricing-card pricing-card-premium">
+                    <div className="pricing-popular-badge">
+                        <Sparkles size={14} />
+                        Most Popular
+                    </div>
+                    <div className="pricing-card-header">
+                        <h3 className="pricing-tier-name">Premium</h3>
+                        <p className="pricing-tier-sub">Intelligent scheduling optimization</p>
+                    </div>
+                    <div className="pricing-tier-price">
+                        <span className="pricing-currency">$</span>
+                        <span className="pricing-amount">599</span>
+                        <span className="pricing-period">/month</span>
+                    </div>
+                    <button className="lp-btn lp-btn-primary lp-btn-lg" onClick={onLogin}>
+                        Select Plan
+                    </button>
+                    <div className="pricing-features">
+                        <div className="pricing-features-include">
+                            Everything in Standard, plus:
+                        </div>
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>NLP for structured data entry</span>
+                        </div>
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>Room utilization heatmaps</span>
+                        </div>
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>Workload density analytics</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Enterprise */}
+                <div className="pricing-card pricing-card-enterprise">
+                    <div className="pricing-card-header">
+                        <h3 className="pricing-tier-name">Enterprise</h3>
+                        <p className="pricing-tier-sub">Tailored for your institution</p>
+                    </div>
+                    <div className="pricing-tier-price">
+                        <span className="pricing-amount">Contact Us</span>
+                    </div>
+                    <button className="lp-btn lp-btn-secondary lp-btn-lg" onClick={() => window.location.href = 'mailto:sales@optisched.edu'}>
+                        Contact Sales
+                    </button>
+                    <div className="pricing-features">
+                        <div className="pricing-features-include">
+                            Everything in Premium, plus:
+                        </div>
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>API integration with existing SIS</span>
+                        </div>
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>Custom UI</span>
+                        </div>
+                        <div className="pricing-feature">
+                            <Check size={16} className="pricing-feature-icon" />
+                            <span>Custom service-level agreements</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+};
+
+/* ============================================================
    Footer
    ============================================================ */
-const Footer: React.FC<{ onLogin: () => void; onScrollTo: (id: string) => void; theme: string }> = ({ onLogin, onScrollTo, theme }) => (
+interface FooterProps {
+    onLogin: () => void;
+    theme: 'dark' | 'light';
+    activeView: 'landing' | 'pricing';
+    onSwitchToLanding: (sectionId?: string) => void;
+    onSwitchToPricing: () => void;
+}
+
+const Footer: React.FC<FooterProps> = ({ onLogin, theme, activeView, onSwitchToLanding, onSwitchToPricing }) => (
     <footer className="lp-footer">
         <div className="landing-container lp-footer-inner">
             <div className="lp-footer-top">
@@ -1332,21 +1465,60 @@ const Footer: React.FC<{ onLogin: () => void; onScrollTo: (id: string) => void; 
                         schedules, role based access, approval workflows, and cross platform
                         delivery.
                     </p>
+                    <div className="lp-footer-socials">
+                        <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+                            <Facebook size={18} />
+                        </a>
+                        <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
+                            <Twitter size={18} />
+                        </a>
+                        <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+                            <Linkedin size={18} />
+                        </a>
+                        <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+                            <Instagram size={18} />
+                        </a>
+                        <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
+                            <Youtube size={18} />
+                        </a>
+                    </div>
                 </div>
 
                 <div className="lp-footer-col">
                     <h5>Platform</h5>
-                    <button onClick={() => onScrollTo('features')}>Features</button>
-                    <button onClick={() => onScrollTo('workflow')}>Workflow</button>
-                    <button onClick={() => onScrollTo('roles')}>Roles</button>
-                    <button onClick={() => onScrollTo('security')}>Security</button>
+                    <button onClick={() => onSwitchToLanding()}>Features</button>
+                    <button onClick={() => onSwitchToLanding('workflow')}>Workflow</button>
+                    <button onClick={() => onSwitchToLanding('roles')}>Roles</button>
+                    <button onClick={() => onSwitchToLanding('security')}>Security</button>
+                    <button onClick={onSwitchToPricing} className={activeView === 'pricing' ? 'lp-footer-link-active' : ''}>Pricing</button>
                 </div>
 
                 <div className="lp-footer-col">
                     <h5>Access</h5>
                     <button onClick={onLogin}>Sign in</button>
                     <button onClick={onLogin}>Forgot password</button>
-                    <a href="mailto:admin@institution.edu">Contact administrator</a>
+                    <a href="mailto:support@optisched.edu?subject=OptiSched Support Request" className="lp-footer-contact">
+                        <Mail size={14} /> Contact support
+                    </a>
+                    <a href="mailto:admin@institution.edu" className="lp-footer-contact">
+                        <UserCog size={14} /> Contact administrator
+                    </a>
+                </div>
+
+                <div className="lp-footer-col">
+                    <h5>Contact</h5>
+                    <a href="mailto:info@optisched.edu" className="lp-footer-contact">
+                        <Mail size={14} /> info@optisched.edu
+                    </a>
+                    <a href="tel:+1234567890" className="lp-footer-contact">
+                        <Phone size={14} /> +1 (234) 567-890
+                    </a>
+                    <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="lp-footer-contact">
+                        <MapPin size={14} /> 123 Academic Way, Campus City
+                    </a>
+                    <a href="https://optisched.edu" target="_blank" rel="noopener noreferrer" className="lp-footer-contact">
+                        <Globe size={14} /> www.optisched.edu
+                    </a>
                 </div>
 
                 <div className="lp-footer-col">
@@ -1354,6 +1526,8 @@ const Footer: React.FC<{ onLogin: () => void; onScrollTo: (id: string) => void; 
                     <a href="#top">Licensing model</a>
                     <a href="#security">Security posture</a>
                     <a href="#features">Deployment</a>
+                    <a href="https://docs.optisched.edu" target="_blank" rel="noopener noreferrer">Documentation</a>
+                    <a href="https://status.optisched.edu" target="_blank" rel="noopener noreferrer">System status</a>
                 </div>
             </div>
 
@@ -1409,44 +1583,89 @@ const LandingPage: React.FC = () => {
     const { theme, toggle } = useTheme();
     const { animationsEnabled, toggle: toggleAnimations } = useAnimations();
     const [loginOpen, setLoginOpen] = useState(false);
+    const [activeView, setActiveView] = useState<'landing' | 'pricing'>('landing');
+    const [pendingScroll, setPendingScroll] = useState<string | null>(null);
 
     useReveal(animationsEnabled);
+
+    // Scroll to top on refresh
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+    }, []);
 
     const scrollTo = useCallback((id: string) => {
         const el = document.getElementById(id);
         if (!el) return;
-        const y = el.getBoundingClientRect().top + window.scrollY - 72;
+        const navHeight = window.innerWidth <= 820 ? 60 : 68;
+        const y = el.getBoundingClientRect().top + window.scrollY - navHeight - 8;
         window.scrollTo({ top: y, behavior: 'smooth' });
     }, []);
+
+    // Scroll to pending section after view switch
+    useEffect(() => {
+        if (activeView === 'landing' && pendingScroll) {
+            setTimeout(() => {
+                scrollTo(pendingScroll);
+                setPendingScroll(null);
+            }, 400);
+        }
+    }, [activeView, pendingScroll, scrollTo]);
 
     const openLogin = useCallback(() => setLoginOpen(true), []);
     const closeLogin = useCallback(() => setLoginOpen(false), []);
 
+    const handleSwitchToLanding = useCallback((sectionId?: string) => {
+        // No animations for landing transition - switch immediately
+        if (sectionId) {
+            setPendingScroll(sectionId);
+            setActiveView('landing');
+        } else {
+            setActiveView('landing');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, []);
+
+    const handleSwitchToPricing = useCallback(() => {
+        // No animations for pricing transition - switch immediately
+        setActiveView('pricing');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, []);
+
     return (
-        <AuroraBackground className="landing" disabled={!animationsEnabled}>
+        <AuroraBackground className={`landing ${animationsEnabled ? 'animations-enabled' : ''}`} disabled={!animationsEnabled}>
             <div className="lp-grid-bg" aria-hidden="true" />
             <div className="lp-ambient" aria-hidden="true" />
 
             <div className="lp-page-content">
-                <Navigation onLogin={openLogin} onScrollTo={scrollTo} theme={theme} onToggleTheme={toggle} animationsEnabled={animationsEnabled} onToggleAnimations={toggleAnimations} />
+                <Navigation onLogin={openLogin} theme={theme as 'dark' | 'light'} onToggleTheme={toggle} animationsEnabled={animationsEnabled} onToggleAnimations={toggleAnimations} activeView={activeView} onSwitchToLanding={handleSwitchToLanding} onSwitchToPricing={handleSwitchToPricing} />
 
-                <main>
-                    <HeroSection onLogin={openLogin} onScrollTo={scrollTo} />
-                    <TrustStrip />
-                    <ProblemSolution />
-                    <FeaturesBento />
-                    <WorkflowSection />
-                    <RolesSection />
-                    <SecuritySection />
-                    <CrossPlatformSection />
-                    <FinalCTA onLogin={openLogin} />
+                <main className="lp-main-content">
+                    <div className={`lp-view-container lp-view-${activeView}`}>
+                        {/* Landing content */}
+                        <div className={`lp-view-landing-content ${activeView === 'landing' ? 'lp-view-visible' : 'lp-view-hidden'}`}>
+                            <HeroSection onLogin={openLogin} />
+                            <TrustStrip />
+                            <ProblemSolution />
+                            <FeaturesBento />
+                            <WorkflowSection />
+                            <RolesSection />
+                            <SecuritySection />
+                            <CrossPlatformSection />
+                            <FinalCTA onLogin={openLogin} />
+                        </div>
+                        {/* Pricing content */}
+                        <div className={`lp-view-pricing-content ${activeView === 'pricing' ? 'lp-view-visible' : 'lp-view-hidden'}`}>
+                            <PricingSection onLogin={openLogin} />
+                        </div>
+                    </div>
                 </main>
 
-                <Footer onLogin={openLogin} onScrollTo={scrollTo} theme={theme} />
+                <Footer onLogin={openLogin} theme={theme as 'dark' | 'light'} activeView={activeView} onSwitchToLanding={handleSwitchToLanding} onSwitchToPricing={handleSwitchToPricing} />
             </div>
 
             <LoginModal open={loginOpen} onClose={closeLogin} theme={theme} />
             <ScrollToTop />
+            <FloatingOptiBot />
         </AuroraBackground>
     );
 };

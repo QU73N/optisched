@@ -53,7 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({ badges = {} }) => {
     // Collapsed groups (persisted)
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
         try { return JSON.parse(localStorage.getItem(STORAGE_COLLAPSED) || '{}'); }
-        catch { return {}; }
+        catch (err) { console.error('[Sidebar] Data load failed:', err); return {}; }
     });
     useEffect(() => {
         localStorage.setItem(STORAGE_COLLAPSED, JSON.stringify(collapsed));

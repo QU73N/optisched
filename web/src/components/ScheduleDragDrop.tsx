@@ -415,10 +415,33 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         customSectionId?: string,
         customTeacherId?: string
     ) => {
+        console.log('[ScheduleDragDrop] APPLY MOVE START:', {
+            entryKey: entry.key,
+            subjectName: entry.subjectName,
+            originalDay: entry.day,
+            originalStart: entry.start,
+            originalEnd: entry.end,
+            originalRoomId: entry.roomId,
+            originalSectionId: entry.sectionId,
+            originalTeacherId: entry.teacherId,
+            newDay,
+            newStartTime,
+            newEndTime,
+            customRoomId,
+            customSectionId,
+            customTeacherId
+        });
+
         // Find custom room, section, and teacher objects if provided
         const customRoom = customRoomId ? rooms.find(r => r.id === customRoomId) : null;
         const customSection = customSectionId ? sections.find(s => s.id === customSectionId) : null;
         const customTeacher = customTeacherId ? teachers.find(t => t.id === customTeacherId) : null;
+
+        console.log('[ScheduleDragDrop] CUSTOM OBJECTS FOUND:', {
+            customRoom: customRoom ? { id: customRoom.id, name: customRoom.name } : null,
+            customSection: customSection ? { id: customSection.id, name: customSection.name } : null,
+            customTeacher: customTeacher ? { id: customTeacher.id, name: customTeacher.full_name } : null
+        });
 
         // Create updated entry with custom room/section/teacher if provided
         const updatedEntry: ScheduleEntry = {
@@ -426,15 +449,15 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
             ...(newDay && { day: newDay }),
             ...(newStartTime && { start: newStartTime }),
             ...(newEndTime && { end: newEndTime }),
-            ...(customRoomId && { 
-                roomId: customRoomId, 
+            ...(customRoomId && {
+                roomId: customRoomId,
                 roomName: customRoom?.name || entry.roomName,
                 roomType: customRoom?.type as 'common' | 'special' | undefined,
                 capacity: customRoom?.capacity,
                 compatibleSubjectIds: customRoom?.compatible_subject_ids,
             }),
-            ...(customSectionId && { 
-                sectionId: customSectionId, 
+            ...(customSectionId && {
+                sectionId: customSectionId,
                 sectionName: customSection?.name || entry.sectionName,
                 sectionSize: customSection?.student_count,
             }),
@@ -443,14 +466,45 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
                 teacherName: customTeacher?.full_name || entry.teacherName,
             }),
         };
-        
+
+        console.log('[ScheduleDragDrop] UPDATED ENTRY CREATED:', {
+            key: updatedEntry.key,
+            day: updatedEntry.day,
+            start: updatedEntry.start,
+            end: updatedEntry.end,
+            roomId: updatedEntry.roomId,
+            roomName: updatedEntry.roomName,
+            sectionId: updatedEntry.sectionId,
+            sectionName: updatedEntry.sectionName,
+            teacherId: updatedEntry.teacherId,
+            teacherName: updatedEntry.teacherName
+        });
+
+        console.log('[ScheduleDragDrop] CALLING onUpdate WITH updatedEntry');
         // Call onUpdate to persist the change
         onUpdate(updatedEntry);
+        console.log('[ScheduleDragDrop] onUpdate CALLED COMPLETED');
     }, [onUpdate, rooms, sections, teachers]);
 
     // Handle drag start
     const handleDragStart = useCallback((e: React.DragEvent, entry: ScheduleEntry) => {
-        if (!canEdit) return;
+        console.log('[ScheduleDragDrop] DRAG START:', {
+            entryKey: entry.key,
+            subjectName: entry.subjectName,
+            sectionName: entry.sectionName,
+            day: entry.day,
+            start: entry.start,
+            end: entry.end,
+            roomId: entry.roomId,
+            roomName: entry.roomName,
+            teacherId: entry.teacherId,
+            teacherName: entry.teacherName,
+            canEdit
+        });
+        if (!canEdit) {
+            console.warn('[ScheduleDragDrop] DRAG START ABORTED: canEdit is false');
+            return;
+        }
         setDraggedEntry(entry);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('application/json', JSON.stringify({
@@ -471,8 +525,23 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
 
     // Handle drop on a time slot
     const handleDrop = useCallback((e: React.DragEvent, day: string, startTime: string) => {
+        console.log('[ScheduleDragDrop] DROP INITIATED:', {
+            day,
+            startTime,
+            draggedEntry: draggedEntry ? {
+                key: draggedEntry.key,
+                subjectName: draggedEntry.subjectName,
+                currentDay: draggedEntry.day,
+                currentStart: draggedEntry.start,
+                currentEnd: draggedEntry.end
+            } : null,
+            canEdit
+        });
         e.preventDefault();
-        if (!draggedEntry || !canEdit) return;
+        if (!draggedEntry || !canEdit) {
+            console.warn('[ScheduleDragDrop] DROP ABORTED:', !draggedEntry ? 'No dragged entry' : 'canEdit is false');
+            return;
+        }
 
         // Calculate the duration based on the entry's original duration
         const originalStartMinutes = parseInt(draggedEntry.start.split(':')[0]) * 60 + parseInt(draggedEntry.start.split(':')[1]);
@@ -481,17 +550,36 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
 
         const newStartMinutes = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
         const newEndMinutes = newStartMinutes + duration;
-        
+
+        console.log('[ScheduleDragDrop] TIME CALCULATION:', {
+            originalStartMinutes,
+            originalEndMinutes,
+            duration,
+            newStartMinutes,
+            newEndMinutes,
+            maxEndMinutes: (START_HOUR + TOTAL_SLOTS / 2) * 60
+        });
+
         // Validate that the new time slot is within bounds
         const maxEndMinutes = (START_HOUR + TOTAL_SLOTS / 2) * 60;
         if (newEndMinutes > maxEndMinutes) {
+            console.warn('[ScheduleDragDrop] DROP ABORTED: Time slot outside valid range');
             // Prevent drop if the slot is outside the valid time range
             setDraggedEntry(null);
             setHoveredSlot(null);
             return;
         }
-        
+
         const newEndTime = formatTime(`${Math.floor(newEndMinutes / 60)}:${(newEndMinutes % 60).toString().padStart(2, '0')}`);
+
+        console.log('[ScheduleDragDrop] SHOWING CUSTOMIZATION MODAL:', {
+            newDay: day,
+            newStartTime: startTime,
+            newEndTime,
+            customRoomId: draggedEntry.roomId,
+            customSectionId: draggedEntry.sectionId,
+            customTeacherId: draggedEntry.teacherId
+        });
 
         // Show customization modal first
         setPendingMove({
@@ -507,12 +595,24 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
         setSelectedCustomSection(draggedEntry.sectionId || sections[0]?.id || '');
         setSelectedCustomTeacher(draggedEntry.teacherId || teachers[0]?.id || '');
         setShowCustomizationModal(true);
-        
+
         setDraggedEntry(null);
     }, [draggedEntry, formatTime, canEdit, START_HOUR, TOTAL_SLOTS, rooms, sections, teachers]);
 
     // Confirm the move despite conflicts
     const confirmMove = useCallback(() => {
+        console.log('[ScheduleDragDrop] CONFIRM MOVE (DESPITE CONFLICTS):', {
+            pendingMove: pendingMove ? {
+                entryKey: pendingMove.entry.key,
+                subjectName: pendingMove.entry.subjectName,
+                newDay: pendingMove.newDay,
+                newStartTime: pendingMove.newStartTime,
+                newEndTime: pendingMove.newEndTime,
+                customRoomId: pendingMove.customRoomId,
+                customSectionId: pendingMove.customSectionId,
+                customTeacherId: pendingMove.customTeacherId
+            } : null
+        });
         if (!pendingMove) return;
         applyMove(
             pendingMove.entry,
@@ -530,8 +630,20 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
 
     // Confirm the customization and proceed to check conflicts
     const confirmCustomization = useCallback(() => {
+        console.log('[ScheduleDragDrop] CONFIRM CUSTOMIZATION:', {
+            pendingMove: pendingMove ? {
+                entryKey: pendingMove.entry.key,
+                subjectName: pendingMove.entry.subjectName,
+                newDay: pendingMove.newDay,
+                newStartTime: pendingMove.newStartTime,
+                newEndTime: pendingMove.newEndTime
+            } : null,
+            selectedCustomRoom,
+            selectedCustomSection,
+            selectedCustomTeacher
+        });
         if (!pendingMove) return;
-        
+
         // Update pending move with custom selections
         const updatedPendingMove = {
             ...pendingMove,
@@ -539,28 +651,35 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
             customSectionId: selectedCustomSection,
             customTeacherId: selectedCustomTeacher,
         };
-        
+
         setShowCustomizationModal(false);
-        
+
         // Check for conflicts with custom selections
         const conflicts = checkConflicts(
-            pendingMove.entry, 
-            pendingMove.newDay, 
-            pendingMove.newStartTime, 
+            pendingMove.entry,
+            pendingMove.newDay,
+            pendingMove.newStartTime,
             pendingMove.newEndTime,
             selectedCustomRoom,
             selectedCustomSection,
             selectedCustomTeacher
         );
-        
+
+        console.log('[ScheduleDragDrop] CONFLICT CHECK RESULT:', {
+            conflictCount: conflicts.length,
+            conflicts
+        });
+
         if (conflicts.length > 0) {
             // Show conflict warning with suggestions
+            console.log('[ScheduleDragDrop] SHOWING CONFLICT WARNING MODAL');
             const suggestions = generateSuggestions(pendingMove.entry, pendingMove.newDay, pendingMove.newStartTime);
             setPendingMove(updatedPendingMove);
             setConflictDetails({ conflicts, suggestions });
             setShowConflictWarning(true);
         } else {
             // Apply the move without conflicts
+            console.log('[ScheduleDragDrop] NO CONFLICTS, APPLYING MOVE DIRECTLY');
             applyMove(
                 pendingMove.entry,
                 pendingMove.newDay,
@@ -576,6 +695,7 @@ export const ScheduleDragDrop: React.FC<ScheduleDragDropProps> = ({
 
     // Cancel the move
     const cancelMove = useCallback(() => {
+        console.log('[ScheduleDragDrop] CANCEL MOVE');
         setShowConflictWarning(false);
         setShowCustomizationModal(false);
         setPendingMove(null);

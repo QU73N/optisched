@@ -4,8 +4,8 @@ import type { Subject, Teacher, Room, Section, ExistingSchedule, GenerationConfi
 
 // Mock data for integration tests
 const mockTeachers: Teacher[] = [
-    { id: 't1', full_name: 'Teacher 1', max_hours: 40, weight: 50, priority_note: null, preferred_days: ['Monday', 'Wednesday', 'Friday'], availability: {} },
-    { id: 't2', full_name: 'Teacher 2', max_hours: 40, weight: 50, priority_note: null, preferred_days: ['Tuesday', 'Thursday'], availability: {} },
+    { id: 't1', full_name: 'Teacher 1', max_hours: 40, max_hours_per_day: 8, weight: 50, priority_note: null, preferred_days: ['Monday', 'Wednesday', 'Friday'], availability: {} },
+    { id: 't2', full_name: 'Teacher 2', max_hours: 40, max_hours_per_day: 8, weight: 50, priority_note: null, preferred_days: ['Tuesday', 'Thursday'], availability: {} },
 ];
 
 const mockRooms: Room[] = [
@@ -31,14 +31,16 @@ const mockConfig: GenerationConfig = {
     days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
     dayStart: '08:00',
     dayEnd: '17:00',
-    breaks: [],
+    breakMode: 'fixed',
+    fixedBreak: { label: 'Lunch', start: '12:00', end: '13:00' },
+    variableBreak: { startTime: '12:00', endTime: '13:00', duration: 60, increments: 15 },
+    commonBreak: { enabled: false, day: 'Monday', time: '12:00', duration: 60 },
     maxAttempts: 10,
     sectionIds: [],
     partialTarget: null,
     priorities: {
         subjects: {},
         sections: {},
-        specialRoomBias: 50,
     },
     soft: {
         balancedLoad: 50,
@@ -49,6 +51,7 @@ const mockConfig: GenerationConfig = {
         workloadFairness: 50,
         subjectSpacing: 50,
         roomUtilization: 50,
+        specialRoomBias: 50,
     },
     overflowPolicy: 'relax_soft',
     enableForwardChecking: false,
@@ -309,6 +312,9 @@ describe('Generator Integration Tests', () => {
                 priorities: {
                     subjects: { 'sub1': 80 },
                     sections: {},
+                },
+                soft: {
+                    ...mockConfig.soft,
                     specialRoomBias: 50,
                 },
             };

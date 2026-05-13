@@ -1,7 +1,7 @@
 // StudentSection - section-wide weekly schedule grid for the student's section.
 // Visibility gated by `students_can_see_section_wide_schedule` rule.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -25,37 +25,77 @@ const StudentSection: React.FC = () => {
     const perms = usePermissions();
     const [loading, setLoading] = useState(true);
     const [items, setItems] = useState<Row[]>([]);
+    const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
+    const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
+
+    const fetchStudentSection = useCallback(async () => {
+        try {
+            const { data: studentData, error: studentError } = await supabase
+                .from('students')
+                .select('section_id, sections!inner(name)')
+                .eq('profile_id', profile?.id)
+                .eq('is_active', true)
+                .single();
+            
+            if (studentError) {
+                console.error('[StudentSection] Failed to fetch student section:', studentError);
+                setLoading(false);
+                return;
+            }
+            
+            if (studentData) {
+                setStudentSectionId(studentData.section_id);
+                const sectionName = Array.isArray(studentData.sections) ? studentData.sections[0]?.name : null;
+                setStudentSectionName(sectionName);
+                fetchSchedules();
+            } else {
+                console.warn('[StudentSection] No student record found for profile');
+                setLoading(false);
+            }
+        } catch (err) {
+            console.error('[StudentSection] Error fetching student section:', err);
+            setLoading(false);
+        }
+    }, [profile?.id, studentSectionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
-        if (!profile?.section) { setLoading(false); return; }
         if (!perms.ruleEnabled('students_can_see_section_wide_schedule', true)) {
             setLoading(false);
             return;
         }
-        (async () => {
-            try {
-                const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
-                if (rpcError) { console.error('[StudentSection] RPC error:', rpcError); setLoading(false); return; }
-                const sectionName = (profile.section || '').toLowerCase();
-                const list = (rpcData || [])
-                    .filter((s: any) => s.status === 'published' && (s.section_name || '').toLowerCase() === sectionName)
-                    .map((s: any) => ({
-                        id: s.id,
-                        day_of_week: s.day_of_week,
-                        start_time: s.start_time,
-                        end_time: s.end_time,
-                        subject: { name: s.subject_name, code: s.subject_code },
-                        room: { name: s.room_name },
-                        teacher: { profile: { full_name: s.teacher_name } },
-                    }));
-                setItems(list as Row[]);
-            } catch (err) {
-                console.error('[StudentSection] load failed', err);
-            } finally {
-                setLoading(false);
-            }
-        })();
-    }, [profile?.section, perms]);
+        if (profile) {
+            fetchStudentSection();
+        } else {
+            setLoading(false);
+        }
+    }, [profile, perms, fetchStudentSection]);
+
+    const fetchSchedules = async () => {
+        if (!studentSectionId) {
+            setLoading(false);
+            return;
+        }
+        try {
+            const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
+            if (rpcError) { console.error('[StudentSection] RPC error:', rpcError); setLoading(false); return; }
+            const list = (rpcData || [])
+                .filter((s: any) => s.status === 'published' && s.section_id === studentSectionId)
+                .map((s: any) => ({
+                    id: s.id,
+                    day_of_week: s.day_of_week,
+                    start_time: s.start_time,
+                    end_time: s.end_time,
+                    subject: { name: s.subject_name, code: s.subject_code },
+                    room: { name: s.room_name },
+                    teacher: { profile: { full_name: s.teacher_name } },
+                }));
+            setItems(list as Row[]);
+        } catch (err) {
+            console.error('[StudentSection] load failed', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const subjectName = (s: Row['subject']) => Array.isArray(s) ? s[0]?.name : s?.name || 'N/A';
     const roomName = (r: Row['room']) => Array.isArray(r) ? r[0]?.name : r?.name || 'TBA';
@@ -98,7 +138,7 @@ const StudentSection: React.FC = () => {
         return <div className="dashboard"><div className="dash-loading-center"><Loader2 className="spin" size={28} /></div></div>;
     }
 
-    if (!profile?.section) {
+    if (!studentSectionId) {
         return (
             <div className="dashboard">
                 <div className="dash-empty"><Calendar size={28} /><div>No section assigned to your account.</div></div>
@@ -111,7 +151,7 @@ const StudentSection: React.FC = () => {
             <div className="dashboard-header">
                 <h1 className="dashboard-title"><Calendar size={20} /> Section Schedule</h1>
                 <p className="dashboard-subtitle">
-                    All classes for <strong>{profile.section}</strong> this week.
+                    All classes for <strong>{studentSectionName || 'your section'}</strong> this week.
                 </p>
             </div>
 

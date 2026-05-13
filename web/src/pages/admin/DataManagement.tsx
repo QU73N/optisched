@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
+import { ConfirmDialog } from '../../components/states/ConfirmDialog';
 import { hasAnyRole } from '../../types/database';
 import { BookOpen, MapPin, Plus, Trash2, X, Loader2, Layers, Lock, Edit, Folder, Database, ChevronUp, ChevronDown } from 'lucide-react';
 import '../admin/Dashboard.css';
@@ -82,7 +84,16 @@ interface Section {
 
 const DataManagement: React.FC = () => {
     const { role, roles } = useAuth();
+    const { showToast } = useToast();
     const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
+    
+    // Confirmation dialog state
+    const [confirmDialog, setConfirmDialog] = useState<{
+        open: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ open: false, title: '', message: '', onConfirm: () => {} });
     const canEdit = hasAnyRole(allRoles, ['admin', 'schedule_manager', 'schedule_admin', 'power_admin', 'system_admin']);
     const [tab, setTab] = useState<Tab>('rooms');
     const [rooms, setRooms] = useState<Room[]>([]);
@@ -287,7 +298,7 @@ const DataManagement: React.FC = () => {
         
         // Validation: Special rooms must have at least one compatible subject
         if (newRoom.type === 'special' && newRoom.compatible_subject_ids.length === 0) {
-            alert('Special rooms must have at least one compatible subject selected.');
+            showToast({ title: 'Validation error', message: 'Special rooms must have at least one compatible subject selected', type: 'warning' });
             return;
         }
         
@@ -329,7 +340,7 @@ const DataManagement: React.FC = () => {
         
         // Validation: Special subjects must have at least one compatible room
         if (newSubject.type === 'special' && newSubject.compatible_room_ids.length === 0) {
-            alert('Special subjects must have at least one compatible room selected.');
+            showToast({ title: 'Validation error', message: 'Special subjects must have at least one compatible room selected', type: 'warning' });
             return;
         }
         
@@ -383,21 +394,27 @@ const DataManagement: React.FC = () => {
     };
 
     const handleDelete = async (table: string, id: string, label: string) => {
-        if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
-        
-        try {
-            const { error } = await supabase.from(table).delete().eq('id', id);
-            if (error) {
-                console.error('Delete error:', error);
-                alert(`Failed to delete: ${error.message}`);
-                return;
+        setConfirmDialog({
+            open: true,
+            title: 'Delete Item',
+            message: `Delete "${label}"? This cannot be undone.`,
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase.from(table).delete().eq('id', id);
+                    if (error) {
+                        console.error('Delete error:', error);
+                        showToast({ title: 'Failed to delete', message: error.message, type: 'error' });
+                        return;
+                    }
+                    await fetchAll();
+                    showToast({ title: 'Item deleted', type: 'success' });
+                } catch (err: unknown) {
+                    console.error('Delete exception:', err);
+                    const message = err instanceof Error ? err.message : String(err);
+                    showToast({ title: 'Failed to delete', message, type: 'error' });
+                }
             }
-            await fetchAll();
-        } catch (err: unknown) {
-            console.error('Delete exception:', err);
-            const message = err instanceof Error ? err.message : String(err);
-            alert(`Failed to delete: ${message}`);
-        }
+        });
     };
 
     const openEditRoom = async (room: Room) => {
@@ -501,7 +518,7 @@ const DataManagement: React.FC = () => {
 
             if (updateError) {
                 console.error('Update room error:', updateError);
-                alert(`Failed to update room: ${updateError.message}`);
+showToast({ title: 'Failed to update room', message: updateError.message, type: 'error' });
                 setSaving(false);
                 return;
             }
@@ -510,7 +527,7 @@ const DataManagement: React.FC = () => {
             const { error: deleteError } = await supabase.from('subject_rooms').delete().eq('room_id', editingId);
             if (deleteError) {
                 console.error('Delete subject_rooms error:', deleteError);
-                alert(`Failed to update room compatibility: ${deleteError.message}`);
+showToast({ title: 'Failed to update room compatibility', message: deleteError.message, type: 'error' });
                 setSaving(false);
                 return;
             }
@@ -524,7 +541,7 @@ const DataManagement: React.FC = () => {
                 const { error: insertError } = await supabase.from('subject_rooms').insert(subjectRelations);
                 if (insertError) {
                     console.error('Insert subject_rooms error:', insertError);
-                    alert(`Failed to update room compatibility: ${insertError.message}`);
+showToast({ title: 'Failed to update room compatibility', message: insertError.message, type: 'error' });
                     setSaving(false);
                     return;
                 }
@@ -538,7 +555,7 @@ const DataManagement: React.FC = () => {
         } catch (err: unknown) {
             console.error('Edit room exception:', err);
             const message = err instanceof Error ? err.message : String(err);
-            alert(`Failed to update room: ${message}`);
+showToast({ title: 'Failed to update room', message, type: 'error' });
             setSaving(false);
         }
     };
@@ -548,7 +565,7 @@ const DataManagement: React.FC = () => {
         
         // Validation: Special subjects must have at least one compatible room
         if (editSubject.type === 'special' && editSubject.compatible_room_ids.length === 0) {
-            alert('Special subjects must have at least one compatible room selected.');
+            showToast({ title: 'Validation error', message: 'Special subjects must have at least one compatible room selected', type: 'warning' });
             return;
         }
         
@@ -580,7 +597,7 @@ const DataManagement: React.FC = () => {
 
             if (updateError) {
                 console.error('Update subject error:', updateError);
-                alert(`Failed to update subject: ${updateError.message}`);
+showToast({ title: 'Failed to update subject', message: updateError.message, type: 'error' });
                 setSaving(false);
                 return;
             }
@@ -589,7 +606,7 @@ const DataManagement: React.FC = () => {
             const { error: deleteError } = await supabase.from('subject_rooms').delete().eq('subject_id', editingId);
             if (deleteError) {
                 console.error('Delete subject_rooms error:', deleteError);
-                alert(`Failed to update subject compatibility: ${deleteError.message}`);
+showToast({ title: 'Failed to update subject compatibility', message: deleteError.message, type: 'error' });
                 setSaving(false);
                 return;
             }
@@ -603,7 +620,7 @@ const DataManagement: React.FC = () => {
                 const { error: insertError } = await supabase.from('subject_rooms').insert(roomRelations);
                 if (insertError) {
                     console.error('Insert subject_rooms error:', insertError);
-                    alert(`Failed to update subject compatibility: ${insertError.message}`);
+showToast({ title: 'Failed to update subject compatibility', message: insertError.message, type: 'error' });
                     setSaving(false);
                     return;
                 }
@@ -617,7 +634,7 @@ const DataManagement: React.FC = () => {
         } catch (err: unknown) {
             console.error('Edit subject exception:', err);
             const message = err instanceof Error ? err.message : String(err);
-            alert(`Failed to update subject: ${message}`);
+showToast({ title: 'Failed to update subject', message, type: 'error' });
             setSaving(false);
         }
     };
@@ -630,7 +647,7 @@ const DataManagement: React.FC = () => {
             const { error } = await supabase.from('sections').update(editSection).eq('id', editingId);
             if (error) {
                 console.error('Update section error:', error);
-                alert(`Failed to update section: ${error.message}`);
+showToast({ title: 'Failed to update section', message: error.message, type: 'error' });
                 setSaving(false);
                 return;
             }
@@ -642,7 +659,7 @@ const DataManagement: React.FC = () => {
         } catch (err: unknown) {
             console.error('Edit section exception:', err);
             const message = err instanceof Error ? err.message : String(err);
-            alert(`Failed to update section: ${message}`);
+showToast({ title: 'Failed to update section', message, type: 'error' });
             setSaving(false);
         }
     };
@@ -1276,6 +1293,15 @@ const DataManagement: React.FC = () => {
                 .field-label { font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: 1.5px; padding-left: 2px; }
                 .spin { animation: spin 1s linear infinite; }
             `}</style>
+            
+            <ConfirmDialog
+                open={confirmDialog.open}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
+                confirmVariant="danger"
+            />
         </div>
     );
 };

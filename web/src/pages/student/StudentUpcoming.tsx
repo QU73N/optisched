@@ -1,6 +1,6 @@
 // StudentUpcoming - next class, next break, today's remaining classes.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Clock, Calendar, MapPin, Loader2, Coffee, BookOpen } from 'lucide-react';
@@ -24,38 +24,75 @@ const StudentUpcoming: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [weekly, setWeekly] = useState<ScheduleRow[]>([]);
     const [now, setNow] = useState(new Date());
+    const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
 
     useEffect(() => {
         const t = setInterval(() => setNow(new Date()), DASHBOARD_CONFIG.TIME.TIMER_INTERVAL_MS);
         return () => clearInterval(t);
     }, []);
 
-    useEffect(() => {
-        if (!profile?.section) { setLoading(false); return; }
-        (async () => {
-            try {
-                const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
-                if (rpcError) { console.error('[StudentUpcoming] RPC error:', rpcError); setLoading(false); return; }
-                const sectionName = (profile.section || '').toLowerCase();
-                const list = (rpcData || [])
-                    .filter((s: any) => s.status === 'published' && (s.section_name || '').toLowerCase() === sectionName)
-                    .map((s: any) => ({
-                        id: s.id,
-                        day_of_week: s.day_of_week,
-                        start_time: s.start_time,
-                        end_time: s.end_time,
-                        subject: { name: s.subject_name, code: s.subject_code },
-                        room: { name: s.room_name },
-                        teacher: { profile: { full_name: s.teacher_name } },
-                    }));
-                setWeekly(list as ScheduleRow[]);
-            } catch (err) {
-                console.error('[StudentUpcoming] load failed', err);
-            } finally {
+    const fetchStudentSection = useCallback(async () => {
+        try {
+            const { data: studentData, error: studentError } = await supabase
+                .from('students')
+                .select('section_id')
+                .eq('profile_id', profile?.id)
+                .eq('is_active', true)
+                .single();
+            
+            if (studentError) {
+                console.error('[StudentUpcoming] Failed to fetch student section:', studentError);
+                setLoading(false);
+                return;
+            }
+            
+            if (studentData) {
+                setStudentSectionId(studentData.section_id);
+                fetchSchedules();
+            } else {
+                console.warn('[StudentUpcoming] No student record found for profile');
                 setLoading(false);
             }
-        })();
-    }, [profile?.section]);
+        } catch (err) {
+            console.error('[StudentUpcoming] Error fetching student section:', err);
+            setLoading(false);
+        }
+    }, [profile?.id, studentSectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (profile) {
+            fetchStudentSection();
+        } else {
+            setLoading(false);
+        }
+    }, [profile, fetchStudentSection]);
+
+    const fetchSchedules = async () => {
+        if (!studentSectionId) {
+            setLoading(false);
+            return;
+        }
+        try {
+            const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
+            if (rpcError) { console.error('[StudentUpcoming] RPC error:', rpcError); setLoading(false); return; }
+            const list = (rpcData || [])
+                .filter((s: any) => s.status === 'published' && s.section_id === studentSectionId)
+                .map((s: any) => ({
+                    id: s.id,
+                    day_of_week: s.day_of_week,
+                    start_time: s.start_time,
+                    end_time: s.end_time,
+                    subject: { name: s.subject_name, code: s.subject_code },
+                    room: { name: s.room_name },
+                    teacher: { profile: { full_name: s.teacher_name } },
+                }));
+            setWeekly(list as ScheduleRow[]);
+        } catch (err) {
+            console.error('[StudentUpcoming] load failed', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const minutesNow = now.getHours() * 60 + now.getMinutes();
     const todayName = DAYS[now.getDay()];
@@ -114,7 +151,7 @@ const StudentUpcoming: React.FC = () => {
         return <div className="dashboard"><div className="dash-loading-center"><Loader2 className="spin" size={28} /></div></div>;
     }
 
-    if (!profile?.section) {
+    if (!studentSectionId) {
         return (
             <div className="dashboard">
                 <div className="dash-empty"><Calendar size={28} /><div>No section assigned to your account yet.</div></div>

@@ -5,6 +5,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { usePermissions, ROLE_RANK } from '../../hooks/usePermissions';
+import { useToast } from '../../contexts/ToastContext';
+import { ConfirmDialog } from '../../components/states/ConfirmDialog';
 import { logAudit } from '../../hooks/useActivityLogger';
 import { ROLE_DISPLAY_NAMES, type UserRole } from '../../types/database';
 import {
@@ -44,6 +46,15 @@ const ROLES_FOR_OVERRIDES: UserRole[] = [
 
 const SystemRules: React.FC = () => {
     const perms = usePermissions();
+    const { showToast } = useToast();
+    
+    // Confirmation dialog state
+    const [confirmDialog, setConfirmDialog] = useState<{
+        open: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ open: false, title: '', message: '', onConfirm: () => {} });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<string | null>(null);
     const [rules, setRules] = useState<RuleRow[]>([]);
@@ -134,7 +145,7 @@ const SystemRules: React.FC = () => {
             await logAudit('rule.global.update', 'system_rules', null, { rule_key: key, new_value: newValue });
         } catch (err) {
             console.error('[SystemRules] update global failed', err);
-            alert('Failed to update rule. Check console.');
+            showToast({ title: 'Failed to update rule', message: 'Check console for details', type: 'error' });
         } finally {
             setSaving(null);
         }
@@ -157,7 +168,7 @@ const SystemRules: React.FC = () => {
             await logAudit('rule.role.update', 'system_rules', null, { rule_key: key, role, new_value: newValue });
         } catch (err) {
             console.error('[SystemRules] role override failed', err);
-            alert('Failed to update role override.');
+            showToast({ title: 'Failed to update role override', type: 'error' });
         } finally {
             setSaving(null);
         }
@@ -165,14 +176,17 @@ const SystemRules: React.FC = () => {
 
     const addUserOverride = async (key: string) => {
         if (!overrideUserId || !overrideValue.trim()) {
-            alert('Pick a user and provide a value.');
+            showToast({ title: 'Validation error', message: 'Pick a user and provide a value', type: 'warning' });
             return;
         }
         const target = users.find(u => u.id === overrideUserId);
-        if (!target) { alert('User not found.'); return; }
+        if (!target) {
+            showToast({ title: 'User not found', type: 'error' }); 
+            return;
+        }
         // hierarchy guard (UI side; SQL also enforces)
         if ((ROLE_RANK[target.role] ?? 0) >= perms.myRank) {
-            alert('You cannot set per-user overrides on a user of equal or higher rank.');
+            showToast({ title: 'Permission denied', message: 'You cannot set per-user overrides on a user of equal or higher rank', type: 'error' });
             return;
         }
         setSaving(`user:${key}`);
@@ -201,26 +215,32 @@ const SystemRules: React.FC = () => {
             setOverrideValue(''); setOverrideReason(''); setOverrideExpiresAt('');
         } catch (err) {
             console.error('[SystemRules] user override failed', err);
-            alert('Failed to add user override.');
+            showToast({ title: 'Failed to add user override', type: 'error' });
         } finally {
             setSaving(null);
         }
     };
 
     const removeUserOverride = async (overrideId: string) => {
-        if (!confirm('Remove this per-user override?')) return;
-        try {
-            const { error } = await supabase
-                .from('user_permission_overrides')
-                .delete()
-                .eq('id', overrideId);
-            if (error) throw error;
-            setUserOverrides(prev => prev.filter(o => o.id !== overrideId));
-            await logAudit('rule.user.remove', 'user_permission_overrides', overrideId);
-        } catch (err) {
-            console.error('[SystemRules] remove failed', err);
-            alert('Failed to remove override.');
-        }
+        setConfirmDialog({
+            open: true,
+            title: 'Remove Override',
+            message: 'Remove this per-user override?',
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase
+                        .from('user_permission_overrides')
+                        .delete()
+                        .eq('id', overrideId);
+                    if (error) throw error;
+                    setUserOverrides(prev => prev.filter(o => o.id !== overrideId));
+                    await logAudit('rule.user.remove', 'user_permission_overrides', overrideId);
+                } catch (err) {
+                    console.error('[SystemRules] remove failed', err);
+                    showToast({ title: 'Failed to remove override', type: 'error' });
+                }
+            }
+        });
     };
 
     const editableUsers = useMemo(
@@ -240,7 +260,7 @@ const SystemRules: React.FC = () => {
             await logAudit('institution_name.update', 'system_rules', null, { new_name: newName });
         } catch (err) {
             console.error('[SystemRules] update institution name failed', err);
-            alert('Failed to update institution name.');
+            showToast({ title: 'Failed to update institution name', type: 'error' });
         } finally {
             setSaving(null);
         }
@@ -475,6 +495,15 @@ const SystemRules: React.FC = () => {
                 })}
             </div>
             </div>
+            
+            <ConfirmDialog
+                open={confirmDialog.open}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
+                confirmVariant="danger"
+            />
         </div>
     );
 };

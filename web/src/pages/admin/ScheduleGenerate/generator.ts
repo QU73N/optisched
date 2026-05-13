@@ -21,9 +21,6 @@ import type {
     HardConstraintSet,
     SoftConstraintSet,
     PreferenceConstraintSet,
-    FixedBreakConfig,
-    VariableBreakConfig,
-    CommonBreakConfig,
     SoftConstraintViolation,
     OptimizationSuggestion,
     ScenarioConfig,
@@ -536,29 +533,6 @@ const priorityOf = (map: Record<string, number>, id: string) =>
  * Returns a session length that divides the total required time evenly,
  * preferring lengths close to the base session length.
  */
-const calculateOptimalSessionLength = (totalMinutes: number, baseSessionMinutes: number): number => {
-    // Find divisors of totalMinutes that are >= baseSessionMinutes
-    // We want to minimize overflow, so we look for divisors that fit exactly
-    const divisors: number[] = [];
-    for (let i = baseSessionMinutes; i <= totalMinutes; i += 30) { // 30-minute granularity
-        if (totalMinutes % i === 0) {
-            divisors.push(i);
-        }
-    }
-    
-    // If no exact divisor found, use the base session length (will have overflow)
-    if (divisors.length === 0) {
-        return baseSessionMinutes;
-    }
-    
-    // Choose the divisor closest to the base session length
-    // This keeps sessions as close to the standard length as possible
-    const closest = divisors.reduce((prev, curr) => {
-        return Math.abs(curr - baseSessionMinutes) < Math.abs(prev - baseSessionMinutes) ? curr : prev;
-    });
-    
-    return closest;
-};
 
 /**
  * Calculate both the session count and optimal session length for a subject.
@@ -630,12 +604,6 @@ const teacherAvailable = (teacher: Teacher, day: string, startHHMM: string): boo
 };
 
 /** Check if day falls within teacher's preferred_days; empty/missing = all days ok. */
-const dayIsPreferred = (teacher: Teacher, day: string): boolean => {
-    const pd = teacher.preferred_days;
-    if (!pd || pd.length === 0) return true;
-    return pd.includes(day);
-};
-
 /** Check if placing this session would exceed teacher's max_classes_per_day. */
 const wouldExceedMaxClassesPerDay = (
     teacherId: string,
@@ -1172,7 +1140,7 @@ const constructDomains = (
     tasks: Array<{ subject: Subject; section: Section; sessionIndex: number }>,
     teachers: Map<string, NormalizedTeacher>,
     rooms: Map<string, Room>,
-    teacherDomainMap: Map<string, TeacherDomain>,
+    _teacherDomainMap: Map<string, TeacherDomain>,
     roomDomainMap: Map<string, RoomDomain>,
     _sectionDomainMap: Map<string, SectionDomain>,
     days: string[],
@@ -2813,7 +2781,7 @@ export async function runGenerator(
 
     const domains = buildDomains(normalizedData.normalizedTeachers, availableRooms, scopedSections, normalizedData.normalizedSubjects, days, firstDaySlots);
     // Create domain maps for efficient lookup
-    const teacherDomainMap = new Map(domains.teacher_domains.map(d => [d.teacher_id, d]));
+    const _teacherDomainMap = new Map(domains.teacher_domains.map(d => [d.teacher_id, d]));
     const roomDomainMap = new Map(domains.room_domains.map(d => [d.room_id, d]));
     const sectionDomainMap = new Map(domains.section_domains.map(d => [d.section_id, d]));
 
@@ -3107,7 +3075,7 @@ export async function runGenerator(
             rankedTasks,
             teacherMap,
             roomMap,
-            teacherDomainMap,
+            _teacherDomainMap,
             roomDomainMap,
             sectionDomainMap,
             days,

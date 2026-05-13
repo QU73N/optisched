@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    ArrowLeft, LayoutDashboard, Users,
+    LayoutDashboard, Users,
     Sparkles, AlertTriangle, Database,
     CheckCircle, XCircle, Shield, GitBranch,
     Gauge, FileCheck, FolderTree, KeyRound,
@@ -9,20 +9,32 @@ import {
     GraduationCap,
     History, RefreshCw,
     Menu, AlertCircle,
-    Sun, Moon, TrendingUp, Zap, Settings, Layers
+    Sun, Moon, TrendingUp, Zap, Settings, Layers, PanelLeft, X, LogOut, Bot
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { ADMIN_ROLES, ROLE_DISPLAY_NAMES, hasAnyRole } from '../../types/database';
+import Sidebar from '../../components/Sidebar';
+import FloatingOptiBot from '../../components/FloatingOptiBot';
 import './HelpPage.css';
 
 const HelpPage: React.FC = () => {
+    const { profile, role, roles, signOut } = useAuth();
     const navigate = useNavigate();
     const [theme, setTheme] = useState<string>(() =>
         (typeof window !== 'undefined' && localStorage.getItem('optisched-theme')) || 'light'
     );
+    const [siderailOpen, setSiderailOpen] = useState(true);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeSection, setActiveSection] = useState<string>('getting-started');
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
     }, [theme]);
+
+    const handleSignOut = useCallback(async () => {
+        await signOut();
+        navigate('/login');
+    }, [signOut, navigate]);
 
     const toggleTheme = () => {
         const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -35,52 +47,91 @@ const HelpPage: React.FC = () => {
         }, 450);
     };
 
-    const sections = [
-        { id: 'getting-started', title: 'Getting Started', icon: LayoutDashboard },
-        { id: 'user-roles', title: 'User Roles', icon: Users },
-        { id: 'schedule-engine', title: 'Schedule Engine', icon: Sparkles },
-        { id: 'key-features', title: 'Key Features', icon: CheckCircle },
-        { id: 'best-practices', title: 'Best Practices', icon: Shield },
-        { id: 'troubleshooting', title: 'Troubleshooting', icon: AlertCircle },
-    ];
+    const isAnyAdmin = hasAnyRole(roles, ADMIN_ROLES);
+
+    const getRoleBadgeClass = () => {
+        if (role === 'power_admin') return 'badge badge-admin';
+        if (role === 'admin') return 'badge badge-admin';
+        if (role === 'schedule_admin') return 'badge badge-admin';
+        if (role === 'schedule_manager') return 'badge badge-admin';
+        if (role === 'teacher') return 'badge badge-teacher';
+        return 'badge badge-student';
+    };
+
+    const SHORT_NAMES: Record<string, string> = {
+        'Schedule Administrator': 'Sched Admin',
+        'Schedule Manager': 'Sched Mgr',
+        'System Administrator': 'Sys Admin',
+        'Power Admin': 'Power Admin',
+        'Teacher': 'Teacher',
+        'Student': 'Student',
+    };
+    const displayRole = roles.length > 1
+        ? roles.map(r => SHORT_NAMES[ROLE_DISPLAY_NAMES[r]] || ROLE_DISPLAY_NAMES[r] || r).join(' · ').toUpperCase()
+        : role ? (ROLE_DISPLAY_NAMES[role] || role).toUpperCase() : 'USER';
 
     return (
-        <div className="help-layout">
-            <div className="help-main-wrapper">
-                <header className="help-topbar">
-                    <div className="help-topbar-left">
-                        <div className="help-logo">
-                            <img src={theme === 'light' ? '/logo.png' : '/logo-white.png'} alt="OptiSched" />
-                        </div>
-                        <div className="help-brand">
-                            <h2>OptiSched</h2>
-                            <span>Help Center</span>
-                        </div>
-                    </div>
-                    <div className="help-topbar-right">
-                        <button className="help-topbar-btn" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
-                            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-                        </button>
-                        <button className="help-topbar-btn" onClick={() => navigate(-1)} aria-label="Back">
-                            <ArrowLeft size={18} />
-                        </button>
-                    </div>
-                </header>
+        <div className="layout">
+            <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+                <button className="mobile-close-btn" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
+                    <Menu size={18} />
+                </button>
+                <Sidebar />
 
-                <div className="help-tabs">
-                    {sections.map(section => (
-                        <button
-                            key={section.id}
-                            className={`help-tab ${activeSection === section.id ? 'help-tab-active' : ''}`}
-                            onClick={() => setActiveSection(section.id)}
-                        >
-                            <section.icon size={16} />
-                            <span>{section.title}</span>
-                        </button>
-                    ))}
+                <div className="sidebar-footer">
+                    <div className="sidebar-user">
+                        <div className="sidebar-avatar">
+                            {profile?.full_name
+                                ? profile.full_name.split(' ').map(n => n[0]).join('').substring(0, 2)
+                                : '?'}
+                        </div>
+                        <div className="sidebar-user-info">
+                            <span className="sidebar-user-name">{profile?.full_name || 'User'}</span>
+                            <button
+                                className={`${getRoleBadgeClass()} badge-sm`}
+                                title={displayRole}
+                            >
+                                {displayRole}
+                            </button>
+                        </div>
+                    </div>
+                    <button className="sidebar-logout" onClick={handleSignOut} aria-label="Sign Out">
+                        <LogOut size={18} />
+                    </button>
                 </div>
+            </aside>
 
-            <main className="help-main">
+            <div className={`sidebar-overlay ${mobileMenuOpen ? 'mobile-open' : ''}`} onClick={() => setMobileMenuOpen(false)} aria-hidden="true" />
+
+            <header className="topbar">
+                <div className="topbar-left">
+                    <button className="topbar-btn mobile-menu-btn" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle mobile menu">
+                        <Menu size={18} />
+                    </button>
+                    <div className="sidebar-logo">
+                        <img src={theme === 'light' ? '/logo.png' : '/logo-white.png'} alt="OptiSched" />
+                    </div>
+                    <div className="sidebar-brand">
+                        <h2>OptiSched</h2>
+                        <span>Help Center</span>
+                    </div>
+                </div>
+                <div className="topbar-right">
+                    <button className="topbar-btn" onClick={() => setSiderailOpen(!siderailOpen)} aria-label="Toggle siderail">
+                        <PanelLeft size={18} />
+                    </button>
+                    <button className="topbar-btn" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
+                        {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+                    </button>
+                    <button className="topbar-btn" onClick={() => navigate(isAnyAdmin ? '/admin' : `/${role}`)} aria-label="Back to dashboard">
+                        <X size={18} />
+                    </button>
+                </div>
+            </header>
+
+            <div className="content-area">
+                <div className="main-wrapper help-main-wrapper">
+                    <main className="main-content help-main">
                 {activeSection === 'getting-started' && (
                     <>
                 <section className="help-section" id="getting-started">
@@ -726,7 +777,29 @@ const HelpPage: React.FC = () => {
                     </>
                 )}
             </main>
+                </div>
+
+                <aside className={`siderail ${siderailOpen ? 'siderail-open' : ''}`}>
+                    <div className="siderail-content">
+                        <div className="siderail-section">
+                            <h4>OptiBot Chat</h4>
+                            <div className="optibot-siderail">
+                                <div className="optibot-siderail-messages">
+                                    <div className="optibot-siderail-msg optibot-siderail-msg-bot">
+                                        Hi! I'm OptiBot, your AI assistant. Ask me anything about OptiSched!
+                                    </div>
+                                </div>
+                                <div className="optibot-siderail-input">
+                                    <input type="text" placeholder="Ask OptiBot..." />
+                                    <button><Bot size={16} /></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
             </div>
+
+            <FloatingOptiBot />
         </div>
     );
 };

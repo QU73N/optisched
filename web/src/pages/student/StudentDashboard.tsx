@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSchedules, useAnnouncements } from '../../hooks/useSupabase';
@@ -53,29 +53,63 @@ const StudentDashboard: React.FC = () => {
     const { announcements: allAnnouncements } = useAnnouncements();
     const { events: upcomingEvents } = useCustomEvents(undefined, true);
 
+    const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
+    const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
+
+    const fetchStudentSection = useCallback(async () => {
+        try {
+            const { data: studentData, error: studentError } = await supabase
+                .from('students')
+                .select('section_id, sections!inner(name)')
+                .eq('profile_id', profile?.id)
+                .eq('is_active', true)
+                .single();
+            
+            if (studentError) {
+                console.error('[StudentDashboard] Failed to fetch student section:', studentError);
+                return;
+            }
+            
+            if (studentData) {
+                setStudentSectionId(studentData.section_id);
+                const sectionName = Array.isArray(studentData.sections) ? studentData.sections[0]?.name : null;
+                setStudentSectionName(sectionName);
+            } else {
+                console.warn('[StudentDashboard] No student record found for profile');
+            }
+        } catch (err) {
+            console.error('[StudentDashboard] Error fetching student section:', err);
+        }
+    }, [profile?.id]);
+
+    useEffect(() => {
+        if (profile) {
+            fetchStudentSection();
+        }
+    }, [profile, fetchStudentSection]);
+
     // Fetch all weekly schedules for the student's section (real data for charts)
     const [weekSectionSchedules, setWeekSectionSchedules] = useState<ScheduleItem[]>([]);
     useEffect(() => {
-        if (!profile?.section) return;
+        if (!studentSectionId) return;
         (async () => {
             const { data } = await supabase
                 .from('schedules')
-                .select('id, day_of_week, start_time, end_time, status, subject:subjects(name), section:sections(name)')
+                .select('id, day_of_week, start_time, end_time, status, subject:subjects(name), section:sections(name), section_id')
                 .eq('status', 'published')
                 .eq('is_active', true);
-            const mine = (data || []).filter((s: ScheduleItem) => (s.section?.[0]?.name || '').toLowerCase() === (profile.section || '').toLowerCase());
+            const mine = (data || []).filter((s: ScheduleItem & { section_id?: string }) => s.section_id === studentSectionId);
             setWeekSectionSchedules(mine);
         })();
-    }, [profile?.section]);
+    }, [studentSectionId]);
 
     // Filter schedules for student's section
     const schedules = useMemo(() => {
-        if (!profile?.section) return allSchedules;
-        return allSchedules.filter((s: ScheduleItem) => {
-            const secName = s.section?.[0]?.name || '';
-            return secName.toLowerCase() === (profile.section ?? '').toLowerCase();
+        if (!studentSectionId) return allSchedules;
+        return allSchedules.filter((s: ScheduleItem & { section_id?: string }) => {
+            return s.section_id === studentSectionId;
         });
-    }, [allSchedules, profile]);
+    }, [allSchedules, studentSectionId]);
 
     // Filter announcements for student's section
     const announcements = useMemo(() => {
@@ -84,11 +118,11 @@ const StudentDashboard: React.FC = () => {
             if (a.target_section) {
                 const target = a.target_section.toLowerCase().trim();
                 if (target === 'all sections') return true;
-                return target === (profile?.section || '').toLowerCase().trim();
+                return target === (studentSectionName || '').toLowerCase().trim();
             }
             return true;
         });
-    }, [allAnnouncements, profile?.section]);
+    }, [allAnnouncements, studentSectionName]);
 
     // Current time for live progress
     const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -169,7 +203,7 @@ const StudentDashboard: React.FC = () => {
             <div className="dash-greeting">
                 <div>
                     <h2>{ongoingClass ? <><span className="dash-live-dot" />In Class Now</> : `Welcome back, ${profile?.full_name?.split(',')[0] || profile?.full_name?.split(' ')[0] || 'Student'}`}</h2>
-                    <p>{ongoingClass ? `${ongoingClass.subject} with ${ongoingClass.teacher} in ${ongoingClass.room}` : nextClass ? `Next class: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}` : profile?.section ? `Section ${profile.section}` : 'Your daily schedule overview'}</p>
+                    <p>{ongoingClass ? `${ongoingClass.subject} with ${ongoingClass.teacher} in ${ongoingClass.room}` : nextClass ? `Next class: ${nextClass.subject} at ${nextClass.time.split('–')[0].trim()}` : studentSectionName ? `Section ${studentSectionName}` : 'Your daily schedule overview'}</p>
                 </div>
                 <span className="dash-day-badge">{isOffDay ? 'Tomorrow: Monday' : scheduleDayName}</span>
             </div>

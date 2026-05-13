@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 
-const supabase = createClient(process.env.VITE_SUPABASE_URL, 'sb_secret_dLrEn6OjdCDzi_BYWaumdg_b1Axhu6F');
+const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_SERVICE_ROLE_KEY);
 
 async function verify() {
   // Get all schedules grouped by section and status

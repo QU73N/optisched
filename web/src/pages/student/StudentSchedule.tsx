@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { CalendarDays, Clock, MapPin, ChevronLeft, ChevronRight, List, LayoutGrid, Timer, Download } from 'lucide-react';
@@ -22,25 +22,63 @@ const StudentSchedule: React.FC = () => {
     const { profile } = useAuth();
     const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
+    const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'timeline' | 'grid' | 'table'>('timeline');
     const [selectedDay, setSelectedDay] = useState(() => {
         const d = new Date().getDay();
         return d === 0 ? 'Monday' : dayOrder[d - 1] || 'Monday';
     });
 
+    const fetchStudentSection = useCallback(async () => {
+        try {
+            const { data: studentData, error: studentError } = await supabase
+                .from('students')
+                .select('section_id, sections!inner(name)')
+                .eq('profile_id', profile?.id)
+                .eq('is_active', true)
+                .single();
+            
+            if (studentError) {
+                console.error('[StudentSchedule] Failed to fetch student section:', studentError);
+                setLoading(false);
+                return;
+            }
+            
+            if (studentData) {
+                setStudentSectionId(studentData.section_id);
+                const sectionName = Array.isArray(studentData.sections) ? studentData.sections[0]?.name : null;
+                setStudentSectionName(sectionName);
+                fetchSchedules();
+            } else {
+                console.warn('[StudentSchedule] No student record found for profile');
+                setLoading(false);
+            }
+        } catch (err) {
+            console.error('[StudentSchedule] Error fetching student section:', err);
+            setLoading(false);
+        }
+    }, [profile?.id, studentSectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
     useEffect(() => {
-        if (profile?.section) fetchSchedules();
-        else setLoading(false);
-    }, [profile]);
+        if (profile) {
+            fetchStudentSection();
+        } else {
+            setLoading(false);
+        }
+    }, [profile, fetchStudentSection]);
 
     const fetchSchedules = async () => {
+        if (!studentSectionId) {
+            setLoading(false);
+            return;
+        }
         try {
             const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
             if (rpcError) { console.error('[StudentSchedule] RPC error:', rpcError); setLoading(false); return; }
             // Filter to this student's section + published
-            const sectionName = (profile!.section || '').toLowerCase();
             const filtered = (rpcData || [])
-                .filter((s: any) => s.status === 'published' && (s.section_name || '').toLowerCase() === sectionName)
+                .filter((s: any) => s.status === 'published' && s.section_id === studentSectionId)
                 .map((s: any) => ({
                     id: s.id,
                     day_of_week: s.day_of_week,
@@ -100,7 +138,7 @@ const StudentSchedule: React.FC = () => {
             <div className="dashboard-header">
                 <div>
                     <h1 className="dashboard-title">My Schedule</h1>
-                    <p className="dashboard-subtitle">{profile?.program && profile?.section ? `${profile.program} - Section ${profile.section}` : 'Class schedule'}</p>
+                    <p className="dashboard-subtitle">{profile?.program && studentSectionName ? `${profile.program} - Section ${studentSectionName}` : 'Class schedule'}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <button className="btn btn-secondary btn-sm" onClick={exportCSV} disabled={schedules.length === 0}>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
+import { ConfirmDialog } from '../../components/states/ConfirmDialog';
 import { supabase } from '../../lib/supabase';
 import { scheduleVersionService } from '../../services/scheduleVersionService';
 import { ADMIN_ROLES } from '../../types/database';
@@ -8,7 +10,7 @@ import type { DayOfWeek, ScheduleStatus } from '../../types/database';
 import type { ScheduleEntry } from '../../components/ScheduleDragDrop';
 import { ScheduleDragDrop } from '../../components/ScheduleDragDrop';
 
-import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Trash2, Download, Lock, CalendarDays, Scissors, Merge, X, Maximize, Minimize, CheckCircle, Send } from 'lucide-react';
+import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Download, Lock, CalendarDays, Scissors, Merge, X, Maximize, Minimize, CheckCircle, Send, Archive, RefreshCw } from 'lucide-react';
 
 // Temporarily disabled audit logging - log_audit RPC function doesn't exist
 // import { scheduleAudit, logAudit } from '../../services/auditService';
@@ -114,9 +116,18 @@ const CATEGORY_META: { key: Category; label: string; icon: React.ComponentType<{
 const ScheduleManagement: React.FC = () => {
     const { role, roles, user } = useAuth();
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [searchParams] = useSearchParams();
     const versionId = searchParams.get('version');
     const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
+    
+    // Confirmation dialog state
+    const [confirmDialog, setConfirmDialog] = useState<{
+        open: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ open: false, title: '', message: '', onConfirm: () => {} });
     const isAdmin = allRoles.some(r => ADMIN_ROLES.includes(r));
     const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -271,10 +282,13 @@ const ScheduleManagement: React.FC = () => {
                         }
                     }
                     setSchedules(schedulesFromVersion);
+                    // Verify all schedules in the batch have the same status
+                    const uniqueStatuses = new Set(schedulesFromVersion.map(s => s.status));
+                    const consistentStatus = uniqueStatuses.size === 1 ? schedulesFromVersion[0]?.status : 'mixed';
                     setVersionStatus({
                         change_type: version.change_type,
                         is_active: version.is_active,
-                        schedules_status: schedulesFromVersion[0]?.status || 'unknown',
+                        schedules_status: consistentStatus,
                         batch_id: schedulesFromVersion[0]?.batch_id || null,
                     });
                 }
@@ -440,38 +454,43 @@ const ScheduleManagement: React.FC = () => {
     const handleSubmitVersion = async () => {
         if (!versionStatus?.batch_id) {
             console.warn('[SCHEDULE MGMT] Submit blocked: no batch_id (select a draft version)');
-            alert('Select a draft version to submit.');
+            showToast({ title: 'Select draft', message: 'Select a draft version to submit', type: 'warning' });
             return;
         }
-        if (!confirm('Submit this draft for approval?')) return;
-        try {
-            // Pre-check: ensure batch has active schedules
-            const { data: activeSchedules, error: activeErr } = await supabase
-                .from('schedules')
-                .select('id')
-                .eq('batch_id', versionStatus.batch_id)
-                .eq('is_active', true)
-                .limit(1);
-            if (activeErr) {
-                console.warn('[SCHEDULE MGMT] Unable to verify schedules before submit', activeErr.message);
-            }
-            if (!activeSchedules || activeSchedules.length === 0) {
-                alert('This draft has no active schedules. Save as draft first, then submit.');
-                return;
-            }
+        setConfirmDialog({
+            open: true,
+            title: 'Submit Draft',
+            message: 'Submit this draft for approval?',
+            onConfirm: async () => {
+                try {
+                    // Pre-check: ensure batch has active schedules
+                    const { data: activeSchedules, error: activeErr } = await supabase
+                        .from('schedules')
+                        .select('id')
+                        .eq('batch_id', versionStatus.batch_id)
+                        .eq('is_active', true);
+                    if (activeErr) {
+                        console.warn('[SCHEDULE MGMT] Unable to verify schedules before submit', activeErr.message);
+                    }
+                    if (!activeSchedules || activeSchedules.length === 0) {
+                        showToast({ title: 'No schedules', message: 'This draft has no active schedules. Save as draft first, then submit.', type: 'warning' });
+                        return;
+                    }
 
-            const res = await scheduleVersionService.submitSchedule(versionStatus.batch_id, { changeReason: 'Submitted from schedule management' });
-            if (!res.success) throw new Error(res.message);
-            alert('Successfully submitted draft.');
-            if (res.active_version_id) {
-                navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
-            } else {
-                fetchData();
+                    const res = await scheduleVersionService.submitSchedule(versionStatus.batch_id, { changeReason: 'Submitted from schedule management' });
+                    if (!res.success) throw new Error(res.message);
+                    showToast({ title: 'Submitted', type: 'success' });
+                    if (res.active_version_id) {
+                        navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
+                    } else {
+                        fetchData();
+                    }
+                } catch (err: unknown) {
+                    console.error(err);
+                    showToast({ title: 'Failed to submit', message: err instanceof Error ? err.message : String(err), type: 'error' });
+                }
             }
-        } catch (err: unknown) {
-            console.error(err);
-            alert(`Failed to submit: ${err instanceof Error ? err.message : String(err)}`);
-        }
+        });
     };
 
     const handleApprovePublishVersion = async () => {
@@ -489,7 +508,7 @@ const ScheduleManagement: React.FC = () => {
             if (!res.success) throw new Error(res.message);
             res = await (scheduleVersionService as any).publishApprovedSchedule(versionStatus.batch_id, { changeReason: 'Published from schedule management' }); // eslint-disable-line @typescript-eslint/no-explicit-any
             if (!res.success) throw new Error(res.message);
-            alert('Successfully approved and published schedule.');
+            showToast({ title: 'Approved and published', type: 'success' });
             if (res.active_version_id) {
                 navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
             } else {
@@ -497,170 +516,268 @@ const ScheduleManagement: React.FC = () => {
             }
         } catch (err: unknown) {
             console.error(err);
-            alert(`Failed to approve & publish: ${err instanceof Error ? err.message : String(err)}`);
+            showToast({ title: 'Failed to approve', message: err instanceof Error ? err.message : String(err), type: 'error' });
         }
     };
 
     const handlePublishPreviousVersion = async () => {
         if (!schedules.length) return;
-        if (!confirm('Restore and publish this previous version? This will overwrite the current active schedule.')) return;
-        try {
+        setConfirmDialog({
+            open: true,
+            title: 'Restore Previous Version',
+            message: 'Restore and publish this previous version? This will overwrite the current active schedule.',
+            onConfirm: async () => {
+                try {
+                    // To get accurate subject_id, we should fetch from db or use the existing ones if we stored them.
+                    // Oh wait, ScheduleRow doesn't store subject_id. Let me check if we can fetch it.
+                    // A simpler way: we have `versionId`! We can just fetch the raw snapshot from `schedule_versions`!
+                    const { data: v } = await supabase.from('schedule_versions').select('snapshot').eq('id', versionId).single();
+                    if (!v || !v.snapshot) throw new Error('Could not find version snapshot');
+                    
+                    const rawSchedules = Array.isArray(v.snapshot) ? v.snapshot : [v.snapshot];
+                    const mappedSchedules = rawSchedules.map((s: VersionSnapshot) => ({
+                        id: crypto.randomUUID(),
+                        subject_id: s.subject_id,
+                        teacher_id: s.teacher_id,
+                        room_id: s.room_id,
+                        section_id: s.section_id,
+                        day_of_week: s.day_of_week,
+                        start_time: s.start_time,
+                        end_time: s.end_time,
+                        status: 'published',
+                        is_active: true,
+                        semester: s.semester,
+                        academic_year: s.academic_year,
+                        created_by: user?.id,
+                    }));
 
-            
-            // To get accurate subject_id, we should fetch from db or use the existing ones if we stored them.
-            // Oh wait, ScheduleRow doesn't store subject_id. Let me check if we can fetch it.
-            // A simpler way: we have `versionId`! We can just fetch the raw snapshot from `schedule_versions`!
-            const { data: v } = await supabase.from('schedule_versions').select('snapshot').eq('id', versionId).single();
-            if (!v || !v.snapshot) throw new Error('Could not find version snapshot');
-            
-            const rawSchedules = Array.isArray(v.snapshot) ? v.snapshot : [v.snapshot];
-            const mappedSchedules = rawSchedules.map((s: VersionSnapshot) => ({
-                id: crypto.randomUUID(),
-                subject_id: s.subject_id,
-                teacher_id: s.teacher_id,
-                room_id: s.room_id,
-                section_id: s.section_id,
-                day_of_week: s.day_of_week,
-                start_time: s.start_time,
-                end_time: s.end_time,
-                status: 'published',
-                is_active: true,
-                semester: s.semester,
-                academic_year: s.academic_year,
-                created_by: user?.id,
-            }));
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const res = await scheduleVersionService.publishSchedule(mappedSchedules as unknown as any[], {
-                academic_year: mappedSchedules[0]?.academic_year || '2025-2026',
-                semester: mappedSchedules[0]?.semester || '1st Semester',
-                changeReason: 'Restored from previous version',
-                force: true, // Auto overwrite
-            });
-            
-            if (!res.success) throw new Error(res.message);
-            alert('Successfully restored and published previous schedule.');
-            navigate('/admin/schedules');
-        } catch (err: unknown) {
-            console.error(err);
-            alert(`Failed to restore: ${err instanceof Error ? err.message : String(err)}`);
-        }
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const res = await scheduleVersionService.publishSchedule(mappedSchedules as unknown as any[], {
+                        academic_year: mappedSchedules[0]?.academic_year || '2025-2026',
+                        semester: mappedSchedules[0]?.semester || '1st Semester',
+                        changeReason: 'Restored from previous version',
+                        force: true, // Auto overwrite
+                    });
+                    
+                    if (!res.success) throw new Error(res.message);
+                    showToast({ title: 'Restored', type: 'success' });
+                    navigate('/admin/schedules');
+                } catch (err: unknown) {
+                    console.error(err);
+                    showToast({ title: 'Failed to restore', message: err instanceof Error ? err.message : String(err), type: 'error' });
+                }
+            }
+        });
     };
 
-    const handleDeleteVersion = async () => {
-        if (!versionId) return;
+    const handleArchiveVersion = async () => {
+        if (!versionId || !versionStatus?.batch_id) return;
 
-        if (!confirm('Are you sure you want to delete this version? This action cannot be undone.')) {
-            return;
-        }
+        setConfirmDialog({
+            open: true,
+            title: 'Archive Version',
+            message: 'Are you sure you want to archive this version? It will be moved to archived status and can be recovered later.',
+            onConfirm: async () => {
+                try {
+                    // Archive the schedules associated with this version by setting status to 'archived'
+                    const { error: updateError } = await supabase
+                        .from('schedules')
+                        .update({ status: 'archived' })
+                        .eq('batch_id', versionStatus.batch_id);
 
-        try {
-            // Delete the version only - do not modify schedules
-            // Deleting a version should only remove the version record, not affect current schedules
-            const { error } = await supabase
-                .from('schedule_versions')
-                .delete()
-                .eq('id', versionId);
+                    if (updateError) throw updateError;
 
-            if (error) throw error;
+                    // Also deactivate the version
+                    const { error: versionError } = await supabase
+                        .from('schedule_versions')
+                        .update({ is_active: false })
+                        .eq('id', versionId);
 
-            // Log version deletion
-            // await logAudit('delete', 'schedule_versions', versionId, {
-            //     version_number: version?.version_number,
-            //     change_type: version?.change_type,
-            //     deleted_by: user?.id
-            // });
+                    if (versionError) throw versionError;
 
-            // Navigate back to current schedules
-            navigate('/admin/schedules');
-        } catch (err: unknown) {
-            console.error('Failed to delete version:', err);
-            alert('Failed to delete version');
-        }
+                    // Navigate back to current schedules
+                    navigate('/admin/schedules');
+                } catch (err: unknown) {
+                    console.error('Failed to archive version:', err);
+                    showToast({ title: 'Failed to archive', message: err instanceof Error ? err.message : String(err), type: 'error' });
+                }
+            }
+        });
+    };
+
+    const handleRecoverVersion = async () => {
+        if (!versionId || !versionStatus?.batch_id) return;
+
+        setConfirmDialog({
+            open: true,
+            title: 'Recover Version',
+            message: 'Are you sure you want to recover this version? It will be restored as a draft.',
+            onConfirm: async () => {
+                try {
+                    // Check for conflicts with existing active schedules
+                    const { data: existingSchedules } = await supabase
+                        .from('schedules')
+                        .select('id, section_id, teacher_id, room_id, day_of_week, start_time, end_time')
+                        .eq('status', 'published')
+                        .eq('is_active', true)
+                        .limit(10);
+
+                    // Get schedules in the batch being recovered
+                    const { data: batchSchedules } = await supabase
+                        .from('schedules')
+                        .select('id, section_id, teacher_id, room_id, day_of_week, start_time, end_time')
+                        .eq('batch_id', versionStatus.batch_id);
+
+                    if (existingSchedules && batchSchedules && existingSchedules.length > 0 && batchSchedules.length > 0) {
+                        // Simple conflict check: same day/time for same teacher/room/section
+                        const hasConflict = batchSchedules.some(batch => 
+                            existingSchedules.some(existing =>
+                                (batch.section_id === existing.section_id ||
+                                 batch.teacher_id === existing.teacher_id ||
+                                 batch.room_id === existing.room_id) &&
+                                batch.day_of_week === existing.day_of_week &&
+                                ((batch.start_time >= existing.start_time && batch.start_time < existing.end_time) ||
+                                 (batch.end_time > existing.start_time && batch.end_time <= existing.end_time) ||
+                                 (batch.start_time <= existing.start_time && batch.end_time >= existing.end_time))
+                            )
+                        );
+
+                        if (hasConflict) {
+                            setConfirmDialog({
+                                open: true,
+                                title: 'Conflict Warning',
+                                message: 'Warning: Recovering this version may create conflicts with existing published schedules. Continue anyway?',
+                                onConfirm: async () => {
+                                    try {
+                                        // Recover the schedules by setting status back to 'draft'
+                                        const { error: updateError } = await supabase
+                                            .from('schedules')
+                                            .update({ status: 'draft' })
+                                            .eq('batch_id', versionStatus.batch_id);
+
+                                        if (updateError) throw updateError;
+
+                                        // Activate the version
+                                        const { error: versionError } = await supabase
+                                            .from('schedule_versions')
+                                            .update({ is_active: true })
+                                            .eq('id', versionId);
+
+                                        if (versionError) throw versionError;
+
+                                        // Navigate back to current schedules
+                                        navigate('/admin/schedules');
+                                    } catch (err: unknown) {
+                                        console.error('Failed to recover version:', err);
+                                        showToast({ title: 'Failed to recover', message: err instanceof Error ? err.message : String(err), type: 'error' });
+                                    }
+                                }
+                            });
+                            return;
+                        }
+                    }
+
+                    // Recover the schedules by setting status back to 'draft'
+                    const { error: updateError } = await supabase
+                        .from('schedules')
+                        .update({ status: 'draft' })
+                        .eq('batch_id', versionStatus.batch_id);
+
+                    if (updateError) throw updateError;
+
+                    // Activate the version
+                    const { error: versionError } = await supabase
+                        .from('schedule_versions')
+                        .update({ is_active: true })
+                        .eq('id', versionId);
+
+                    if (versionError) throw versionError;
+
+                    // Navigate back to current schedules
+                    navigate('/admin/schedules');
+                } catch (err: unknown) {
+                    console.error('Failed to recover version:', err);
+                    showToast({ title: 'Failed to recover', message: err instanceof Error ? err.message : String(err), type: 'error' });
+                }
+            }
+        });
     };
 
     const handleUnpublishCurrentSchedule = async () => {
-        if (!confirm('Are you sure you want to unpublish the current schedule? It will become a draft and students/teachers will not see it.')) {
-            return;
-        }
+        setConfirmDialog({
+            open: true,
+            title: 'Unpublish Schedule',
+            message: 'Are you sure you want to unpublish the current schedule? It will become a draft and students/teachers will not see it.',
+            onConfirm: async () => {
+                try {
+                    // Update all published schedules to draft
+                    const { error } = await supabase
+                        .from('schedules')
+                        .update({ status: 'draft' })
+                        .eq('status', 'published');
 
-        try {
-            // Update all published schedules to draft
-            const { error } = await supabase
-                .from('schedules')
-                .update({ status: 'draft' })
-                .eq('status', 'published');
+                    if (error) throw error;
 
-            if (error) throw error;
+                    // Update versionStatus to reflect the change
+                    setVersionStatus({
+                        change_type: 'created',
+                        is_active: false,
+                        schedules_status: 'draft',
+                        batch_id: null,
+                    });
 
-            // Update versionStatus to reflect the change
-            setVersionStatus({
-                change_type: 'created',
-                is_active: false,
-                schedules_status: 'draft',
-                batch_id: null,
-            });
-
-            alert('Successfully unpublished current schedule.');
-            fetchData();
-        } catch (err: unknown) {
-            console.error('Failed to unpublish:', err);
-            alert(`Failed to unpublish: ${err instanceof Error ? err.message : String(err)}`);
-        }
+                    showToast({ title: 'Unpublished', type: 'success' });
+                    fetchData();
+                } catch (err: unknown) {
+                    console.error('Failed to unpublish:', err);
+                    showToast({ title: 'Failed to unpublish', message: err instanceof Error ? err.message : String(err), type: 'error' });
+                }
+            }
+        });
     };
 
     const handleUnpublishVersion = async () => {
         if (!versionId) return;
 
-        if (!confirm('Are you sure you want to unpublish this version? It will become a draft and students/teachers will not see it.')) {
-            return;
-        }
+        setConfirmDialog({
+            open: true,
+            title: 'Unpublish Version',
+            message: 'Are you sure you want to unpublish this version? It will become a draft and students/teachers will not see it.',
+            onConfirm: async () => {
+                try {
+                    // Get schedule IDs for this version
+                    const { data: versionData } = await supabase
+                        .from('schedule_versions')
+                        .select('snapshot')
+                        .eq('id', versionId)
+                        .single();
 
-        try {
-            // Get the version to extract schedule IDs
-            const { data: version } = await supabase
-                .from('schedule_versions')
-                .select('*')
-                .eq('id', versionId)
-                .single();
+                    if (!versionData?.snapshot) {
+                        showToast({ title: 'No snapshot found', type: 'error' });
+                        return;
+                    }
 
-            if (version) {
-                // Update the version to draft
-                await supabase
-                    .from('schedule_versions')
-                    .update({ change_type: 'created', is_active: false })
-                    .eq('id', versionId);
-
-                if (version.snapshot) {
-                    const snapshot = version.snapshot as VersionSnapshot[];
-                    const schedules = Array.isArray(snapshot) ? snapshot : [snapshot];
-                    
-                    // Get schedule IDs from the snapshot
-                    const scheduleIds = schedules
-                        .map((s: VersionSnapshot) => s.id)
-                        .filter((id: string) => id);
+                    const snapshot = Array.isArray(versionData.snapshot) ? versionData.snapshot : [versionData.snapshot];
+                    const scheduleIds = snapshot.map((s: any) => s.id).filter(Boolean);
 
                     if (scheduleIds.length > 0) {
-                        // Update schedules to draft status
-                        await supabase
+                        // Update schedules to draft
+                        const { error } = await supabase
                             .from('schedules')
                             .update({ status: 'draft' })
                             .in('id', scheduleIds);
 
-                        // Log audit for each schedule
-                        // for (const scheduleId of scheduleIds) {
-                        //     await scheduleAudit.unpublished(scheduleId, { unpublished_by: user?.id });
-                        // }
+                        if (error) throw error;
                     }
-                }
 
-                alert('Version unpublished successfully');
-                navigate('/admin/schedules/versions');
+                    showToast({ title: 'Version unpublished', type: 'success' });
+                    navigate('/admin/schedules/versions');
+                } catch (err: unknown) {
+                    console.error('Failed to unpublish version:', err);
+                    showToast({ title: 'Failed to unpublish', type: 'error' });
+                }
             }
-        } catch (err: unknown) {
-            console.error('Failed to unpublish version:', err);
-            alert('Failed to unpublish version');
-        }
+        });
     };
 
     const entities: Entity[] = useMemo(() => {
@@ -799,21 +916,39 @@ const ScheduleManagement: React.FC = () => {
                                     <Send size={16} /> Submit
                                 </button>
                             )}
-                            <button
-                                onClick={handleDeleteVersion}
-                                className="btn"
-                                style={{
-                                    textDecoration: 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    backgroundColor: 'var(--accent-error-10, rgba(200, 75, 75, 0.1))',
-                                    border: '1px solid var(--accent-error)',
-                                    color: 'var(--accent-error)',
-                                }}
-                            >
-                                <Trash2 size={16} /> Delete
-                            </button>
+                            {versionStatus?.schedules_status === 'archived' ? (
+                                <button
+                                    onClick={handleRecoverVersion}
+                                    className="btn"
+                                    style={{
+                                        textDecoration: 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        backgroundColor: 'var(--accent-success-10, rgba(75, 200, 75, 0.1))',
+                                        border: '1px solid var(--accent-success)',
+                                        color: 'var(--accent-success)',
+                                    }}
+                                >
+                                    <RefreshCw size={16} /> Recover
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleArchiveVersion}
+                                    className="btn"
+                                    style={{
+                                        textDecoration: 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        backgroundColor: 'var(--accent-error-10, rgba(200, 75, 75, 0.1))',
+                                        border: '1px solid var(--accent-error)',
+                                        color: 'var(--accent-error)',
+                                    }}
+                                >
+                                    <Archive size={16} /> Archive
+                                </button>
+                            )}
                         </>
                     ) : (
                         // Current schedules (no versionId) - show unpublish if published
@@ -907,6 +1042,15 @@ const ScheduleManagement: React.FC = () => {
                     )}
                 </>
             )}
+            
+            <ConfirmDialog
+                open={confirmDialog.open}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
+                confirmVariant="danger"
+            />
         </div>
     );
 };
@@ -924,6 +1068,7 @@ interface ScheduleDetailProps {
 
 const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBack, onUpdate, rooms, teachers, sections, category }) => {
     const { role, roles } = useAuth();
+    const { showToast } = useToast();
     const allRoles = roles.length > 0 ? roles : (role ? [role] : []);
     const canEdit = allRoles.some(r => ADMIN_ROLES.includes(r));
 
@@ -979,14 +1124,43 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
 
     // Handle schedule update from drag-and-drop
     const handleScheduleUpdate = async (updatedEntry: ScheduleEntry) => {
+        console.log('[ScheduleManagement] HANDLE SCHEDULE UPDATE START:', {
+            updatedEntry: {
+                key: updatedEntry.key,
+                subjectName: updatedEntry.subjectName,
+                day: updatedEntry.day,
+                start: updatedEntry.start,
+                end: updatedEntry.end,
+                roomId: updatedEntry.roomId,
+                roomName: updatedEntry.roomName,
+                teacherId: updatedEntry.teacherId,
+                teacherName: updatedEntry.teacherName,
+                sectionId: updatedEntry.sectionId,
+                sectionName: updatedEntry.sectionName
+            }
+        });
+
         try {
             const updateData: Record<string, string> = {};
-            
+
             // Only include fields that have changed from the original entry
             const originalEntry = schedules.find(s => s.id === updatedEntry.key);
-            
+
+            console.log('[ScheduleManagement] ORIGINAL ENTRY LOOKUP:', {
+                found: !!originalEntry,
+                originalEntry: originalEntry ? {
+                    id: originalEntry.id,
+                    day_of_week: originalEntry.day_of_week,
+                    start_time: originalEntry.start_time,
+                    end_time: originalEntry.end_time,
+                    teacher_id: originalEntry.teacher?.id,
+                    room_id: originalEntry.room?.id,
+                    section_id: originalEntry.section?.id
+                } : null
+            });
+
             if (!originalEntry) {
-                console.error('Original entry not found:', updatedEntry.key);
+                console.error('[ScheduleManagement] ORIGINAL ENTRY NOT FOUND:', updatedEntry.key);
                 return;
             }
 
@@ -997,13 +1171,38 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
             if (updatedEntry.roomId !== originalEntry.room?.id) updateData.room_id = updatedEntry.roomId;
             if (updatedEntry.sectionId !== originalEntry.section?.id) updateData.section_id = updatedEntry.sectionId;
 
-            if (Object.keys(updateData).length === 0) return;
+            console.log('[ScheduleManagement] UPDATE DATA BUILT:', updateData);
 
-            await supabase.from('schedules').update(updateData).eq('id', updatedEntry.key);
+            if (Object.keys(updateData).length === 0) {
+                console.warn('[ScheduleManagement] NO CHANGES DETECTED, ABORTING UPDATE');
+                return;
+            }
+
+            console.log('[ScheduleManagement] CALLING SUPABASE UPDATE:', {
+                table: 'schedules',
+                id: updatedEntry.key,
+                updateData
+            });
+
+            const { data, error } = await supabase.from('schedules').update(updateData).eq('id', updatedEntry.key).select();
+
+            console.log('[ScheduleManagement] SUPABASE UPDATE RESULT:', {
+                success: !error,
+                error: error ? error.message : null,
+                data: data
+            });
+
+            if (error) {
+                console.error('[ScheduleManagement] SUPABASE UPDATE ERROR:', error);
+                throw error;
+            }
+
+            console.log('[ScheduleManagement] CALLING onUpdate CALLBACK TO REFRESH DATA');
             onUpdate?.();
+            console.log('[ScheduleManagement] HANDLE SCHEDULE UPDATE COMPLETED');
         } catch (err) {
-            console.error('Error updating schedule:', err);
-            alert('Failed to update schedule');
+            console.error('[ScheduleManagement] ERROR UPDATING SCHEDULE:', err);
+            showToast({ title: 'Failed to update', type: 'error' });
         }
     };
 
@@ -1056,7 +1255,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
             setShowMenu(false);
         } catch (err) {
             console.error('Error splitting session:', err);
-            alert('Failed to split session');
+            showToast({ title: 'Failed to split', type: 'error' });
         }
     };
 
@@ -1068,7 +1267,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
         );
 
         if (sameDayEvents.length === 0) {
-            alert('No other events on the same day to combine with');
+            showToast({ title: 'No events', message: 'No other events on the same day to combine with', type: 'warning' });
             return;
         }
 
@@ -1090,7 +1289,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({ entity, schedules, onBa
             setShowMenu(false);
         } catch (err) {
             console.error('Error combining schedules:', err);
-            alert('Failed to combine schedules');
+            showToast({ title: 'Failed to combine', type: 'error' });
         }
     };
 

@@ -1778,6 +1778,9 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
     padding: 18px 20px;
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .sg-stage-card.sg-compact {
@@ -2067,20 +2070,19 @@
     transform: translateX(-50%);
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    padding: 10px 14px;
-    min-width: 200px;
-    max-width: 300px;
-    box-shadow: var(--shadow-lg);
+    border-radius: 6px;
+    padding: 8px 12px;
+    width: 240px;
+    max-width: 90vw;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    font-weight: normal;
+    text-align: left;
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.2s ease, visibility 0.2s ease;
-    font-size: 11px;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    font-weight: normal;
-    text-align: left;
 }
 
 .sg-break-tooltip::before {
@@ -2117,10 +2119,6 @@
 }
 
 .sg-field-tooltip {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);
@@ -2129,41 +2127,12 @@
     max-width: 350px;
     box-shadow: var(--shadow-lg);
     z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.2s ease, visibility 0.2s ease;
     font-size: 11px;
     line-height: 1.5;
     color: var(--text-secondary);
     text-align: left;
     white-space: pre-wrap;
     font-weight: normal;
-}
-
-.sg-field-tooltip::before {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: var(--bg-elevated);
-}
-
-.sg-field-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 7px solid transparent;
-    border-top-color: var(--border-default);
-    margin-top: -1px;
-}
-
-.sg-field-tooltip-wrapper:hover .sg-field-tooltip {
-    opacity: 1;
-    visibility: visible;
 }
 
 .sg-sep { font-size: 12px; color: var(--text-muted); }
