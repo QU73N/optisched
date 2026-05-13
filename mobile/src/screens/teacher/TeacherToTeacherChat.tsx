@@ -48,7 +48,7 @@ const TeacherToTeacherChat: React.FC = () => {
             // First try with is_active filter
             let { data, error } = await supabase
                 .from('teachers')
-                .select('id, profile:profiles(id, full_name, avatar_url)')
+                .select('id, profile:profiles!teachers_profile_id_fkey(id, full_name, avatar_url)')
                 .eq('is_active', true);
 
             // If no results or error, try without is_active filter
@@ -56,7 +56,7 @@ const TeacherToTeacherChat: React.FC = () => {
                 console.log('[TeacherChat] Retrying without is_active filter...');
                 const fallback = await supabase
                     .from('teachers')
-                    .select('id, profile:profiles(id, full_name, avatar_url)');
+                    .select('id, profile:profiles!teachers_profile_id_fkey(id, full_name, avatar_url)');
                 if (fallback.data && fallback.data.length > 0) {
                     data = fallback.data;
                 }
@@ -87,6 +87,20 @@ const TeacherToTeacherChat: React.FC = () => {
             return;
         }
         fetchTeachers(profile.id);
+
+        // Subscribe to profile changes so updated names/avatars appear in real-time
+        const profileChannel = supabase
+            .channel('teacher-profile-changes')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+            }, () => {
+                fetchTeachers(profile.id);
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(profileChannel); };
     }, [profile?.id]);
 
     // Fetch messages with selected teacher
@@ -304,7 +318,7 @@ const styles = StyleSheet.create({
     headerSub: { fontSize: 13, marginTop: 2 },
     teacherItem: {
         flexDirection: 'row', alignItems: 'center',
-        borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1
+        borderRadius: 8, padding: 14, marginBottom: 10, borderWidth: 1
     },
     avatar: { width: 48, height: 48, borderRadius: 24 },
     avatarPlaceholder: { justifyContent: 'center', alignItems: 'center' },

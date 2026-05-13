@@ -91,7 +91,7 @@ export const ClassCard: React.FC<ClassCardProps> = ({
         <View style={[
             s.classCard,
             { backgroundColor: colors.surface, borderColor: colors.border },
-            isOngoing && { borderColor: 'rgba(63,175,115,0.4)', backgroundColor: 'rgba(63,175,115,0.06)' },
+            isOngoing && { borderColor: 'rgba(100,116,139,0.3)', backgroundColor: 'rgba(100,116,139,0.04)' },
         ]}>
             {/* Color stripe */}
             <View style={[s.classStripe, { backgroundColor: color }]} />
@@ -249,7 +249,7 @@ const s = StyleSheet.create({
     /* StatCard */
     statCard: {
         flex: 1,
-        borderRadius: 14,
+        borderRadius: 8,
         borderWidth: 1,
         padding: 14,
         gap: 6,
@@ -257,7 +257,7 @@ const s = StyleSheet.create({
     statIcon: {
         width: 32,
         height: 32,
-        borderRadius: 10,
+        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 2,
@@ -315,7 +315,7 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
         padding: 12,
-        borderRadius: 10,
+        borderRadius: 8,
         borderWidth: 1,
         marginBottom: 8,
     },
@@ -391,7 +391,7 @@ const s = StyleSheet.create({
 
     /* DayProgressBar */
     dayProgressCard: {
-        borderRadius: 14,
+        borderRadius: 8,
         borderWidth: 1,
         padding: 14,
         paddingHorizontal: 18,
@@ -457,7 +457,7 @@ const s = StyleSheet.create({
         gap: 10,
         padding: 10,
         paddingHorizontal: 12,
-        borderRadius: 10,
+        borderRadius: 8,
         borderWidth: 1,
         marginBottom: 8,
     },
@@ -490,7 +490,7 @@ const s = StyleSheet.create({
         gap: 10,
         padding: 10,
         paddingHorizontal: 12,
-        borderRadius: 10,
+        borderRadius: 8,
         borderWidth: 1,
         marginBottom: 8,
         alignItems: 'center',

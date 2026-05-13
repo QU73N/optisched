@@ -40,11 +40,10 @@ const AppSettings: React.FC = () => {
         Alert.alert(val ? 'Enabled' : 'Disabled', `Schedule update notifications ${val ? 'enabled' : 'disabled'}.`);
     };
 
-    // Change password modal
+    // Password reset request modal
     const [showPasswordModal, setShowPasswordModal] = useState(false);
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [changingPassword, setChangingPassword] = useState(false);
+    const [requestReason, setRequestReason] = useState('');
+    const [sendingRequest, setSendingRequest] = useState(false);
 
     // Edit profile modal
     const [showProfileModal, setShowProfileModal] = useState(false);
@@ -142,30 +141,40 @@ const AppSettings: React.FC = () => {
         ]);
     };
 
-    const handleChangePassword = async () => {
-        if (!newPassword || newPassword.length < 6) {
-            Alert.alert('Error', 'Password must be at least 6 characters.');
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match.');
-            return;
-        }
-        setChangingPassword(true);
+    // Send password reset request to admin
+    const handlePasswordResetRequest = async () => {
+        setSendingRequest(true);
         try {
-            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            const { error } = await supabase.from('password_reset_requests').insert({
+                user_id: profile?.id,
+                user_email: profile?.email || '',
+                user_name: profile?.full_name || '',
+                reason: requestReason.trim() || 'User requested password reset',
+                status: 'pending',
+            });
             if (error) {
-                Alert.alert('Error', error.message);
-            } else {
-                Alert.alert('Success', 'Password changed successfully!');
+                // If table doesn't exist, create a notification instead
+                console.log('[Settings] password_reset_requests insert error:', error.message);
+                // Fallback: create a notification for admins
+                await supabase.from('notifications').insert({
+                    user_id: profile?.id,
+                    title: 'Password Reset Request',
+                    message: `${profile?.full_name || 'A user'} (${profile?.email || ''}) has requested a password reset. Reason: ${requestReason.trim() || 'Not specified'}`,
+                    type: 'password_reset',
+                    is_read: false,
+                });
+                Alert.alert('Request Sent', 'Your password reset request has been sent to the administrator. You will be notified once it has been processed.');
                 setShowPasswordModal(false);
-                setNewPassword('');
-                setConfirmPassword('');
+                setRequestReason('');
+                return;
             }
+            Alert.alert('Request Sent', 'Your password reset request has been sent to the administrator. You will be notified once it has been processed.');
+            setShowPasswordModal(false);
+            setRequestReason('');
         } catch (err) {
-            Alert.alert('Error', 'Failed to change password.');
+            Alert.alert('Error', 'Failed to send request. Please try again.');
         } finally {
-            setChangingPassword(false);
+            setSendingRequest(false);
         }
     };
 
@@ -212,18 +221,14 @@ const AppSettings: React.FC = () => {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
+            {/* Header — clean, no back button */}
             <View style={styles.header}>
-                <AnimatedPressable style={styles.backBtn}>
-                    <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
-                </AnimatedPressable>
                 <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Settings</Text>
-                <View style={{ width: 32 }} />
             </View>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Profile Summary */}
-                <AnimatedPressable style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => {
+                <AnimatedPressable style={[styles.profileCard, { backgroundColor: colors.surface }]} onPress={() => {
                     setEditName(profile?.full_name || '');
                     setEditStrand(profile?.program || '');
                     setEditSection(profile?.section || '');
@@ -231,100 +236,87 @@ const AppSettings: React.FC = () => {
                 }} activeOpacity={0.7}>
                     <AnimatedPressable style={styles.profileAvatar} onPress={pickImage}>
                         {profileImage ? (
-                            <Image source={{ uri: profileImage }} style={{ width: 56, height: 56, borderRadius: 28 }} />
+                            <Image source={{ uri: profileImage }} style={{ width: 52, height: 52, borderRadius: 26 }} />
                         ) : (
                             <Text style={styles.avatarText}>{initials}</Text>
                         )}
-                        <View style={{ position: 'absolute', bottom: -2, right: -2, width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.background }}>
-                            <MaterialIcons name="camera-alt" size={12} color={Colors.white} />
+                        <View style={{ position: 'absolute', bottom: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.textMuted, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.surface }}>
+                            <MaterialIcons name="camera-alt" size={10} color={Colors.white} />
                         </View>
                     </AnimatedPressable>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.profileName, { color: colors.textPrimary }]}>{profile?.full_name || 'User'}</Text>
                         <Text style={[styles.profileEmail, { color: colors.textSecondary }]}>{profile?.email || 'user@sti.edu.ph'}</Text>
                         {profile?.program && (
-                            <Text style={styles.profileStrand}>Strand: {profile.program}</Text>
+                            <Text style={[styles.profileStrand, { color: colors.textMuted }]}>{profile.program}{profile?.section ? ` · ${profile.section}` : ''}</Text>
                         )}
-                        <View style={styles.roleBadge}>
-                            <Text style={styles.roleText}>{profile?.role?.toUpperCase() || 'STUDENT'}</Text>
-                        </View>
                     </View>
-                    <MaterialIcons name="edit" size={18} color={colors.textMuted} />
+                    <MaterialIcons name="chevron-right" size={20} color={colors.textMuted} />
                 </AnimatedPressable>
 
                 {/* Account & Security */}
-                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ACCOUNT & SECURITY</Text>
-                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <AnimatedPressable style={styles.settingRow} onPress={() => setShowPasswordModal(true)}>
-                        <View style={styles.settingLeft}>
-                            <View style={[styles.settingIcon, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
-                                <MaterialIcons name="lock" size={20} color="#4988C4" />
-                            </View>
-                            <View>
-                                <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Change Password</Text>
-                                <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Update your password</Text>
-                            </View>
+                <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ACCOUNT & SECURITY</Text>
+                <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
+                    <AnimatedPressable style={styles.listItem} onPress={() => setShowPasswordModal(true)}>
+                        <MaterialIcons name="lock-outline" size={20} color={colors.textSecondary} />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={[styles.listTitle, { color: colors.textPrimary }]}>Request Password Reset</Text>
+                            <Text style={[styles.listSub, { color: colors.textMuted }]}>Send request to administrator</Text>
                         </View>
-                        <MaterialIcons name="chevron-right" size={20} color={colors.textMuted} />
+                        <MaterialIcons name="chevron-right" size={18} color={colors.textMuted} />
                     </AnimatedPressable>
 
-                    <View style={[styles.settingRow, styles.rowBorder]}>
-                        <View style={styles.settingLeft}>
-                            <View style={[styles.settingIcon, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
-                                <MaterialIcons name="security" size={20} color="#34d399" />
-                            </View>
-                            <View>
-                                <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Two-Factor Auth</Text>
-                                <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Add extra security layer</Text>
-                            </View>
+                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
+
+                    <View style={styles.listItem}>
+                        <MaterialIcons name="shield" size={20} color={colors.textSecondary} />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={[styles.listTitle, { color: colors.textPrimary }]}>Two-Factor Auth</Text>
+                            <Text style={[styles.listSub, { color: colors.textMuted }]}>Extra security layer</Text>
                         </View>
                         <Switch
                             value={twoFactor}
                             onValueChange={handleTwoFactor}
-                            trackColor={{ false: colors.isDark ? '#1E2935' : '#cbd5e1', true: Colors.primary }}
+                            trackColor={{ false: colors.isDark ? '#1E2935' : '#d1d5db', true: Colors.primary }}
                             thumbColor={'#ffffff'}
                         />
                     </View>
                 </View>
 
                 {/* Notifications */}
-                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>NOTIFICATIONS</Text>
-                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <View style={styles.settingRow}>
-                        <View style={styles.settingLeft}>
-                            <View style={[styles.settingIcon, { backgroundColor: 'rgba(139,92,246,0.15)' }]}>
-                                <MaterialIcons name="event" size={20} color="#a78bfa" />
-                            </View>
-                            <View>
-                                <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Schedule Updates</Text>
-                                <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Get notified of changes</Text>
-                            </View>
+                <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>NOTIFICATIONS</Text>
+                <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
+                    <View style={styles.listItem}>
+                        <MaterialIcons name="notifications-none" size={20} color={colors.textSecondary} />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={[styles.listTitle, { color: colors.textPrimary }]}>Schedule Updates</Text>
+                            <Text style={[styles.listSub, { color: colors.textMuted }]}>Get notified of changes</Text>
                         </View>
                         <Switch
                             value={scheduleNotif}
                             onValueChange={(v) => handleNotifToggle('schedule', v)}
-                            trackColor={{ false: colors.isDark ? '#1E2935' : '#cbd5e1', true: Colors.primary }}
+                            trackColor={{ false: colors.isDark ? '#1E2935' : '#d1d5db', true: Colors.primary }}
                             thumbColor={'#ffffff'}
                         />
                     </View>
                 </View>
 
                 {/* Appearance */}
-                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>APPEARANCE</Text>
-                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>APPEARANCE</Text>
+                <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
                     <View style={styles.themeRow}>
                         {themes.map(t => (
                             <AnimatedPressable
                                 key={t.key}
-                                style={[styles.themeOption, themeMode === t.key && styles.themeOptionActive]}
+                                style={[styles.themeOption, themeMode === t.key && [styles.themeOptionActive, { borderColor: Colors.primary }]]}
                                 onPress={() => handleThemeChange(t.key)}
                             >
                                 <MaterialIcons
                                     name={t.icon as keyof typeof MaterialIcons.glyphMap}
-                                    size={22}
+                                    size={20}
                                     color={themeMode === t.key ? Colors.primary : colors.textMuted}
                                 />
-                                <Text style={[styles.themeText, { color: colors.textMuted }, themeMode === t.key && styles.themeTextActive]}>
+                                <Text style={[styles.themeText, { color: colors.textMuted }, themeMode === t.key && { color: Colors.primary }]}>
                                     {t.label}
                                 </Text>
                             </AnimatedPressable>
@@ -333,48 +325,42 @@ const AppSettings: React.FC = () => {
                 </View>
 
                 {/* Legal */}
-                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>LEGAL</Text>
-                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <AnimatedPressable style={styles.settingRow} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/privacy.html')}>
-                        <View style={styles.settingLeft}>
-                            <View style={[styles.settingIcon, { backgroundColor: 'rgba(129,140,248,0.15)' }]}>
-                                <MaterialIcons name="policy" size={20} color="#818cf8" />
-                            </View>
-                            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Privacy Policy</Text>
-                        </View>
-                        <MaterialIcons name="open-in-new" size={16} color={colors.textMuted} />
+                <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LEGAL</Text>
+                <View style={[styles.listGroup, { backgroundColor: colors.surface }]}>
+                    <AnimatedPressable style={styles.listItem} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/privacy.html')}>
+                        <MaterialIcons name="policy" size={20} color={colors.textSecondary} />
+                        <Text style={[styles.listTitle, { color: colors.textPrimary, flex: 1, marginLeft: 12 }]}>Privacy Policy</Text>
+                        <MaterialIcons name="open-in-new" size={14} color={colors.textMuted} />
                     </AnimatedPressable>
-                    <AnimatedPressable style={[styles.settingRow, styles.rowBorder]} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/terms.html')}>
-                        <View style={styles.settingLeft}>
-                            <View style={[styles.settingIcon, { backgroundColor: 'rgba(129,140,248,0.15)' }]}>
-                                <MaterialIcons name="description" size={20} color="#818cf8" />
-                            </View>
-                            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Terms of Service</Text>
-                        </View>
-                        <MaterialIcons name="open-in-new" size={16} color={colors.textMuted} />
+                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                    <AnimatedPressable style={styles.listItem} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/terms.html')}>
+                        <MaterialIcons name="description" size={20} color={colors.textSecondary} />
+                        <Text style={[styles.listTitle, { color: colors.textPrimary, flex: 1, marginLeft: 12 }]}>Terms of Service</Text>
+                        <MaterialIcons name="open-in-new" size={14} color={colors.textMuted} />
                     </AnimatedPressable>
-                    <AnimatedPressable style={[styles.settingRow, styles.rowBorder]} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/about.html')}>
-                        <View style={styles.settingLeft}>
-                            <View style={[styles.settingIcon, { backgroundColor: 'rgba(129,140,248,0.15)' }]}>
-                                <MaterialIcons name="info" size={20} color="#818cf8" />
-                            </View>
-                            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>About OptiSched</Text>
-                        </View>
-                        <MaterialIcons name="open-in-new" size={16} color={colors.textMuted} />
+                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                    <AnimatedPressable style={styles.listItem} onPress={() => Linking.openURL('https://optisched-legal.vercel.app/about.html')}>
+                        <MaterialIcons name="info-outline" size={20} color={colors.textSecondary} />
+                        <Text style={[styles.listTitle, { color: colors.textPrimary, flex: 1, marginLeft: 12 }]}>About OptiSched</Text>
+                        <MaterialIcons name="open-in-new" size={14} color={colors.textMuted} />
                     </AnimatedPressable>
                 </View>
 
-                {/* Sign Out */}
-                <AnimatedPressable style={styles.signOutBtn} onPress={handleSignOut}>
-                    <MaterialIcons name="logout" size={20} color="#E05D5D" />
-                    <Text style={styles.signOutText}>Sign Out</Text>
-                </AnimatedPressable>
+                {/* Sign Out — clean, professional */}
+                <View style={{ marginTop: 24 }}>
+                    <View style={[styles.separator, { backgroundColor: colors.border, marginHorizontal: 0 }]} />
+                    <AnimatedPressable style={styles.signOutBtn} onPress={handleSignOut}>
+                        <MaterialIcons name="logout" size={18} color="#dc2626" />
+                        <Text style={styles.signOutText}>Sign Out</Text>
+                    </AnimatedPressable>
+                    <View style={[styles.separator, { backgroundColor: colors.border, marginHorizontal: 0 }]} />
+                </View>
 
-                <Text style={[styles.version, { color: colors.textMuted }]}>OptiSched v1.0 • STI College Meycauayan</Text>
-                <View style={{ height: 60 }} />
+                <Text style={[styles.version, { color: colors.textMuted }]}>OptiSched v1.0 · STI College Meycauayan</Text>
+                <View style={{ height: 80 }} />
             </ScrollView>
 
-            {/* Change Password Modal */}
+            {/* Password Reset Request Modal */}
             <Modal visible={showPasswordModal} animationType="slide" transparent>
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -383,34 +369,36 @@ const AppSettings: React.FC = () => {
                     <View style={styles.modalOverlay}>
                         <View style={[styles.modalContent, { backgroundColor: colors.elevated }]}>
                             <View style={styles.modalHeader}>
-                                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Change Password</Text>
+                                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Request Password Reset</Text>
                                 <AnimatedPressable onPress={() => setShowPasswordModal(false)}>
                                     <MaterialIcons name="close" size={24} color={colors.textMuted} />
                                 </AnimatedPressable>
                             </View>
-                            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>NEW PASSWORD</Text>
+
+                            <View style={[styles.infoBox, { backgroundColor: colors.isDark ? 'rgba(59,130,246,0.08)' : 'rgba(59,130,246,0.06)' }]}>
+                                <MaterialIcons name="info-outline" size={16} color={colors.textSecondary} />
+                                <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                                    Your request will be sent to the administrator. Once approved, the admin will set a new password for your account.
+                                </Text>
+                            </View>
+
+                            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>REASON (OPTIONAL)</Text>
                             <TextInput
                                 style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]}
-                                placeholder="Min 6 characters"
-                                placeholderTextColor="#6b7280"
-                                secureTextEntry
-                                value={newPassword}
-                                onChangeText={setNewPassword}
+                                placeholder="e.g. Forgot my password"
+                                placeholderTextColor={colors.textMuted}
+                                value={requestReason}
+                                onChangeText={setRequestReason}
+                                multiline
+                                numberOfLines={3}
+                                textAlignVertical="top"
                             />
-                            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>CONFIRM PASSWORD</Text>
-                            <TextInput
-                                style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]}
-                                placeholder="Repeat new password"
-                                placeholderTextColor="#6b7280"
-                                secureTextEntry
-                                value={confirmPassword}
-                                onChangeText={setConfirmPassword}
-                            />
-                            <AnimatedPressable style={styles.modalBtn} onPress={handleChangePassword} disabled={changingPassword}>
-                                {changingPassword ? (
+
+                            <AnimatedPressable style={styles.modalBtn} onPress={handlePasswordResetRequest} disabled={sendingRequest}>
+                                {sendingRequest ? (
                                     <ActivityIndicator color={Colors.white} />
                                 ) : (
-                                    <Text style={styles.modalBtnText}>Update Password</Text>
+                                    <Text style={styles.modalBtnText}>Send Request</Text>
                                 )}
                             </AnimatedPressable>
                         </View>
@@ -434,20 +422,20 @@ const AppSettings: React.FC = () => {
                             </View>
 
                             <View style={styles.avatarEditRow}>
-                                <View style={styles.avatarLarge}>
+                                <View style={[styles.avatarLarge, { backgroundColor: colors.textMuted }]}>
                                     <Text style={styles.avatarLargeText}>{initials}</Text>
                                 </View>
                                 <Text style={[styles.avatarEditHint, { color: colors.textMuted }]}>Profile initials are auto-generated from your name</Text>
                             </View>
 
                             <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>FULL NAME</Text>
-                            <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editName} onChangeText={setEditName} placeholderTextColor="#6b7280" />
+                            <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editName} onChangeText={setEditName} placeholderTextColor={colors.textMuted} />
 
                             <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>STRAND / PROGRAM</Text>
-                            <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editStrand} onChangeText={setEditStrand} placeholder="e.g. MAWD, BSIT, BSCS" placeholderTextColor="#6b7280" />
+                            <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editStrand} onChangeText={setEditStrand} placeholder="e.g. MAWD, BSIT, BSCS" placeholderTextColor={colors.textMuted} />
 
                             <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>SECTION</Text>
-                            <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editSection} onChangeText={setEditSection} placeholder="e.g. MAWD 12A-2" placeholderTextColor="#6b7280" />
+                            <TextInput style={[styles.modalInput, { backgroundColor: colors.inset, borderColor: colors.border, color: colors.textPrimary }]} value={editSection} onChangeText={setEditSection} placeholder="e.g. MAWD 12A-2" placeholderTextColor={colors.textMuted} />
 
                             <AnimatedPressable style={styles.modalBtn} onPress={handleSaveProfile} disabled={savingProfile}>
                                 {savingProfile ? (
@@ -467,102 +455,107 @@ const AppSettings: React.FC = () => {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 20, paddingVertical: 16
+        paddingHorizontal: 20, paddingVertical: 16,
     },
-    backBtn: { padding: 4 },
-    headerTitle: { fontSize: 18, fontWeight: '700' },
+    headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.3 },
     scrollView: { flex: 1, paddingHorizontal: 20 },
 
+    // Profile card — clean, no border
     profileCard: {
         flexDirection: 'row', alignItems: 'center', gap: 12,
-        borderRadius: 16, padding: 16,
-        borderWidth: 1, marginBottom: 24
+        borderRadius: 10, padding: 14,
+        marginBottom: 24,
     },
     profileAvatar: {
-        width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary,
-        justifyContent: 'center', alignItems: 'center'
+        width: 52, height: 52, borderRadius: 26, backgroundColor: '#6b7280',
+        justifyContent: 'center', alignItems: 'center',
     },
-    avatarText: { color: '#ffffff', fontWeight: '700', fontSize: 20 },
-    profileName: { fontSize: 16, fontWeight: '700' },
-    profileEmail: { fontSize: 12, marginTop: 2 },
-    profileStrand: { fontSize: 11, color: Colors.primary, marginTop: 2, fontWeight: '500' },
-    roleBadge: {
-        alignSelf: 'flex-start', marginTop: 6,
-        backgroundColor: 'rgba(59,130,246,0.15)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2
-    },
-    roleText: { fontSize: 10, fontWeight: '600', color: '#4988C4', letterSpacing: 0.5 },
+    avatarText: { color: '#ffffff', fontWeight: '600', fontSize: 18 },
+    profileName: { fontSize: 16, fontWeight: '600' },
+    profileEmail: { fontSize: 12, marginTop: 1, opacity: 0.7 },
+    profileStrand: { fontSize: 11, marginTop: 2 },
 
+    // Section labels
     sectionLabel: {
         fontSize: 11, fontWeight: '600',
-        letterSpacing: 1.5, marginBottom: 8, paddingLeft: 4
+        letterSpacing: 1, marginBottom: 6, paddingLeft: 2, marginTop: 4,
     },
-    card: {
-        borderRadius: 16, padding: 4,
-        borderWidth: 1, marginBottom: 20
-    },
-    settingRow: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 12, paddingVertical: 14
-    },
-    rowBorder: { borderTopWidth: 1, borderTopColor: 'rgba(51,65,85,0.3)' },
-    settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-    settingIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    settingTitle: { fontSize: 14, fontWeight: '500' },
-    settingSub: { fontSize: 11, marginTop: 2 },
 
-    themeRow: { flexDirection: 'row', padding: 8, gap: 8 },
+    // Flat list group — no borders, just background
+    listGroup: {
+        borderRadius: 10,
+        marginBottom: 20,
+        overflow: 'hidden',
+    },
+    listItem: {
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 14, paddingVertical: 13,
+    },
+    listTitle: { fontSize: 14, fontWeight: '500' },
+    listSub: { fontSize: 11, marginTop: 1 },
+    separator: {
+        height: StyleSheet.hairlineWidth, marginLeft: 46,
+    },
+
+    // Theme row
+    themeRow: { flexDirection: 'row', padding: 8, gap: 6 },
     themeOption: {
-        flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12,
-        borderRadius: 12, borderWidth: 1, borderColor: 'transparent'
+        flex: 1, alignItems: 'center', gap: 4, paddingVertical: 10,
+        borderRadius: 8, borderWidth: 1, borderColor: 'transparent',
     },
-    themeOptionActive: { borderColor: Colors.primary, backgroundColor: 'rgba(19,91,236,0.08)' },
-    themeText: { fontSize: 12, fontWeight: '500' },
-    themeTextActive: { color: Colors.primary },
+    themeOptionActive: { backgroundColor: 'rgba(19,91,236,0.06)' },
+    themeText: { fontSize: 11, fontWeight: '500' },
 
+    // Sign out — minimal
     signOutBtn: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-        backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: 14, paddingVertical: 16,
-        borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', marginTop: 8
+        paddingVertical: 14,
     },
-    signOutText: { color: '#E05D5D', fontSize: 15, fontWeight: '600' },
+    signOutText: { color: '#dc2626', fontSize: 15, fontWeight: '500' },
 
     version: {
-        fontSize: 12, textAlign: 'center', marginTop: 20
+        fontSize: 11, textAlign: 'center', marginTop: 20, opacity: 0.6,
     },
 
     // Modal styles
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: {
-        borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, maxHeight: '80%'
+        borderTopLeftRadius: 16, borderTopRightRadius: 16,
+        paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, maxHeight: '80%',
     },
     modalHeader: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20,
     },
-    modalTitle: { fontSize: 20, fontWeight: '700' },
+    modalTitle: { fontSize: 18, fontWeight: '600' },
     fieldLabel: {
-        fontSize: 10, fontWeight: '600', letterSpacing: 1.5,
-        marginBottom: 6, marginTop: 14
+        fontSize: 10, fontWeight: '600', letterSpacing: 1,
+        marginBottom: 6, marginTop: 14,
     },
     modalInput: {
         borderWidth: 1,
-        borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
-        fontSize: 14
+        borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12,
+        fontSize: 14,
     },
     modalBtn: {
-        backgroundColor: Colors.primary, borderRadius: 12,
-        paddingVertical: 16, alignItems: 'center', marginTop: 24
+        backgroundColor: Colors.primary, borderRadius: 8,
+        paddingVertical: 14, alignItems: 'center', marginTop: 24,
     },
-    modalBtnText: { color: '#ffffff', fontSize: 15, fontWeight: '600' },
+    modalBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+
+    // Info box for password reset
+    infoBox: {
+        flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+        padding: 12, borderRadius: 8, marginBottom: 8,
+    },
+    infoText: { fontSize: 12, lineHeight: 18, flex: 1 },
 
     avatarEditRow: { alignItems: 'center', marginBottom: 8 },
     avatarLarge: {
-        width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary,
-        justifyContent: 'center', alignItems: 'center', marginBottom: 8
+        width: 72, height: 72, borderRadius: 36,
+        justifyContent: 'center', alignItems: 'center', marginBottom: 8,
     },
-    avatarLargeText: { color: '#ffffff', fontWeight: '700', fontSize: 28 },
-    avatarEditHint: { fontSize: 12 }
+    avatarLargeText: { color: '#ffffff', fontWeight: '700', fontSize: 26 },
+    avatarEditHint: { fontSize: 12 },
 });
 
 export default AppSettings;

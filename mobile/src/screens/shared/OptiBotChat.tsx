@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(129,140,248,0.15)', justifyContent: 'center', alignItems: 'center',
         marginTop: 4
     },
-    bubbleContent: { borderRadius: 16, padding: 14, maxWidth: '100%' },
+    bubbleContent: { borderRadius: 12, padding: 14, maxWidth: '100%' },
     botContent: { backgroundColor: '#263241', borderBottomLeftRadius: 4 },
     userContent: { backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
     messageText: { fontSize: 14, lineHeight: 21 },
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     quickActionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     quickActionBtn: {
         borderWidth: 1, borderColor: Colors.borderDark, backgroundColor: 'rgba(30,41,59,0.5)',
-        borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8
+        borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8
     },
     quickActionText: { fontSize: 13, color: Colors.textPrimaryDark, fontWeight: '500' },
 

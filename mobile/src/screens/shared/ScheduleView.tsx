@@ -627,7 +627,7 @@ const ScheduleView: React.FC = () => {
                                     </AnimatedPressable>
                                 </View>
 
-                                <View style={{ backgroundColor: colors.inset, borderRadius: 14, padding: 16, gap: 14 }}>
+                                <View style={{ backgroundColor: colors.inset, borderRadius: 10, padding: 16, gap: 14 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                         <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(99,102,241,0.12)', justifyContent: 'center', alignItems: 'center' }}>
                                             <MaterialIcons name="schedule" size={18} color="#818cf8" />
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
 
     calendarStrip: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 12, gap: 4 },
     calendarDay: {
-        flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14,
+        flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10,
         backgroundColor: 'transparent'
     },
     calendarDayActive: {
@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
     timeLabel: { width: 48, textAlign: 'right', fontSize: 11, fontWeight: '600', paddingRight: 8 },
     timeLine: { flex: 1, height: 1, backgroundColor: 'rgba(51,65,85,0.3)' },
     timeBlock: {
-        position: 'absolute', left: 56, right: 0, borderRadius: 12, borderLeftWidth: 3,
+        position: 'absolute', left: 56, right: 0, borderRadius: 8, borderLeftWidth: 3,
         paddingHorizontal: 12, paddingVertical: 10, overflow: 'hidden'
     },
     blockSubject: { fontSize: 14, fontWeight: '700' },
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
 
     // List
     listCard: {
-        borderRadius: 16, padding: 16, marginBottom: 10,
+        borderRadius: 10, padding: 16, marginBottom: 10,
         borderLeftWidth: 4, borderWidth: 1
     },
     listCardDivider: { height: 1, marginVertical: 10 },

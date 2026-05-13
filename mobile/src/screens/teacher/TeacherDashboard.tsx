@@ -294,7 +294,7 @@ const TeacherDashboard: React.FC = () => {
 
     const statusStyles: Record<string, { bg: string; text: string; label: string }> = {
         finished: { bg: 'rgba(148,163,184,0.1)', text: '#A9B4C2', label: 'Finished' },
-        ongoing: { bg: 'rgba(16,185,129,0.15)', text: '#3FAF73', label: 'Ongoing' },
+        ongoing: { bg: 'rgba(100,116,139,0.1)', text: '#64748b', label: 'Ongoing' },
         upcoming: { bg: 'rgba(59,130,246,0.1)', text: '#4988C4', label: 'Upcoming' }
     };
 
@@ -335,35 +335,27 @@ const TeacherDashboard: React.FC = () => {
                     <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                         <View style={styles.summaryRow}>
                             <View style={styles.summaryItem}>
-                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(59,130,246,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
-                                    <MaterialIcons name="school" size={18} color="#60a5fa" />
-                                </View>
+                                <MaterialIcons name="school" size={18} color={colors.textMuted} style={{ marginBottom: 6 }} />
                                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{loading ? '-' : todaySchedule.length}</Text>
-                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Classes Today</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Classes</Text>
                             </View>
                             <View style={styles.summaryDivider} />
                             <View style={styles.summaryItem}>
-                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
-                                    <MaterialIcons name="check-circle" size={18} color="#10b981" />
-                                </View>
-                                <Text style={[styles.summaryValue, { color: '#10b981' }]}>{todaySchedule.filter(s => s.status === 'finished').length}</Text>
-                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Completed</Text>
+                                <MaterialIcons name="check-circle" size={18} color={colors.textMuted} style={{ marginBottom: 6 }} />
+                                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{todaySchedule.filter(s => s.status === 'finished').length}</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Done</Text>
                             </View>
                             <View style={styles.summaryDivider} />
                             <View style={styles.summaryItem}>
-                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(167,139,250,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
-                                    <MaterialIcons name="people" size={18} color="#a78bfa" />
-                                </View>
+                                <MaterialIcons name="people" size={18} color={colors.textMuted} style={{ marginBottom: 6 }} />
                                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{allSchedules.length}</Text>
-                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total Entries</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total</Text>
                             </View>
                             <View style={styles.summaryDivider} />
                             <View style={styles.summaryItem}>
-                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
-                                    <MaterialIcons name="campaign" size={18} color="#f59e0b" />
-                                </View>
+                                <MaterialIcons name="campaign" size={18} color={colors.textMuted} style={{ marginBottom: 6 }} />
                                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{announcements.length}</Text>
-                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Announcements</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Alerts</Text>
                             </View>
                         </View>
                     </View>
@@ -428,17 +420,17 @@ const TeacherDashboard: React.FC = () => {
                 <SectionHeader title="Quick Actions" icon="flash-on" />
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginHorizontal: 20, marginBottom: 24 }}>
                     <AnimatedPressable
-                        style={{ width: '48%', backgroundColor: colors.surface, borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
+                        style={{ width: '48%', backgroundColor: colors.surface, borderRadius: 10, padding: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
                         onPress={() => navigation.navigate('Messages')}
                     >
-                        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(99,102,241,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
+                        <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: 'rgba(99,102,241,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
                             <MaterialIcons name="chat" size={20} color="#818cf8" />
                         </View>
                         <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' }}>Message Admin</Text>
                     </AnimatedPressable>
 
                     <AnimatedPressable
-                        style={{ width: '48%', backgroundColor: colors.surface, borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
+                        style={{ width: '48%', backgroundColor: colors.surface, borderRadius: 10, padding: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
                         onPress={() => {
                             if (todaySchedule.length > 0) {
                                 setSelectedClassId(todaySchedule[0].id);
@@ -447,27 +439,27 @@ const TeacherDashboard: React.FC = () => {
                             }
                         }}
                     >
-                        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
+                        <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
                             <MaterialIcons name="calendar-today" size={20} color="#4988C4" />
                         </View>
                         <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' }}>My Schedule</Text>
                     </AnimatedPressable>
 
                     <AnimatedPressable
-                        style={{ width: '48%', backgroundColor: colors.surface, borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
+                        style={{ width: '48%', backgroundColor: colors.surface, borderRadius: 10, padding: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
                         onPress={() => setShowReportRoom(true)}
                     >
-                        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
+                        <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
                             <MaterialIcons name="report-problem" size={20} color="#E6A23C" />
                         </View>
                         <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' }}>Report Issue</Text>
                     </AnimatedPressable>
 
                     <AnimatedPressable
-                        style={{ width: '48%', backgroundColor: colors.surface, borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
+                        style={{ width: '48%', backgroundColor: colors.surface, borderRadius: 10, padding: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
                         onPress={() => setShowEventModal(true)}
                     >
-                        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
+                        <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: 'rgba(16,185,129,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
                             <MaterialIcons name="event" size={20} color="#34d399" />
                         </View>
                         <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' }}>Create Event</Text>
@@ -751,10 +743,10 @@ const TeacherDashboard: React.FC = () => {
                         <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textPrimary, marginBottom: 16 }}>Quick Actions</Text>
 
                         <AnimatedPressable
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border }}
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 10, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border }}
                             onPress={() => { setShowQuickActions(false); setSelectedClassName('General'); setSelectedClassId('general'); setShowRequestModal(true); }}
                         >
-                            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                            <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
                                 <MaterialIcons name="swap-horiz" size={24} color="#4988C4" />
                             </View>
                             <View style={{ flex: 1 }}>
@@ -765,10 +757,10 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
 
                         <AnimatedPressable
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border }}
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 10, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border }}
                             onPress={() => { setShowQuickActions(false); setShowMessageAdmin(true); }}
                         >
-                            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(16,185,129,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                            <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: 'rgba(16,185,129,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
                                 <MaterialIcons name="chat" size={24} color="#34d399" />
                             </View>
                             <View style={{ flex: 1 }}>
@@ -779,10 +771,10 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
 
                         <AnimatedPressable
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border }}
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 10, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border }}
                             onPress={() => { setShowQuickActions(false); setShowReportRoom(true); }}
                         >
-                            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                            <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
                                 <MaterialIcons name="report-problem" size={24} color="#fbbf24" />
                             </View>
                             <View style={{ flex: 1 }}>
@@ -793,10 +785,10 @@ const TeacherDashboard: React.FC = () => {
                         </AnimatedPressable>
 
                         <AnimatedPressable
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: colors.border }}
                             onPress={() => { setShowQuickActions(false); setShowTeacherAnnounce(true); }}
                         >
-                            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                            <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: 'rgba(59,130,246,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
                                 <MaterialIcons name="campaign" size={24} color="#4988C4" />
                             </View>
                             <View style={{ flex: 1 }}>
@@ -1217,11 +1209,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 16,
         marginHorizontal: 20,
-        marginTop: 16,
-        marginBottom: 16,
-        padding: 16,
-        paddingHorizontal: 20,
-        borderRadius: 14,
+        marginTop: 12,
+        marginBottom: 12,
+        padding: 14,
+        paddingHorizontal: 16,
+        borderRadius: 10,
         borderWidth: 1,
     },
     greetingTitle: {
@@ -1249,8 +1241,8 @@ const styles = StyleSheet.create({
 
     /* Summary card — matches student layout */
     summaryCard: {
-        paddingVertical: 20,
-        borderRadius: 16,
+        paddingVertical: 14,
+        borderRadius: 10,
         borderWidth: 1,
         marginBottom: 20,
     },
@@ -1264,9 +1256,9 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     summaryValue: {
-        fontSize: 22,
+        fontSize: 18,
         fontWeight: '700',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     summaryLabel: {
         fontSize: 11,
@@ -1280,12 +1272,12 @@ const styles = StyleSheet.create({
 
     /* Schedule panel — matches web .dash-schedule-panel */
     schedulePanel: {
-        borderRadius: 14,
+        borderRadius: 10,
         borderWidth: 1,
         padding: 12,
         gap: 0,
         minHeight: 80,
-        marginBottom: 24,
+        marginBottom: 20,
     },
     panelEmpty: {
         alignItems: 'center',
