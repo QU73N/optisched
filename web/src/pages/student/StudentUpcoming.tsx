@@ -33,19 +33,20 @@ const StudentUpcoming: React.FC = () => {
 
     const fetchStudentSection = useCallback(async () => {
         try {
+            // Fix: Use a simpler query without !inner join to avoid 406 error
             const { data: studentData, error: studentError } = await supabase
                 .from('students')
                 .select('section_id')
                 .eq('profile_id', profile?.id)
                 .eq('is_active', true)
                 .single();
-            
+
             if (studentError) {
                 console.error('[StudentUpcoming] Failed to fetch student section:', studentError);
                 setLoading(false);
                 return;
             }
-            
+
             if (studentData) {
                 setStudentSectionId(studentData.section_id);
                 fetchSchedules();
@@ -57,7 +58,7 @@ const StudentUpcoming: React.FC = () => {
             console.error('[StudentUpcoming] Error fetching student section:', err);
             setLoading(false);
         }
-    }, [profile?.id, studentSectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [profile?.id]);
 
     useEffect(() => {
         if (profile) {

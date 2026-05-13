@@ -74,22 +74,34 @@ const StudentDashboard: React.FC = () => {
 
     const fetchStudentSection = useCallback(async () => {
         try {
+            // Fix: Use a simpler query without !inner join to avoid 406 error
             const { data: studentData, error: studentError } = await supabase
                 .from('students')
-                .select('section_id, sections!inner(name)')
+                .select('section_id')
                 .eq('profile_id', profile?.id)
                 .eq('is_active', true)
                 .single();
-            
+
+            console.log('[StudentDashboard] Student data query:', { studentData, studentError });
+
             if (studentError) {
                 console.error('[StudentDashboard] Failed to fetch student section:', studentError);
                 return;
             }
-            
+
             if (studentData) {
                 setStudentSectionId(studentData.section_id);
-                const sectionName = Array.isArray(studentData.sections) ? studentData.sections[0]?.name : null;
-                setStudentSectionName(sectionName);
+                // Fetch section name separately
+                const { data: sectionData } = await supabase
+                    .from('sections')
+                    .select('name')
+                    .eq('id', studentData.section_id)
+                    .single();
+                setStudentSectionName(sectionData?.name || null);
+                console.log('[StudentDashboard] Student section set:', {
+                    sectionId: studentData.section_id,
+                    sectionName: sectionData?.name
+                });
             } else {
                 console.warn('[StudentDashboard] No student record found for profile');
             }
