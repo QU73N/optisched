@@ -560,3 +560,5 @@ const ScheduleVersions: React.FC = () => {
         </div>
     );
 };
+
+export default ScheduleVersions;
