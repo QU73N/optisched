@@ -8,7 +8,7 @@ import {
     Shield, FileSearch, CheckCircle, Activity, Server, Save,
     AlertOctagon, ToggleRight, Megaphone, Briefcase, Building2,
     Palette, Inbox, Clock, BookOpen, History, Share2, FileText,
-    User, Calendar, ListChecks, MapPin, HelpCircle, Bot, Monitor, DoorOpen
+    User, Calendar, ListChecks, HelpCircle, Bot, Monitor, DoorOpen
 } from 'lucide-react';
 
 export interface NavLink {
@@ -228,7 +228,6 @@ export const STUDENT_NAV: NavGroup[] = [
         links: [
             { to: '/student/schedule', icon: Calendar, label: 'Schedule' },
             { to: '/student/upcoming', icon: Clock, label: 'Upcoming' },
-            { to: '/student/section', icon: MapPin, label: 'Section' },
         ],
     },
     {
