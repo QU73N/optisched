@@ -151,17 +151,24 @@ const LoginScreen: React.FC = () => {
         }
         setForgotLoading(true);
         try {
-            const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-                forgotEmail.trim().toLowerCase()
-            );
-            if (resetError) {
-                Alert.alert('Error', resetError.message);
-                setShowForgotModal(false);
-                return;
+            const { error } = await supabase.from('password_reset_requests').insert({
+                email: forgotEmail.trim().toLowerCase(),
+                status: 'pending',
+                requested_at: new Date().toISOString(),
+            });
+            if (error) {
+                // Fallback: create notification
+                await supabase.from('notifications').insert({
+                    title: 'Password Reset Request',
+                    message: `${forgotEmail.trim()} has requested a password reset. Reason: Forgot password`,
+                    type: 'system',
+                    is_read: false,
+                    user_id: '00000000-0000-0000-0000-000000000000',
+                });
             }
             setForgotSuccess(true);
         } catch {
-            Alert.alert('Error', 'Failed to send reset link.');
+            Alert.alert('Error', 'Failed to send reset request.');
             setShowForgotModal(false);
         } finally {
             setForgotLoading(false);
@@ -360,14 +367,14 @@ const LoginScreen: React.FC = () => {
                                 </View>
                                 <Text style={{ fontSize: 20, fontWeight: '700', color: c.modalText, marginBottom: 8 }}>Request Sent!</Text>
                                 <Text style={{ fontSize: 13, color: c.modalSubtext, textAlign: 'center', lineHeight: 20, marginBottom: 8 }}>
-                                    If an account exists for this email, a password reset link has been sent.
+                                    Your password reset request has been sent to the administrator.
                                 </Text>
                                 <View style={{ backgroundColor: c.modalInfoBg, borderRadius: 12, padding: 14, marginBottom: 20, width: '100%' }}>
                                     <Text style={{ fontSize: 12, color: c.modalInfoLabel, fontWeight: '600', marginBottom: 4 }}>What happens next?</Text>
                                     <Text style={{ fontSize: 12, color: c.modalInfoText, lineHeight: 18 }}>
-                                        • Check your email inbox and spam folder{"\n"}
-                                        • Open the reset link and set a new password{"\n"}
-                                        • If no email arrives, confirm you entered the correct account email
+                                        • Your request is now pending admin approval{"\n"}
+                                        • The administrator will set a new password for you{"\n"}
+                                        • Contact the admin if you need immediate assistance
                                     </Text>
                                 </View>
                                 <AnimatedPressable
@@ -382,9 +389,9 @@ const LoginScreen: React.FC = () => {
                                 <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
                                     <MaterialIcons name="lock-reset" size={36} color="#E6A23C" />
                                 </View>
-                                <Text style={{ fontSize: 20, fontWeight: '700', color: c.modalText, marginBottom: 8 }}>Reset Password</Text>
+                                <Text style={{ fontSize: 20, fontWeight: '700', color: c.modalText, marginBottom: 8 }}>Forgot Password</Text>
                                 <Text style={{ fontSize: 13, color: c.modalSubtext, textAlign: 'center', lineHeight: 20, marginBottom: 16 }}>
-                                    Enter your email to receive a password reset link:
+                                    Enter your email to request a password reset from the administrator:
                                 </Text>
                                 <View style={{ backgroundColor: c.modalInputBg, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 4, marginBottom: 20, width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: c.modalInputBorder }}>
                                     <MaterialIcons name="email" size={18} color={c.modalInfoLabel} />
@@ -405,7 +412,7 @@ const LoginScreen: React.FC = () => {
                                     {forgotLoading ? (
                                         <ActivityIndicator color={Colors.white} />
                                     ) : (
-                                        <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '600' }}>Send Reset Link</Text>
+                                        <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '600' }}>Send Request</Text>
                                     )}
                                 </AnimatedPressable>
                                 <AnimatedPressable

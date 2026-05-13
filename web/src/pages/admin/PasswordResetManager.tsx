@@ -198,12 +198,12 @@ const PasswordResetManager: React.FC = () => {
                             <input className="input" type="text" value={resetModal.password} onChange={e => setResetModal(prev => ({ ...prev, password: e.target.value }))} placeholder="Enter new password" autoFocus />
                             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                                 <button className="pw-deny" onClick={() => setResetModal({ open: false, req: null, password: '' })}>Cancel</button>
-                                <button className="pw-approve" disabled={!resetModal.password.trim() || resetModal.password.trim().length < 6 || processingId === resetModal.req.id} onClick={handleResetConfirm}>
+                                <button className="pw-approve" disabled={!resetModal.password.trim() || resetModal.password.trim().length < 8 || processingId === resetModal.req.id} onClick={handleResetConfirm}>
                                     {processingId === resetModal.req.id ? <Loader2 size={14} className="spin" /> : <Check size={14} />} Set Password
                                 </button>
                             </div>
-                            {resetModal.password.trim().length > 0 && resetModal.password.trim().length < 6 && (
-                                <p style={{ fontSize: 11, color: '#ef4444', marginTop: 8 }}>Password must be at least 6 characters</p>
+                            {resetModal.password.trim().length > 0 && resetModal.password.trim().length < 8 && (
+                                <p style={{ fontSize: 11, color: '#ef4444', marginTop: 8 }}>Password must be at least 8 characters</p>
                             )}
                         </div>
                     </div>

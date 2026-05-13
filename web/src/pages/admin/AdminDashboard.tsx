@@ -884,14 +884,14 @@ const AdminDashboard: React.FC = () => {
                                 <button className="dash-modal-btn" onClick={() => setResetModal({ open: false, req: null, password: '' })}>Cancel</button>
                                 <button
                                     className="dash-modal-btn dash-modal-btn-primary"
-                                    disabled={!resetModal.password.trim() || resetModal.password.trim().length < 6 || processingResetId === resetModal.req.id}
+                                    disabled={!resetModal.password.trim() || resetModal.password.trim().length < 8 || processingResetId === resetModal.req.id}
                                     onClick={handleResetConfirm}
                                 >
                                     {processingResetId === resetModal.req.id ? <><Loader2 size={14} className="spin" /> Setting...</> : 'Set Password'}
                                 </button>
                             </div>
-                            {resetModal.password.trim().length > 0 && resetModal.password.trim().length < 6 && (
-                                <p style={{ fontSize: 11, color: 'var(--accent-error, #ef4444)', marginTop: 8 }}>Password must be at least 6 characters</p>
+                            {resetModal.password.trim().length > 0 && resetModal.password.trim().length < 8 && (
+                                <p style={{ fontSize: 11, color: 'var(--accent-error, #ef4444)', marginTop: 8 }}>Password must be at least 8 characters</p>
                             )}
                         </div>
                     </div>
