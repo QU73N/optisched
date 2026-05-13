@@ -436,8 +436,20 @@ const AdminDashboard: React.FC = () => {
                 setProcessingResetId(null);
                 return;
             }
+            // Resolve the auth user ID — may be missing for forgot-password requests from login
+            let authUserId = req.user_id;
+            if (!authUserId) {
+                // Look up user by email in profiles table
+                const { data: profileData } = await supabase.from('profiles').select('id').eq('email', req.email).maybeSingle();
+                authUserId = profileData?.id || null;
+            }
+            if (!authUserId) {
+                showToast({ title: 'User not found', message: `No account found for ${req.email}`, type: 'error' });
+                setProcessingResetId(null);
+                return;
+            }
             // Use admin client to set the password directly
-            const { error } = await supabaseAdmin.auth.admin.updateUserById(req.user_id || '', { password: resetModal.password.trim() });
+            const { error } = await supabaseAdmin.auth.admin.updateUserById(authUserId, { password: resetModal.password.trim() });
             if (error) throw error;
 
             await supabase.from('password_reset_requests').update({

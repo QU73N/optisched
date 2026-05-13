@@ -78,7 +78,18 @@ const PasswordResetManager: React.FC = () => {
                 setProcessingId(null);
                 return;
             }
-            const { error } = await supabaseAdmin.auth.admin.updateUserById(req.user_id || '', { password: resetModal.password.trim() });
+            // Resolve user ID by email if missing
+            let authUserId = req.user_id;
+            if (!authUserId) {
+                const { data: profileData } = await supabase.from('profiles').select('id').eq('email', req.email).maybeSingle();
+                authUserId = profileData?.id || null;
+            }
+            if (!authUserId) {
+                showToast({ title: 'User not found', message: `No account for ${req.email}`, type: 'error' });
+                setProcessingId(null);
+                return;
+            }
+            const { error } = await supabaseAdmin.auth.admin.updateUserById(authUserId, { password: resetModal.password.trim() });
             if (error) throw error;
 
             await supabase.from('password_reset_requests').update({
