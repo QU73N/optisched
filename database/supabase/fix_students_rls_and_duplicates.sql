@@ -12,6 +12,7 @@ ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies
 DROP POLICY IF EXISTS "students_select_own" ON public.students;
+DROP POLICY IF EXISTS "students_select_admin" ON public.students;
 DROP POLICY IF EXISTS "students_insert_own" ON public.students;
 DROP POLICY IF EXISTS "students_update_own" ON public.students;
 
