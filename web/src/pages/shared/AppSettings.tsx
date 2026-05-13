@@ -4,7 +4,7 @@ import { useUserPreferences } from '../../contexts/UserPreferencesContext';
 import { supabase } from '../../lib/supabase';
 import {
     Settings, User, Shield, Moon, Sun, Bell, LogOut,
-    Lock, Mail, Eye, EyeOff, Save, CheckCircle, Loader2, Layers,
+    Lock, Save, CheckCircle, Loader2, Layers,
     Camera, Upload, X
 } from 'lucide-react';
 
@@ -22,14 +22,10 @@ const AppSettings: React.FC = () => {
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Security
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-    const [showNewPassword, setShowNewPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [changingPassword, setChangingPassword] = useState(false);
+    // Security — Password reset request
+    const [resetReason, setResetReason] = useState('');
+    const [sendingReset, setSendingReset] = useState(false);
+    const [resetSent, setResetSent] = useState(false);
 
     const handleSaveProfile = async () => {
         if (!profile?.id) return;
@@ -127,44 +123,34 @@ const AppSettings: React.FC = () => {
         }
     };
 
-    const handleChangePassword = async () => {
-        if (!currentPassword) {
-            window.alert('Please enter your current password');
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            window.alert('Passwords do not match');
-            return;
-        }
-        if (newPassword.length < 6) {
-            window.alert('Password must be at least 6 characters');
-            return;
-        }
-        setChangingPassword(true);
+    const handlePasswordResetRequest = async () => {
+        setSendingReset(true);
         try {
-            // First verify current password by signing in with it
-            const { error: signInError } = await supabase.auth.signInWithPassword({
+            const { error } = await supabase.from('password_reset_requests').insert({
+                user_id: profile?.id,
                 email: session?.user?.email || '',
-                password: currentPassword,
+                user_name: profile?.full_name || '',
+                reason: resetReason.trim() || 'User requested password reset',
+                status: 'pending',
+                requested_at: new Date().toISOString(),
             });
-            
-            if (signInError) {
-                window.alert('Current password is incorrect');
-                setChangingPassword(false);
-                return;
+            if (error) {
+                // Fallback: create notification
+                console.warn('[Settings] password_reset_requests error:', error.message);
+                await supabase.from('notifications').insert({
+                    user_id: profile?.id,
+                    title: 'Password Reset Request',
+                    message: `${profile?.full_name || 'A user'} (${session?.user?.email || ''}) has requested a password reset. Reason: ${resetReason.trim() || 'Not specified'}`,
+                    type: 'password_reset',
+                    is_read: false,
+                });
             }
-
-            // Current password verified, now update to new password
-            const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-            if (updateError) throw updateError;
-            
-            window.alert('Password updated successfully');
-            setCurrentPassword('');
-            setNewPassword('');
-            setConfirmPassword('');
+            setResetSent(true);
+            setResetReason('');
+            setTimeout(() => setResetSent(false), 5000);
         } catch (err: unknown) {
             window.alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
-        } finally { setChangingPassword(false); }
+        } finally { setSendingReset(false); }
     };
 
     const handleSignOut = async () => {
@@ -291,30 +277,25 @@ const AppSettings: React.FC = () => {
                     {activeTab === 'security' && (
                         <div className="settings-section">
                             <h2>Security Settings</h2>
-                            <div className="s-form-group">
-                                <label>Current Password</label>
-                                <div className="password-input-wrap">
-                                    <input className="input" type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Enter current password" />
-                                    <button className="eye-btn" onClick={() => setShowCurrentPassword(!showCurrentPassword)}>{showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                            <div className="reset-request-card">
+                                <div className="reset-request-icon">
+                                    <Lock size={24} />
+                                </div>
+                                <div className="reset-request-info">
+                                    <h3>Request Password Reset</h3>
+                                    <p>For security, password changes must be approved by an administrator. Submit a request and the admin will set a new password for your account.</p>
                                 </div>
                             </div>
                             <div className="s-form-group">
-                                <label>New Password</label>
-                                <div className="password-input-wrap">
-                                    <input className="input" type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Enter new password" />
-                                    <button className="eye-btn" onClick={() => setShowNewPassword(!showNewPassword)}>{showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-                                </div>
+                                <label>Reason (optional)</label>
+                                <textarea className="input" value={resetReason} onChange={e => setResetReason(e.target.value)} placeholder="e.g. Forgot my password, need a reset..." rows={3} style={{ resize: 'none', minHeight: 80 }} />
                             </div>
-                            <div className="s-form-group">
-                                <label>Confirm New Password</label>
-                                <div className="password-input-wrap">
-                                    <input className="input" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm new password" />
-                                    <button className="eye-btn" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>{showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-                                </div>
-                            </div>
-                            <button className="s-save-btn" onClick={handleChangePassword} disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}>
-                                {changingPassword ? <><Loader2 size={16} className="spin" /> Updating...</> : <><Lock size={16} /> Update Password</>}
+                            <button className={`s-save-btn ${resetSent ? 'saved' : ''}`} onClick={handlePasswordResetRequest} disabled={sendingReset}>
+                                {sendingReset ? <><Loader2 size={16} className="spin" /> Sending...</> : resetSent ? <><CheckCircle size={16} /> Request Sent!</> : <><Lock size={16} /> Send Reset Request</>}
                             </button>
+                            {resetSent && (
+                                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 12 }}>Your request has been sent to the administrator. You'll be notified once it's been processed.</p>
+                            )}
                         </div>
                     )}
 
@@ -442,6 +423,11 @@ const AppSettings: React.FC = () => {
                 .password-input-wrap input { padding-right: 44px; }
                 .eye-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: var(--radius-sm); transition: color 120ms ease; }
                 .eye-btn:hover { color: var(--text-primary); }
+
+                .reset-request-card { display: flex; align-items: flex-start; gap: 16px; padding: 20px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); margin-bottom: 20px; }
+                .reset-request-icon { width: 48px; height: 48px; border-radius: var(--radius-md); background: rgba(59,130,246,0.1); display: flex; align-items: center; justify-content: center; color: var(--accent-primary); flex-shrink: 0; }
+                .reset-request-info h3 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+                .reset-request-info p { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin: 0; }
 
                 .s-save-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: var(--radius-md); background: var(--accent-primary); color: #fff; border: none; cursor: pointer; font-weight: 600; font-size: 13.5px; font-family: var(--font-sans); transition: all 150ms ease; margin-top: 4px; box-shadow: var(--shadow-sm); }
                 .s-save-btn:hover:not(:disabled) { background: var(--accent-primary-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); }

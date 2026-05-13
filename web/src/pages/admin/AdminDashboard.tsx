@@ -9,7 +9,7 @@ import type {
 } from '../../types/dashboard';
 import { DASHBOARD_CONFIG } from '../../config/dashboard';
 import {
-    Activity, CalendarDays, CalendarPlus, CheckCircle, Clock, Inbox, Megaphone, TrendingUp, XCircle, AlertTriangle, Edit3, Trash2, X, Loader2, Users, BookOpen, LayoutDashboard, Shield
+    Activity, CalendarDays, CalendarPlus, CheckCircle, Clock, Inbox, Megaphone, TrendingUp, XCircle, AlertTriangle, Edit3, Trash2, X, Loader2, Users, BookOpen, LayoutDashboard, Shield, KeyRound
 } from 'lucide-react';
 import {
     LineChart, Line,
@@ -417,6 +417,45 @@ const AdminDashboard: React.FC = () => {
         setPostingEvent(false);
     };
 
+    // Password reset handlers
+    const [processingResetId, setProcessingResetId] = useState<string | null>(null);
+
+    const handleResetApprove = async (req: ResetRequest) => {
+        setProcessingResetId(req.id);
+        try {
+            const { data: userData } = await supabase.from('profiles').select('id, full_name').eq('email', req.email).single();
+            if (!userData) { showToast({ title: 'User not found', type: 'error' }); setProcessingResetId(null); return; }
+
+            const emailLocal = req.email.split('@')[0] || '';
+            const parts = emailLocal.split('.');
+            const surname = parts[0]?.toLowerCase() || (userData.full_name || '').split(' ').pop()?.toLowerCase() || 'user';
+            const idFromEmail = parts[1] || userData.id.slice(-6);
+            const newPassword = `${surname}.${idFromEmail}`;
+
+            const { error } = await supabase.auth.admin.updateUserById(userData.id, { password: newPassword });
+            if (error) throw error;
+
+            await supabase.from('password_reset_requests').update({
+                status: 'approved', resolved_at: new Date().toISOString(), resolved_by: profile?.id
+            }).eq('id', req.id);
+
+            fetchResetRequests();
+            showToast({ title: 'Password reset', message: `New password: ${newPassword}`, type: 'success' });
+        } catch {
+            showToast({ title: 'Error', message: 'Failed to reset password. You may need admin service role key.', type: 'error' });
+        }
+        setProcessingResetId(null);
+    };
+
+    const handleResetDeny = async (req: ResetRequest) => {
+        setProcessingResetId(req.id);
+        await supabase.from('password_reset_requests').update({
+            status: 'denied', resolved_at: new Date().toISOString(), resolved_by: profile?.id
+        }).eq('id', req.id);
+        fetchResetRequests();
+        setProcessingResetId(null);
+    };
+
     const handleDeleteEvent = async (id: string) => {
         setConfirmDialog({
             open: true,
@@ -675,6 +714,44 @@ const AdminDashboard: React.FC = () => {
                                             </div>
                                             <div className="dash-list-item-meta">
                                                 {new Date(ev.event_date).toLocaleDateString()} · {ev.start_time?.slice(0, 5)} to {ev.end_time?.slice(0, 5)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Password Reset Requests */}
+                {canSeeResets && (
+                    <div className="dash-card dash-stagger">
+                        <div className="dash-card-header">
+                            <div className="dash-card-title"><KeyRound size={16} /> Password Resets</div>
+                            {resetRequests.length > 0 && <span className="dash-card-badge dash-badge-warning">{resetRequests.length}</span>}
+                        </div>
+                        {resetRequests.length === 0 ? (
+                            <div className="dash-empty"><KeyRound size={28} /><div>No pending resets</div></div>
+                        ) : (
+                            <div className="dash-list">
+                                {resetRequests.slice(0, 5).map(req => (
+                                    <div key={req.id} className="dash-list-item">
+                                        <div className="dash-list-item-accent" style={{ background: '#f59e0b' }} />
+                                        <div className="dash-list-item-body dash-list-item-body--compact">
+                                            <div className="dash-header-row">
+                                                <div className="dash-list-item-title">{req.email}</div>
+                                                <span className="dash-status-badge" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>PENDING</span>
+                                            </div>
+                                            <div className="dash-list-item-meta">
+                                                {req.requested_at ? new Date(req.requested_at).toLocaleString() : 'Just now'}
+                                            </div>
+                                            <div className="dash-list-item-actions">
+                                                <button className="btn btn-primary" onClick={() => handleResetApprove(req)} disabled={processingResetId === req.id}>
+                                                    {processingResetId === req.id ? <Loader2 size={12} className="spin" /> : <CheckCircle size={12} />} Reset
+                                                </button>
+                                                <button className="btn btn-secondary dash-btn-danger" onClick={() => handleResetDeny(req)} disabled={processingResetId === req.id}>
+                                                    <XCircle size={12} /> Deny
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
