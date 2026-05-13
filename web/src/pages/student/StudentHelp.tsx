@@ -60,7 +60,7 @@ const StudentHelp: React.FC = () => {
                 </p>
             </div>
 
-            <div className="admin-dash-grid">
+            <div className="admin-dash-grid" style={{ gap: 24 }}>
                 <div className="admin-dash-left">
                     <div className="dash-card dash-stagger">
                         <div className="dash-card-header">
@@ -113,7 +113,7 @@ const StudentHelp: React.FC = () => {
                 <div className="admin-dash-right">
                     <div className="dash-card dash-stagger">
                         <div className="dash-card-header">
-                            <div className="dash-card-title"><HelpCircle size={16} /> Quick answers</div>
+                            <div className="dash-card-title"><HelpCircle size={16} /> Frequently Asked Questions</div>
                         </div>
                         <div className="dash-list" style={{ gap: 8 }}>
                             {FAQS.map((f, i) => (

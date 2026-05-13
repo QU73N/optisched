@@ -57,7 +57,6 @@ const TeacherSections = lazy(() => import('./pages/teacher/TeacherSections'));
 const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
 const StudentSchedule = lazy(() => import('./pages/student/StudentSchedule'));
 const StudentUpcoming = lazy(() => import('./pages/student/StudentUpcoming'));
-const StudentSection = lazy(() => import('./pages/student/StudentSection'));
 const StudentHelp = lazy(() => import('./pages/student/StudentHelp'));
 import './index.css';
 
@@ -198,7 +197,6 @@ function App() {
             <Route index element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentDashboard /></Suspense>} />
             <Route path="schedule" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentSchedule /></Suspense>} />
             <Route path="upcoming" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentUpcoming /></Suspense>} />
-            <Route path="section" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentSection /></Suspense>} />
             <Route path="announcements" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><AnnouncementsPage /></Suspense>} />
             <Route path="help" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><StudentHelp /></Suspense>} />
             <Route path="optibot" element={<Suspense fallback={<div className="dash-loading-center"><div className="spin" style={{fontSize: 24}}>⟳</div><div style={{marginTop: 8}}>Loading...</div></div>}><OptiBotPage /></Suspense>} />
