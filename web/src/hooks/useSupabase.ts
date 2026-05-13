@@ -83,21 +83,6 @@ export function useSchedules(filters?: {
             const { data: result, error: fetchError } = await query;
             if (fetchError) throw fetchError;
 
-            // DEBUG: Log raw RPC result
-            console.log('[useSchedules DEBUG] Raw RPC result:', {
-                count: result?.length || 0,
-                filters,
-                sample: result?.slice(0, 3).map((s: any) => ({
-                    id: s.id,
-                    day_of_week: s.day_of_week,
-                    subject_name: s.subject_name,
-                    section_name: s.section_name,
-                    section_id: s.section_id,
-                    status: s.status,
-                    is_active: s.is_active
-                }))
-            });
-
             // Map RPC response to expected format
             const mappedData = (result || []).map((s: any) => ({
                 id: s.id,
@@ -120,30 +105,21 @@ export function useSchedules(filters?: {
 
             // Apply filters on client side since RPC doesn't support them
             let filteredData = mappedData;
-            console.log('[useSchedules DEBUG] After mapping:', filteredData.length);
-
             if (filters?.teacherId) {
                 filteredData = filteredData.filter((s: any) => s.teacher_id === filters.teacherId);
-                console.log('[useSchedules DEBUG] After teacherId filter:', filteredData.length);
             }
             if (filters?.sectionId) {
                 filteredData = filteredData.filter((s: any) => s.section_id === filters.sectionId);
-                console.log('[useSchedules DEBUG] After sectionId filter:', filteredData.length);
             }
             if (filters?.dayOfWeek) {
                 filteredData = filteredData.filter((s: any) => s.day_of_week === filters.dayOfWeek);
-                console.log('[useSchedules DEBUG] After dayOfWeek filter:', filteredData.length);
             }
             if (filters?.status) {
                 filteredData = filteredData.filter((s: any) => s.status === filters.status);
-                console.log('[useSchedules DEBUG] After status filter:', filteredData.length);
             }
             if (filters?.isActive !== undefined) {
                 filteredData = filteredData.filter((s: any) => s.is_active === filters.isActive);
-                console.log('[useSchedules DEBUG] After isActive filter:', filteredData.length);
             }
-
-            console.log('[useSchedules DEBUG] Final result:', filteredData.length);
 
             setData(filteredData);
         } catch (err) {
