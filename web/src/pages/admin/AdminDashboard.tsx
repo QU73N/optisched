@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { supabase } from '../../lib/supabase';
+import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../types/database';
 import type {
     ChangeRequest, Announcement, CustomEvent, ResetRequest,
@@ -419,14 +419,25 @@ const AdminDashboard: React.FC = () => {
 
     // Password reset handlers
     const [processingResetId, setProcessingResetId] = useState<string | null>(null);
+    const [resetModal, setResetModal] = useState<{ open: boolean; req: ResetRequest | null; password: string }>({ open: false, req: null, password: '' });
 
     const handleResetApprove = async (req: ResetRequest) => {
+        // Open the modal so admin can type the new password
+        setResetModal({ open: true, req, password: '' });
+    };
+
+    const handleResetConfirm = async () => {
+        const req = resetModal.req;
+        if (!req || !resetModal.password.trim()) return;
         setProcessingResetId(req.id);
         try {
-            // Send a password reset email to the user (works with anon key)
-            const { error } = await supabase.auth.resetPasswordForEmail(req.email, {
-                redirectTo: `${window.location.origin}/login`,
-            });
+            if (!supabaseAdmin) {
+                showToast({ title: 'Config error', message: 'Service role key not configured. Add VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file.', type: 'error' });
+                setProcessingResetId(null);
+                return;
+            }
+            // Use admin client to set the password directly
+            const { error } = await supabaseAdmin.auth.admin.updateUserById(req.user_id || '', { password: resetModal.password.trim() });
             if (error) throw error;
 
             await supabase.from('password_reset_requests').update({
@@ -434,9 +445,10 @@ const AdminDashboard: React.FC = () => {
             }).eq('id', req.id);
 
             fetchResetRequests();
-            showToast({ title: 'Reset email sent', message: `A password reset link has been sent to ${req.email}`, type: 'success' });
+            setResetModal({ open: false, req: null, password: '' });
+            showToast({ title: 'Password updated', message: `Password has been set for ${req.email}`, type: 'success' });
         } catch {
-            showToast({ title: 'Error', message: 'Failed to send reset email. Please try again.', type: 'error' });
+            showToast({ title: 'Error', message: 'Failed to reset password. Check your service role key.', type: 'error' });
         }
         setProcessingResetId(null);
     };
@@ -842,6 +854,45 @@ const AdminDashboard: React.FC = () => {
                                     Confirm {resolveAction === 'approved' ? 'Approval' : 'Rejection'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Password Reset Modal */}
+            {resetModal.open && resetModal.req && (
+                <div className="modal-overlay" onClick={() => setResetModal({ open: false, req: null, password: '' })}>
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="dash-modal-header">
+                            <h3>Set New Password</h3>
+                            <button className="dash-modal-close" onClick={() => setResetModal({ open: false, req: null, password: '' })}><X size={16} /></button>
+                        </div>
+                        <div className="dash-modal-body">
+                            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+                                Set a new password for <strong>{resetModal.req.email}</strong>
+                            </p>
+                            <label>New Password</label>
+                            <input
+                                className="input"
+                                type="text"
+                                value={resetModal.password}
+                                onChange={e => setResetModal(prev => ({ ...prev, password: e.target.value }))}
+                                placeholder="Enter new password for user"
+                                autoFocus
+                            />
+                            <div className="dash-header-row" style={{ gap: 10, marginTop: 16 }}>
+                                <button className="dash-modal-btn" onClick={() => setResetModal({ open: false, req: null, password: '' })}>Cancel</button>
+                                <button
+                                    className="dash-modal-btn dash-modal-btn-primary"
+                                    disabled={!resetModal.password.trim() || resetModal.password.trim().length < 6 || processingResetId === resetModal.req.id}
+                                    onClick={handleResetConfirm}
+                                >
+                                    {processingResetId === resetModal.req.id ? <><Loader2 size={14} className="spin" /> Setting...</> : 'Set Password'}
+                                </button>
+                            </div>
+                            {resetModal.password.trim().length > 0 && resetModal.password.trim().length < 6 && (
+                                <p style={{ fontSize: 11, color: 'var(--accent-error, #ef4444)', marginTop: 8 }}>Password must be at least 6 characters</p>
+                            )}
                         </div>
                     </div>
                 </div>

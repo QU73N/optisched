@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ConfirmDialog } from '../../components/states/ConfirmDialog';
-import { supabase } from '../../lib/supabase';
+import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { KeyRound, Check, X, Loader2, ShieldCheck } from 'lucide-react';
 
 interface ResetRequest {
@@ -29,6 +29,7 @@ const PasswordResetManager: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [resetModal, setResetModal] = useState<{ open: boolean; req: ResetRequest | null; password: string }>({ open: false, req: null, password: '' });
 
     const fetchRequests = async () => {
         try {
@@ -64,30 +65,33 @@ const PasswordResetManager: React.FC = () => {
     }, []);
 
     const handleApprove = async (req: ResetRequest) => {
-        setConfirmDialog({
-            open: true,
-            title: 'Send Reset Email',
-            message: `Send a password reset link to ${req.email}?`,
-            onConfirm: async () => {
-                setProcessingId(req.id);
-                try {
-                    const { error } = await supabase.auth.resetPasswordForEmail(req.email, {
-                        redirectTo: `${window.location.origin}/login`,
-                    });
-                    if (error) throw error;
+        setResetModal({ open: true, req, password: '' });
+    };
 
-                    await supabase.from('password_reset_requests').update({
-                        status: 'approved', resolved_at: new Date().toISOString(), resolved_by: profile?.id
-                    }).eq('id', req.id);
-
-                    fetchRequests();
-                    showToast({ title: 'Reset email sent', message: `A password reset link has been sent to ${req.email}`, type: 'success' });
-                } catch {
-                    showToast({ title: 'Error', message: 'Failed to send reset email', type: 'error' });
-                }
+    const handleResetConfirm = async () => {
+        const req = resetModal.req;
+        if (!req || !resetModal.password.trim()) return;
+        setProcessingId(req.id);
+        try {
+            if (!supabaseAdmin) {
+                showToast({ title: 'Config error', message: 'Add VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file.', type: 'error' });
                 setProcessingId(null);
+                return;
             }
-        });
+            const { error } = await supabaseAdmin.auth.admin.updateUserById(req.user_id || '', { password: resetModal.password.trim() });
+            if (error) throw error;
+
+            await supabase.from('password_reset_requests').update({
+                status: 'approved', resolved_at: new Date().toISOString(), resolved_by: profile?.id
+            }).eq('id', req.id);
+
+            fetchRequests();
+            setResetModal({ open: false, req: null, password: '' });
+            showToast({ title: 'Password updated', message: `Password set for ${req.email}`, type: 'success' });
+        } catch {
+            showToast({ title: 'Error', message: 'Failed to reset password. Check service role key.', type: 'error' });
+        }
+        setProcessingId(null);
     };
 
     const handleDeny = async (req: ResetRequest) => {
@@ -139,7 +143,7 @@ const PasswordResetManager: React.FC = () => {
                         <span className="pw-pending-badge">Pending</span>
                     </div>
                     <p className="pw-hint">
-                        Password will reset to: <strong className="pw-new">surname.ID (from email)</strong>
+                        Click Approve to set a new password for this user.
                     </p>
                     <div className="pw-actions">
                         <button className="pw-approve" onClick={() => handleApprove(req)} disabled={processingId === req.id}>
@@ -178,6 +182,34 @@ const PasswordResetManager: React.FC = () => {
                 .spin { animation: spin 1s linear infinite; }
             `}</style>
             
+            {/* Password Reset Modal */}
+            {resetModal.open && resetModal.req && (
+                <div className="modal-overlay" onClick={() => setResetModal({ open: false, req: null, password: '' })}>
+                    <div className="dash-modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+                        <div className="dash-modal-header">
+                            <h3>Set New Password</h3>
+                            <button className="dash-modal-close" onClick={() => setResetModal({ open: false, req: null, password: '' })}><X size={16} /></button>
+                        </div>
+                        <div className="dash-modal-body">
+                            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+                                Set a new password for <strong>{resetModal.req.email}</strong>
+                            </p>
+                            <label>New Password</label>
+                            <input className="input" type="text" value={resetModal.password} onChange={e => setResetModal(prev => ({ ...prev, password: e.target.value }))} placeholder="Enter new password" autoFocus />
+                            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                                <button className="pw-deny" onClick={() => setResetModal({ open: false, req: null, password: '' })}>Cancel</button>
+                                <button className="pw-approve" disabled={!resetModal.password.trim() || resetModal.password.trim().length < 6 || processingId === resetModal.req.id} onClick={handleResetConfirm}>
+                                    {processingId === resetModal.req.id ? <Loader2 size={14} className="spin" /> : <Check size={14} />} Set Password
+                                </button>
+                            </div>
+                            {resetModal.password.trim().length > 0 && resetModal.password.trim().length < 6 && (
+                                <p style={{ fontSize: 11, color: '#ef4444', marginTop: 8 }}>Password must be at least 6 characters</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <ConfirmDialog
                 open={confirmDialog.open}
                 title={confirmDialog.title}

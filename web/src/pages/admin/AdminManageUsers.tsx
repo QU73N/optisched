@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -505,6 +505,19 @@ const AdminManageUsers: React.FC = () => {
             };
             const { error } = await supabase.from('profiles').update(updateData).eq('id', editUser.id);
             if (error) throw error;
+
+            // Sync email in Supabase Auth if it changed
+            if (editForm.email !== editUser.email && supabaseAdmin) {
+                const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(editUser.id, {
+                    email: editForm.email,
+                });
+                if (authError) {
+                    console.error('Auth email sync error:', authError);
+                    showToast({ title: 'Warning', message: `Profile updated but auth email sync failed: ${authError.message}`, type: 'warning' });
+                }
+            } else if (editForm.email !== editUser.email && !supabaseAdmin) {
+                showToast({ title: 'Warning', message: 'Profile email updated but auth email could not be synced. Add VITE_SUPABASE_SERVICE_ROLE_KEY to enable.', type: 'warning' });
+            }
 
             // Update teachers table department if role is teacher
             if (editForm.role === 'teacher') {
