@@ -3,22 +3,21 @@ import { supabase } from '../../../lib/supabase';
 
 import { useAuth } from '../../../contexts/AuthContext';
 import { useUserPreferences } from '../../../contexts/UserPreferencesContext';
-import { POWER_ADMIN_ROLES, hasAnyRole } from '../../../types/database';
 import type { Schedule } from '../../../types/database';
 import {
-    AlertTriangle, ArrowLeft, ArrowRight, Book, Check, CheckCircle, ChevronDown, ChevronUp, Clock, FileClock,
-    Flag, GitBranch, HelpCircle, Inbox, Layers, Lightbulb, ListChecks, Lock, MapPin, Play, Plus,
-    RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, ShieldCheck, Sliders, Sparkles, Upload,
+    AlertTriangle, ArrowLeft, ArrowRight, Book, Check, CheckCircle, ChevronDown, ChevronUp, Clock,
+    Flag, GitBranch, HelpCircle, Layers, Lightbulb, ListChecks, Lock, MapPin, Play, Plus,
+    RefreshCw, RotateCcw, Save, Search as SearchIcon, Send, ShieldCheck, Sliders, Sparkles,
     UserCheck, Users, X, XCircle,
 } from 'lucide-react';
 import '../Dashboard.css';
 import {
     ALL_DAYS, DEFAULT_CONFIG, HARD_CONSTRAINTS, MODE_LABELS, PARTIAL_KIND_LABELS, PRIORITY_TIERS,
-    PRIORITY_VALUES, STAGES, WORKFLOW_META, tierFromValue, type GenerationMode,
+    PRIORITY_VALUES, STAGES, tierFromValue, type GenerationMode,
     type DiffEntry, type ExistingSchedule, type GenerationConfig,
     type GenerationProgress, type GenerationResult, type PartialKind, type PartialTarget,
     type PlacedEntry, type PriorityTier, type Room, type Section, type StageKey,
-    type Subject, type Teacher, type VersionSummary, type WorkflowState,
+    type Subject, type Teacher,
 } from './types';
 import { useGeneratorWorker } from './useGeneratorWorker';
 import { getRulesAsRecord, notifyStudentsOfScheduleChanges } from '../../../services/generationService';
@@ -35,9 +34,8 @@ import { ScheduleDragDrop } from '../../../components/ScheduleDragDrop';
 // ---------------------------------------------------------------------------
 
 const ScheduleGenerate: React.FC = () => {
-    const { roles, user } = useAuth();
+    const { user } = useAuth();
     const { preferences, updatePreferences } = useUserPreferences();
-    const canApprove = hasAnyRole(roles, [...POWER_ADMIN_ROLES, 'schedule_admin']);
     const [stage, setStage] = useState<StageKey>('scope');
     const [maxStageReached, setMaxStageReached] = useState<StageKey>('scope');
     const [config, setConfig] = useState<GenerationConfig>(DEFAULT_CONFIG);
@@ -48,8 +46,6 @@ const ScheduleGenerate: React.FC = () => {
     const [sections, setSections] = useState<Section[]>([]);
     const [existing, setExisting] = useState<ExistingSchedule[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
-    const [availableVersions, setAvailableVersions] = useState<Array<{ id: string; version_number: number; changed_at: string; change_type: string; is_active: boolean; snapshot?: unknown }>>([]);
-    const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
 
     const [progress, setProgress] = useState<GenerationProgress>({
         subStage: 'idle', attempt: 0, totalAttempts: 0, placed: 0, total: 0, message: 'Ready',
@@ -60,10 +56,6 @@ const ScheduleGenerate: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [savedId, setSavedId] = useState<string | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
-    const [versionsOpen, setVersionsOpen] = useState(false);
-    const [workflowBusy, setWorkflowBusy] = useState<WorkflowState | null>(null);
-    const [workflowNote, setWorkflowNote] = useState<string | null>(null);
-    const [workflowError, setWorkflowError] = useState<string | null>(null);
     const cancelRef = useRef(false);
 
     // Use Web Worker for generation (runs in background even when tabbed out)
@@ -103,71 +95,23 @@ const ScheduleGenerate: React.FC = () => {
         scheduleBId: string | null;
     };
 
-    type VersionWorkflowService = typeof scheduleVersionService & {
-        approveSchedule: (batchId: string, options: { changeReason: string }) => Promise<{ success: boolean; message?: string }>;
-        publishApprovedSchedule: (batchId: string, options: { changeReason: string }) => Promise<{ success: boolean; message?: string; active_version_id?: string | null }>;
-    };
-
     const refreshExisting = async () => {
         // Query generation_runs table to count actual schedules (not individual sessions)
         const { data } = await supabase
             .from('generation_runs')
-            .select('id, status, completed_at');
-        
-        // Map generation_runs status to workflow states
-        // generation_runs status: 'running', 'completed', 'failed'
-        // workflow states: 'draft', 'submitted', 'approved', 'published'
-        // For now, treat all completed runs as 'draft' since the workflow state is stored separately
+            .select('id, status, created_at, config, result')
+            .order('created_at', { ascending: false })
+            .limit(100);
+
         const mappedData = (data || []).map(run => ({
             id: run.id,
-            status: run.status === 'completed' ? 'draft' : run.status,
-            created_at: run.completed_at,
+            status: run.status,
+            created_at: run.created_at,
+            config: run.config,
+            result: run.result
         }));
-        
+
         setExisting(mappedData as unknown as ExistingSchedule[]);
-    };
-
-    const loadSchedulesFromVersion = async (versionId: string | null) => {
-        if (!versionId) {
-            // Load current schedules from database
-            const { data: sch } = await supabase
-                .from('schedules')
-                .select('id, subject_id, teacher_id, room_id, section_id, day_of_week, start_time, end_time, status, created_at, batch_id');
-            setExisting((sch as unknown as ExistingSchedule[]) || []);
-            return;
-        }
-
-        // Load schedules from version snapshot
-        const { data: versionData, error } = await supabase
-            .from('schedule_versions')
-            .select('final_schedule')
-            .eq('id', versionId)
-            .single();
-
-        if (error || !versionData) {
-            console.error('Error loading version snapshot:', error);
-            return;
-        }
-
-        // Parse the snapshot JSONB data
-        const snapshot = versionData.final_schedule as { entries?: Array<{ subjectId: string; teacherId: string; roomId: string; sectionId: string; day: string; start: string; end: string }> };
-        
-        if (snapshot?.entries) {
-            const versionSchedules: ExistingSchedule[] = snapshot.entries.map((entry, idx) => ({
-                id: `version-${versionId}-${idx}`,
-                subject_id: entry.subjectId,
-                teacher_id: entry.teacherId,
-                room_id: entry.roomId,
-                section_id: entry.sectionId,
-                day_of_week: entry.day,
-                start_time: entry.start,
-                end_time: entry.end,
-                status: 'draft',
-                created_at: null,
-                batch_id: versionId,
-            }));
-            setExisting(versionSchedules);
-        }
     };
 
     useEffect(() => {
@@ -223,6 +167,7 @@ const ScheduleGenerate: React.FC = () => {
                 preferred_time_start: string | null;
                 preferred_time_end: string | null;
                 max_classes_per_day: number | null;
+                max_hours_per_day: number | null;
                 max_consecutive_classes: number | null;
                 availability: Record<string, boolean> | null;
             };
@@ -270,6 +215,7 @@ const ScheduleGenerate: React.FC = () => {
                         return {
                             id: x.id,
                             max_hours: x.max_hours,
+                            max_hours_per_day: pref?.max_hours_per_day ?? 8,
                             full_name: profile?.full_name || 'Unnamed',
                             weight: x.weight ?? 50,
                             priority_note: x.priority_note,
@@ -290,15 +236,6 @@ const ScheduleGenerate: React.FC = () => {
             );
             setSections((sec.data as unknown as Section[]) || []);
             setExisting((sch.data as unknown as ExistingSchedule[]) || []);
-
-            // Fetch available schedule versions for partial regeneration
-            const { data: versionsData } = await supabase
-                .from('schedule_versions')
-                .select('id, version_number, changed_at, change_type, is_active, snapshot')
-                .order('changed_at', { ascending: false })
-                .limit(50);
-
-            setAvailableVersions((versionsData as unknown as Array<{ id: string; version_number: number; changed_at: string; change_type: string; is_active: boolean; snapshot?: unknown }>) || []);
 
             setDataLoading(false);
             } catch (err) {
@@ -345,84 +282,6 @@ const ScheduleGenerate: React.FC = () => {
     }, [generating, progress.subStage, result]);
 
     const stageIndex = STAGES.findIndex(s => s.key === stage);
-
-    const versionSummary: VersionSummary[] = useMemo(() => {
-        const states: WorkflowState[] = ['draft', 'submitted', 'approved', 'published'];
-        return states.map(state => {
-            const rows = existing.filter(e => ((e.status as WorkflowState) || 'draft') === state);
-            const latest = rows.reduce<string | null>((acc, r) => {
-                if (!r.created_at) return acc;
-                return !acc || r.created_at > acc ? r.created_at : acc;
-            }, null);
-            // For published state, count schedule_versions instead of schedules
-            const count = state === 'published' 
-                ? (rows.length > 0 ? 1 : 0) // Each published schedule represents one version
-                : rows.length;
-            return { state, count, latest, label: WORKFLOW_META[state].label, desc: WORKFLOW_META[state].desc };
-        });
-    }, [existing]);
-
-    const transitionAll = async (from: WorkflowState, to: WorkflowState) => {
-        // Collect the row ids in this status so the update never reaches unrelated
-        // schedules that land in the table between the read and the write.
-        const matchingSchedules = existing.filter(e => ((e.status as WorkflowState) || 'draft') === from) as Array<ExistingSchedule & { batch_id?: string | null }>;
-        const ids = matchingSchedules.map(e => e.id);
-        if (ids.length === 0) return;
-        
-        // Extract batch ID for version service operations
-        const batchIds = new Set(matchingSchedules.filter(s => Boolean(s.batch_id)).map(s => s.batch_id as string));
-        const batchId = Array.from(batchIds)[0];
-
-        setWorkflowBusy(from);
-        setWorkflowNote(null);
-        setWorkflowError(null);
-        try {
-            const versionWorkflowService = scheduleVersionService as VersionWorkflowService;
-
-            if (batchId && user?.id) {
-                scheduleVersionService.initialize(supabase, user.id);
-                if (to === 'submitted') {
-                    const result = await scheduleVersionService.submitSchedule(batchId, { changeReason: 'Submitted via workflow panel' });
-                    if (!result.success) throw new Error(result.message);
-                } else if (to === 'approved') {
-                    const result = await versionWorkflowService.approveSchedule(batchId, { changeReason: 'Approved via workflow panel' });
-                    if (!result.success) throw new Error(result.message);
-                } else if (to === 'published') {
-                    const result = await versionWorkflowService.publishApprovedSchedule(batchId, { changeReason: 'Published via workflow panel' });
-                    if (!result.success) throw new Error(result.message);
-                }
-            } else {
-                // Fallback for legacy items without batch_id
-                const { error } = await supabase.from('schedules').update({ 
-                    status: to,
-                    submitted_at: to === 'submitted' ? new Date().toISOString() : undefined,
-                    approved_at: to === 'approved' ? new Date().toISOString() : undefined,
-                    approved_by: to === 'approved' && user ? user.id : undefined,
-                }).in('id', ids);
-                if (error) throw error;
-            }
-
-            // Log audit for each schedule status change
-            // Temporarily disabled - log_audit RPC function doesn't exist
-            // for (const id of ids) {
-            //     if (to === 'submitted') {
-            //         await scheduleAudit.submitted(id, { submitted_by: user?.id });
-            //     } else if (to === 'published') {
-            //         await scheduleAudit.published(id, { published_by: user?.id });
-            //     } else if (to === 'approved') {
-            //         await scheduleAudit.approved(id, { approved_by: user?.id });
-            //     }
-            // }
-            
-            await refreshExisting();
-            setWorkflowNote(`${ids.length} ${WORKFLOW_META[from].label.toLowerCase()} ${ids.length === 1 ? 'entry' : 'entries'} moved to ${WORKFLOW_META[to].label}.`);
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            setWorkflowError(`Could not update: ${msg}`);
-        } finally {
-            setWorkflowBusy(null);
-        }
-    };
 
     const canAdvance = (from: StageKey): boolean => {
         if (from === 'review') return blockers.length === 0;
@@ -576,6 +435,23 @@ const ScheduleGenerate: React.FC = () => {
                     t.kind === 'teacher' ? 'teacher_id' :
                     t.kind === 'room' ? 'room_id' : 'subject_id';
 
+                // Check for published schedules in the target
+                const { data: publishedSchedules } = await supabase
+                    .from('schedules')
+                    .select('id')
+                    .eq(column, t.id)
+                    .eq('status', 'published')
+                    .eq('is_active', true)
+                    .limit(1);
+
+                if (publishedSchedules && publishedSchedules.length > 0) {
+                    const confirmMsg = `There are ${publishedSchedules.length} published schedule(s) for this ${t.kind}. Partial regeneration will create a draft version that can be approved later. The published schedules will remain active until the new version is approved and published. Continue?`;
+                    if (!confirm(confirmMsg)) {
+                        throw new Error('Partial regeneration cancelled by user due to published schedules.');
+                    }
+                }
+
+                // Only delete draft/submitted/approved schedules, keep published ones active
                 const { error: delErr } = await supabase
                     .from('schedules')
                     .delete()
@@ -842,30 +718,8 @@ const ScheduleGenerate: React.FC = () => {
                     >
                         <Layers size={14} /> {preferences.compact_mode ? 'Detailed' : 'Compact'}
                     </button>
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => setVersionsOpen(v => !v)}
-                        aria-expanded={versionsOpen}
-                    >
-                        <FileClock size={14} /> Versions
-                        {versionsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    </button>
                 </div>
             </div>
-
-            {versionsOpen && (
-                <VersionsPanel
-                    summary={versionSummary}
-                    busy={workflowBusy}
-                    note={workflowNote}
-                    error={workflowError}
-                    canApprove={canApprove}
-                    onSubmitDrafts={() => transitionAll('draft', 'submitted')}
-                    onApproveSubmitted={() => transitionAll('submitted', 'approved')}
-                    onPublishApproved={() => transitionAll('approved', 'published')}
-                    onDismissNote={() => { setWorkflowNote(null); setWorkflowError(null); }}
-                />
-            )}
 
             <Stepper stage={stage} onJump={jumpTo} canJump={!generating} maxStageReached={maxStageReached} />
 
@@ -882,12 +736,6 @@ const ScheduleGenerate: React.FC = () => {
                             rooms={rooms}
                             subjects={subjects}
                             compact={preferences.compact_mode}
-                            availableVersions={availableVersions}
-                            selectedVersionId={selectedVersionId}
-                            onVersionChange={async (versionId) => {
-                                setSelectedVersionId(versionId);
-                                await loadSchedulesFromVersion(versionId);
-                            }}
                         />
                     )}
                     {stage === 'structure' && (
@@ -1044,10 +892,7 @@ const ScopeStage: React.FC<{
     rooms: Room[];
     subjects: Subject[];
     compact?: boolean;
-    availableVersions: Array<{ id: string; version_number: number; changed_at: string; change_type: string; is_active: boolean; snapshot?: unknown }>;
-    selectedVersionId: string | null;
-    onVersionChange: (versionId: string | null) => void;
-}> = ({ config, setConfig, sections, teachers, rooms, subjects, compact = false, availableVersions, selectedVersionId, onVersionChange }) => {
+}> = ({ config, setConfig, sections, teachers, rooms, subjects, compact = false }) => {
     const setMode = (mode: GenerationMode) => setConfig(c => ({ ...c, mode, sectionIds: [] }));
 
     const setPartialKind = (kind: PartialKind) =>
@@ -1102,9 +947,6 @@ const ScopeStage: React.FC<{
                     options={targetOptions}
                     onKindChange={setPartialKind}
                     onIdChange={setPartialId}
-                    availableVersions={availableVersions}
-                    selectedVersionId={selectedVersionId}
-                    onVersionChange={onVersionChange}
                 />
             )}
         </div>
@@ -1116,10 +958,7 @@ const PartialTargetPicker: React.FC<{
     options: { id: string; label: string; sub?: string }[];
     onKindChange: (kind: PartialKind) => void;
     onIdChange: (id: string) => void;
-    availableVersions: Array<{ id: string; version_number: number; changed_at: string; change_type: string; is_active: boolean; snapshot?: unknown }>;
-    selectedVersionId: string | null;
-    onVersionChange: (versionId: string | null) => void;
-}> = ({ target, options, onKindChange, onIdChange, availableVersions, selectedVersionId, onVersionChange }) => {
+}> = ({ target, options, onKindChange, onIdChange }) => {
     const kind = target?.kind ?? 'section';
 
     const kindIcons: Record<PartialKind, React.ReactNode> = {
@@ -1176,44 +1015,6 @@ const PartialTargetPicker: React.FC<{
                 </select>
             </div>
 
-            <div style={{ marginBottom: 20 }}>
-                <div style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-                    <strong>Base Version (Optional)</strong>
-                    <FieldTooltip>Select a historical version snapshot to regenerate from. Leave empty to use current version.</FieldTooltip>
-                </div>
-                <select
-                    className="input"
-                    value={selectedVersionId || ''}
-                    onChange={e => onVersionChange(e.target.value || null)}
-                    style={{
-                        width: '100%',
-                        maxWidth: 480,
-                        padding: '10px 12px',
-                        fontSize: 14,
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--border-light)',
-                        backgroundColor: 'var(--surface)',
-                        color: 'var(--text-primary)'
-                    }}
-                >
-                    <option value="">Current Version</option>
-                    {availableVersions.map(v => {
-                        const date = new Date(v.changed_at).toLocaleDateString('en-US', {
-                            month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                        });
-                        const changeLabel = v.change_type === 'created' ? 'Draft' : v.change_type.charAt(0).toUpperCase() + v.change_type.slice(1);
-                        // Only show (Active) for published versions that are actually active
-                        const isActive = v.change_type === 'publish' && v.is_active;
-                        const label = `v${v.version_number} - ${changeLabel} - ${date}${isActive ? ' (Active)' : ''}`;
-                        return (
-                            <option key={v.id} value={v.id}>
-                                {label}
-                            </option>
-                        );
-                    })}
-                </select>
-            </div>
-
             <div className="sg-partial-hint" style={{
                 padding: 12,
                 backgroundColor: 'var(--surface-soft)',
@@ -1235,12 +1036,75 @@ const PartialTargetPicker: React.FC<{
 };
 
 // Simple tooltip component for field labels
-const FieldTooltip: React.FC<{ children: string }> = ({ children }) => (
-    <div className="sg-field-tooltip-wrapper">
-        <HelpCircle size={14} style={{ color: 'var(--text-muted)', cursor: 'help', marginLeft: 4 }} />
-        <div className="sg-field-tooltip">{children}</div>
-    </div>
-);
+const FieldTooltip: React.FC<{ children: string }> = ({ children }) => {
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    const tooltipRef = useRef<HTMLDivElement>(null);
+    const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+    const [isHovered, setIsHovered] = useState(false);
+
+    const handleMouseEnter = () => {
+        setIsHovered(true);
+        // Small delay to allow tooltip to render and be measured
+        setTimeout(() => {
+            if (wrapperRef.current && tooltipRef.current) {
+                const wrapperRect = wrapperRef.current.getBoundingClientRect();
+                const tooltipRect = tooltipRef.current.getBoundingClientRect();
+
+                // Position tooltip above the element
+                let top = wrapperRect.top - tooltipRect.height - 8;
+                let left = wrapperRect.left + wrapperRect.width / 2 - tooltipRect.width / 2;
+
+                // Ensure tooltip doesn't go off the top of the viewport
+                if (top < 8) {
+                    top = wrapperRect.bottom + 8;
+                }
+
+                // Ensure tooltip doesn't go off the left edge
+                if (left < 8) {
+                    left = 8;
+                }
+
+                // Ensure tooltip doesn't go off the right edge
+                if (left + tooltipRect.width > window.innerWidth - 8) {
+                    left = window.innerWidth - tooltipRect.width - 8;
+                }
+
+                setPosition({ top, left });
+            }
+        }, 0);
+    };
+
+    const handleMouseLeave = () => {
+        setIsHovered(false);
+        setPosition(null);
+    };
+
+    return (
+        <div
+            ref={wrapperRef}
+            className="sg-field-tooltip-wrapper"
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+        >
+            <HelpCircle size={14} style={{ color: 'var(--text-muted)', cursor: 'help', marginLeft: 4 }} />
+            <div
+                ref={tooltipRef}
+                className="sg-field-tooltip"
+                style={{
+                    position: 'fixed',
+                    top: position ? `${position.top}px` : '-9999px',
+                    left: position ? `${position.left}px` : '-9999px',
+                    transform: 'none',
+                    opacity: position ? 1 : 0,
+                    visibility: isHovered ? 'visible' : 'hidden',
+                    transition: 'opacity 0.2s ease',
+                }}
+            >
+                {children}
+            </div>
+        </div>
+    );
+};
 
 // ---------------------------------------------------------------------------
 // Stage 2 - Structure
@@ -1504,7 +1368,7 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
         setConfig(c => ({ ...c, soft: { ...c.soft, [key]: val } }));
 
     return (
-        <div style={{ maxHeight: '600px', overflowY: 'auto', paddingRight: '8px' }}>
+        <div>
             <StageHeader icon={<Sliders size={16} />} title="Constraints" desc="Hard rules are always enforced. Tune soft weights to guide optimization." compact={compact} />
 
             <div className="sg-subhead"><ShieldCheck size={12} /> Policies</div>
@@ -1913,6 +1777,7 @@ const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
     const scoreRounded = result.score.toFixed(2);
     const unplacedCount = result.total - result.placed;
     const noSessionsPlaced = result.placed === 0;
+    const [isTableOpen, setIsTableOpen] = useState(result.mode !== 'partial'); // Auto-open for full generation, closed for partial
 
     return (
         <div>
@@ -1954,26 +1819,41 @@ const ResultsStage: React.FC<{ result: GenerationResult }> = ({ result }) => {
             )}
 
             {result.entries.length > 0 && (
-                <div className="table-container" style={{ maxHeight: 360, overflow: 'auto', marginTop: 12 }}>
-                    <table>
-                        <thead><tr><th>Day</th><th>Time</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Section</th></tr></thead>
-                        <tbody>
-                            {result.entries.slice().sort((a, b) => {
-                                const d = ALL_DAYS.indexOf(a.day) - ALL_DAYS.indexOf(b.day);
-                                return d !== 0 ? d : a.start.localeCompare(b.start);
-                            }).map(e => (
-                                <tr key={`${e.teacherId}-${e.subjectId}-${e.roomId}-${e.sectionId}-${e.day}-${e.start}`}>
-                                    <td style={{ fontWeight: 600 }}>{e.day}</td>
-                                    <td><Clock size={12} style={{ verticalAlign: 'middle', color: 'var(--text-muted)', marginRight: 4 }} />{e.start} to {e.end}</td>
-                                    <td><strong>{e.subjectCode}</strong><br /><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.subjectName}</span></td>
-                                    <td>{e.teacherName}</td>
-                                    <td><MapPin size={12} style={{ verticalAlign: 'middle', color: 'var(--text-muted)', marginRight: 4 }} />{e.roomName}</td>
-                                    <td>{e.sectionName}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <>
+                    {result.mode === 'partial' && (
+                        <div 
+                            className="sg-diff-head" 
+                            style={{ cursor: 'pointer', marginBottom: 12, marginTop: 12 }} 
+                            onClick={() => setIsTableOpen(!isTableOpen)}
+                        >
+                            <ListChecks size={13} />
+                            <span>Generated sessions</span>
+                            <ChevronDown size={13} style={{ marginLeft: 'auto', transition: 'transform 0.2s', transform: isTableOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                        </div>
+                    )}
+                    {isTableOpen && (
+                        <div className="table-container" style={{ maxHeight: 360, overflow: 'auto', marginTop: result.mode === 'partial' ? 0 : 12 }}>
+                            <table>
+                                <thead><tr><th>Day</th><th>Time</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Section</th></tr></thead>
+                                <tbody>
+                                    {result.entries.slice().sort((a, b) => {
+                                        const d = ALL_DAYS.indexOf(a.day) - ALL_DAYS.indexOf(b.day);
+                                        return d !== 0 ? d : a.start.localeCompare(b.start);
+                                    }).map(e => (
+                                        <tr key={`${e.teacherId}-${e.subjectId}-${e.roomId}-${e.sectionId}-${e.day}-${e.start}`}>
+                                            <td style={{ fontWeight: 600 }}>{e.day}</td>
+                                            <td><Clock size={12} style={{ verticalAlign: 'middle', color: 'var(--text-muted)', marginRight: 4 }} />{e.start} to {e.end}</td>
+                                            <td><strong>{e.subjectCode}</strong><br /><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.subjectName}</span></td>
+                                            <td>{e.teacherName}</td>
+                                            <td><MapPin size={12} style={{ verticalAlign: 'middle', color: 'var(--text-muted)', marginRight: 4 }} />{e.roomName}</td>
+                                            <td>{e.sectionName}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );
@@ -1991,7 +1871,8 @@ const OutcomeStage: React.FC<{
 }> = ({ result, teachers, rooms, sections }) => {
     const [viewMode, setViewMode] = useState<'section' | 'teacher' | 'room'>('section');
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    
+    const [isDetailView, setIsDetailView] = useState(false);
+
     // Local state for editable schedule entries (for drag-and-drop)
     const [localEntries, setLocalEntries] = useState<typeof result.entries>(result.entries);
 
@@ -2118,140 +1999,177 @@ const OutcomeStage: React.FC<{
 
     return (
         <div>
-            <StageHeader
-                icon={<Layers size={16} />}
-                title="Outcome"
-                desc="View the generated schedule from different perspectives."
-            />
+            {!isDetailView ? (
+                <>
+                    <StageHeader
+                        icon={<Layers size={16} />}
+                        title="Outcome"
+                        desc="View the generated schedule from different perspectives."
+                    />
 
-            <div style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                    <button
-                        className={`btn ${viewMode === 'section' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => { setViewMode('section'); setSelectedId(null); }}
-                    >
-                        <Users size={14} style={{ marginRight: 8 }} /> Sections
-                    </button>
-                    <button
-                        className={`btn ${viewMode === 'teacher' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => { setViewMode('teacher'); setSelectedId(null); }}
-                    >
-                        <Users size={14} style={{ marginRight: 8 }} /> Teachers
-                    </button>
-                    <button
-                        className={`btn ${viewMode === 'room' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => { setViewMode('room'); setSelectedId(null); }}
-                    >
-                        <MapPin size={14} style={{ marginRight: 8 }} /> Rooms
-                    </button>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginBottom: 20 }}>
-                    {viewMode === 'section' && sections.filter(s => (groupedBySection[s.id]?.length || 0) > 0).map(section => (
-                        <button
-                            key={section.id}
-                            className={`btn ${selectedId === section.id ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => setSelectedId(section.id)}
-                            style={{ justifyContent: 'flex-start' }}
-                        >
-                            <Users size={14} style={{ marginRight: 8 }} />
-                            {section.name}
-                            <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
-                                {groupedBySection[section.id]?.length || 0}
-                            </span>
-                        </button>
-                    ))}
-                    {viewMode === 'teacher' && teachers.filter(t => (groupedByTeacher[t.id]?.length || 0) > 0).map(teacher => (
-                        <button
-                            key={teacher.id}
-                            className={`btn ${selectedId === teacher.id ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => setSelectedId(teacher.id)}
-                            style={{ justifyContent: 'flex-start' }}
-                        >
-                            <Users size={14} style={{ marginRight: 8 }} />
-                            {formatTeacherName(teacher, teachers)}
-                            <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
-                                {groupedByTeacher[teacher.id]?.length || 0}
-                            </span>
-                        </button>
-                    ))}
-                    {viewMode === 'room' && rooms.filter(r => (groupedByRoom[r.id]?.length || 0) > 0).map(room => (
-                        <button
-                            key={room.id}
-                            className={`btn ${selectedId === room.id ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => setSelectedId(room.id)}
-                            style={{ justifyContent: 'flex-start' }}
-                        >
-                            <MapPin size={14} style={{ marginRight: 8 }} />
-                            {room.name}
-                            <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
-                                {groupedByRoom[room.id]?.length || 0}
-                            </span>
-                        </button>
-                    ))}
-                </div>
-
-                {selectedId && events.length > 0 ? (
-                    <div style={{ background: 'var(--surface-soft)', borderRadius: 8, padding: 16 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}>
-                            <div>
-                                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                                    {viewMode === 'section' ? sections.find(s => s.id === selectedId)?.name
-                                     : viewMode === 'teacher' ? formatTeacherName(teachers.find(t => t.id === selectedId)!, teachers)
-                                     : rooms.find(r => r.id === selectedId)?.name}
-                                </div>
-                                <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>
-                                    {events.length} {events.length === 1 ? 'session' : 'sessions'} this week
-                                </div>
-                            </div>
+                    <div style={{ marginBottom: 20 }}>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                            <button
+                                className={`btn ${viewMode === 'section' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => { setViewMode('section'); setSelectedId(null); }}
+                            >
+                                <Users size={14} style={{ marginRight: 8 }} /> Sections
+                            </button>
+                            <button
+                                className={`btn ${viewMode === 'teacher' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => { setViewMode('teacher'); setSelectedId(null); }}
+                            >
+                                <Users size={14} style={{ marginRight: 8 }} /> Teachers
+                            </button>
+                            <button
+                                className={`btn ${viewMode === 'room' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => { setViewMode('room'); setSelectedId(null); }}
+                            >
+                                <MapPin size={14} style={{ marginRight: 8 }} /> Rooms
+                            </button>
                         </div>
 
-                        <ScheduleDragDrop
-                            entries={localEntries.map(e => ({ ...e, key: `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}` }) as ScheduleEntry)}
-                            rooms={rooms}
-                            teachers={teachers}
-                            sections={sections}
-                            onUpdate={async (entry, newDay, newStartTime, newEndTime) => {
-                                // Update local entries for PlacedEntry
-                                const entryKey = entry.key;
-                                const updatedEntries = localEntries.map(e => {
-                                    const key = `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}`;
-                                    if (key === entryKey) {
-                                        const updated = { ...e };
-                                        if (newDay) updated.day = newDay;
-                                        if (newStartTime) updated.start = newStartTime;
-                                        if (newEndTime) updated.end = newEndTime;
-                                        return updated;
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginBottom: 20 }}>
+                            {viewMode === 'section' && sections.filter(s => (groupedBySection[s.id]?.length || 0) > 0).map(section => (
+                                <button
+                                    key={section.id}
+                                    className={`btn ${selectedId === section.id ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => { setSelectedId(section.id); setIsDetailView(true); }}
+                                    style={{ justifyContent: 'flex-start' }}
+                                >
+                                    <Users size={14} style={{ marginRight: 8 }} />
+                                    {section.name}
+                                    <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
+                                        {groupedBySection[section.id]?.length || 0}
+                                    </span>
+                                </button>
+                            ))}
+                            {viewMode === 'teacher' && teachers.filter(t => (groupedByTeacher[t.id]?.length || 0) > 0).map(teacher => (
+                                <button
+                                    key={teacher.id}
+                                    className={`btn ${selectedId === teacher.id ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => { setSelectedId(teacher.id); setIsDetailView(true); }}
+                                    style={{ justifyContent: 'flex-start' }}
+                                >
+                                    <Users size={14} style={{ marginRight: 8 }} />
+                                    {formatTeacherName(teacher, teachers)}
+                                    <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
+                                        {groupedByTeacher[teacher.id]?.length || 0}
+                                    </span>
+                                </button>
+                            ))}
+                            {viewMode === 'room' && rooms.filter(r => (groupedByRoom[r.id]?.length || 0) > 0).map(room => (
+                                <button
+                                    key={room.id}
+                                    className={`btn ${selectedId === room.id ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => { setSelectedId(room.id); setIsDetailView(true); }}
+                                    style={{ justifyContent: 'flex-start' }}
+                                >
+                                    <MapPin size={14} style={{ marginRight: 8 }} />
+                                    {room.name}
+                                    <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
+                                        {groupedByRoom[room.id]?.length || 0}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <>
+                    {selectedId && events.length > 0 ? (
+                        <div style={{ background: 'var(--surface-soft)', borderRadius: 8, padding: 13 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}>
+                                <div>
+                                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                                        {viewMode === 'section' ? sections.find(s => s.id === selectedId)?.name
+                                         : viewMode === 'teacher' ? formatTeacherName(teachers.find(t => t.id === selectedId)!, teachers)
+                                         : rooms.find(r => r.id === selectedId)?.name}
+                                    </div>
+                                    <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                                        {events.length} {events.length === 1 ? 'session' : 'sessions'} this week
+                                    </div>
+                                </div>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => setIsDetailView(false)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                                >
+                                    <ArrowLeft size={14} /> Back to {viewMode}s
+                                </button>
+                            </div>
+
+                            <ScheduleDragDrop
+                                entries={localEntries.map(e => ({ ...e, key: `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}` }) as ScheduleEntry)}
+                                rooms={rooms}
+                                teachers={teachers.map(t => ({
+                                    id: t.id,
+                                    full_name: t.full_name,
+                                    department: '',
+                                    is_active: true
+                                }))}
+                                sections={sections}
+                                onUpdate={async (updatedEntry) => {
+                                    console.log('[ScheduleGenerate] DRAG DROP UPDATE:', {
+                                        updatedEntry: {
+                                            key: updatedEntry.key,
+                                            subjectName: updatedEntry.subjectName,
+                                            day: updatedEntry.day,
+                                            start: updatedEntry.start,
+                                            end: updatedEntry.end,
+                                            roomId: updatedEntry.roomId,
+                                            roomName: updatedEntry.roomName,
+                                            teacherId: updatedEntry.teacherId,
+                                            teacherName: updatedEntry.teacherName,
+                                            sectionId: updatedEntry.sectionId,
+                                            sectionName: updatedEntry.sectionName
+                                        }
+                                    });
+                                    // Update local entries for PlacedEntry
+                                    const entryKey = updatedEntry.key;
+                                    const updatedEntries = localEntries.map(e => {
+                                        const key = `${e.subjectId}-${e.sectionId}-${e.day}-${e.start}`;
+                                        if (key === entryKey) {
+                                            const updated = { ...e };
+                                            // Update all fields from updatedEntry
+                                            updated.day = updatedEntry.day;
+                                            updated.start = updatedEntry.start;
+                                            updated.end = updatedEntry.end;
+                                            if (updatedEntry.roomId) updated.roomId = updatedEntry.roomId;
+                                            if (updatedEntry.roomName) updated.roomName = updatedEntry.roomName;
+                                            if (updatedEntry.teacherId) updated.teacherId = updatedEntry.teacherId;
+                                            if (updatedEntry.teacherName) updated.teacherName = updatedEntry.teacherName;
+                                            if (updatedEntry.sectionId) updated.sectionId = updatedEntry.sectionId;
+                                            if (updatedEntry.sectionName) updated.sectionName = updatedEntry.sectionName;
+                                            return updated;
+                                        }
+                                        return e;
+                                    });
+                                    console.log('[ScheduleGenerate] LOCAL ENTRIES UPDATED');
+                                    setLocalEntries(updatedEntries);
+                                }}
+                                dayOrder={dayOrder}
+                                START_HOUR={START_HOUR}
+                                TOTAL_SLOTS={TOTAL_SLOTS}
+                                formatTime={formatTime}
+                                colorForKey={colorForKey}
+                                viewMode={viewMode}
+                                events={events.map(ev => ({
+                                    ...ev,
+                                    entry: {
+                                        ...ev.entry,
+                                        key: `${ev.entry.subjectId}-${ev.entry.sectionId}-${ev.entry.day}-${ev.entry.start}`
                                     }
-                                    return e;
-                                });
-                                setLocalEntries(updatedEntries);
-                            }}
-                            dayOrder={dayOrder}
-                            START_HOUR={START_HOUR}
-                            TOTAL_SLOTS={TOTAL_SLOTS}
-                            formatTime={formatTime}
-                            colorForKey={colorForKey}
-                            viewMode={viewMode}
-                            events={events.map(ev => ({ 
-                                ...ev, 
-                                entry: { 
-                                    ...ev.entry, 
-                                    key: `${ev.entry.subjectId}-${ev.entry.sectionId}-${ev.entry.day}-${ev.entry.start}` 
-                                } 
-                            }))}
-                        />
-                    </div>
-                ) : selectedId ? (
-                    <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
-                        No entries found for this selection
-                    </div>
-                ) : (
-                    <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
-                        Select a {viewMode} to view their schedule
-                    </div>
-                )}
-            </div>
+                                }))}
+                            />
+                        </div>
+                    ) : selectedId ? (
+                        <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
+                            No entries found for this selection
+                        </div>
+                    ) : null}
+                </>
+            )}
         </div>
     );
 };
@@ -2313,110 +2231,6 @@ const SaveStage: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Versions panel (Phase 4)
-// ---------------------------------------------------------------------------
-
-const STATE_ACTION: Record<WorkflowState, { nextLabel: string; icon: React.ReactNode } | null> = {
-    draft:     { nextLabel: 'Submit for approval', icon: <Send size={13} /> },
-    submitted: { nextLabel: 'Approve',              icon: <CheckCircle size={13} /> },
-    approved:  { nextLabel: 'Publish',              icon: <Upload size={13} /> },
-    published: null,
-};
-
-const formatRelativeTime = (iso: string | null): string => {
-    if (!iso) return 'No entries yet';
-    const then = new Date(iso).getTime();
-    if (Number.isNaN(then)) return iso;
-    const diff = Date.now() - then;
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins} min ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours} h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days} d ago`;
-    return new Date(iso).toLocaleDateString();
-};
-
-const VersionsPanel: React.FC<{
-    summary: VersionSummary[];
-    busy: WorkflowState | null;
-    note: string | null;
-    error: string | null;
-    canApprove: boolean;
-    onSubmitDrafts: () => void;
-    onApproveSubmitted: () => void;
-    onPublishApproved: () => void;
-    onDismissNote: () => void;
-}> = ({ summary, busy, note, error, canApprove, onSubmitDrafts, onApproveSubmitted, onPublishApproved, onDismissNote }) => {
-    const actionFor = (state: WorkflowState) => {
-        if (state === 'draft')     return onSubmitDrafts;
-        if (state === 'submitted') return canApprove ? onApproveSubmitted : undefined;
-        if (state === 'approved')  return canApprove ? onPublishApproved  : undefined;
-        return undefined;
-    };
-    const lockedReason = (state: WorkflowState) =>
-        (state === 'submitted' || state === 'approved') && !canApprove
-            ? 'Only a Schedule Administrator can move this forward.'
-            : null;
-    return (
-        <div className="sg-versions">
-            <div className="sg-versions-head">
-                <FileClock size={14} />
-                <span>Workflow versions</span>
-                <span className="sg-versions-hint">Move a group forward when it is ready.</span>
-            </div>
-            <div className="sg-versions-grid">
-                {summary.map(v => {
-                    const action = STATE_ACTION[v.state];
-                    const onClick = actionFor(v.state);
-                    return (
-                        <div key={v.state} className={`sg-version-card sg-version-${v.state}`}>
-                            <div className="sg-version-label">
-                                {v.state === 'published' ? <Upload size={13} /> :
-                                 v.state === 'approved'  ? <CheckCircle size={13} /> :
-                                 v.state === 'submitted' ? <Inbox size={13} /> : <Save size={13} />}
-                                {v.label}
-                            </div>
-                            <div className="sg-version-count">{v.count}</div>
-                            <div className="sg-version-desc">{v.desc}</div>
-                            <div className="sg-version-meta">{formatRelativeTime(v.latest)}</div>
-                            {action && onClick ? (
-                                <button
-                                    className="btn btn-secondary sg-version-action"
-                                    onClick={onClick}
-                                    disabled={v.count === 0 || busy === v.state}
-                                >
-                                    {action.icon} {busy === v.state ? 'Working…' : action.nextLabel}
-                                </button>
-                            ) : lockedReason(v.state) && v.count > 0 ? (
-                                <div className="sg-version-locked">{lockedReason(v.state)}</div>
-                            ) : null}
-                        </div>
-                    );
-                })}
-            </div>
-            {note && (
-                <div className="sg-banner sg-banner-success" style={{ marginTop: 12, justifyContent: 'space-between' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <CheckCircle size={14} /> {note}
-                    </span>
-                    <button className="sg-icon-btn" onClick={onDismissNote} aria-label="Dismiss"><X size={12} /></button>
-                </div>
-            )}
-            {error && (
-                <div className="sg-banner sg-banner-error" style={{ marginTop: 12, justifyContent: 'space-between' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <XCircle size={14} /> {error}
-                    </span>
-                    <button className="sg-icon-btn" onClick={onDismissNote} aria-label="Dismiss"><X size={12} /></button>
-                </div>
-            )}
-        </div>
-    );
-};
-
-// ---------------------------------------------------------------------------
 // Shared bits
 // ---------------------------------------------------------------------------
 
@@ -2432,13 +2246,14 @@ const STATUS_META: Record<DiffEntry['status'], { label: string; icon: React.Reac
 };
 
 const DiffView: React.FC<{ diff: DiffEntry[] }> = ({ diff }) => {
+    const [isOpen, setIsOpen] = useState(false);
     const counts = diff.reduce((acc, d) => { acc[d.status] = (acc[d.status] || 0) + 1; return acc; }, {} as Record<string, number>);
     if (diff.length === 0) {
         return <div className="sg-diff-empty">No prior sessions to compare. Everything in this slice is new.</div>;
     }
     return (
         <div className="sg-diff">
-            <div className="sg-diff-head">
+            <div className="sg-diff-head" style={{ cursor: 'pointer' }} onClick={() => setIsOpen(!isOpen)}>
                 <GitBranch size={13} />
                 <span>Changes vs current schedule</span>
                 <div className="sg-diff-counts">
@@ -2448,10 +2263,13 @@ const DiffView: React.FC<{ diff: DiffEntry[] }> = ({ diff }) => {
                         </span>
                     ) : null)}
                 </div>
+                <ChevronDown size={13} style={{ marginLeft: 'auto', transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
             </div>
-            <ul className="sg-diff-list">
-                {diff.map(d => <DiffRow key={d.key} entry={d} />)}
-            </ul>
+            {isOpen && (
+                <ul className="sg-diff-list">
+                    {diff.map(d => <DiffRow key={d.key} entry={d} />)}
+                </ul>
+            )}
         </div>
     );
 };
@@ -2704,12 +2522,7 @@ const PrioritiesStage: React.FC<{
                     desc="Flag what matters most. The engine places high priority items first and protects their slots."
                     compact={compact}
                     titleIcon={
-                        <div className="sg-break-tooltip-wrapper">
-                            <HelpCircle size={14} style={{ color: 'var(--text-muted)', cursor: 'help', marginLeft: 4 }} />
-                            <div className="sg-break-tooltip">
-                                Overrides all other breaks on selected day. All classes and teachers have a break at this time.
-                            </div>
-                        </div>
+                        <FieldTooltip>Flag what matters most. The engine places high priority items first and protects their slots.</FieldTooltip>
                     }
                 />
             </div>

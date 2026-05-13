@@ -396,10 +396,12 @@ const ScheduleVersions: React.FC = () => {
                     </button>
                 </div>
             ) : (
-                <div style={{ 
+                <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                    gap: 16
+                    gap: 16,
+                    maxHeight: 'calc(100vh - 300px)',
+                    overflowY: 'auto'
                 }}>
                     {versions.map((version) => {
                         const versionLabel = version.label || 'v1a';
