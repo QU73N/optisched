@@ -1,6 +1,6 @@
 /* Help Page - Uses main Layout structure */
 .help-main-wrapper {
-    padding: 0;
+    padding: 24px 0 0 0;
 }
 
 .help-main {
@@ -15,7 +15,7 @@
 .optibot-siderail {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: 600px;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -93,7 +93,7 @@
 /* ========== HELP CONTENT STYLES ========== */
 .help-section {
     margin-bottom: 80px;
-    scroll-margin-top: 80px;
+    scroll-margin-top: 100px;
 }
 
 .help-section-header {

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ADMIN_ROLES, ROLE_DISPLAY_NAMES, hasAnyRole } from '../../types/database';
-import Sidebar from '../../components/Sidebar';
+import HelpSidebar from '../../components/HelpSidebar';
 import FloatingOptiBot from '../../components/FloatingOptiBot';
 import './HelpPage.css';
 
@@ -76,7 +76,7 @@ const HelpPage: React.FC = () => {
                 <button className="mobile-close-btn" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
                     <Menu size={18} />
                 </button>
-                <Sidebar />
+                <HelpSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
 
                 <div className="sidebar-footer">
                     <div className="sidebar-user">
