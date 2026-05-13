@@ -12,6 +12,8 @@ import { supabase } from '../../config/supabase';
 import { smartSend } from '../../utils/offlineQueue';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 
+const TAB_BAR_HEIGHT = Platform.OS === 'web' ? 70 : 80;
+
 interface Message {
     id: string;
     sender_id: string;
@@ -93,7 +95,7 @@ const TeacherAdminChat: React.FC = () => {
     const isMyMessage = (msg: Message) => msg.sender_id === profile?.id || msg.direction === 'teacher_to_admin';
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: TAB_BAR_HEIGHT }]}>
             {/* Header */}
             <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
                 <View style={styles.headerAvatar}>
@@ -171,7 +173,7 @@ const TeacherAdminChat: React.FC = () => {
             {/* Input */}
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={0}
+                keyboardVerticalOffset={TAB_BAR_HEIGHT + 10}
             >
                 <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
                     <TextInput

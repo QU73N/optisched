@@ -17,7 +17,7 @@ import { useRooms } from '../../hooks/useSupabase';
 import { useToast } from '../../components/CustomToast';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { StaggeredView } from '../../components/StaggeredView';
-import { StatCard, SectionHeader, ClassCard, DayProgressBar, AnnouncementItem, EventItem } from '../../components/DashCard';
+import { SectionHeader, ClassCard, DayProgressBar, AnnouncementItem, EventItem } from '../../components/DashCard';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 
@@ -330,13 +330,44 @@ const TeacherDashboard: React.FC = () => {
             </View>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                {/* Stats grid — matches web .stats-grid (4 cards) */}
-                <View style={styles.statsGrid}>
-                    <StatCard icon="school" iconColor="#60a5fa" iconBg="rgba(59,130,246,0.1)" value={loading ? '...' : todaySchedule.length} label="Classes Today" />
-                    <StatCard icon="check-circle" iconColor="#10b981" iconBg="rgba(16,185,129,0.1)" value={todaySchedule.filter(s => s.status === 'finished').length} label="Completed" />
-                    <StatCard icon="people" iconColor="#a78bfa" iconBg="rgba(167,139,250,0.1)" value={allSchedules.length} label="Total Entries" />
-                    <StatCard icon="campaign" iconColor="#f59e0b" iconBg="rgba(245,158,11,0.1)" value={announcements.length} label="Announcements" />
-                </View>
+                {/* Single Hero Summary Card — matches student layout */}
+                <StaggeredView delay={60}>
+                    <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={styles.summaryRow}>
+                            <View style={styles.summaryItem}>
+                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(59,130,246,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                                    <MaterialIcons name="school" size={18} color="#60a5fa" />
+                                </View>
+                                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{loading ? '-' : todaySchedule.length}</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Classes Today</Text>
+                            </View>
+                            <View style={styles.summaryDivider} />
+                            <View style={styles.summaryItem}>
+                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                                    <MaterialIcons name="check-circle" size={18} color="#10b981" />
+                                </View>
+                                <Text style={[styles.summaryValue, { color: '#10b981' }]}>{todaySchedule.filter(s => s.status === 'finished').length}</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Completed</Text>
+                            </View>
+                            <View style={styles.summaryDivider} />
+                            <View style={styles.summaryItem}>
+                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(167,139,250,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                                    <MaterialIcons name="people" size={18} color="#a78bfa" />
+                                </View>
+                                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{allSchedules.length}</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total Entries</Text>
+                            </View>
+                            <View style={styles.summaryDivider} />
+                            <View style={styles.summaryItem}>
+                                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                                    <MaterialIcons name="campaign" size={18} color="#f59e0b" />
+                                </View>
+                                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{announcements.length}</Text>
+                                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Announcements</Text>
+                            </View>
+                        </View>
+                    </View>
+                </StaggeredView>
 
                 {/* Day progress bar — matches web .dash-day-progress-card */}
                 {!isOffDay && <DayProgressBar finished={dayProgress.finished} ongoing={dayProgress.ongoing} upcoming={dayProgress.upcoming} />}
@@ -1216,12 +1247,35 @@ const styles = StyleSheet.create({
         letterSpacing: 0.2,
     },
 
-    /* Stats grid — matches web .stats-grid */
-    statsGrid: {
+    /* Summary card — matches student layout */
+    summaryCard: {
+        paddingVertical: 20,
+        borderRadius: 16,
+        borderWidth: 1,
+        marginBottom: 20,
+    },
+    summaryRow: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-        marginBottom: 24,
+        justifyContent: 'space-evenly',
+        alignItems: 'center',
+    },
+    summaryItem: {
+        alignItems: 'center',
+        flex: 1,
+    },
+    summaryValue: {
+        fontSize: 22,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    summaryLabel: {
+        fontSize: 11,
+        fontWeight: '500',
+    },
+    summaryDivider: {
+        width: 1,
+        height: 32,
+        backgroundColor: 'rgba(150,150,150,0.2)',
     },
 
     /* Schedule panel — matches web .dash-schedule-panel */

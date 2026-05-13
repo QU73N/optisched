@@ -2,7 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useRef } from 'react';
 import {
     View, Text, ScrollView, StyleSheet,
-    TextInput, KeyboardAvoidingView, Platform, ActivityIndicator
+    TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -12,6 +12,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme } from '../../contexts/ThemeContext';
 import { supabase } from '../../config/supabase';
+
+// Tab bar height constant to offset content above it
+const TAB_BAR_HEIGHT = Platform.OS === 'web' ? 70 : 80;
 
 const OptiBotChat: React.FC = () => {
     const { profile } = useAuth();
@@ -197,7 +200,7 @@ const OptiBotChat: React.FC = () => {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background, paddingBottom: TAB_BAR_HEIGHT }]}>
             {/* Header */}
             <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
                 <View style={styles.headerInfo}>
@@ -224,7 +227,7 @@ const OptiBotChat: React.FC = () => {
             <ScrollView
                 ref={scrollViewRef}
                 style={styles.messagesArea}
-                contentContainerStyle={styles.messagesContent}
+                contentContainerStyle={[styles.messagesContent, { paddingBottom: 8 }]}
                 showsVerticalScrollIndicator={false}
             >
                 {messages.map(msg => (
@@ -298,7 +301,7 @@ const OptiBotChat: React.FC = () => {
             {/* Input Area */}
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={88}
+                keyboardVerticalOffset={TAB_BAR_HEIGHT + 10}
             >
                 <View style={[styles.inputArea, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
                     <View style={styles.inputRow}>
@@ -365,7 +368,7 @@ const styles = StyleSheet.create({
     typingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     typingText: { color: '#818cf8', fontSize: 13, fontStyle: 'italic' },
 
-    quickActionsSection: { marginTop: 8 },
+    quickActionsSection: { marginTop: 8, paddingBottom: 4 },
     quickActionsLabel: {
         fontSize: 11, fontWeight: '600', color: Colors.slate500,
         letterSpacing: 1, marginBottom: 8

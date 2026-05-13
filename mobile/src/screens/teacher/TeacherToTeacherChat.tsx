@@ -13,6 +13,8 @@ import { supabase } from '../../config/supabase';
 import { smartSend } from '../../utils/offlineQueue';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 
+const TAB_BAR_HEIGHT = Platform.OS === 'web' ? 70 : 80;
+
 interface Teacher {
     id: string;
     profile_id: string;
@@ -39,13 +41,27 @@ const TeacherToTeacherChat: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const scrollRef = useRef<ScrollView>(null);
-    // Fetch all teachers except self
+
+    // Fetch all teachers except self — try without is_active filter first for broader results
     const fetchTeachers = async (currentProfileId: string) => {
         try {
-            const { data } = await supabase
+            // First try with is_active filter
+            let { data, error } = await supabase
                 .from('teachers')
                 .select('id, profile:profiles(id, full_name, avatar_url)')
                 .eq('is_active', true);
+
+            // If no results or error, try without is_active filter
+            if (error || !data || data.length <= 1) {
+                console.log('[TeacherChat] Retrying without is_active filter...');
+                const fallback = await supabase
+                    .from('teachers')
+                    .select('id, profile:profiles(id, full_name, avatar_url)');
+                if (fallback.data && fallback.data.length > 0) {
+                    data = fallback.data;
+                }
+            }
+
             if (data) {
                 const mapped = data
                     .map((t: any) => ({
@@ -54,7 +70,7 @@ const TeacherToTeacherChat: React.FC = () => {
                         full_name: t.profile?.full_name || 'Teacher',
                         avatar_url: t.profile?.avatar_url || null,
                     }))
-                    .filter((t: Teacher) => t.profile_id !== currentProfileId); // Filter out current user
+                    .filter((t: Teacher) => t.profile_id && t.profile_id !== currentProfileId);
                 console.log('[TeacherChat] Fetched', mapped.length, 'teachers (current user:', currentProfileId, ')');
                 setTeachers(mapped);
             }
@@ -158,63 +174,64 @@ const TeacherToTeacherChat: React.FC = () => {
     // Teacher list view
     if (!selectedTeacher) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Teacher Chat</Text>
-                    <Text style={styles.headerSub}>Chat with your colleagues</Text>
+            <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: TAB_BAR_HEIGHT }]}>
+                <View style={[styles.header, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Teacher Chat</Text>
+                    <Text style={[styles.headerSub, { color: colors.textMuted }]}>Chat with your colleagues</Text>
                 </View>
                 {loading ? (
-                    <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+                    <ActivityIndicator size="large" color={colors.accentPrimary} style={{ marginTop: 40 }} />
                 ) : teachers.length === 0 ? (
                     <View style={{ alignItems: 'center', marginTop: 60 }}>
-                        <MaterialIcons name="group" size={60} color={Colors.slate600} />
-                        <Text style={{ color: Colors.slate500, marginTop: 12, fontSize: 15 }}>No other teachers found</Text>
+                        <MaterialIcons name="group" size={60} color={colors.textMuted} />
+                        <Text style={{ color: colors.textSecondary, marginTop: 12, fontSize: 15 }}>No other teachers found</Text>
+                        <Text style={{ color: colors.textMuted, marginTop: 4, fontSize: 12 }}>Teachers will appear here once registered</Text>
                     </View>
                 ) : (
                     <FlatList
                         data={teachers}
                         keyExtractor={item => item.id}
-                        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}
                         renderItem={({ item }) => (
                             <AnimatedPressable
-                                style={styles.teacherItem}
+                                style={[styles.teacherItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
                                 onPress={() => setSelectedTeacher(item)}
                             >
                                 {item.avatar_url ? (
                                     <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
                                 ) : (
-                                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                    <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.accentPrimary }]}>
                                         <Text style={styles.avatarLetter}>{item.full_name.charAt(0).toUpperCase()}</Text>
                                     </View>
                                 )}
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={styles.teacherName}>{item.full_name}</Text>
-                                    <Text style={styles.teacherSub}>Tap to start chatting</Text>
+                                    <Text style={[styles.teacherName, { color: colors.textPrimary }]}>{item.full_name}</Text>
+                                    <Text style={[styles.teacherSub, { color: colors.textMuted }]}>Tap to start chatting</Text>
                                 </View>
-                                <MaterialIcons name="chevron-right" size={20} color={Colors.slate600} />
+                                <MaterialIcons name="chevron-right" size={20} color={colors.textMuted} />
                             </AnimatedPressable>
                         )}
                     />
                 )}
-            </SafeAreaView>
+            </View>
         );
     }
 
     // Chat view
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <View style={styles.chatHeader}>
+        <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: TAB_BAR_HEIGHT }]}>
+            <View style={[styles.chatHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
                 <AnimatedPressable onPress={() => setSelectedTeacher(null)} style={{ marginRight: 12 }}>
-                    <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
+                    <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
                 </AnimatedPressable>
                 {selectedTeacher.avatar_url ? (
                     <Image source={{ uri: selectedTeacher.avatar_url }} style={[styles.avatar, { width: 36, height: 36 }]} />
                 ) : (
-                    <View style={[styles.avatar, styles.avatarPlaceholder, { width: 36, height: 36 }]}>
+                    <View style={[styles.avatar, styles.avatarPlaceholder, { width: 36, height: 36, backgroundColor: colors.accentPrimary }]}>
                         <Text style={[styles.avatarLetter, { fontSize: 16 }]}>{selectedTeacher.full_name.charAt(0).toUpperCase()}</Text>
                     </View>
                 )}
-                <Text style={styles.chatHeaderName}>{selectedTeacher.full_name}</Text>
+                <Text style={[styles.chatHeaderName, { color: colors.textPrimary }]}>{selectedTeacher.full_name}</Text>
                 <AnimatedPressable onPress={handleResetConversation} style={{ marginLeft: 'auto', padding: 6 }}>
                     <MaterialIcons name="delete-sweep" size={22} color="#E05D5D" />
                 </AnimatedPressable>
@@ -223,8 +240,8 @@ const TeacherToTeacherChat: React.FC = () => {
             <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 8 }}>
                 {messages.length === 0 && (
                     <View style={{ alignItems: 'center', marginTop: 40 }}>
-                        <MaterialIcons name="chat-bubble-outline" size={48} color={Colors.slate700} />
-                        <Text style={{ color: Colors.slate500, marginTop: 8, fontSize: 13 }}>No messages yet. Say hello!</Text>
+                        <MaterialIcons name="chat-bubble-outline" size={48} color={colors.textMuted} />
+                        <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 13 }}>No messages yet. Say hello!</Text>
                     </View>
                 )}
                 {messages.map(msg => {
@@ -232,17 +249,17 @@ const TeacherToTeacherChat: React.FC = () => {
                     return (
                         <View key={msg.id} style={{ alignItems: isMe ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
                             {!isMe && (
-                                <Text style={{ fontSize: 10, color: Colors.slate500, marginBottom: 2 }}>{msg.sender_name}</Text>
+                                <Text style={{ fontSize: 10, color: colors.textMuted, marginBottom: 2 }}>{msg.sender_name}</Text>
                             )}
                             <AnimatedPressable
                                 onLongPress={() => isMe && handleUnsend(msg.id)}
                                 activeOpacity={0.7}
                             >
-                                <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+                                <View style={[styles.bubble, isMe ? [styles.bubbleMe, { backgroundColor: colors.accentPrimary }] : [styles.bubbleOther, { backgroundColor: colors.elevated }]]}>
                                     <Text style={{ color: Colors.white, fontSize: 14 }}>{msg.message}</Text>
                                 </View>
                             </AnimatedPressable>
-                            <Text style={{ fontSize: 9, color: Colors.slate600, marginTop: 2 }}>
+                            <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 2 }}>
                                 {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </Text>
                         </View>
@@ -252,19 +269,19 @@ const TeacherToTeacherChat: React.FC = () => {
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={0}
+                keyboardVerticalOffset={TAB_BAR_HEIGHT + 10}
             >
-                <View style={styles.inputRow}>
+                <View style={[styles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
                     <TextInput
-                        style={styles.chatInput}
+                        style={[styles.chatInput, { backgroundColor: colors.elevated, color: colors.textPrimary, borderColor: colors.border }]}
                         value={input}
                         onChangeText={setInput}
                         placeholder={`Message ${selectedTeacher.full_name}...`}
-                        placeholderTextColor="#6b7280"
+                        placeholderTextColor={colors.textMuted}
                         multiline
                     />
                     <AnimatedPressable
-                        style={[styles.sendBtn, !input.trim() && { opacity: 0.4 }]}
+                        style={[styles.sendBtn, { backgroundColor: input.trim() ? colors.accentPrimary : colors.elevated }, !input.trim() && { opacity: 0.4 }]}
                         onPress={handleSend}
                         disabled={sending || !input.trim()}
                     >
@@ -276,42 +293,42 @@ const TeacherToTeacherChat: React.FC = () => {
                     </AnimatedPressable>
                 </View>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.backgroundDark },
-    header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#263241' },
-    headerTitle: { fontSize: 24, fontWeight: '700', color: Colors.white },
-    headerSub: { fontSize: 13, color: Colors.slate500, marginTop: 2 },
+    container: { flex: 1 },
+    header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1 },
+    headerTitle: { fontSize: 24, fontWeight: '700' },
+    headerSub: { fontSize: 13, marginTop: 2 },
     teacherItem: {
-        flexDirection: 'row', alignItems: 'center', backgroundColor: '#263241',
-        borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#1E2935'
+        flexDirection: 'row', alignItems: 'center',
+        borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1
     },
     avatar: { width: 48, height: 48, borderRadius: 24 },
-    avatarPlaceholder: { backgroundColor: '#6366f1', justifyContent: 'center', alignItems: 'center' },
+    avatarPlaceholder: { justifyContent: 'center', alignItems: 'center' },
     avatarLetter: { color: Colors.white, fontSize: 18, fontWeight: '700' },
-    teacherName: { fontSize: 15, fontWeight: '600', color: Colors.white },
-    teacherSub: { fontSize: 12, color: Colors.slate500, marginTop: 2 },
+    teacherName: { fontSize: 15, fontWeight: '600' },
+    teacherSub: { fontSize: 12, marginTop: 2 },
     chatHeader: {
         flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12,
-        borderBottomWidth: 1, borderBottomColor: '#263241', backgroundColor: '#0B0F14'
+        borderBottomWidth: 1
     },
-    chatHeaderName: { fontSize: 17, fontWeight: '600', color: Colors.white, marginLeft: 10 },
+    chatHeaderName: { fontSize: 17, fontWeight: '600', marginLeft: 10 },
     bubble: { maxWidth: '80%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16 },
-    bubbleMe: { backgroundColor: '#6366f1', borderBottomRightRadius: 4 },
-    bubbleOther: { backgroundColor: '#1E2935', borderBottomLeftRadius: 4 },
+    bubbleMe: { borderBottomRightRadius: 4 },
+    bubbleOther: { borderBottomLeftRadius: 4 },
     inputRow: {
         flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, paddingVertical: 8,
-        borderTopWidth: 1, borderTopColor: '#263241', backgroundColor: '#0B0F14'
+        borderTopWidth: 1
     },
     chatInput: {
-        flex: 1, backgroundColor: '#263241', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10,
-        color: Colors.white, fontSize: 14, maxHeight: 100, borderWidth: 1, borderColor: '#1E2935'
+        flex: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10,
+        fontSize: 14, maxHeight: 100, borderWidth: 1
     },
     sendBtn: {
-        width: 40, height: 40, borderRadius: 20, backgroundColor: '#6366f1',
+        width: 40, height: 40, borderRadius: 20,
         justifyContent: 'center', alignItems: 'center', marginLeft: 8
     },
 });

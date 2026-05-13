@@ -18,6 +18,15 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const daysFull = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+const CARD_COLORS = [
+    { border: '#4988C4', bg: 'rgba(59,130,246,0.08)', text: '#60a5fa' },
+    { border: '#3FAF73', bg: 'rgba(16,185,129,0.08)', text: '#34d399' },
+    { border: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', text: '#a78bfa' },
+    { border: '#E6A23C', bg: 'rgba(245,158,11,0.08)', text: '#fbbf24' },
+    { border: '#ec4899', bg: 'rgba(236,72,153,0.08)', text: '#f472b6' },
+    { border: '#06b6d4', bg: 'rgba(6,182,212,0.08)', text: '#22d3ee' },
+];
+
 interface ScheduleItem {
     id: string;
     day_of_week: string;
@@ -246,7 +255,7 @@ const TeacherSchedule: React.FC = () => {
             </View>
 
             {/* Content */}
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
                 {loading ? (
                     <View style={{ paddingTop: 80, alignItems: 'center' }}>
                         <ActivityIndicator size="large" color={colors.accentPrimary} />
@@ -262,39 +271,61 @@ const TeacherSchedule: React.FC = () => {
                     </View>
                 ) : (
                     <View style={{ padding: 16 }} ref={scheduleRef} collapsable={false}>
-                        {scheduleItems.map((item) => (
-                            <AnimatedPressable
-                                key={item.id}
-                                onPress={() => setSelectedItem(item)}
-                                style={[
-                                    styles.scheduleCard,
-                                    { 
-                                        backgroundColor: colors.surface,
-                                        borderColor: colors.border,
-                                    }
-                                ]}
-                            >
-                                <View style={{ flex: 1 }}>
-                                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.subject}</Text>
-                                    <Text style={[styles.cardCode, { color: colors.textSecondary }]}>{item.code} • {item.section}</Text>
-                                    <View style={{ marginTop: 12, gap: 8 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                            <MaterialIcons name="schedule" size={14} color={colors.textMuted} />
-                                            <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{formatTime(item.startTime)} - {formatTime(item.endTime)}</Text>
-                                            <MaterialIcons name="meeting-room" size={14} color={colors.textMuted} />
-                                            <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{item.room}</Text>
+                        {scheduleItems.map((item, idx) => {
+                            const cardColor = CARD_COLORS[idx % CARD_COLORS.length];
+                            const startMin = timeToMinutes(item.startTime);
+                            const endMin = timeToMinutes(item.endTime);
+                            const isOngoing = isToday && currentMinutes >= startMin && currentMinutes < endMin;
+                            const isDone = isToday && currentMinutes >= endMin;
+                            return (
+                                <AnimatedPressable
+                                    key={item.id}
+                                    onPress={() => setSelectedItem(item)}
+                                    style={[
+                                        styles.scheduleCard,
+                                        {
+                                            backgroundColor: isOngoing ? cardColor.bg : colors.surface,
+                                            borderColor: isOngoing ? cardColor.border : colors.border,
+                                            borderLeftColor: cardColor.border,
+                                            borderLeftWidth: 4,
+                                            opacity: isDone ? 0.6 : 1,
+                                        }
+                                    ]}
+                                >
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                            <Text style={[styles.cardTitle, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>{item.subject}</Text>
+                                            {isOngoing && (
+                                                <View style={{ backgroundColor: cardColor.border + '25', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginLeft: 8 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: cardColor.border }}>NOW</Text>
+                                                </View>
+                                            )}
+                                            {isDone && (
+                                                <View style={{ backgroundColor: 'rgba(148,163,184,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginLeft: 8 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted }}>DONE</Text>
+                                                </View>
+                                            )}
                                         </View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                            <MaterialIcons name="group" size={14} color={colors.textMuted} />
-                                            <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{item.section}</Text>
+                                        <Text style={[styles.cardCode, { color: cardColor.text }]}>{item.code} • {item.section}</Text>
+                                        <View style={{ marginTop: 10, gap: 6 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <MaterialIcons name="schedule" size={13} color={colors.textMuted} />
+                                                <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{formatTime(item.startTime)} – {formatTime(item.endTime)}</Text>
+                                                <MaterialIcons name="meeting-room" size={13} color={colors.textMuted} />
+                                                <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{item.room}</Text>
+                                            </View>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <MaterialIcons name="group" size={13} color={colors.textMuted} />
+                                                <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{item.section}</Text>
+                                            </View>
                                         </View>
                                     </View>
-                                </View>
-                                <View style={[styles.indexBadge, { backgroundColor: colors.isDark ? 'rgba(73,136,196,0.2)' : 'rgba(28,77,141,0.12)' }]}>
-                                    <Text style={[styles.indexText, { color: colors.accentPrimary }]}>{item.index}</Text>
-                                </View>
-                            </AnimatedPressable>
-                        ))}
+                                    <View style={[styles.indexBadge, { backgroundColor: cardColor.border + '20' }]}>
+                                        <Text style={[styles.indexText, { color: cardColor.border }]}>{item.index}</Text>
+                                    </View>
+                                </AnimatedPressable>
+                            );
+                        })}
                     </View>
                 )}
             </ScrollView>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -13,19 +13,19 @@ const TeacherChatHub: React.FC = () => {
     return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
             {/* Tab Switcher */}
-            <SafeAreaView edges={['top']} style={{ backgroundColor: '#0B0F14' }}>
-                <View style={styles.tabRow}>
+            <SafeAreaView edges={['top']} style={{ backgroundColor: colors.surface }}>
+                <View style={[styles.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
                     <Pressable
-                        style={[styles.tabBtn, tab === 'admin' && styles.tabActive]}
+                        style={[styles.tabBtn, { backgroundColor: colors.elevated }, tab === 'admin' && [styles.tabActive, { backgroundColor: colors.accentPrimary }]]}
                         onPress={() => setTab('admin')}
                     >
-                        <Text style={[styles.tabText, tab === 'admin' && styles.tabTextActive]}>Admin Chat</Text>
+                        <Text style={[styles.tabText, { color: colors.textMuted }, tab === 'admin' && styles.tabTextActive]}>Admin Chat</Text>
                     </Pressable>
                     <Pressable
-                        style={[styles.tabBtn, tab === 'teachers' && styles.tabActive]}
+                        style={[styles.tabBtn, { backgroundColor: colors.elevated }, tab === 'teachers' && [styles.tabActive, { backgroundColor: colors.accentPrimary }]]}
                         onPress={() => setTab('teachers')}
                     >
-                        <Text style={[styles.tabText, tab === 'teachers' && styles.tabTextActive]}>Teachers</Text>
+                        <Text style={[styles.tabText, { color: colors.textMuted }, tab === 'teachers' && styles.tabTextActive]}>Teachers</Text>
                     </Pressable>
                 </View>
             </SafeAreaView>
@@ -43,7 +43,6 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         gap: 8,
         borderBottomWidth: 1,
-        borderBottomColor: '#263241',
     },
     tabBtn: {
         flex: 1,
@@ -51,15 +50,13 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#263241',
     },
     tabActive: {
-        backgroundColor: '#6366f1',
+        // backgroundColor overridden inline with accentPrimary
     },
     tabText: {
         fontSize: 14,
         fontWeight: '600',
-        color: Colors.slate400,
     },
     tabTextActive: {
         color: Colors.white,
