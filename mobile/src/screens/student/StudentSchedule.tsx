@@ -90,23 +90,43 @@ const StudentSchedule: React.FC = () => {
         return monday.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     })();
 
-    // Direct DB query for student's section — bypasses AuthContext cache
-    const [mySection, setMySection] = useState<string | null>(null);
+    // Fetch student's section — try students table (UUID) first, fallback to profiles.section (text)
+    const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
+    const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
     useEffect(() => {
         (async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user?.id) return;
-            const { data } = await supabase
+
+            // Method 1: Query students table for section_id (same as web)
+            const { data: studentData } = await supabase
+                .from('students')
+                .select('section_id')
+                .eq('profile_id', session.user.id)
+                .eq('is_active', true)
+                .maybeSingle();
+
+            if (studentData?.section_id) {
+                console.log('[StudentSchedule] section_id from students table:', studentData.section_id);
+                setStudentSectionId(studentData.section_id);
+                return;
+            }
+
+            // Method 2: Fallback to profiles.section (text field)
+            console.log('[StudentSchedule] No student record found, falling back to profiles.section');
+            const { data: profileData } = await supabase
                 .from('profiles')
                 .select('section')
                 .eq('id', session.user.id)
                 .single();
-            console.log('[StudentSchedule] Fresh section from DB:', data?.section);
-            setMySection(data?.section || null);
+            if (profileData?.section) {
+                console.log('[StudentSchedule] Using profiles.section fallback:', profileData.section);
+                setStudentSectionName(profileData.section);
+            }
         })();
     }, []);
 
-    // Fetch schedules using section_id lookup (same pattern as web)
+    // Fetch schedules using section_id or section name
     const [schedules, setSchedules] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -114,10 +134,8 @@ const StudentSchedule: React.FC = () => {
         const fetchSchedules = async () => {
             try {
                 setLoading(true);
-                const sectionName = mySection || profile?.section;
-                if (!sectionName) { setLoading(false); return; }
 
-                // Use RPC function to bypass RLS (same as web)
+                // Always fetch via RPC — same as web (web shows all if no section)
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
                 if (rpcError) {
                     console.error('[StudentSchedule] RPC error:', rpcError);
@@ -125,11 +143,20 @@ const StudentSchedule: React.FC = () => {
                     return;
                 }
 
-                const normalizedSection = sectionName.toLowerCase();
+                // Section matching: prefer section_id > section_name > show all (same as web fallback)
+                const sectionName = studentSectionName || profile?.section;
+                const hasSectionFilter = !!(studentSectionId || sectionName);
+
+                const matchesSection = (s: any) => {
+                    if (!hasSectionFilter) return true; // No section = show all (matches web)
+                    if (studentSectionId) return s.section_id === studentSectionId;
+                    return (s.section_name || '').toLowerCase() === (sectionName || '').toLowerCase();
+                };
+
                 const filtered = (rpcData || [])
                     .filter((s: any) =>
                         s.status === 'published' &&
-                        (s.section_name || '').toLowerCase() === normalizedSection &&
+                        matchesSection(s) &&
                         s.day_of_week === daysFull[selectedDay]
                     )
                     .map((s: any) => ({
@@ -145,7 +172,7 @@ const StudentSchedule: React.FC = () => {
                     }))
                     .sort((a: any, b: any) => (a.start_time || '').localeCompare(b.start_time || ''));
 
-                console.log('[StudentSchedule] Fetched', filtered.length, 'schedules for', daysFull[selectedDay]);
+                console.log('[StudentSchedule] Fetched', filtered.length, 'schedules. Method:', studentSectionId ? 'section_id' : sectionName ? 'section_name' : 'all (no section)');
                 setSchedules(filtered);
             } catch (err) {
                 console.error('[StudentSchedule] Exception:', err);
@@ -164,7 +191,7 @@ const StudentSchedule: React.FC = () => {
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [mySection, profile?.section, selectedDay]);
+    }, [studentSectionId, studentSectionName, profile?.section, selectedDay]);
 
     const formatTime = (t: string | null) => {
         if (!t) return '';

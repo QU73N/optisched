@@ -115,20 +115,39 @@ const ScheduleView: React.FC = () => {
     });
     useRealtimeSchedules(refetch);
 
-    // Direct DB query for student's section — bypasses AuthContext cache
-    const [mySection, setMySection] = useState<string | null>(null);
+    // Fetch student's section — try students table (UUID) first, fallback to profiles.section (text)
+    const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
+    const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
     useEffect(() => {
         (async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user?.id) return;
-            const { data } = await supabase
+
+            // Method 1: Query students table for section_id (same as web)
+            const { data: studentData } = await supabase
+                .from('students')
+                .select('section_id')
+                .eq('profile_id', session.user.id)
+                .eq('is_active', true)
+                .maybeSingle();
+
+            if (studentData?.section_id) {
+                console.log('[ScheduleView] section_id from students table:', studentData.section_id);
+                setStudentSectionId(studentData.section_id);
+                return;
+            }
+
+            // Method 2: Fallback to profiles.section (text field)
+            console.log('[ScheduleView] No student record found, falling back to profiles.section');
+            const { data: profileData } = await supabase
                 .from('profiles')
                 .select('section')
                 .eq('id', session.user.id)
                 .single();
-            const sec = data?.section || null;
-            console.log('[ScheduleView] Fresh section from DB:', sec);
-            setMySection(sec);
+            if (profileData?.section) {
+                console.log('[ScheduleView] Using profiles.section fallback:', profileData.section);
+                setStudentSectionName(profileData.section);
+            }
         })();
     }, []);
 
@@ -143,32 +162,42 @@ const ScheduleView: React.FC = () => {
             });
         }
 
-        // Students: use directly-fetched section
-        const sectionToUse = mySection || profile?.section;
-        if (!sectionToUse) {
-            console.log('[ScheduleView] No section found (neither fresh DB nor cached) — showing nothing');
-            return [];
+        // Students: prefer section_id > section_name > show all (same as web fallback)
+        const sectionName = studentSectionName || profile?.section;
+        const hasSectionFilter = !!(studentSectionId || sectionName);
+
+        if (!hasSectionFilter) {
+            console.log('[ScheduleView] No section info — showing all published schedules');
+            return rawSchedules;
         }
 
-        const normalize = (str: string) => str.toLowerCase().trim().replace(/[-\s]+/g, '');
-        const normalizedMySection = normalize(sectionToUse);
+        // Normalize for flexible matching
+        const normalize = (str: string) => str.toLowerCase().replace(/[-\s_]+/g, '').trim();
+        const normalizedStudentSection = sectionName ? normalize(sectionName) : '';
+
+        // Try section_id first, but if no matches exist, fallback to name matching
+        const matchesByIdAndPublished = rawSchedules.filter(s =>
+            s.status === 'published' && s.section_id === studentSectionId
+        );
+        const useSectionId = studentSectionId && matchesByIdAndPublished.length > 0;
 
         const filtered = rawSchedules.filter(s => {
-            const scheduleSectionName = s.section?.name || '';
-            return normalize(scheduleSectionName) === normalizedMySection;
+            if (useSectionId) return s.section_id === studentSectionId;
+            const scheduleSection = normalize(s.section?.name || '');
+            return scheduleSection === normalizedStudentSection ||
+                   scheduleSection.includes(normalizedStudentSection) ||
+                   normalizedStudentSection.includes(scheduleSection);
         });
 
         console.log('[ScheduleView] Section filter:', {
-            sectionSource: mySection ? 'DB' : 'AuthContext',
-            section: sectionToUse,
-            normalized: normalizedMySection,
+            studentSection: sectionName,
+            useSectionId,
             total: rawSchedules.length,
             matched: filtered.length,
-            scheduleSections: rawSchedules.map(s => s.section?.name || `(null, id:${s.section_id})`),
         });
 
         return filtered;
-    }, [rawSchedules, userRole, profile?.full_name, profile?.section, mySection]);
+    }, [rawSchedules, userRole, profile?.full_name, profile?.section, studentSectionId, studentSectionName]);
 
     const formatTime = (t: string | null) => {
         if (!t) return '';

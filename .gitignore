@@ -45,6 +45,7 @@ mobile/.env
 web/.env
 web/.env.local
 web/.env.build
+web/.env.development
 
 # typescript
 *.tsbuildinfo

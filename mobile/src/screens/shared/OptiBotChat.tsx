@@ -7,7 +7,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { ChatMessage } from '../../types/database';
-import { sendToGemini, GeminiMessage } from '../../services/optibotService';
+import { sendToGemini, GeminiMessage, checkAIStatus } from '../../services/optibotService';
 import { useAuth } from '../../contexts/AuthContext';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -27,8 +27,21 @@ const OptiBotChat: React.FC = () => {
     ]);
     const [inputText, setInputText] = useState('');
     const [isTyping, setIsTyping] = useState(false);
+    const [aiStatus, setAiStatus] = useState<{ online: boolean; provider: string }>({ online: false, provider: 'checking...' });
     const scrollViewRef = useRef<ScrollView>(null);
     const conversationHistoryRef = useRef<GeminiMessage[]>([]);
+
+    // Check AI status on mount and every 60 seconds
+    React.useEffect(() => {
+        const check = async () => {
+            const status = await checkAIStatus();
+            console.log('[OptiBot] AI status:', status.online ? 'Online' : 'Offline', '| Provider:', status.provider);
+            setAiStatus(status);
+        };
+        check();
+        const interval = setInterval(check, 60000);
+        return () => clearInterval(interval);
+    }, []);
 
     const role = profile?.role || 'student';
     const CHAT_LIMIT = role === 'admin' ? Infinity : (role === 'teacher' ? 20 : 10);
@@ -183,12 +196,14 @@ const OptiBotChat: React.FC = () => {
                     if (error) console.error('[OptiBot] Error updating chat count:', error.message);
                 });
             }
-        } catch (error) {
+        } catch (error: any) {
+            console.error('[OptiBot] Chat error:', error?.message || error);
+            console.error('[OptiBot] Error stack:', error?.stack);
             const errorMessage: ChatMessage = {
                 id: (Date.now() + 1).toString(),
                 user_id: 'bot',
                 is_bot: true,
-                content: '❌ Sorry, I encountered an error. Please try again.',
+                content: `❌ Sorry, I encountered an error: ${error?.message || 'Unknown error'}. Please try again.`,
                 metadata: null,
                 created_at: new Date().toISOString()
             };
@@ -210,8 +225,10 @@ const OptiBotChat: React.FC = () => {
                     <View>
                         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>OptiBot</Text>
                         <View style={styles.onlineRow}>
-                            <View style={styles.onlineDot} />
-                            <Text style={[styles.onlineText, { color: colors.textMuted }]}>Powered by Gemini AI</Text>
+                            <View style={[styles.onlineDot, { backgroundColor: aiStatus.online ? '#22c55e' : '#ef4444' }]} />
+                            <Text style={[styles.onlineText, { color: aiStatus.online ? '#22c55e' : '#ef4444' }]}>
+                                {aiStatus.online ? 'Online' : 'Offline'}
+                            </Text>
                         </View>
                     </View>
                 </View>

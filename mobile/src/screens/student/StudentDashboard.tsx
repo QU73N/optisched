@@ -28,30 +28,48 @@ const StudentDashboard: React.FC = () => {
     // Force fresh profile on mount
     useEffect(() => { refreshProfile(); }, []);
 
-    // Direct DB query for student's section — bypasses AuthContext cache
-    const [mySection, setMySection] = useState<string | null>(null);
+    // Fetch student's section — try students table (UUID) first, fallback to profiles.section (text)
+    const [studentSectionId, setStudentSectionId] = useState<string | null>(null);
+    const [studentSectionName, setStudentSectionName] = useState<string | null>(null);
     useEffect(() => {
         (async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user?.id) return;
-            const { data, error } = await supabase
+
+            // Method 1: Query students table for section_id (same as web)
+            const { data: studentData, error: studentError } = await supabase
+                .from('students')
+                .select('section_id')
+                .eq('profile_id', session.user.id)
+                .eq('is_active', true)
+                .maybeSingle();
+
+            if (studentData?.section_id) {
+                console.log('[StudentDashboard] section_id from students table:', studentData.section_id);
+                setStudentSectionId(studentData.section_id);
+                return;
+            }
+
+            // Method 2: Fallback to profiles.section (text field)
+            if (studentError) {
+                console.log('[StudentDashboard] No student record found, falling back to profiles.section');
+            }
+            const { data: profileData } = await supabase
                 .from('profiles')
                 .select('section')
                 .eq('id', session.user.id)
                 .single();
-
-            if (error) {
-                // Network error offline — attempt to load from AuthContext cache
+            if (profileData?.section) {
+                console.log('[StudentDashboard] Using profiles.section fallback:', profileData.section);
+                setStudentSectionName(profileData.section);
+            } else {
+                // Last resort: use cached profile
                 const cachedProfile = await getCachedData<any>(`profile_${session.user.id}`);
                 if (cachedProfile.data?.section) {
-                    console.log('[StudentDashboard] Loaded offline section:', cachedProfile.data.section);
-                    setMySection(cachedProfile.data.section);
+                    console.log('[StudentDashboard] Using cached profile section:', cachedProfile.data.section);
+                    setStudentSectionName(cachedProfile.data.section);
                 }
-                return;
             }
-
-            console.log('[StudentDashboard] Fresh section from DB:', data?.section);
-            setMySection(data?.section || null);
         })();
     }, []);
 
@@ -62,7 +80,7 @@ const StudentDashboard: React.FC = () => {
     const tomorrowDayIndex = (dayIndex + 1) % 7;
     const tomorrowDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][tomorrowDayIndex];
 
-    // Fetch schedules using section_id lookup (same pattern as web)
+    // Fetch schedules using section_id or section name
     const [schedules, setSchedules] = useState<any[]>([]);
     const [tomorrowSchedules, setTomorrowSchedules] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -71,29 +89,102 @@ const StudentDashboard: React.FC = () => {
         const fetchSchedules = async () => {
             try {
                 setLoading(true);
-                const sectionName = mySection || profile?.section;
-                console.log('[StudentDashboard] Section name from profile:', sectionName);
-                if (!sectionName) { 
-                    console.log('[StudentDashboard] No section name found — skipping fetch');
-                    setLoading(false); 
-                    return; 
-                }
 
-                // Use RPC function to bypass RLS (same as web dashboard)
+                // Try RPC first, fallback to direct query
+                let sourceData: any[] = [];
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
-                if (rpcError) {
-                    console.error('[StudentDashboard] RPC error:', rpcError);
-                    setLoading(false);
-                    return;
+                
+                if (!rpcError && (rpcData || []).length > 0) {
+                    sourceData = rpcData;
+                    console.log('[StudentDashboard] RPC returned', sourceData.length, 'schedules');
+                } else {
+                    // RPC failed or returned nothing — fallback to direct query
+                    if (rpcError) console.warn('[StudentDashboard] RPC error:', rpcError.message);
+                    else console.warn('[StudentDashboard] RPC returned 0 results');
+
+                    const { data: directResult, error: directError } = await supabase
+                        .from('schedules')
+                        .select(`
+                            id, teacher_id, subject_id, room_id, section_id,
+                            day_of_week, start_time, end_time, status, is_active,
+                            semester, academic_year,
+                            subject:subjects(name, code),
+                            teacher:teachers(id, profile:profiles!teachers_profile_id_fkey(full_name)),
+                            room:rooms(id, name, building),
+                            section:sections(id, name, program)
+                        `)
+                        .eq('status', 'published');
+                    
+                    if (directError) {
+                        console.error('[StudentDashboard] Direct query failed:', directError.message);
+                        setLoading(false);
+                        return;
+                    }
+
+                    // Normalize direct query results to match RPC format
+                    sourceData = (directResult || []).map((s: any) => ({
+                        ...s,
+                        subject_name: s.subject?.name,
+                        subject_code: s.subject?.code,
+                        teacher_name: s.teacher?.profile?.full_name,
+                        room_name: s.room?.name,
+                        room_building: s.room?.building,
+                        section_name: s.section?.name,
+                        section_program: s.section?.program,
+                    }));
+                    console.log('[StudentDashboard] Direct query returned', sourceData.length, 'schedules');
                 }
 
-                // Filter client-side: section + day + published
-                const normalizedSection = sectionName.toLowerCase();
-                
-                const processSchedules = (dayName: string) => (rpcData || [])
-                    .filter((s: any) => 
+                // Section matching: prefer section_id > section_name > show all (same as web fallback)
+                const sectionName = studentSectionName || profile?.section;
+                const hasSectionFilter = !!(studentSectionId || sectionName);
+
+                // Debug: show what section names exist in the data
+                const uniqueSections = [...new Set(sourceData.map((s: any) => s.section_name))];
+                console.log('[StudentDashboard] Student section:', sectionName, '| section_id:', studentSectionId);
+                console.log('[StudentDashboard] Available sections:', uniqueSections.slice(0, 10));
+
+                // Debug: check MAWD-12a schedules specifically
+                const mySectionSchedules = sourceData.filter((s: any) => s.section_name === sectionName);
+                console.log('[StudentDashboard] Schedules with section_name "' + sectionName + '":', mySectionSchedules.length);
+                if (mySectionSchedules.length > 0) {
+                    const sampleSchedule = mySectionSchedules[0];
+                    console.log('[StudentDashboard] Sample schedule section_id:', sampleSchedule.section_id, '| Student section_id:', studentSectionId, '| Match:', sampleSchedule.section_id === studentSectionId);
+                    console.log('[StudentDashboard] Sample status:', sampleSchedule.status, '| day:', sampleSchedule.day_of_week);
+                    // Show all statuses for this section's schedules
+                    const sectionStatuses = mySectionSchedules.reduce((acc: any, s: any) => {
+                        acc[s.status] = (acc[s.status] || 0) + 1;
+                        return acc;
+                    }, {});
+                    console.log('[StudentDashboard] Section schedule statuses:', sectionStatuses);
+                }
+
+                // Normalize for flexible matching
+                const normalize = (str: string) => str.toLowerCase().replace(/[-\s_]+/g, '').trim();
+                const normalizedStudentSection = sectionName ? normalize(sectionName) : '';
+
+                // Use section_id match first, but if it yields 0 published results, fallback to name match
+                const matchesByIdAndPublished = sourceData.filter((s: any) =>
+                    s.status === 'published' && s.section_id === studentSectionId
+                );
+                const useSectionId = studentSectionId && matchesByIdAndPublished.length > 0;
+
+                console.log('[StudentDashboard] section_id match count (published):', matchesByIdAndPublished.length, '| Using:', useSectionId ? 'section_id' : 'section_name');
+
+                const matchesSection = (s: any) => {
+                    if (!hasSectionFilter) return true; // No section info = show all
+                    if (useSectionId) return s.section_id === studentSectionId;
+                    // Fallback: flexible section name matching
+                    const scheduleSection = normalize(s.section_name || '');
+                    return scheduleSection === normalizedStudentSection ||
+                           scheduleSection.includes(normalizedStudentSection) ||
+                           normalizedStudentSection.includes(scheduleSection);
+                };
+
+                const processSchedules = (dayName: string) => sourceData
+                    .filter((s: any) =>
                         s.status === 'published' &&
-                        (s.section_name || '').toLowerCase() === normalizedSection &&
+                        matchesSection(s) &&
                         s.day_of_week === dayName
                     )
                     .map((s: any) => ({
@@ -112,7 +203,7 @@ const StudentDashboard: React.FC = () => {
                 const filteredToday = processSchedules(scheduleDayName);
                 const filteredTomorrow = processSchedules(tomorrowDayName);
 
-                console.log('[StudentDashboard] Fetched', filteredToday.length, 'schedules for section', sectionName, 'on', scheduleDayName);
+                console.log('[StudentDashboard] Looking for day:', scheduleDayName, '| Fetched', filteredToday.length, 'today,', filteredTomorrow.length, 'tomorrow.');
                 setSchedules(filteredToday);
                 setTomorrowSchedules(filteredTomorrow);
             } catch (err) {
@@ -133,29 +224,29 @@ const StudentDashboard: React.FC = () => {
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [mySection, profile?.section, scheduleDayName, tomorrowDayName]);
+    }, [studentSectionId, studentSectionName, profile?.section, scheduleDayName, tomorrowDayName]);
 
     const { announcements: allAnnouncements } = useAnnouncements();
 
     // Filter announcements for this student's section
     const announcements = useMemo(() => {
         if (!allAnnouncements) return [];
-        const mySection = profile?.section?.toLowerCase().trim();
+        const mySectionName = profile?.section?.toLowerCase().trim();
         return allAnnouncements.filter((a: any) => {
             // 1. Check target_section field (new reliable method)
             if (a.target_section) {
                 const target = a.target_section.toLowerCase().trim();
                 if (target === 'all sections') return true;
-                if (!mySection) return true; // No section assigned to student, show all
-                return target === mySection;
+                if (!mySectionName) return true; // No section assigned to student, show all
+                return target === mySectionName;
             }
             // 2. Fallback: parse title prefix for older announcements
             const title = a.title || '';
             if (title.startsWith('[All Sections]')) return true;
             if (!title.startsWith('[')) return true; // No section prefix = visible to all
             const sectionMatch = title.match(/^\[([^\]]+)\]/);
-            if (sectionMatch && mySection) {
-                return sectionMatch[1].toLowerCase().trim() === mySection;
+            if (sectionMatch && mySectionName) {
+                return sectionMatch[1].toLowerCase().trim() === mySectionName;
             }
             return true;
         });

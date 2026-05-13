@@ -161,8 +161,8 @@ async function getScheduleContext(): Promise<string> {
     console.log('[OptiBot] getScheduleContext using:', supabaseAdmin ? 'supabaseAdmin (service_role)' : 'supabase (anon)');
     try {
         const [schedulesRes, teachersRes, roomsRes, conflictsRes, eventsRes, usersRes, subjectsRes, sectionsRes, announcementsRes] = await Promise.all([
-            db.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile:profiles(full_name)), room:rooms(name, capacity), section:sections(name)').eq('status', 'published').limit(50),
-            db.from('teachers').select('*, profile:profiles(full_name)').eq('is_active', true),
+            db.from('schedules').select('*, subject:subjects(name, code), teacher:teachers(profile:profiles!teachers_profile_id_fkey(full_name)), room:rooms(name, capacity), section:sections(name)').eq('status', 'published').limit(50),
+            db.from('teachers').select('*, profile:profiles!teachers_profile_id_fkey(full_name)').eq('is_active', true),
             db.from('rooms').select('*'),
             db.from('conflicts').select('*').eq('is_resolved', false),
             db.from('custom_events').select('*').gte('event_date', new Date().toISOString().split('T')[0]).order('event_date', { ascending: true }).limit(20),
@@ -988,6 +988,74 @@ async function executeAction(action: string, params: Record<string, any>): Promi
         console.error('[OptiBot] executeAction error:', err);
         return { success: false, message: err.message || 'An unexpected error occurred.' };
     }
+}
+
+// === AI Status Check ===
+// Pings providers to determine if at least one AI is reachable
+export async function checkAIStatus(): Promise<{ online: boolean; provider: string }> {
+    // 1. Try Gemini with a minimal request
+    if (GEMINI_API_KEY) {
+        try {
+            const url = `${GEMINI_BASE_URL}/${GEMINI_MODELS[0]}:generateContent?key=${GEMINI_API_KEY}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+                    generationConfig: { maxOutputTokens: 1 },
+                }),
+            });
+            if (res.ok || res.status === 200) {
+                return { online: true, provider: 'Gemini' };
+            }
+            // 429 = rate limited but alive
+            if (res.status === 429) {
+                return { online: true, provider: 'Gemini (rate limited)' };
+            }
+        } catch { /* network error */ }
+    }
+
+    // 2. Try Groq
+    if (GROQ_API_KEY) {
+        try {
+            const res = await fetch(GROQ_BASE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
+                body: JSON.stringify({
+                    model: 'llama-3.3-70b-versatile',
+                    messages: [{ role: 'user', content: 'ping' }],
+                    max_tokens: 1,
+                }),
+            });
+            if (res.ok || res.status === 200 || res.status === 429) {
+                return { online: true, provider: 'Groq' };
+            }
+        } catch { /* network error */ }
+    }
+
+    // 3. Try OpenRouter
+    if (OPENROUTER_API_KEY) {
+        try {
+            const res = await fetch(OPENROUTER_BASE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://optisched.app',
+                },
+                body: JSON.stringify({
+                    model: 'meta-llama/llama-3.3-70b-instruct',
+                    messages: [{ role: 'user', content: 'ping' }],
+                    max_tokens: 1,
+                }),
+            });
+            if (res.ok || res.status === 200 || res.status === 429) {
+                return { online: true, provider: 'OpenRouter' };
+            }
+        } catch { /* network error */ }
+    }
+
+    return { online: false, provider: 'none' };
 }
 
 export type { GeminiMessage };

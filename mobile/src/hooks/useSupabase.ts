@@ -89,10 +89,57 @@ export function useSchedules(filters?: {
 
             // Use RPC function to bypass RLS (same as web)
             const { data: rpcResult, error: rpcError } = await supabase.rpc('get_schedules_with_details');
-            if (rpcError) throw rpcError;
+            
+            let sourceData: any[] = rpcResult || [];
+            let dataSource = 'rpc';
 
-            // Map RPC response to expected format
-            let mappedData = (rpcResult || []).map((s: any) => ({
+            if (rpcError || sourceData.length === 0) {
+                // RPC failed or returned nothing — fallback to direct query
+                if (rpcError) {
+                    console.warn('[useSchedules] RPC error, falling back to direct query:', rpcError.message);
+                } else {
+                    console.warn('[useSchedules] RPC returned 0 results, falling back to direct query');
+                }
+
+                // Direct query with joins as fallback
+                const { data: directResult, error: directError } = await supabase
+                    .from('schedules')
+                    .select(`
+                        id, teacher_id, subject_id, room_id, section_id,
+                        day_of_week, start_time, end_time, status, is_active,
+                        semester, academic_year,
+                        subject:subjects(name, code),
+                        teacher:teachers(id, profile:profiles!teachers_profile_id_fkey(full_name)),
+                        room:rooms(id, name, building),
+                        section:sections(id, name, program)
+                    `)
+                    .eq('status', 'published');
+                
+                if (directError) {
+                    console.error('[useSchedules] Direct query also failed:', directError.message);
+                    throw directError;
+                }
+
+                console.log('[useSchedules] Direct query returned', (directResult || []).length, 'schedules');
+                
+                // Map direct query format (nested objects already)
+                sourceData = (directResult || []).map((s: any) => ({
+                    ...s,
+                    subject_name: s.subject?.name,
+                    subject_code: s.subject?.code,
+                    teacher_name: s.teacher?.profile?.full_name,
+                    room_name: s.room?.name,
+                    room_building: s.room?.building,
+                    section_name: s.section?.name,
+                    section_program: s.section?.program,
+                }));
+                dataSource = 'direct';
+            }
+
+            console.log(`[useSchedules] Source: ${dataSource}, Total: ${sourceData.length}`);
+
+            // Map to expected format
+            let mappedData = sourceData.map((s: any) => ({
                 id: s.id,
                 teacher_id: s.teacher_id,
                 subject_id: s.subject_id,
@@ -102,12 +149,13 @@ export function useSchedules(filters?: {
                 start_time: s.start_time,
                 end_time: s.end_time,
                 status: s.status,
+                is_active: s.is_active,
                 semester: s.semester,
                 academic_year: s.academic_year,
-                subject: { name: s.subject_name, code: s.subject_code },
-                teacher: { id: s.teacher_id, profile: { full_name: s.teacher_name } },
-                room: { id: s.room_id, name: s.room_name, building: s.room_building },
-                section: { id: s.section_id, name: s.section_name, program: s.section_program },
+                subject: { name: s.subject_name || s.subject?.name, code: s.subject_code || s.subject?.code },
+                teacher: { id: s.teacher_id, profile: { full_name: s.teacher_name || s.teacher?.profile?.full_name } },
+                room: { id: s.room_id, name: s.room_name || s.room?.name, building: s.room_building || s.room?.building },
+                section: { id: s.section_id, name: s.section_name || s.section?.name, program: s.section_program || s.section?.program },
             }));
 
             // Apply filters client-side
@@ -126,6 +174,8 @@ export function useSchedules(filters?: {
 
             // Sort by start_time
             mappedData.sort((a: any, b: any) => (a.start_time || '').localeCompare(b.start_time || ''));
+
+            console.log(`[useSchedules] After filters: ${mappedData.length} (day=${filters?.dayOfWeek}, status=${filters?.status})`);
 
             setData(mappedData as Schedule[]);
             // Cache for offline use
