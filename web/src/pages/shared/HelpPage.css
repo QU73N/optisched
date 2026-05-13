@@ -1,10 +1,15 @@
 /* Help Page - Uses main Layout structure */
 .help-main-wrapper {
     padding: 24px 0 0 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .help-main {
     padding: 28px clamp(16px, 3vw, 40px);
+    overflow-y: auto;
+    flex: 1;
 }
 
 .help-content {
