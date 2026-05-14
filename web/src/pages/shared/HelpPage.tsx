@@ -79,27 +79,25 @@ const HelpPage: React.FC = () => {
 
                 <div className="sidebar-footer">
                     {profile ? (
-                        <>
-                            <div className="sidebar-user">
-                                <div className="sidebar-avatar">
-                                    {profile.full_name
-                                        ? profile.full_name.split(' ').map(n => n[0]).join('').substring(0, 2)
-                                        : '?'}
-                                </div>
-                                <div className="sidebar-user-info">
-                                    <span className="sidebar-user-name">{profile.full_name}</span>
-                                    <button
-                                        className={`${getRoleBadgeClass()} badge-sm`}
-                                        title={displayRole}
-                                    >
-                                        {displayRole}
-                                    </button>
-                                </div>
+                        <div className="sidebar-user">
+                            <div className="sidebar-avatar">
+                                {profile.full_name
+                                    ? profile.full_name.split(' ').map(n => n[0]).join('').substring(0, 2)
+                                    : '?'}
+                            </div>
+                            <div className="sidebar-user-info">
+                                <span className="sidebar-user-name">{profile.full_name}</span>
+                                <button
+                                    className={`${getRoleBadgeClass()} badge-sm`}
+                                    title={displayRole}
+                                >
+                                    {displayRole}
+                                </button>
                             </div>
                             <button className="sidebar-logout" onClick={handleSignOut} aria-label="Sign Out">
                                 <LogOut size={18} />
                             </button>
-                        </>
+                        </div>
                     ) : (
                         <div className="sidebar-user-placeholder">
                             <div className="sidebar-avatar-placeholder">
