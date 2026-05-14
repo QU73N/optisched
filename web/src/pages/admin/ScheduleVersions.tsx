@@ -137,14 +137,24 @@ const ScheduleVersions: React.FC = () => {
 
             if (filter !== 'all') {
                 if (filter === 'published') {
-                    // Active published versions only
-                    filteredVersions = filteredVersions.filter(v => v.is_active && ['publish', 'overwrite', 'restore'].includes(v.change_type));
+                    // Active published versions only (including restored versions)
+                    filteredVersions = filteredVersions.filter(v =>
+                        v.is_active && (
+                            ['publish', 'overwrite', 'restore'].includes(v.change_type) ||
+                            (v.change_type === 'status_change' && v.change_summary === 'Version restored from archive')
+                        )
+                    );
                 } else if (filter === 'previous') {
-                    // Inactive published versions
-                    filteredVersions = filteredVersions.filter(v => !v.is_active && ['publish', 'overwrite', 'restore'].includes(v.change_type));
+                    // Inactive published versions (including restored versions)
+                    filteredVersions = filteredVersions.filter(v =>
+                        !v.is_active && (
+                            ['publish', 'overwrite', 'restore'].includes(v.change_type) ||
+                            (v.change_type === 'status_change' && v.change_summary === 'Version restored from archive')
+                        )
+                    );
                 } else if (filter === 'submitted') {
-                    filteredVersions = filteredVersions.filter(v => 
-                        ['status_change'].includes(v.change_type) && 
+                    filteredVersions = filteredVersions.filter(v =>
+                        ['status_change'].includes(v.change_type) &&
                         !(v.change_summary === 'Version archived' || v.change_summary === 'Version restored from archive')
                     );
                 } else if (filter === 'draft') {
@@ -153,10 +163,10 @@ const ScheduleVersions: React.FC = () => {
                     filteredVersions = filteredVersions.filter(v => v.change_type === 'status_change' && v.change_summary === 'Version archived');
                 }
             } else {
-                // For 'all', show all meaningful version types except archived and restored
+                // For 'all', show all meaningful version types except archived
                 filteredVersions = filteredVersions.filter(v =>
                     ['publish', 'overwrite', 'restore', 'status_change', 'created'].includes(v.change_type) &&
-                    !(v.change_type === 'status_change' && (v.change_summary === 'Version archived' || v.change_summary === 'Version restored from archive'))
+                    !(v.change_type === 'status_change' && v.change_summary === 'Version archived')
                 );
             }
             
@@ -661,6 +671,7 @@ const ScheduleVersions: React.FC = () => {
                                         {isGloballyActive ? 'Schedule (Current)' :
                                          version.change_type === 'created' ? 'Schedule (Draft)' :
                                          version.change_type === 'status_change' && version.change_summary === 'Version archived' ? 'Schedule (Archived)' :
+                                         version.change_type === 'status_change' && version.change_summary === 'Version restored from archive' ? 'Schedule (Published)' :
                                          version.change_type === 'status_change' ? 'Schedule (Submitted)' :
                                          ['publish', 'overwrite', 'restore'].includes(version.change_type) ? 'Schedule (Previous)' :
                                          'Schedule (Saved)'}
