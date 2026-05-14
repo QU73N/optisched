@@ -56,8 +56,8 @@
     position: fixed;
     bottom: 88px;
     right: 24px;
-    width: 360px;
-    height: 500px;
+    width: 380px;
+    height: 540px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-xl);
@@ -402,4 +402,93 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* ============================================================
+   OptiBot UI v2 enhancements (brand-aligned)
+   ============================================================ */
+.optibot-panel-header {
+    background: linear-gradient(135deg, var(--accent-primary-subtle) 0%, transparent 100%);
+}
+.optibot-panel-header-info { flex: 1; min-width: 0; }
+.optibot-panel-header-info span {
+    display: inline-flex; align-items: center;
+    font-weight: 600; letter-spacing: 0.2px;
+}
+.optibot-panel-close {
+    width: 28px; height: 28px;
+    background: transparent; border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background 140ms var(--ease-out), color 140ms var(--ease-out);
+    flex-shrink: 0;
+}
+.optibot-panel-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+.optibot-status-dot {
+    display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; background: currentColor; margin-right: 5px;
+}
+.status-online .optibot-status-dot {
+    box-shadow: 0 0 0 3px var(--accent-success-subtle, rgba(47,143,91,0.18));
+    animation: optibotLivePulse 1.8s ease-in-out infinite;
+}
+@keyframes optibotLivePulse {
+    0%, 100% { box-shadow: 0 0 0 3px var(--accent-success-subtle, rgba(47,143,91,0.18)); }
+    50%      { box-shadow: 0 0 0 5px rgba(47,143,91,0.08); }
+}
+.optibot-panel-header-icon {
+    background: var(--accent-primary);
+    color: var(--text-on-accent);
+    box-shadow: var(--shadow-sm);
+}
+.optibot-panel-messages { scroll-behavior: smooth; }
+.optibot-panel-messages::-webkit-scrollbar { width: 4px; }
+.optibot-panel-messages::-webkit-scrollbar-track { background: transparent; }
+.optibot-panel-messages::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 2px; }
+.optibot-msg-row {
+    display: flex; align-items: flex-end; gap: 8px; max-width: 100%;
+    animation: optibotMsgFadeIn 220ms var(--ease-out);
+}
+.optibot-msg-row-bot { justify-content: flex-start; }
+.optibot-msg-row-user { justify-content: flex-end; }
+@keyframes optibotMsgFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.optibot-msg-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent-primary-subtle); color: var(--accent-primary);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-bottom: 2px;
+}
+.optibot-msg-bot {
+    align-self: auto;
+    border: 1px solid var(--border-default);
+    border-bottom-left-radius: 4px;
+}
+.optibot-msg-user {
+    align-self: auto;
+    border-bottom-right-radius: 4px;
+}
+.optibot-typing-bubble {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 12px 14px; min-width: 48px;
+}
+.optibot-typing-bubble .typing-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-muted);
+    animation: optibotTypingDot 1.2s ease-in-out infinite;
+}
+.optibot-typing-bubble .typing-dot:nth-child(1) { animation-delay: 0s; }
+.optibot-typing-bubble .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.optibot-typing-bubble .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes optibotTypingDot {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30%           { transform: translateY(-4px); opacity: 1; }
+}
+.optibot-panel-input {
+    background: var(--bg-secondary);
+    flex-shrink: 0;
 }

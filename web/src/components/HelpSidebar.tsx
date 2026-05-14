@@ -60,12 +60,12 @@ const HelpSidebar: React.FC<HelpSidebarProps> = ({ activeSection, onSectionChang
             .filter((l): l is typeof allLinks[0] => Boolean(l));
     }, [pinned, allLinks]);
 
-    const renderLink = (link: { id: string; label: string; icon: React.ComponentType<{ size?: number }> }, withPin = true) => {
+    const renderLinkInner = (link: { id: string; label: string; icon: React.ComponentType<{ size?: number }> }, withPin = true) => {
         const isPinned = pinned.includes(link.id);
         const isActive = activeSection === link.id;
         const Icon = link.icon;
         return (
-            <div key={link.id} className="sidebar-link-row">
+            <>
                 <button
                     className={`sidebar-link ${isActive ? 'sidebar-link-active' : ''}`}
                     onClick={() => onSectionChange(link.id)}
@@ -84,7 +84,7 @@ const HelpSidebar: React.FC<HelpSidebarProps> = ({ activeSection, onSectionChang
                         <Star size={12} />
                     </button>
                 )}
-            </div>
+            </>
         );
     };
 
@@ -97,7 +97,11 @@ const HelpSidebar: React.FC<HelpSidebarProps> = ({ activeSection, onSectionChang
                         <Star size={10} /> Pinned
                     </div>
                     <div className="sidebar-group-links">
-                        {pinnedLinks.map(l => renderLink(l, false))}
+                        {pinnedLinks.map(l => (
+                            <div key={l.id} className="sidebar-link-row">
+                                {renderLinkInner(l, false)}
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
@@ -129,7 +133,7 @@ const HelpSidebar: React.FC<HelpSidebarProps> = ({ activeSection, onSectionChang
                                             key={l.id}
                                             className={`sidebar-link-row ${!isVisible ? 'sidebar-link-hidden' : ''}`}
                                         >
-                                            {renderLink(l)}
+                                            {renderLinkInner(l)}
                                         </div>
                                     );
                                 })}

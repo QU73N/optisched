@@ -166,8 +166,8 @@ const ScheduleManagement: React.FC = () => {
                     .single();
 
                 if (version) {
-                    const formattedChangeType = version.change_type.charAt(0).toUpperCase() + version.change_type.slice(1);
-                    setVersionName(`Version ${version.version_number} (${formattedChangeType})`);
+                    // Set initial version name (will be updated after schedules are loaded)
+                    setVersionName(`Version ${version.version_number}`);
 
                     // Load sections, teachers, rooms, and subjects for filtering
                     // Use RPC for rooms and subjects to bypass RLS issues
@@ -285,6 +285,11 @@ const ScheduleManagement: React.FC = () => {
                     // Verify all schedules in the batch have the same status
                     const uniqueStatuses = new Set(schedulesFromVersion.map(s => s.status));
                     const consistentStatus = uniqueStatuses.size === 1 ? schedulesFromVersion[0]?.status : 'mixed';
+                    
+                    // Update version name with user-friendly status
+                    const formattedStatus = consistentStatus.charAt(0).toUpperCase() + consistentStatus.slice(1);
+                    setVersionName(`Version ${version.version_number} (${formattedStatus})`);
+                    
                     setVersionStatus({
                         change_type: version.change_type,
                         is_active: version.is_active,
@@ -896,27 +901,36 @@ const ScheduleManagement: React.FC = () => {
                 <div style={{ display: 'flex', gap: 8 }}>
                     {versionName ? (
                         <>
-                            {versionStatus?.change_type === 'publish' && versionStatus?.is_active && (
-                                <button onClick={handleUnpublishVersion} className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                    <Download size={16} /> Unpublish
-                                </button>
-                            )}
-                            {versionStatus?.change_type === 'publish' && !versionStatus?.is_active && (
-                                <button onClick={handlePublishPreviousVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                    <CheckCircle size={16} /> Publish
-                                </button>
-                            )}
+                            {/* Submitted schedules - show approve/publish for admins */}
                             {versionStatus?.schedules_status === 'submitted' && canApprove && (
                                 <button onClick={handleApprovePublishVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                     <CheckCircle size={16} /> Approve & Publish
                                 </button>
                             )}
+                            
+                            {/* Draft schedules - show submit button */}
                             {versionStatus?.schedules_status === 'draft' && (
                                 <button onClick={handleSubmitVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                     <Send size={16} /> Submit
                                 </button>
                             )}
-                            {versionStatus?.schedules_status === 'archived' ? (
+                            
+                            {/* Published schedules - show unpublish if active */}
+                            {versionStatus?.schedules_status === 'published' && versionStatus?.is_active && (
+                                <button onClick={handleUnpublishVersion} className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                    <Download size={16} /> Unpublish
+                                </button>
+                            )}
+                            
+                            {/* Published but inactive schedules - show publish button */}
+                            {versionStatus?.schedules_status === 'published' && !versionStatus?.is_active && (
+                                <button onClick={handlePublishPreviousVersion} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                    <CheckCircle size={16} /> Publish
+                                </button>
+                            )}
+                            
+                            {/* Archived schedules - show recover button */}
+                            {versionStatus?.schedules_status === 'archived' && (
                                 <button
                                     onClick={handleRecoverVersion}
                                     className="btn"
@@ -932,7 +946,10 @@ const ScheduleManagement: React.FC = () => {
                                 >
                                     <RefreshCw size={16} /> Recover
                                 </button>
-                            ) : (
+                            )}
+                            
+                            {/* Archive button - show if not archived and not published active */}
+                            {versionStatus?.schedules_status !== 'archived' && !(versionStatus?.schedules_status === 'published' && versionStatus?.is_active) && (
                                 <button
                                     onClick={handleArchiveVersion}
                                     className="btn"

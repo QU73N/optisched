@@ -97,6 +97,20 @@ const StudentUpcoming: React.FC = () => {
         }
     }, [studentSectionId, fetchSchedules]);
 
+    // Real-time subscription for schedule changes
+    useEffect(() => {
+        if (!studentSectionId) return;
+
+        const channel = supabase
+            .channel('student-upcoming-schedules-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => {
+                fetchSchedules();
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [studentSectionId, fetchSchedules]);
+
     const minutesNow = now.getHours() * 60 + now.getMinutes();
     const todayName = DAYS[now.getDay()];
 

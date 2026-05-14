@@ -1,2 +1,24 @@
-/* HelpSidebar uses the same CSS classes as the main Sidebar component */
-/* No additional styles needed - styles are in src/components/Layout.css */
+/* HelpSidebar uses the same CSS classes as the main Sidebar component (Layout.css).
+   These styles only reset <button> user-agent defaults so buttons render
+   identically to NavLink (<a>) elements used in the main sidebar. */
+
+/* Button reset to match NavLink rendering */
+.sidebar .sidebar-nav-v2 button.sidebar-link {
+    width: 100%;
+    margin: 0;
+    font-family: inherit;
+    line-height: inherit;
+    text-align: left;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Hide the black ::before accent indicator on active link */
+.sidebar .sidebar-nav-v2 .sidebar-link-active::before {
+    display: none !important;
+}
+

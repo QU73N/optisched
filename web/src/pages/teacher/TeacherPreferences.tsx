@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Save, Clock, Calendar, BookOpen, CheckCircle, Loader2, MapPin } from 'lucide-react';
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TIME_SLOTS = [
     '7:00', '7:30', '8:00', '8:30', '9:00', '9:30', '10:00', '10:30',
     '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
@@ -26,6 +26,7 @@ const TeacherPreferences: React.FC = () => {
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
     const [teacherId, setTeacherId] = useState<string | null>(null);
+    const [employmentType, setEmploymentType] = useState<'full-time' | 'part-time' | null>(null);
 
     const [allSubjects, setAllSubjects] = useState<{ id: string; name: string }[]>([]);
     const [allRooms, setAllRooms] = useState<{ id: string; name: string }[]>([]);
@@ -35,11 +36,14 @@ const TeacherPreferences: React.FC = () => {
             const [subRes, roomRes, teacherRes] = await Promise.all([
                 supabase.from('subjects').select('id, name'),
                 supabase.from('rooms').select('id, name'),
-                supabase.from('teachers').select('id').eq('profile_id', profile?.id || '').maybeSingle()
+                supabase.from('teachers').select('id, employment_type').eq('profile_id', profile?.id || '').maybeSingle()
             ]);
             if (subRes.data) setAllSubjects(subRes.data);
             if (roomRes.data) setAllRooms(roomRes.data);
-            if (teacherRes.data) setTeacherId(teacherRes.data.id);
+            if (teacherRes.data) {
+                setTeacherId(teacherRes.data.id);
+                setEmploymentType(teacherRes.data.employment_type as 'full-time' | 'part-time' | null);
+            }
         };
         fetchData();
     }, [profile]);
@@ -93,6 +97,59 @@ const TeacherPreferences: React.FC = () => {
         setPreferredRooms(prev => prev.includes(roomName) ? prev.filter(r => r !== roomName) : [...prev, roomName]);
     };
 
+    // Preset schedules for part-time teachers
+    const setWeekendOnly = () => {
+        setPreferredDays(['Saturday', 'Sunday']);
+        setPreferredTimeStart('08:00');
+        setPreferredTimeEnd('17:00');
+        // Update availability grid
+        const newAvailability: Record<string, boolean> = {};
+        ['Saturday', 'Sunday'].forEach(day => {
+            TIME_SLOTS.forEach(time => {
+                if (time >= '08:00' && time <= '17:00') {
+                    newAvailability[`${day}-${time}`] = true;
+                }
+            });
+        });
+        setAvailability(newAvailability);
+    };
+
+    const setSaturdayOnly = () => {
+        setPreferredDays(['Saturday']);
+        setPreferredTimeStart('08:00');
+        setPreferredTimeEnd('17:00');
+        // Update availability grid
+        const newAvailability: Record<string, boolean> = {};
+        TIME_SLOTS.forEach(time => {
+            if (time >= '08:00' && time <= '17:00') {
+                newAvailability[`Saturday-${time}`] = true;
+            }
+        });
+        setAvailability(newAvailability);
+    };
+
+    const setWeekdaysOnly = () => {
+        setPreferredDays(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
+        setPreferredTimeStart('08:00');
+        setPreferredTimeEnd('17:00');
+        // Update availability grid
+        const newAvailability: Record<string, boolean> = {};
+        const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        weekdays.forEach(day => {
+            TIME_SLOTS.forEach(time => {
+                if (time >= '08:00' && time <= '17:00') {
+                    newAvailability[`${day}-${time}`] = true;
+                }
+            });
+        });
+        setAvailability(newAvailability);
+    };
+
+    const setCustomSchedule = () => {
+        // Allow user to manually configure
+        // No preset applied
+    };
+
     const handleSave = async () => {
         if (!teacherId) return;
         setSaving(true);
@@ -128,6 +185,11 @@ const TeacherPreferences: React.FC = () => {
                 <div>
                     <h1>Teaching Preferences</h1>
                     <p>Set your schedule availability and preferences</p>
+                    {employmentType && (
+                        <span className={`employment-badge ${employmentType}`}>
+                            {employmentType === 'part-time' ? 'Part-Time' : 'Full-Time'} Teacher
+                        </span>
+                    )}
                 </div>
                 <button className={`save-btn ${saved ? 'saved' : ''}`} onClick={handleSave} disabled={saving}>
                     {saving ? <><Loader2 size={16} className="spin" /> Saving...</> : saved ? <><CheckCircle size={16} /> Saved!</> : <><Save size={16} /> Save Preferences</>}
@@ -135,7 +197,50 @@ const TeacherPreferences: React.FC = () => {
             </div>
 
             <div className="prefs-grid">
-                {/* Section 1: Preferred Days */}
+                {/* Section 1: Employment Type & Schedule Presets */}
+                <div className="pref-section glass-panel">
+                    <h3><Calendar size={18} color="#60a5fa" /> Schedule Type</h3>
+                    <p className="helper-text">Your employment type and quick schedule presets</p>
+                    {employmentType === 'part-time' && (
+                        <div className="preset-buttons">
+                            <button className="preset-btn" onClick={setSaturdayOnly}>
+                                <Calendar size={16} />
+                                <div>
+                                    <span>Saturday Only</span>
+                                    <small>Saturday 8AM-5PM</small>
+                                </div>
+                            </button>
+                            <button className="preset-btn" onClick={setWeekendOnly}>
+                                <Calendar size={16} />
+                                <div>
+                                    <span>Weekend Only</span>
+                                    <small>Sat-Sun 8AM-5PM</small>
+                                </div>
+                            </button>
+                            <button className="preset-btn" onClick={setWeekdaysOnly}>
+                                <Calendar size={16} />
+                                <div>
+                                    <span>Weekdays Only</span>
+                                    <small>Mon-Fri 8AM-5PM</small>
+                                </div>
+                            </button>
+                            <button className="preset-btn" onClick={setCustomSchedule}>
+                                <Clock size={16} />
+                                <div>
+                                    <span>Custom Schedule</span>
+                                    <small>Select specific days below</small>
+                                </div>
+                            </button>
+                        </div>
+                    )}
+                    {employmentType === 'full-time' && (
+                        <div className="preset-info">
+                            <p>As a full-time teacher, you're expected to be available Monday-Friday. You can customize your specific availability below.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Section 2: Preferred Days */}
                 <div className="pref-section glass-panel">
                     <h3><Calendar size={18} color="#60a5fa" /> Preferred Days</h3>
                     <p className="helper-text">Select the days you prefer to teach</p>
@@ -263,11 +368,24 @@ const TeacherPreferences: React.FC = () => {
                 .save-btn:disabled { opacity: 0.5; }
                 .save-btn.saved { background: #10b981; }
 
+                .employment-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; margin-top: 0.5rem; }
+                .employment-badge.full-time { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+                .employment-badge.part-time { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+
                 .prefs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
                 .pref-section { padding: 1.5rem; }
                 .pref-section h3 { display: flex; align-items: center; gap: 0.5rem; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
                 .pref-section.full-width { grid-column: 1 / -1; }
                 .helper-text { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 1rem; }
+
+                .preset-buttons { display: flex; flex-direction: column; gap: 0.5rem; }
+                .preset-btn { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-light); background: rgba(15, 23, 42, 0.5); color: var(--text-secondary); cursor: pointer; transition: all 0.2s; text-align: left; }
+                .preset-btn:hover { background: rgba(59, 130, 246, 0.1); border-color: var(--brand-primary); }
+                .preset-btn div { display: flex; flex-direction: column; }
+                .preset-btn span { font-size: 0.85rem; font-weight: 500; }
+                .preset-btn small { font-size: 0.7rem; color: var(--text-muted); }
+
+                .preset-info p { color: var(--text-muted); font-size: 0.85rem; line-height: 1.5; }
 
                 .days-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
                 .day-btn { padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid var(--border-light); background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.85rem; transition: all 0.2s; }

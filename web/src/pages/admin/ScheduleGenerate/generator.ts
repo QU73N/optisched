@@ -371,7 +371,8 @@ const checkForwardConstraints = (
                     if (!slotsConsecutive) continue;
 
                     // Check if teacher is available and free at this slot
-                    if (teacherAvailable(teacher, d, firstSlot.start) && 
+                    if (teacherPreferredDay(teacher, d) &&
+                        teacherAvailable(teacher, d, firstSlot.start) && 
                         isFree(tempBusy, 'teacher', tid, d, sMin, eMin)) {
                         teacherHasSlot = true;
                         break;
@@ -594,9 +595,45 @@ const isSpecialRoom = (room: Room) => {
            name.includes('workshop');
 };
 
+/** Normalize availability data to handle both old slots format and new map format */
+const normalizeAvailability = (availability: Record<string, unknown> | undefined): Record<string, boolean> => {
+    if (!availability || Object.keys(availability).length === 0) return {};
+    
+    // Check if it's the old slots format
+    if ('slots' in availability && Array.isArray(availability.slots)) {
+        const slots = availability.slots as Array<{ day: string; start_time: string; end_time: string }>;
+        const normalized: Record<string, boolean> = {};
+        const TIME_SLOTS = [
+            '7:00', '7:30', '8:00', '8:30', '9:00', '9:30', '10:00', '10:30',
+            '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+            '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'
+        ];
+        
+        const timeToMinutes = (time: string): number => {
+            const [hours, minutes] = time.split(':').map(Number);
+            return hours * 60 + minutes;
+        };
+        
+        slots.forEach(slot => {
+            TIME_SLOTS.forEach(time => {
+                const key = `${slot.day}-${time}`;
+                const timeMinutes = timeToMinutes(time);
+                const startMinutes = timeToMinutes(slot.start_time);
+                const endMinutes = timeToMinutes(slot.end_time);
+                normalized[key] = timeMinutes >= startMinutes && timeMinutes < endMinutes;
+            });
+        });
+        
+        return normalized;
+    }
+    
+    // Already in the correct map format
+    return availability as Record<string, boolean>;
+};
+
 /** Check if a teacher is available at the given day/time per their preferences. */
 const teacherAvailable = (teacher: Teacher, day: string, startHHMM: string): boolean => {
-    const av = teacher.availability;
+    const av = normalizeAvailability(teacher.availability);
     if (!av || Object.keys(av).length === 0) return true; // default available
     const key = `${day}-${startHHMM}`;
     const v = av[key];
@@ -604,6 +641,10 @@ const teacherAvailable = (teacher: Teacher, day: string, startHHMM: string): boo
 };
 
 /** Check if day falls within teacher's preferred_days; empty/missing = all days ok. */
+const teacherPreferredDay = (teacher: Teacher, day: string): boolean => {
+    if (!teacher.preferred_days || teacher.preferred_days.length === 0) return true; // no preference = all days ok
+    return teacher.preferred_days.includes(day);
+};
 /** Check if placing this session would exceed teacher's max_classes_per_day. */
 const wouldExceedMaxClassesPerDay = (
     teacherId: string,
@@ -1078,6 +1119,7 @@ const classifyConstraints = (
         special_subject_room_priority: true,
         break_enforcement: true, // Breaks are always configured in new structure (fixed or variable mode)
         schedule_lock_protection: true,
+        minimum_sessions_per_day: config.minimumSessionsPerDay,
     };
 
     // Soft constraints - these affect scoring but don't block placement
@@ -1146,6 +1188,7 @@ const constructDomains = (
     days: string[],
     slotsByDay: Map<string, { start: string; end: string }[]>,
     config: GenerationConfig, // IMPROVEMENT: Add config for break window checking
+    sectionBreaks?: Map<string, AssignedBreak[]>, // IMPROVEMENT: Add section breaks for variable break mode
 ): Map<string, SessionDomain> => {
     const domains = new Map<string, SessionDomain>();
 
@@ -1215,6 +1258,7 @@ const constructDomains = (
                 const hasAvailableTeacher = validTeachers.some(tid => {
                     const teacher = teachers.get(tid);
                     if (!teacher) return false;
+                    if (!teacherPreferredDay(teacher, day)) return false;
                     if (!teacherAvailable(teacher, day, slot.start)) return false;
                     return true;
                 });
@@ -1228,7 +1272,7 @@ const constructDomains = (
                     // Calculate percentage of teachers available at this time
                     const availableTeacherCount = validTeachers.filter(tid => {
                         const teacher = teachers.get(tid);
-                        return teacher && teacherAvailable(teacher, day, slot.start);
+                        return teacher && teacherPreferredDay(teacher, day) && teacherAvailable(teacher, day, slot.start);
                     }).length;
                     const teacherAvailabilityRatio = availableTeacherCount / Math.max(1, validTeachers.length);
                     lcvScore += teacherAvailabilityRatio * 40; // Higher weight for teacher availability
@@ -1239,14 +1283,21 @@ const constructDomains = (
                     const roomScarcity = 1 / Math.max(1, validRooms.length);
                     lcvScore += roomScarcity * 15;
 
-                    // IMPROVEMENT: Penalize slots that overlap with break windows
+                    // IMPROVEMENT: Penalize slots that overlap with the section's assigned break time
                     const slotStart = toMin(slot.start);
-                    // Check if this slot is within the variable break window (11:00 AM to 1:00 PM)
-                    if (config.breakMode === 'variable') {
-                        const breakWindowStart = toMin(config.variableBreak.startTime);
-                        const breakWindowEnd = toMin(config.variableBreak.endTime);
-                        if (slotStart >= breakWindowStart && slotStart < breakWindowEnd) {
-                            lcvScore -= 30; // Penalize slots during break window
+                    const slotEnd = toMin(slot.end);
+                    // For variable break mode, only penalize the specific assigned break slot for this section
+                    if (config.breakMode === 'variable' && sectionBreaks) {
+                        const sectionBreaksForSection = sectionBreaks.get(section.id) || [];
+                        for (const breakInfo of sectionBreaksForSection) {
+                            if (breakInfo.day === day) {
+                                const breakStart = toMin(breakInfo.start);
+                                const breakEnd = toMin(breakInfo.end);
+                                // Penalize if this slot overlaps with the section's assigned break
+                                if (slotStart < breakEnd && slotEnd > breakStart) {
+                                    lcvScore -= 100; // Strong penalty for assigned break slot
+                                }
+                            }
                         }
                     }
 
@@ -1607,6 +1658,7 @@ const applyRepairs = (
                 const teacher = teacherMap.get(tid);
                 if (!teacher) continue;
 
+                if (!teacherPreferredDay(teacher, d)) continue;
                 if (!teacherAvailable(teacher, d, slot.start)) continue;
                 if (!isFree(busy, 'teacher', tid, d, sMin, eMin)) continue;
                 if (!isFree(busy, 'section', task.section.id, d, sMin, eMin)) continue;
@@ -1708,6 +1760,7 @@ const applyRepairs = (
                     const teacher = teacherMap.get(tid);
                     if (!teacher) continue;
                     
+                    if (!teacherPreferredDay(teacher, d)) continue;
                     if (!teacherAvailable(teacher, d, slot.start)) continue;
                     if (!isFree(busy, 'teacher', tid, d, sMin, eMin)) continue;
                     if (!isFree(busy, 'section', task.section.id, d, sMin, eMin)) continue;
@@ -1873,6 +1926,9 @@ export const optimizeSchedule = (
             
             // Check teacher availability
             const teacher = teachersMap.get(entry.teacherId);
+            if (teacher && !teacherPreferredDay(teacher, entry.day)) {
+                return false;
+            }
             if (teacher && !teacherAvailable(teacher, entry.day, entry.start)) {
                 return false;
             }
@@ -3081,6 +3137,7 @@ export async function runGenerator(
             days,
             slotsByDay,
             config, // IMPROVEMENT: Pass config for break window checking
+            sectionBreaks, // IMPROVEMENT: Pass section breaks for variable break mode
         );
 
         // Phase 4: Improved Ranking - Re-rank tasks by scarcity (MRV heuristic)
@@ -3276,6 +3333,9 @@ export async function runGenerator(
                         }
                         if (!slotsConsecutive) continue;
 
+                        // Hard: respect teacher's preferred_days
+                        if (!teacherPreferredDay(currentTeacher, day)) continue;
+                        
                         // Hard: respect teacher's explicit per-slot availability map.
                         if (!teacherAvailable(currentTeacher, day, slot.start)) continue;
                         
@@ -3578,6 +3638,7 @@ export async function runGenerator(
             days,
             slotsByDay,
             config,
+            sectionBreaks, // IMPROVEMENT: Pass section breaks for variable break mode
         );
 
         // Apply repairs to try to place unplaced tasks
@@ -3660,9 +3721,42 @@ export async function runGenerator(
     if (recommendations.length > 0) {
         best = { ...best, recommendations };
     }
-    
+
+    // Check minimum sessions per day constraint
+    const minimumSessionsViolations: string[] = [];
+    if (config.minimumSessionsPerDay > 1) {
+        // Group entries by section and day
+        const sectionDayCounts: Record<string, Record<string, number>> = {};
+        for (const entry of best.entries) {
+            if (!sectionDayCounts[entry.sectionId]) {
+                sectionDayCounts[entry.sectionId] = {};
+            }
+            if (!sectionDayCounts[entry.sectionId][entry.day]) {
+                sectionDayCounts[entry.sectionId][entry.day] = 0;
+            }
+            sectionDayCounts[entry.sectionId][entry.day]++;
+        }
+
+        // Check each section-day combination
+        for (const sectionId in sectionDayCounts) {
+            for (const day in sectionDayCounts[sectionId]) {
+                const count = sectionDayCounts[sectionId][day];
+                if (count < config.minimumSessionsPerDay) {
+                    const sectionName = sectionMap.get(sectionId)?.name || sectionId;
+                    minimumSessionsViolations.push(
+                        `Section ${sectionName} has only ${count} session(s) on ${day}, but minimum is ${config.minimumSessionsPerDay}.`
+                    );
+                }
+            }
+        }
+    }
+
+    if (minimumSessionsViolations.length > 0) {
+        best = { ...best, errors: [...best.errors, ...minimumSessionsViolations] };
+    }
+
     // Add hard constraint compliance status to result (all placements satisfy hard constraints by construction)
-    best = { ...best, hardConstraintComplianceStatus: { noTeacherOverlap: true, noRoomOverlap: true, noSectionOverlap: true, roomCapacityCompliance: true, teacherQualificationEnforcement: true, teacherAvailabilityEnforcement: true } };
+    best = { ...best, hardConstraintComplianceStatus: { noTeacherOverlap: true, noRoomOverlap: true, noSectionOverlap: true, roomCapacityCompliance: true, teacherQualificationEnforcement: true, teacherAvailabilityEnforcement: true, minimumSessionsPerDay: minimumSessionsViolations.length === 0 } };
     // Violations and suggestions are available for future integration steps
     void violations; // Prepared for future use
     void suggestions; // Prepared for future use

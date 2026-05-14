@@ -114,13 +114,15 @@ const RoomHub: React.FC = () => {
                     const sectionsList = utilization?.sections ? Array.from(utilization.sections) : [];
                     const capacity = room.capacity || 0;
                     const roomType = (room.room_type || 'classroom').replace(/\b\w/g, (l: string) => l.toUpperCase());
-                    const maxHours = 40; // Assuming 8 hours/day * 5 days
-                    const utilizationPct = Math.min(100, ((utilization?.hours || 0) / maxHours) * 100);
-
+                    // Rooms have no max hours constraint - only limited by no double-booking
+                    // Color based on days utilized instead of hours
+                    const daysUtilized = utilization?.days?.size || 0;
                     let utilColor = '#10b981';
                     let utilLabel = 'Low';
-                    if (utilizationPct > 80) { utilColor = '#ef4444'; utilLabel = 'High'; }
-                    else if (utilizationPct > 50) { utilColor = '#f59e0b'; utilLabel = 'Medium'; }
+                    if (daysUtilized > 5) { utilColor = '#ef4444'; utilLabel = 'High'; }
+                    else if (daysUtilized > 3) { utilColor = '#f59e0b'; utilLabel = 'Medium'; }
+                    // Bar width based on days utilized (max 6 days)
+                    const barWidth = Math.min(100, (daysUtilized / 6) * 100);
 
                     const isExpanded = selectedRoom === room.id;
 
@@ -154,13 +156,13 @@ const RoomHub: React.FC = () => {
                                 <div className="fhub-mini-stat"><Users size={13} /><span>{capacity}</span><small>Capacity</small></div>
                             </div>
 
-                            {/* Utilization Bar */}
+                            {/* Utilization Bar - based on days utilized, not hours */}
                             <div className="fhub-load-bar">
-                                <div className="fhub-load-fill" style={{ width: `${utilizationPct}%`, background: `linear-gradient(90deg, ${utilColor}, ${utilColor}90)` }} />
+                                <div className="fhub-load-fill" style={{ width: `${barWidth}%`, background: `linear-gradient(90deg, ${utilColor}, ${utilColor}90)` }} />
                             </div>
                             <div className="fhub-load-meta">
-                                <span>{hours} / {maxHours} hrs</span>
-                                <span style={{ color: utilColor, fontWeight: 600 }}>{utilizationPct.toFixed(0)}%</span>
+                                <span>{hours} hrs total</span>
+                                <span style={{ color: utilColor, fontWeight: 600 }}>{days} days</span>
                             </div>
 
                             {/* Expanded Details */}

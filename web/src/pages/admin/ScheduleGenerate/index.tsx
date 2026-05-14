@@ -39,6 +39,7 @@ const ScheduleGenerate: React.FC = () => {
     const [stage, setStage] = useState<StageKey>('scope');
     const [maxStageReached, setMaxStageReached] = useState<StageKey>('scope');
     const [config, setConfig] = useState<GenerationConfig>(DEFAULT_CONFIG);
+    const [isOutcomeDetailView, setIsOutcomeDetailView] = useState(false);
 
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -775,6 +776,8 @@ const ScheduleGenerate: React.FC = () => {
                             teachers={teachers}
                             rooms={rooms}
                             sections={sections}
+                            isDetailView={isOutcomeDetailView}
+                            setIsDetailView={setIsOutcomeDetailView}
                         />
                     )}
                     {stage === 'save' && result && (
@@ -797,7 +800,17 @@ const ScheduleGenerate: React.FC = () => {
             {!dataLoading && stage !== 'generate' && (
                 <div className="sg-nav">
                     {stageIndex > 0 && (
-                        <button className="btn btn-secondary" onClick={goBack} disabled={generating}>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => {
+                                if (stage === 'outcome' && isOutcomeDetailView) {
+                                    setIsOutcomeDetailView(false);
+                                } else {
+                                    goBack();
+                                }
+                            }}
+                            disabled={generating}
+                        >
                             <ArrowLeft size={14} /> Back
                         </button>
                     )}
@@ -842,9 +855,9 @@ const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJum
         e.preventDefault();
         let next = i;
         if (e.key === 'ArrowLeft')  next = Math.max(0, i - 1);
-        if (e.key === 'ArrowRight') next = Math.min(maxIdx, i + 1);
+        if (e.key === 'ArrowRight') next = Math.min(maxIdx + 1, i + 1); // Allow navigating to next stage
         if (e.key === 'Home')       next = 0;
-        if (e.key === 'End')        next = maxIdx;
+        if (e.key === 'End')        next = maxIdx + 1;
         const el = document.querySelector<HTMLButtonElement>(`[data-sg-step="${STAGES[next].key}"]`);
         el?.focus();
     };
@@ -852,9 +865,9 @@ const Stepper: React.FC<{ stage: StageKey; onJump: (k: StageKey) => void; canJum
         <ol className="sg-stepper" role="tablist" aria-label="Generation stages">
             {STAGES.map((s, i) => {
                 // Use maxIdx to determine if a stage has been visited (not grayed out)
-                const state = i < idx ? 'done' : i === idx ? 'current' : i <= maxIdx ? 'visited' : 'upcoming';
-                // Button is clickable if: not generating AND stage has been visited (i <= maxIdx)
-                const isClickable = canJump && i <= maxIdx;
+                const state = i < idx ? 'done' : i === idx ? 'current' : i <= maxIdx ? 'visited' : i <= maxIdx + 1 ? 'next' : 'upcoming';
+                // Button is clickable if: not generating AND stage has been visited OR is the immediate next stage (i <= maxIdx + 1)
+                const isClickable = canJump && i <= maxIdx + 1;
                 return (
                     <li key={s.key} className={`sg-step sg-step-${state}`}>
                         <button
@@ -1386,6 +1399,27 @@ const ConstraintsStage: React.FC<{ config: GenerationConfig; setConfig: React.Di
                 <div className="sg-hard-list-expanded" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
                         <div className="sg-field-label">
+                            Minimum Sessions Per Day
+                            <FieldTooltip>Minimum number of sessions a section must have on any scheduled day.
+
+For example, if set to 2 and session length is 90 minutes, a section cannot have a day with only 1 session (90 minutes). It must have at least 2 sessions (180 minutes) on any day it is scheduled.
+
+This prevents very short class days and ensures meaningful daily instructional time.</FieldTooltip>
+                        </div>
+                        <select
+                            className="input"
+                            value={config.minimumSessionsPerDay}
+                            onChange={e => setConfig(c => ({ ...c, minimumSessionsPerDay: Number(e.target.value) }))}
+                        >
+                            <option value={1}>1 session (no minimum)</option>
+                            <option value={2}>2 sessions</option>
+                            <option value={3}>3 sessions</option>
+                            <option value={4}>4 sessions</option>
+                            <option value={5}>5 sessions</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div className="sg-field-label">
                             Overflow Policy
                             <FieldTooltip>Controls how the generator handles sections that exceed room capacity:
 
@@ -1868,10 +1902,22 @@ const OutcomeStage: React.FC<{
     teachers: Teacher[];
     rooms: Room[];
     sections: Section[];
-}> = ({ result, teachers, rooms, sections }) => {
+    isDetailView: boolean;
+    setIsDetailView: (value: boolean) => void;
+}> = ({ result, teachers, rooms, sections, isDetailView: parentIsDetailView, setIsDetailView: parentSetIsDetailView }) => {
     const [viewMode, setViewMode] = useState<'section' | 'teacher' | 'room'>('section');
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isDetailView, setIsDetailView] = useState(false);
+
+    // Sync local state with parent
+    useEffect(() => {
+        setIsDetailView(parentIsDetailView);
+    }, [parentIsDetailView]);
+
+    const handleSetDetailView = (value: boolean) => {
+        setIsDetailView(value);
+        parentSetIsDetailView(value);
+    };
 
     // Local state for editable schedule entries (for drag-and-drop)
     const [localEntries, setLocalEntries] = useState<typeof result.entries>(result.entries);
@@ -1916,13 +1962,39 @@ const OutcomeStage: React.FC<{
         let lastName = '';
         let firstName = '';
 
+        // Common suffixes to strip from last name
+        const suffixes = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
         if (nameParts.length >= 3) {
-            // Format: "First Middle Last" or "First Middle Last Suffix"
-            // Last name is at index 2 (third word), suffix (if any) is at last index
-            lastName = nameParts[2];
-            firstName = nameParts[0];
+            // Format: "First Middle Last" or "First Middle Initial Last"
+            // Check if any part ends with a period (middle initial)
+            const hasMiddleInitial = nameParts.some(part => part.endsWith('.'));
+
+            if (hasMiddleInitial) {
+                // If there's a middle initial, last name is the last word (before suffix if present)
+                const potentialLastName = nameParts[nameParts.length - 1];
+                // Check if last part is a suffix
+                if (nameParts.length >= 4 && suffixes.includes(potentialLastName)) {
+                    lastName = nameParts[nameParts.length - 2];
+                } else {
+                    lastName = potentialLastName;
+                }
+                firstName = nameParts[0];
+            } else {
+                // Otherwise, last name is at index 2 (third word) or later if suffix present
+                const potentialLastName = nameParts[2];
+                // Check if there's a suffix after the last name
+                if (nameParts.length >= 4 && suffixes.includes(nameParts[3])) {
+                    lastName = nameParts[2]; // Last name is at index 2, suffix at index 3
+                } else if (nameParts.length >= 4 && suffixes.includes(nameParts[nameParts.length - 1])) {
+                    lastName = nameParts[nameParts.length - 2];
+                } else {
+                    lastName = potentialLastName;
+                }
+                firstName = nameParts[0];
+            }
         } else if (nameParts.length === 2) {
-            // Format: "First Last"
+            // Format: "First Last" or "Last Suffix" (edge case)
             lastName = nameParts[1];
             firstName = nameParts[0];
         } else if (nameParts.length === 1) {
@@ -1932,18 +2004,26 @@ const OutcomeStage: React.FC<{
             lastName = teacher.full_name || '';
             firstName = '';
         }
-        
+
         // Check if any other teacher has the same last name
         const hasDuplicateLastName = allTeachers.some(t => {
             const tLastName = (() => {
                 const parts = t.full_name?.trim().split(' ') || [];
-                if (parts.length >= 3) return parts[2];
+                if (parts.length >= 3) {
+                    const hasMiddleInitial = parts.some(part => part.endsWith('.'));
+                    const potentialLastName = hasMiddleInitial ? parts[parts.length - 1] : parts[2];
+                    // Handle suffixes
+                    if (parts.length >= 4 && suffixes.includes(potentialLastName)) {
+                        return hasMiddleInitial ? parts[parts.length - 2] : parts[2];
+                    }
+                    return potentialLastName;
+                }
                 if (parts.length === 2) return parts[1];
                 return parts[0] || t.full_name || '';
             })();
             return t.id !== teacher.id && tLastName === lastName;
         });
-        
+
         if (hasDuplicateLastName && firstName) {
             return `${lastName}, ${firstName.charAt(0)}.`;
         }
@@ -2034,7 +2114,7 @@ const OutcomeStage: React.FC<{
                                 <button
                                     key={section.id}
                                     className={`btn ${selectedId === section.id ? 'btn-primary' : 'btn-secondary'}`}
-                                    onClick={() => { setSelectedId(section.id); setIsDetailView(true); }}
+                                    onClick={() => { setSelectedId(section.id); handleSetDetailView(true); }}
                                     style={{ justifyContent: 'flex-start' }}
                                 >
                                     <Users size={14} style={{ marginRight: 8 }} />
@@ -2048,7 +2128,7 @@ const OutcomeStage: React.FC<{
                                 <button
                                     key={teacher.id}
                                     className={`btn ${selectedId === teacher.id ? 'btn-primary' : 'btn-secondary'}`}
-                                    onClick={() => { setSelectedId(teacher.id); setIsDetailView(true); }}
+                                    onClick={() => { setSelectedId(teacher.id); handleSetDetailView(true); }}
                                     style={{ justifyContent: 'flex-start' }}
                                 >
                                     <Users size={14} style={{ marginRight: 8 }} />
@@ -2062,7 +2142,7 @@ const OutcomeStage: React.FC<{
                                 <button
                                     key={room.id}
                                     className={`btn ${selectedId === room.id ? 'btn-primary' : 'btn-secondary'}`}
-                                    onClick={() => { setSelectedId(room.id); setIsDetailView(true); }}
+                                    onClick={() => { setSelectedId(room.id); handleSetDetailView(true); }}
                                     style={{ justifyContent: 'flex-start' }}
                                 >
                                     <MapPin size={14} style={{ marginRight: 8 }} />
@@ -2083,7 +2163,7 @@ const OutcomeStage: React.FC<{
                                 <div>
                                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                                         {viewMode === 'section' ? sections.find(s => s.id === selectedId)?.name
-                                         : viewMode === 'teacher' ? formatTeacherName(teachers.find(t => t.id === selectedId)!, teachers)
+                                         : viewMode === 'teacher' ? teachers.find(t => t.id === selectedId)?.full_name
                                          : rooms.find(r => r.id === selectedId)?.name}
                                     </div>
                                     <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -2092,7 +2172,7 @@ const OutcomeStage: React.FC<{
                                 </div>
                                 <button
                                     className="btn btn-secondary"
-                                    onClick={() => setIsDetailView(false)}
+                                    onClick={() => { handleSetDetailView(false); setSelectedId(null); }}
                                     style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                                 >
                                     <ArrowLeft size={14} /> Back to {viewMode}s
@@ -2469,26 +2549,37 @@ const PrioritiesStage: React.FC<{
         // Configure subjects priorities
         const subjectPriorities: Record<string, number> = {};
 
-        // First, check if all subjects have the same teacher pool size (e.g., all 0)
-        const teacherPools = subjects.map(s => {
-            const pool = (s.teacher_eligibility_pool && typeof s.teacher_eligibility_pool === 'object')
-                ? Object.keys(s.teacher_eligibility_pool as Record<string, unknown>).length
-                : 0;
-            return pool;
-        });
-        const hasTeacherVariance = new Set(teacherPools).size > 1;
-
         for (const s of subjects) {
             const teacherPool = (s.teacher_eligibility_pool && typeof s.teacher_eligibility_pool === 'object')
                 ? Object.keys(s.teacher_eligibility_pool as Record<string, unknown>).length
                 : 0;
-            // Only consider teachers scarce if there's variance in teacher pools
-            const scarceTeachers = hasTeacherVariance && (teacherPool <= 2 || (s.teacher_id ? false : teacherPool === 0));
             const isSpecial = s.type === 'special';
+            const requiresLab = s.requires_lab === true;
+            const requiresSpecialRoom = s.requires_special_room === true;
+            const isElective = !s.program;
 
-            if (isSpecial || scarceTeachers) {
+            // Priority logic:
+            // 1. Special subjects: HIGH (need special rooms/facilities, typically have fewer teachers)
+            // 2. Common subjects with 0-1 teachers: HIGH (scarce resources)
+            // 3. Common subjects requiring lab/special room: HIGH (constrained resources)
+            // 4. Common subjects with 2 teachers: NORMAL (adequate availability)
+            // 5. Common subjects with 3+ teachers: LOW (flexible)
+            // 6. Electives: LOW (optional courses)
+
+            if (isSpecial || requiresLab || requiresSpecialRoom) {
+                // Special subjects and those requiring special facilities get high priority
                 subjectPriorities[s.id] = PRIORITY_VALUES.high;
-            } else if (!s.program) {
+            } else if (teacherPool <= 1) {
+                // Common subjects with very few teachers get high priority
+                subjectPriorities[s.id] = PRIORITY_VALUES.high;
+            } else if (teacherPool === 2) {
+                // Common subjects with adequate teachers stay normal
+                // (no priority set, defaults to normal)
+            } else if (teacherPool >= 3) {
+                // Common subjects with many teachers can be low priority (flexible)
+                subjectPriorities[s.id] = PRIORITY_VALUES.low;
+            } else if (isElective) {
+                // Electives get low priority
                 subjectPriorities[s.id] = PRIORITY_VALUES.low;
             }
         }

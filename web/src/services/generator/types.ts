@@ -539,6 +539,7 @@ export interface GeneratorConfig {
   scope: GenerationScope;
   schedule_window: ScheduleWindow;
   constraints: ClassifiedConstraints;
+  minimumSessionsPerDay: number; // Minimum sessions a section must have on any scheduled day
   seed: number;
   max_attempts: number;
   enable_forward_checking: boolean;

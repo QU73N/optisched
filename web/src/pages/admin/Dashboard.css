@@ -319,12 +319,18 @@
     min-height: 0;
 }
 
-/* BOTTOM SECTION: 2-row × 3-column grid */
+/* BOTTOM SECTION: 4-column grid for cards */
 .dash-bottom-section {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(2, auto);
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: auto;
     gap: var(--d-grid-gap);
+}
+
+/* Ensure equal height for all bottom section cards */
+.dash-bottom-section .dash-card {
+    height: 350px;
+    max-height: 350px;
 }
 
 /* Legacy grid classes (for backward compatibility) */
@@ -1818,6 +1824,13 @@
 .sg-step-visited .sg-step-num {
     background: var(--accent-primary-subtle);
     color: var(--accent-primary);
+}
+
+.sg-step-next .sg-step-btn { color: var(--text-primary); opacity: 0.85; }
+
+.sg-step-next .sg-step-num {
+    background: var(--bg-inset);
+    color: var(--text-muted);
 }
 
 .sg-step-upcoming .sg-step-btn { opacity: 0.7; }

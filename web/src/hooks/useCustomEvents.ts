@@ -1,19 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-
-export interface CustomEvent {
-    id: string;
-    title: string;
-    description: string | null;
-    event_date: string;
-    start_time: string | null;
-    end_time: string | null;
-    room: string | null;
-    created_by: string;
-    creator_name: string | null;
-    creator_role: string | null;
-    created_at: string;
-}
+import type { CustomEvent } from '../types/dashboard';
 
 /**
  * Hook for custom events - supports filtering by date or fetching upcoming events.
@@ -37,7 +24,7 @@ export function useCustomEvents(filterDate?: string, upcoming?: boolean) {
             }
 
             const { data, error } = await query;
-            if (!error && data) setEvents(data);
+            if (!error && data) setEvents(data as CustomEvent[]);
         } catch (err) {
             console.log('[Events] Fetch error:', err);
         } finally {

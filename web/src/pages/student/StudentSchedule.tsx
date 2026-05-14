@@ -115,6 +115,20 @@ const StudentSchedule: React.FC = () => {
         }
     }, [studentSectionId, fetchSchedules]);
 
+    // Real-time subscription for schedule changes
+    useEffect(() => {
+        if (!studentSectionId) return;
+
+        const channel = supabase
+            .channel('student-schedules-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => {
+                fetchSchedules();
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [studentSectionId, fetchSchedules]);
+
     const sorted = useMemo(() => [...schedules].sort((a, b) => {
         const dd = dayOrder.indexOf(a.day_of_week) - dayOrder.indexOf(b.day_of_week);
         return dd !== 0 ? dd : a.start_time.localeCompare(b.start_time);

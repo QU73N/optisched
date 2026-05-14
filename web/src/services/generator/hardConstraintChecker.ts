@@ -13,6 +13,7 @@
  * - Subject hour completion
  * - Special subject room priority
  * - Subject room consistency (same room for all sessions of a subject on a day)
+ * - Minimum sessions per day (section must have at least N sessions on any scheduled day)
  */
 
 import type {
@@ -552,6 +553,47 @@ export function checkAllHardConstraints(
   if (enabledConstraints.subject_room_consistency) {
     const result = checkSubjectRoomConsistency(subjectId, sectionId, roomId, day, placedSessions);
     if (result.isViolated) violations.push(result);
+  }
+
+  return violations;
+}
+
+/**
+ * Check if a section meets minimum sessions per day constraint
+ * This is a post-generation check, not a placement-time check
+ */
+export function checkMinimumSessionsPerDay(
+  placedSessions: PlacedSession[],
+  minimumSessions: number
+): HardConstraintCheckResult[] {
+  const violations: HardConstraintCheckResult[] = [];
+
+  // Group sessions by section and day
+  const sectionDayCounts: Record<string, Record<string, number>> = {};
+
+  for (const session of placedSessions) {
+    if (!sectionDayCounts[session.section_id]) {
+      sectionDayCounts[session.section_id] = {};
+    }
+    if (!sectionDayCounts[session.section_id][session.day]) {
+      sectionDayCounts[session.section_id][session.day] = 0;
+    }
+    sectionDayCounts[session.section_id][session.day]++;
+  }
+
+  // Check each section-day combination
+  for (const sectionId in sectionDayCounts) {
+    for (const day in sectionDayCounts[sectionId]) {
+      const count = sectionDayCounts[sectionId][day];
+      if (count < minimumSessions && minimumSessions > 1) {
+        violations.push({
+          isViolated: true,
+          violationType: 'minimum_sessions_per_day',
+          description: `Section ${sectionId} has only ${count} session(s) on ${day}, but minimum is ${minimumSessions}. Sections must have at least ${minimumSessions} sessions on any scheduled day.`,
+          affectedEntities: [sectionId, day],
+        });
+      }
+    }
   }
 
   return violations;

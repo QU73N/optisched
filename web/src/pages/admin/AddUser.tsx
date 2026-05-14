@@ -466,6 +466,34 @@ const AddUser: React.FC = () => {
                 throw new Error('Profile creation verification failed');
             }
             
+            // Helper function to convert availability slots to map format
+            const convertAvailabilitySlotsToMap = (slots: AvailabilitySlot[]): Record<string, boolean> => {
+                const availabilityMap: Record<string, boolean> = {};
+                const TIME_SLOTS = [
+                    '7:00', '7:30', '8:00', '8:30', '9:00', '9:30', '10:00', '10:30',
+                    '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+                    '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'
+                ];
+                
+                slots.forEach(slot => {
+                    TIME_SLOTS.forEach(time => {
+                        const key = `${slot.day}-${time}`;
+                        const timeMinutes = timeToMinutes(time);
+                        const startMinutes = timeToMinutes(slot.start_time);
+                        const endMinutes = timeToMinutes(slot.end_time);
+                        // Mark as available if time falls within the slot range
+                        availabilityMap[key] = timeMinutes >= startMinutes && timeMinutes < endMinutes;
+                    });
+                });
+                
+                return availabilityMap;
+            };
+            
+            const timeToMinutes = (time: string): number => {
+                const [hours, minutes] = time.split(':').map(Number);
+                return hours * 60 + minutes;
+            };
+            
             // Create teacher record if role is teacher
             if (formData.role === 'teacher') {
                 const dbDepartment = getDatabaseDepartmentName(formData.department);
@@ -485,13 +513,7 @@ const AddUser: React.FC = () => {
                     preferred_subjects: formData.selectedSubjects,
                     preferred_time_start: formData.availability[0]?.start_time || '08:00',
                     preferred_time_end: formData.availability[formData.availability.length - 1]?.end_time || '17:00',
-                    availability: {
-                        slots: formData.availability.map(a => ({
-                            day: a.day,
-                            start_time: a.start_time,
-                            end_time: a.end_time
-                        }))
-                    },
+                    availability: convertAvailabilitySlotsToMap(formData.availability),
                     max_classes_per_day: formData.employmentStatus === 'full-time' ? 5 : 3,
                     max_consecutive_classes: formData.employmentStatus === 'full-time' ? 3 : 2,
                 });

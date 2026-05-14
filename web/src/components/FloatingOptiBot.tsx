@@ -203,23 +203,45 @@ const FloatingOptiBot: React.FC = () => {
                 <div className="optibot-panel">
                     <div className="optibot-panel-header">
                         <div className="optibot-panel-header-icon">
-                            <Bot size={22} />
+                            <Bot size={20} />
                         </div>
                         <div className="optibot-panel-header-info">
                             <h3>OptiBot AI</h3>
                             <span className={isOnline ? 'status-online' : 'status-offline'}>
-                                ● {isOnline ? 'Online' : 'Offline'}
+                                <span className="optibot-status-dot" /> {isOnline ? 'Online' : 'Offline'}
                             </span>
                         </div>
+                        <button
+                            className="optibot-panel-close"
+                            onClick={() => setOpen(false)}
+                            aria-label="Close OptiBot"
+                            title="Close"
+                        >
+                            <X size={16} />
+                        </button>
                     </div>
 
                     <div className="optibot-panel-messages" ref={scrollRef}>
                         {messages.map((msg, i) => (
-                            <div key={i} className={`optibot-msg ${msg.role === 'bot' ? 'optibot-msg-bot' : 'optibot-msg-user'}`}>
-                                {msg.text}
+                            <div key={i} className={`optibot-msg-row ${msg.role === 'bot' ? 'optibot-msg-row-bot' : 'optibot-msg-row-user'}`}>
+                                {msg.role === 'bot' && (
+                                    <div className="optibot-msg-avatar"><Bot size={14} /></div>
+                                )}
+                                <div className={`optibot-msg ${msg.role === 'bot' ? 'optibot-msg-bot' : 'optibot-msg-user'}`}>
+                                    {msg.text}
+                                </div>
                             </div>
                         ))}
-                        {isTyping && <div className="optibot-typing">OptiBot is thinking...</div>}
+                        {isTyping && (
+                            <div className="optibot-msg-row optibot-msg-row-bot">
+                                <div className="optibot-msg-avatar"><Bot size={14} /></div>
+                                <div className="optibot-msg optibot-msg-bot optibot-typing-bubble">
+                                    <span className="typing-dot" />
+                                    <span className="typing-dot" />
+                                    <span className="typing-dot" />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="optibot-panel-input">

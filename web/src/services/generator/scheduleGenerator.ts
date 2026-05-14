@@ -60,6 +60,7 @@ import type {
 } from './types';
 import {
   checkAllHardConstraints,
+  checkMinimumSessionsPerDay,
 } from './hardConstraintChecker';
 import {
   checkAllSoftConstraints,
@@ -395,6 +396,7 @@ export class ScheduleGenerator {
 
   /**
    * Parse availability object into availability windows
+   * Handles both old day-based format and new map format
    */
   private parseAvailability(availability: Record<string, unknown>): AvailabilityWindow[] {
     // If no availability specified, return default windows for all operating days
@@ -406,7 +408,66 @@ export class ScheduleGenerator {
       }));
     }
 
-    // Parse actual availability structure if provided
+    // Check if it's the old slots format
+    if ('slots' in availability && Array.isArray(availability.slots)) {
+      const slots = availability.slots as Array<{ day: string; start_time: string; end_time: string }>;
+      return slots.map(slot => ({
+        day: slot.day,
+        start: slot.start_time,
+        end: slot.end_time,
+      }));
+    }
+
+    // Check if it's the new map format (e.g., {"Monday-08:00": true, "Monday-08:30": false})
+    const mapKeys = Object.keys(availability).filter(k => k.includes('-'));
+    if (mapKeys.length > 0) {
+      const windows: AvailabilityWindow[] = [];
+      const dayWindows = new Map<string, { earliest: string; latest: string }>();
+      
+      // Find earliest and latest available times for each day
+      mapKeys.forEach(key => {
+        const [day, time] = key.split('-');
+        const isAvailable = availability[key] as boolean;
+        if (isAvailable) {
+          if (!dayWindows.has(day)) {
+            dayWindows.set(day, { earliest: time, latest: time });
+          } else {
+            const current = dayWindows.get(day)!;
+            const timeMinutes = this.timeToMinutes(time);
+            const earliestMinutes = this.timeToMinutes(current.earliest);
+            const latestMinutes = this.timeToMinutes(current.latest);
+            if (timeMinutes < earliestMinutes) {
+              dayWindows.set(day, { earliest: time, latest: current.latest });
+            }
+            if (timeMinutes > latestMinutes) {
+              dayWindows.set(day, { earliest: current.earliest, latest: time });
+            }
+          }
+        }
+      });
+      
+      // Convert to windows
+      dayWindows.forEach((times, day) => {
+        windows.push({
+          day,
+          start: times.earliest,
+          end: times.latest,
+        });
+      });
+      
+      // If no windows parsed from map, return default
+      if (windows.length === 0) {
+        return this.config.schedule_window.operating_days.map(day => ({
+          day,
+          start: this.config.schedule_window.day_start,
+          end: this.config.schedule_window.day_end,
+        }));
+      }
+      
+      return windows;
+    }
+
+    // Parse actual availability structure if provided (old day-based format)
     // This is a simplified implementation - extend as needed based on actual data structure
     const windows: AvailabilityWindow[] = [];
     
@@ -853,6 +914,41 @@ export class ScheduleGenerator {
    */
   private phase12_ImpossibleScheduleHandling(schedule: FinalSchedule): FailureAnalysis {
     const is_impossible = schedule.unplaced_sessions.length > 0;
+
+    // Check minimum sessions per day constraint
+    const minimumSessionsViolations = checkMinimumSessionsPerDay(
+      schedule.placed_sessions,
+      this.config.minimumSessionsPerDay
+    );
+
+    if (minimumSessionsViolations.length > 0) {
+      const reasons: FailureReason[] = minimumSessionsViolations.map(v => ({
+        type: 'section_demand_too_dense' as const, // Use existing type for now
+        details: v.description,
+        severity: 'major' as const,
+      }));
+
+      const actionableOptions: ActionableOption[] = [
+        {
+          action: 'reduce_minimum_sessions' as const,
+          description: 'Reduce the minimum sessions per day requirement',
+          expected_impact: 'Allows sections with fewer sessions on a day',
+          effort: 'quick' as const,
+        },
+        {
+          action: 'adjust_session_duration' as const,
+          description: 'Increase session duration to reduce total sessions needed',
+          expected_impact: 'May allow meeting minimum with fewer time slots',
+          effort: 'moderate' as const,
+        },
+      ];
+
+      return {
+        is_impossible: true,
+        reasons,
+        actionable_options: actionableOptions,
+      };
+    }
 
     if (is_impossible) {
       const reasons: FailureReason[] = [

@@ -14,7 +14,22 @@ interface ScheduleVersion {
     changed_by: string;
     snapshot?: unknown;
     schedule_count?: number;
+    label?: string;
 }
+
+// Assign chronological labels (v1a, v1b, ...) matching ScheduleVersions tab
+const assignVersionLabels = <T extends { changed_at: string; label?: string }>(versions: T[]): T[] => {
+    const sortedAsc = [...versions].sort(
+        (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
+    );
+    const labelMap = new Map<T, string>();
+    sortedAsc.forEach((v, index) => {
+        const letter = String.fromCharCode(97 + (index % 26));
+        const number = Math.floor(index / 26) + 1;
+        labelMap.set(v, `v${number}${letter}`);
+    });
+    return versions.map(v => ({ ...v, label: labelMap.get(v) }));
+};
 
 const ConflictVersionSelector: React.FC = () => {
     const navigate = useNavigate();
@@ -53,7 +68,7 @@ const ConflictVersionSelector: React.FC = () => {
                 return { ...v, schedule_count: count };
             });
 
-            setVersions(versionsWithCounts);
+            setVersions(assignVersionLabels(versionsWithCounts));
         } catch (err) {
             console.error('Failed to fetch versions:', err);
         } finally {
@@ -80,7 +95,7 @@ const ConflictVersionSelector: React.FC = () => {
                 return { ...v, schedule_count: count };
             });
 
-            setAllVersions(versionsWithCounts);
+            setAllVersions(assignVersionLabels(versionsWithCounts));
         } catch (err) {
             console.error('Failed to fetch all versions:', err);
         }
@@ -233,7 +248,7 @@ const ConflictVersionSelector: React.FC = () => {
                                 <div style={{ flex: 1 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                                         <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                            Version {v.version_number}
+                                            Version {v.label || `v${v.version_number}`}
                                         </span>
                                         {v.change_type === 'publish' && v.is_active && (
                                             <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'rgba(34,197,94,0.12)', color: '#34d399', fontWeight: 700 }}>

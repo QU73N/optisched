@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { ADMIN_ROLES } from '../types/database';
 import type { Notification } from '../types/database';
 
 export async function createNotification(
@@ -19,7 +20,7 @@ export async function createNotification(
         p_action_url: actionUrl || null,
         p_expires_hours: expiresHours || null
     });
-    if (error) throw error;
+    if (error) throw new Error(error.message || 'Failed to create notification');
     return result;
 }
 
@@ -27,15 +28,12 @@ export async function getNotifications(
     unreadOnly = false,
     limit = 50
 ): Promise<Notification[]> {
-    console.log('[NotificationService] getNotifications called, unreadOnly:', unreadOnly, 'limit:', limit);
     const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user;
     if (!user) {
-        console.error('[NotificationService] User not authenticated');
         throw new Error('User not authenticated');
     }
 
-    console.log('[NotificationService] Querying notifications for user:', user.id);
     let query = supabase
         .from('notifications')
         .select('*')
@@ -48,11 +46,7 @@ export async function getNotifications(
     }
 
     const { data, error } = await query;
-    if (error) {
-        console.error('[NotificationService] Query error:', error);
-        throw error;
-    }
-    console.log('[NotificationService] Query success, returned', (data || []).length, 'notifications');
+    if (error) throw new Error(error.message || 'Failed to fetch notifications');
     return (data || []) as Notification[];
 }
 
@@ -65,7 +59,7 @@ export async function markAsRead(notificationId: string): Promise<boolean> {
         p_notification_id: notificationId,
         p_user_id: user.id
     });
-    if (error) throw error;
+    if (error) throw new Error(error.message || 'Failed to mark notification as read');
     return data || false;
 }
 
@@ -77,28 +71,21 @@ export async function markAllAsRead(): Promise<number> {
     const { data, error } = await supabase.rpc('mark_all_notifications_read', {
         p_user_id: user.id
     });
-    if (error) throw error;
+    if (error) throw new Error(error.message || 'Failed to mark all notifications as read');
     return data || 0;
 }
 
 export async function getUnreadCount(): Promise<number> {
-    console.log('[NotificationService] getUnreadCount called');
     const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user;
     if (!user) {
-        console.error('[NotificationService] User not authenticated');
         throw new Error('User not authenticated');
     }
 
-    console.log('[NotificationService] Calling RPC get_unread_notification_count for user:', user.id);
     const { data, error } = await supabase.rpc('get_unread_notification_count', {
         p_user_id: user.id
     });
-    if (error) {
-        console.error('[NotificationService] RPC error:', error);
-        throw error;
-    }
-    console.log('[NotificationService] RPC success, unread count:', data);
+    if (error) throw new Error(error.message || 'Failed to get unread count');
     return data || 0;
 }
 
@@ -107,7 +94,7 @@ export async function deleteNotification(notificationId: string): Promise<void> 
         .from('notifications')
         .delete()
         .eq('id', notificationId);
-    if (error) throw error;
+    if (error) throw new Error(error.message || 'Failed to delete notification');
 }
 
 // Real-time subscription to notifications
@@ -156,7 +143,7 @@ export async function createConflictAlert(
         .eq('id', user.id)
         .maybeSingle();
 
-    if (profile?.role !== 'admin') return;
+    if (!profile?.role || !ADMIN_ROLES.includes(profile.role)) return;
 
     await createNotification(
         user.id,
@@ -179,7 +166,8 @@ export async function createAnnouncement(
     title: string,
     message: string,
     actionUrl?: string,
-    expiresHours?: number
+    expiresHours?: number,
+    targetGroup?: string
 ): Promise<number> {
     const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user;
@@ -192,15 +180,25 @@ export async function createAnnouncement(
         .eq('id', user.id)
         .maybeSingle();
 
-    if (profile?.role !== 'admin') throw new Error('Only admins can create announcements');
+    if (!profile?.role || !ADMIN_ROLES.includes(profile.role)) {
+        throw new Error('Only admins can create announcements');
+    }
 
-    // Get all active users
-    const { data: profiles, error } = await supabase
+    // Build query based on target group
+    let query = supabase
         .from('profiles')
-        .select('id')
+        .select('id, role')
         .eq('is_active', true);
 
-    if (error) throw error;
+    // Filter by target group
+    if (targetGroup === 'Teachers') {
+        query = query.in('role', ['teacher']);
+    }
+    // 'All Sections' and 'All Users' both send to all users (no filter)
+
+    const { data: profiles, error } = await query;
+
+    if (error) throw new Error(error.message || 'Failed to fetch users for announcement');
     if (!profiles) return 0;
 
     // Create announcement for each user
@@ -215,6 +213,7 @@ export async function createAnnouncement(
                 {
                     created_by: user.id,
                     created_at: new Date().toISOString(),
+                    target_group: targetGroup || 'All Users',
                 },
                 actionUrl,
                 expiresHours || 168 // Default 7 days
@@ -243,7 +242,7 @@ export async function createConflictResolutionNotification(
         .eq('id', user.id)
         .maybeSingle();
 
-    if (profile?.role !== 'admin') return;
+    if (!profile?.role || !ADMIN_ROLES.includes(profile.role)) return;
 
     const title = conflictsRemaining === 0 
         ? 'All Conflicts Resolved' 
@@ -277,7 +276,7 @@ export async function createPasswordResetNotification(
     const { data: admins } = await supabase
         .from('profiles')
         .select('id')
-        .in('role', ['power_admin', 'system_admin', 'schedule_admin']);
+        .in('role', ADMIN_ROLES);
 
     if (!admins) return;
 
@@ -352,7 +351,7 @@ export async function createTeacherRequestNotification(
     const { data: admins } = await supabase
         .from('profiles')
         .select('id')
-        .in('role', ['power_admin', 'system_admin', 'schedule_admin']);
+        .in('role', ADMIN_ROLES);
 
     if (!admins) return;
 

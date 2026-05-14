@@ -108,6 +108,20 @@ const StudentSection: React.FC = () => {
         }
     }, [studentSectionId, fetchSchedules]);
 
+    // Real-time subscription for schedule changes
+    useEffect(() => {
+        if (!studentSectionId) return;
+
+        const channel = supabase
+            .channel('student-section-schedules-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => {
+                fetchSchedules();
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [studentSectionId, fetchSchedules]);
+
     const subjectName = (s: Row['subject']) => Array.isArray(s) ? s[0]?.name : s?.name || 'N/A';
     const roomName = (r: Row['room']) => Array.isArray(r) ? r[0]?.name : r?.name || 'TBA';
     const teacherName = (t: Row['teacher']): string => {

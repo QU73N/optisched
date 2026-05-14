@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { CalendarDays, Clock, MapPin, Download, Printer, ChevronLeft, ChevronRight, List, LayoutGrid, Timer } from 'lucide-react';
@@ -28,9 +28,7 @@ const TeacherSchedule: React.FC = () => {
         return d === 0 ? 'Monday' : dayOrder[d - 1] || 'Monday';
     });
 
-    useEffect(() => { if (profile?.id) fetchSchedules(); }, [profile]);
-
-    const fetchSchedules = async () => {
+    const fetchSchedules = useCallback(async () => {
         try {
             const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', profile!.id).maybeSingle();
             if (teacher) {
@@ -41,7 +39,23 @@ const TeacherSchedule: React.FC = () => {
             }
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
-    };
+    }, [profile]);
+
+    useEffect(() => { if (profile?.id) fetchSchedules(); }, [profile, fetchSchedules]);
+
+    // Real-time subscription for schedule changes
+    useEffect(() => {
+        if (!profile?.id) return;
+
+        const channel = supabase
+            .channel('teacher-schedules-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => {
+                fetchSchedules();
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [fetchSchedules, profile?.id]);
 
     const sorted = useMemo(() => [...schedules].sort((a, b) => {
         const dd = dayOrder.indexOf(a.day_of_week) - dayOrder.indexOf(b.day_of_week);

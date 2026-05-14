@@ -47,6 +47,7 @@ export interface Subject {
     optional_monthly_hours?: number | null;
     session_duration_preference?: number;
     priority_level?: 'high' | 'normal' | 'low';
+    requires_lab?: boolean;
     requires_special_room?: boolean;
     preferred_time_window?: 'early' | 'mid' | 'late' | null;
 }
@@ -231,13 +232,16 @@ export interface GenerationConfig {
     dayStart: string;              // HH:MM
     dayEnd: string;                // HH:MM
     sessionMinutes: number;        // 60 | 90 | 120
-    
+
     // Break Configuration
     breakMode: 'fixed' | 'variable';
     fixedBreak: FixedBreakConfig;
     variableBreak: VariableBreakConfig;
     commonBreak: CommonBreakConfig;
-    
+
+    // Hard Constraints
+    minimumSessionsPerDay: number; // Minimum sessions a section must have on a scheduled day
+
     // Constraints
     soft: SoftWeights;
     // Priorities
@@ -351,6 +355,7 @@ export interface GenerationResult {
         roomCapacityCompliance: boolean;
         teacherQualificationEnforcement: boolean;
         teacherAvailabilityEnforcement: boolean;
+        minimumSessionsPerDay: boolean;
     };
     attemptMetadata?: {
         attemptCount: number;
@@ -403,7 +408,10 @@ export const DEFAULT_CONFIG: GenerationConfig = {
         time: '12:00',
         duration: 60,
     },
-    
+
+    // Hard Constraints
+    minimumSessionsPerDay: 2, // Default: at least 2 sessions per day
+
     soft: {
         balancedLoad: 60,
         compactSchedule: 70,
@@ -453,6 +461,7 @@ export const HARD_CONSTRAINTS: string[] = [
     'Maximum Daily Teaching Hours',
     'Maximum Classes Per Day (Teacher)',
     'Maximum Total Hours Per Week (Teacher)',
+    'Minimum Sessions Per Day (Section)',
     'Break Enforcement When Enabled',
     'Single Teacher Per Session',
     'Single Room Per Session',
@@ -576,6 +585,7 @@ export interface HardConstraintSet {
     special_subject_room_priority: boolean;
     break_enforcement: boolean;
     schedule_lock_protection: boolean;
+    minimum_sessions_per_day: number; // Minimum sessions a section must have on a scheduled day
 }
 
 export interface SoftConstraintSet {
