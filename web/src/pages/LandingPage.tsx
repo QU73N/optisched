@@ -1539,8 +1539,7 @@ const Footer: React.FC<FooterProps> = ({ onLogin, theme, activeView, onSwitchToL
 
                 <div className="lp-footer-col">
                     <h5>System Requirements</h5>
-                    <span>Screen: 1280×720 minimum (responsive)</span>
-                    <span>RAM: 4GB recommended, 2GB minimum</span>
+                    <span>Screen: 1280×720 minimum (responsive) · RAM: 4GB recommended, 2GB minimum</span>
                 </div>
             </div>
 
