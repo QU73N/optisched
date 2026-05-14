@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, Users,
+    LayoutDashboard, Users, User,
     Sparkles, AlertTriangle, Database,
     CheckCircle, XCircle, Shield, GitBranch,
     Gauge, FileCheck, FolderTree, KeyRound,
@@ -79,25 +79,44 @@ const HelpPage: React.FC = () => {
                 <HelpSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
 
                 <div className="sidebar-footer">
-                    <div className="sidebar-user">
-                        <div className="sidebar-avatar">
-                            {profile?.full_name
-                                ? profile.full_name.split(' ').map(n => n[0]).join('').substring(0, 2)
-                                : '?'}
-                        </div>
-                        <div className="sidebar-user-info">
-                            <span className="sidebar-user-name">{profile?.full_name || 'User'}</span>
-                            <button
-                                className={`${getRoleBadgeClass()} badge-sm`}
-                                title={displayRole}
-                            >
-                                {displayRole}
+                    {profile ? (
+                        <>
+                            <div className="sidebar-user">
+                                <div className="sidebar-avatar">
+                                    {profile.full_name
+                                        ? profile.full_name.split(' ').map(n => n[0]).join('').substring(0, 2)
+                                        : '?'}
+                                </div>
+                                <div className="sidebar-user-info">
+                                    <span className="sidebar-user-name">{profile.full_name}</span>
+                                    <button
+                                        className={`${getRoleBadgeClass()} badge-sm`}
+                                        title={displayRole}
+                                    >
+                                        {displayRole}
+                                    </button>
+                                </div>
+                            </div>
+                            <button className="sidebar-logout" onClick={handleSignOut} aria-label="Sign Out">
+                                <LogOut size={18} />
                             </button>
+                        </>
+                    ) : (
+                        <div className="sidebar-user-placeholder">
+                            <div className="sidebar-avatar-placeholder">
+                                <User size={24} />
+                            </div>
+                            <div className="sidebar-user-info">
+                                <span className="sidebar-user-name">Not signed in</span>
+                                <button
+                                    className="badge badge-sm"
+                                    onClick={() => navigate('/login')}
+                                >
+                                    Sign in
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <button className="sidebar-logout" onClick={handleSignOut} aria-label="Sign Out">
-                        <LogOut size={18} />
-                    </button>
+                    )}
                 </div>
             </aside>
 

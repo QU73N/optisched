@@ -415,6 +415,14 @@ const Navigation: React.FC<NavProps> = ({ onLogin, theme, onToggleTheme, animati
                 <div className="lp-nav-right">
                     <button
                         className="lp-theme-btn"
+                        onClick={() => window.open('/help', '_blank')}
+                        title="Open Help Center"
+                        aria-label="Help"
+                    >
+                        <BookOpen size={16} />
+                    </button>
+                    <button
+                        className="lp-theme-btn"
                         onClick={onToggleTheme}
                         title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
                         aria-label="Toggle theme"

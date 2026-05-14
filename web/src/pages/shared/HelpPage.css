@@ -497,3 +497,115 @@
         flex-direction: column;
     }
 }
+
+/* ========== SIDEBAR FOOTER ========== */
+.sidebar-footer {
+    position: relative;
+    padding: var(--space-4) 0 var(--space-4);
+    border-top: 1px solid var(--border-default);
+    overflow: hidden;
+    white-space: nowrap;
+    height: 64px;
+}
+
+.sidebar-user {
+    position: absolute;
+    left: 16px;
+    right: 52px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: var(--text-on-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.sidebar-user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sidebar-user-name {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-logout {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--bg-inset);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 180ms var(--ease-out);
+}
+
+.sidebar-logout:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* ========== SIDEBAR USER PLACEHOLDER ========== */
+.sidebar-user-placeholder {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar-avatar-placeholder {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-inset);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sidebar-user-placeholder .sidebar-user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sidebar-user-placeholder .sidebar-user-info .badge {
+    cursor: pointer;
+    transition: all 180ms var(--ease-out);
+}
+
+.sidebar-user-placeholder .sidebar-user-info .badge:hover {
+    background: var(--accent-primary);
+    color: var(--text-on-accent);
+}
