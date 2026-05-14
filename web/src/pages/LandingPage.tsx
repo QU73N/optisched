@@ -1502,6 +1502,16 @@ const Footer: React.FC<FooterProps> = ({ onLogin, theme, activeView, onSwitchToL
                     <a href="https://docs.optisched.edu" target="_blank" rel="noopener noreferrer">Documentation</a>
                     <a href="https://status.optisched.edu" target="_blank" rel="noopener noreferrer">System status</a>
                 </div>
+
+                <div className="lp-footer-col">
+                    <h5>System Requirements</h5>
+                    <span>Browser: Chrome 90+, Firefox 88+, Safari 14+, Edge 90+</span>
+                    <span>Screen: 1280×720 minimum (responsive)</span>
+                    <span>RAM: 4GB recommended, 2GB minimum</span>
+                    <span>Network: Stable internet connection</span>
+                    <span>JavaScript: Enabled (ES2020+)</span>
+                    <span>Animations: Optional (disable in settings)</span>
+                </div>
             </div>
 
             <div className="lp-footer-bottom">
