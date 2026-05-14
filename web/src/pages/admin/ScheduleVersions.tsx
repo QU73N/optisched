@@ -610,15 +610,6 @@ const ScheduleVersions: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* View Button */}
-                                <button
-                                    className="btn btn-secondary"
-                                    style={{ marginTop: 'auto', width: '100%' }}
-                                >
-                                    View Schedule
-                                    <ArrowRight size={14} style={{ marginLeft: 8 }} />
-                                </button>
-
                                 {/* Archive Button (Power Admin only) */}
                                 {isPowerAdmin && version.id !== 'current' && !version.is_active && version.change_type !== 'archive' && (
                                     <button
@@ -639,6 +630,15 @@ const ScheduleVersions: React.FC = () => {
                                         Archive
                                     </button>
                                 )}
+
+                                {/* View Button */}
+                                <button
+                                    className="btn btn-secondary"
+                                    style={{ marginTop: 'auto', width: '100%' }}
+                                >
+                                    View Schedule
+                                    <ArrowRight size={14} style={{ marginLeft: 8 }} />
+                                </button>
                             </div>
                         );
                     })}
