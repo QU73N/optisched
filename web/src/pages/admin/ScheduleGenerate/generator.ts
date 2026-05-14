@@ -1907,6 +1907,8 @@ export const optimizeSchedule = (
     let bestScore = initialScore;
     let iterations = 0;
     let improvements = 0;
+    let lastImprovementIteration = 0;
+    const stagnationThreshold = 100; // Stop if no improvement for 100 iterations
     
     // Helper function to check hard constraints
     const checkHardConstraints = (candidateEntries: PlacedEntry[]): boolean => {
@@ -2038,7 +2040,7 @@ export const optimizeSchedule = (
     };
     
     // Main optimization loop
-    while (iterations < maxIterations && Date.now() - startTime < timeLimit) {
+    while (iterations < maxIterations && Date.now() - startTime < timeLimit && iterations - lastImprovementIteration < stagnationThreshold) {
         iterations++;
         
         // Update progress every 50 iterations
@@ -2075,6 +2077,7 @@ export const optimizeSchedule = (
                 currentEntries = candidateEntries;
                 currentScore = newScore;
                 improvements++;
+                lastImprovementIteration = iterations;
                 
                 // Update best if this is the best so far
                 if (newScore > bestScore) {
@@ -2088,7 +2091,8 @@ export const optimizeSchedule = (
     // Calculate final score breakdown
     const finalScoreResult = calculateSoftConstraintScore(bestEntries, teachers, rooms, sections, config.soft);
     
-    console.log(`Optimization completed: ${iterations} iterations, ${improvements} improvements, score: ${initialScore.toFixed(2)} -> ${bestScore.toFixed(2)}`);
+    const stoppedEarly = iterations - lastImprovementIteration >= stagnationThreshold;
+    console.log(`Optimization completed: ${iterations} iterations, ${improvements} improvements, score: ${initialScore.toFixed(2)} -> ${bestScore.toFixed(2)}${stoppedEarly ? ' (stopped early due to stagnation)' : ''}`);
     
     return {
         entries: bestEntries,
