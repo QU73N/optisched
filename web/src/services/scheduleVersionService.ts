@@ -751,6 +751,19 @@ class ScheduleVersionService {
 
             console.log('[scheduleVersionService] SUBMIT: Using version ID:', versionId);
 
+            // Deactivate the old version before activating the new one
+            await this.supabase
+                .from('schedule_versions')
+                .update({ is_active: false })
+                .eq('batch_id', batchId)
+                .eq('is_active', true);
+
+            // Activate the new version
+            await this.supabase
+                .rpc('activate_batch_version', { p_version_id: versionId });
+
+            console.log('[scheduleVersionService] SUBMIT: Version activated');
+
             // Check for duplicate active versions in this batch before update
             const { data: allVersions } = await this.supabase
                 .from('schedule_versions')

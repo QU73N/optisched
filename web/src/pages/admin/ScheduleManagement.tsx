@@ -166,8 +166,27 @@ const ScheduleManagement: React.FC = () => {
                     .single();
 
                 if (version) {
+                    // Get all versions in this batch to generate letter suffix
+                    const { data: allBatchVersions } = await supabase
+                        .from('schedule_versions')
+                        .select('id, version_number, changed_at')
+                        .eq('batch_id', version.batch_id)
+                        .order('version_number', { ascending: true })
+                        .order('changed_at', { ascending: true });
+
+                    // Generate letter suffix based on position within same version_number
+                    let versionSuffix = '';
+                    if (allBatchVersions) {
+                        const sameVersionCount = allBatchVersions.filter(v => v.version_number === version.version_number).length;
+                        const versionIndex = allBatchVersions.findIndex(v => v.id === version.id);
+                        const sameVersionIndex = allBatchVersions.filter((v, i) => i <= versionIndex && v.version_number === version.version_number).length - 1;
+                        if (sameVersionCount > 1) {
+                            versionSuffix = String.fromCharCode(97 + sameVersionIndex); // a, b, c, ...
+                        }
+                    }
+
                     // Set initial version name (will be updated after schedules are loaded)
-                    setVersionName(`Version ${version.version_number}`);
+                    setVersionName(`Version ${version.version_number}${versionSuffix}`);
 
                     // Load sections, teachers, rooms, and subjects for filtering
                     // Use RPC for rooms and subjects to bypass RLS issues
@@ -302,7 +321,7 @@ const ScheduleManagement: React.FC = () => {
 
                     // Update version name with user-friendly status
                     const formattedStatus = liveStatus.charAt(0).toUpperCase() + liveStatus.slice(1);
-                    setVersionName(`Version ${version.version_number} (${formattedStatus})`);
+                    setVersionName(`Version ${version.version_number}${versionSuffix} (${formattedStatus})`);
 
                     setVersionStatus({
                         change_type: version.change_type,
