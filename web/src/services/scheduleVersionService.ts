@@ -983,18 +983,20 @@ class ScheduleVersionService {
             const hasActive = await this.hasActiveSchedule();
             console.log('[scheduleVersionService] PUBLISH: Has active published schedule:', hasActive);
 
-            // Deactivate existing published schedules
+            // Deactivate existing published schedules (but not archived ones)
             if (hasActive) {
                 console.log('[scheduleVersionService] PUBLISH: Deactivating existing published schedules');
-                await this.supabase.from('schedules').update({ is_active: false }).eq('status', 'published').eq('is_active', true);
-                
+                await this.supabase.from('schedules').update({ is_active: false }).eq('status', 'published').eq('is_active', true).neq('status', 'archived');
+
                 // Deactivate ALL old active versions from other batches (not just publish/overwrite/restore)
                 // This ensures status_change versions are also deactivated
+                // But exclude archived versions
                 console.log('[scheduleVersionService] PUBLISH: Deactivating old active versions from other batches');
                 await this.supabase.from('schedule_versions')
                     .update({ is_active: false })
                     .neq('batch_id', batchId)
-                    .eq('is_active', true);
+                    .eq('is_active', true)
+                    .neq('change_type', 'archive');
             }
 
             // Get active version
@@ -1168,36 +1170,41 @@ class ScheduleVersionService {
                 versions: allVersions?.map(v => ({ id: v.id, is_active: v.is_active, change_type: v.change_type }))
             });
 
-            // Update schedules back to draft status
+            // Update schedules back to draft status (but not archived ones)
             console.log('[scheduleVersionService] UNPUBLISH: Updating schedules to draft status');
             const { error: updateError } = await this.supabase.from('schedules')
                 .update({ status: 'draft', published_at: null })
-                .eq('batch_id', batchId).eq('is_active', true);
+                .eq('batch_id', batchId).eq('is_active', true).neq('status', 'archived');
             if (updateError) {
                 console.error('[scheduleVersionService] UNPUBLISH: Failed to update schedules:', updateError);
-                throw updateError;
+                throw new Error;
             }
 
             console.log('[scheduleVersionService] UNPUBLISH: Schedules updated successfully');
 
             // Update the existing active version to mark it as inactive (becomes "previous")
-            console.log('[scheduleVersionService] UNPUBLISH: Marking version as inactive');
-            const { error: versionUpdateError } = await this.supabase
-                .from('schedule_versions')
-                .update({
-                    is_active: false, // Mark as inactive so it shows as "previous"
-                    change_summary: 'Unpublished schedule (now previous)',
-                    change_reason: options.changeReason || 'Schedule unpublish',
-                    changed_by: this.currentUserId,
-                    changed_at: new Date().toISOString(),
-                })
-                .eq('id', activeVersion[0].id);
+            // But only if it's not already archived
+            if (activeVersion[0].change_type !== 'archive') {
+                console.log('[scheduleVersionService] UNPUBLISH: Marking version as inactive');
+                const { error: versionUpdateError } = await this.supabase
+                    .from('schedule_versions')
+                    .update({
+                        is_active: false, // Mark as inactive so it shows as "previous"
+                        change_summary: 'Unpublished schedule (now previous)',
+                        change_reason: options.changeReason || 'Schedule unpublish',
+                        changed_by: this.currentUserId,
+                        changed_at: new Date().toISOString(),
+                    })
+                    .eq('id', activeVersion[0].id);
 
-            if (versionUpdateError) {
-                console.error('[scheduleVersionService] UNPUBLISH: Version update failed, rolling back:', versionUpdateError);
-                // Rollback
-                await this.supabase.from('schedules').update({ status: 'published' }).eq('batch_id', batchId).eq('is_active', true);
-                throw new Error(`Version update failed: ${versionUpdateError.message}. Status has been reverted.`);
+                if (versionUpdateError) {
+                    console.error('[scheduleVersionService] UNPUBLISH: Version update failed, rolling back:', versionUpdateError);
+                    // Rollback
+                    await this.supabase.from('schedules').update({ status: 'published' }).eq('batch_id', batchId).eq('is_active', true);
+                    throw new Error(`Version update failed: ${versionUpdateError.message}. Status has been reverted.`);
+                }
+            } else {
+                console.log('[scheduleVersionService] UNPUBLISH: Skipping version update - version is already archived');
             }
 
             console.log('[scheduleVersionService] UNPUBLISH: Version marked as inactive successfully');
@@ -1349,21 +1356,23 @@ class ScheduleVersionService {
             createdBatchId = newBatch;
             console.log(`[VERSION SERVICE] Created batch ${createdBatchId}`);
 
-            // Step 2 - Deactivate existing published schedules
+            // Step 2 - Deactivate existing published schedules (but not archived ones)
             if (hasActive) {
                 const { error: deactivateError } = await this.supabase
                     .from('schedules')
                     .update({ is_active: false })
                     .eq('status', 'published')
-                    .eq('is_active', true);
+                    .eq('is_active', true)
+                    .neq('status', 'archived');
 
                 if (deactivateError) throw deactivateError;
-                
-                // Deactivate old published versions from other batches
+
+                // Deactivate old published versions from other batches (but not archived ones)
                 await this.supabase.from('schedule_versions')
                     .update({ is_active: false })
                     .in('change_type', ['publish', 'overwrite', 'restore'])
-                    .eq('is_active', true);
+                    .eq('is_active', true)
+                    .neq('change_type', 'archive');
             }
 
             // Step 3 - Insert new schedules with batch_id
