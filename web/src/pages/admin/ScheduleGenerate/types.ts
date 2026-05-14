@@ -410,7 +410,7 @@ export const DEFAULT_CONFIG: GenerationConfig = {
     },
 
     // Hard Constraints
-    minimumSessionsPerDay: 2, // Default: at least 2 sessions per day
+    minimumSessionsPerDay: 1, // Default: at least 1 session per day (no minimum)
 
     soft: {
         balancedLoad: 60,
