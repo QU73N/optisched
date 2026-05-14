@@ -15,7 +15,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ADMIN_ROLES, ROLE_DISPLAY_NAMES, hasAnyRole } from '../../types/database';
 import HelpSidebar from '../../components/HelpSidebar';
 import FloatingOptiBot from '../../components/FloatingOptiBot';
-import OptiBotSiderail from '../../components/OptiBotSiderail';
 import './HelpPage.css';
 
 const HelpPage: React.FC = () => {
@@ -792,23 +791,15 @@ const HelpPage: React.FC = () => {
                 </section>
                     </>
                 )}
-
-                {activeSection === 'optibot' && (
-                    <section className="help-section help-section-optibot" id="optibot">
-                        <div className="help-section-header">
-                            <h2>OptiBot Assistant</h2>
-                            <p>Chat with OptiBot, your AI assistant for OptiSched</p>
-                        </div>
-                        <div className="help-optibot-container">
-                            <OptiBotSiderail />
-                        </div>
-                    </section>
-                )}
             </main>
                 </div>
             </div>
 
-            {activeSection !== 'optibot' && <FloatingOptiBot />}
+            <aside className="siderail siderail-empty" aria-hidden="true">
+                {/* Empty siderail - placeholder for future use */}
+            </aside>
+
+            <FloatingOptiBot />
         </div>
     );
 };

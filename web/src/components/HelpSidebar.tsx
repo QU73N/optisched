@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    LayoutDashboard, Users, Sparkles, Shield, CheckCircle, AlertTriangle, ChevronDown, Star, Bot
+    LayoutDashboard, Users, Sparkles, Shield, CheckCircle, AlertTriangle, ChevronDown, Star
 } from 'lucide-react';
 import './HelpSidebar.css';
 
@@ -23,7 +23,6 @@ const HelpSidebar: React.FC<HelpSidebarProps> = ({ activeSection, onSectionChang
                 { id: 'key-features', label: 'Key Features', icon: Shield },
                 { id: 'best-practices', label: 'Best Practices', icon: CheckCircle },
                 { id: 'troubleshooting', label: 'Troubleshooting', icon: AlertTriangle },
-                { id: 'optibot', label: 'OptiBot Assistant', icon: Bot },
             ],
         },
     ], []);
