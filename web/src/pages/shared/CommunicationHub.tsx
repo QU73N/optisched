@@ -36,6 +36,7 @@ const CommunicationHub: React.FC = () => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [threads, setThreads] = useState<Thread[]>([]);
     const [allTeachers, setAllTeachers] = useState<TeacherProfile[]>([]);
+    const [allUsers, setAllUsers] = useState<TeacherProfile[]>([]);
     const [selectedThread, setSelectedThread] = useState<string | null>(null);
     const [selectedRecipientName, setSelectedRecipientName] = useState('');
     const [newMessage, setNewMessage] = useState('');
@@ -84,6 +85,28 @@ const CommunicationHub: React.FC = () => {
         }
     }, [isAdmin, profile?.id]);
 
+    const fetchAllUsers = useCallback(async () => {
+        try {
+            // Fetch all users from profiles table
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('id, avatar_url, full_name, role')
+                .order('full_name', { ascending: true });
+
+            if (error) {
+                console.error('Error fetching all users:', error);
+                return;
+            }
+
+            if (data) {
+                // Filter out the current user
+                setAllUsers(data.filter(u => u.id !== profile?.id));
+            }
+        } catch (err) {
+            console.error('Exception in fetchAllUsers:', err);
+        }
+    }, [profile?.id]);
+
     const fetchMessages = useCallback(async () => {
         try {
             let query = supabase
@@ -118,6 +141,7 @@ const CommunicationHub: React.FC = () => {
     useEffect(() => {
         fetchMessages();
         fetchAllTeachers();
+        fetchAllUsers();
 
         // Prevent body scrolling when CommunicationHub is mounted
         document.body.style.overflow = 'hidden';
@@ -150,7 +174,7 @@ const CommunicationHub: React.FC = () => {
                 mainContent.style.overflowX = previousMainOverflowX;
             }
         };
-    }, [profile, fetchMessages, fetchAllTeachers]);
+    }, [profile, fetchMessages, fetchAllTeachers, fetchAllUsers]);
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, selectedThread]);
 
     const buildThreads = async (msgs: Message[]) => {
@@ -309,17 +333,21 @@ const CommunicationHub: React.FC = () => {
         t.full_name?.toLowerCase().includes(search.toLowerCase())
     );
 
-    // When searching in conversations tab, also show matching teachers without existing conversations
+    const filteredUsers = allUsers.filter(u =>
+        u.full_name?.toLowerCase().includes(search.toLowerCase())
+    );
+
+    // When searching in conversations tab, also show matching users without existing conversations
     const searchResults = sidebarTab === 'conversations' && search.trim()
         ? [
             ...filteredThreads.map(t => ({ type: 'thread' as const, data: t })),
-            ...filteredTeachers
-                .filter(t => !threads.find(thread => thread.senderId === t.id))
-                .map(t => ({ type: 'teacher' as const, data: t }))
+            ...filteredUsers
+                .filter(u => !threads.find(thread => thread.senderId === u.id))
+                .map(u => ({ type: 'user' as const, data: u }))
         ]
         : [];
 
-    const resolvedThreadName = selectedRecipientName || threads.find(t => t.senderId === selectedThread)?.senderName || allTeachers.find(t => t.id === selectedThread)?.full_name || '';
+    const resolvedThreadName = selectedRecipientName || threads.find(t => t.senderId === selectedThread)?.senderName || allUsers.find(u => u.id === selectedThread)?.full_name || '';
     const threadMsgs = getThreadMessages();
 
     return (
@@ -346,7 +374,7 @@ const CommunicationHub: React.FC = () => {
                             margin: '4px 0 0 0',
                             fontWeight: 500
                         }}>
-                            {isAdmin ? `${threads.length} conversations • ${allTeachers.length} teachers` : `Chat with admin`}
+                            {isAdmin ? `${threads.length} conversations • ${allUsers.length} users` : `Chat with admin`}
                         </p>
                     </div>
                 </div>
@@ -565,17 +593,17 @@ const CommunicationHub: React.FC = () => {
                                                 )}
                                             </div>
                                         );
-                                    } else {
-                                        const t = result.data;
-                                        const isAdminRole = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'].includes(t.role);
+                                    } else if (result.type === 'user') {
+                                        const u = result.data;
+                                        const isAdminRole = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'].includes(u.role);
                                         return (
-                                            <div key={`teacher-${t.id}`}
-                                                onClick={() => startChatWith(t)}
+                                            <div key={`user-${u.id}`}
+                                                onClick={() => startChatWith(u)}
                                                 style={{
                                                     padding: '16px 20px',
                                                     cursor: 'pointer',
                                                     borderBottom: '1px solid var(--border-subtle)',
-                                                    background: selectedThread === t.id ? 'var(--bg-secondary)' : 'transparent',
+                                                    background: selectedThread === u.id ? 'var(--bg-secondary)' : 'transparent',
                                                     transition: 'all 150ms ease',
                                                     display: 'flex',
                                                     alignItems: 'center',
@@ -583,11 +611,11 @@ const CommunicationHub: React.FC = () => {
                                                     position: 'relative'
                                                 }}
                                                 onMouseEnter={e => {
-                                                    if (selectedThread !== t.id)
+                                                    if (selectedThread !== u.id)
                                                         e.currentTarget.style.background = 'var(--bg-hover)';
                                                 }}
                                                 onMouseLeave={e => {
-                                                    if (selectedThread !== t.id)
+                                                    if (selectedThread !== u.id)
                                                         e.currentTarget.style.background = 'transparent';
                                                 }}
                                             >
@@ -608,10 +636,10 @@ const CommunicationHub: React.FC = () => {
                                                     fontSize: '18px',
                                                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
                                                 }}>
-                                                    {t.avatar_url ? (
-                                                        <img src={t.avatar_url} alt={t.full_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    {u.avatar_url ? (
+                                                        <img src={u.avatar_url} alt={u.full_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                     ) : (
-                                                        t.full_name?.charAt(0)?.toUpperCase() || '?'
+                                                        u.full_name?.charAt(0)?.toUpperCase() || '?'
                                                     )}
                                                 </div>
                                                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -620,7 +648,7 @@ const CommunicationHub: React.FC = () => {
                                                             fontSize: '15px',
                                                             fontWeight: 600,
                                                             color: 'var(--text-primary)'
-                                                        }}>{t.full_name}</span>
+                                                        }}>{u.full_name}</span>
                                                         {isAdminRole && (
                                                             <span style={{
                                                                 fontSize: '10px',
@@ -641,7 +669,7 @@ const CommunicationHub: React.FC = () => {
                                                         Start new conversation
                                                     </span>
                                                 </div>
-                                                {selectedThread === t.id && (
+                                                {selectedThread === u.id && (
                                                     <div style={{
                                                         position: 'absolute',
                                                         left: 0,
