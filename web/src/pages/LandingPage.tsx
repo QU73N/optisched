@@ -1328,33 +1328,51 @@ const PricingSection: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
         {
             tier: 'Standard',
             description: 'Essential scheduling infrastructure',
-            scales: [
-                { name: 'Small Scale', price: 'PHP 24,900' },
-                { name: 'Mid Scale', price: 'PHP 39,900' },
-                { name: 'Large Scale', price: 'PHP 59,900' },
-                { name: 'University Scale', price: 'Custom Quote' },
+            price: 'PHP 24,900',
+            period: 'one-time',
+            features: [
+                'Up to 50 teachers',
+                'Up to 20 sections',
+                'Basic conflict detection',
+                'Schedule generation',
+                'Standard reports',
+                'Email support',
             ],
+            popular: false,
         },
         {
             tier: 'Premium',
             description: 'Intelligent scheduling optimization',
-            isPopular: true,
-            scales: [
-                { name: 'Small Scale', price: 'PHP 39,900' },
-                { name: 'Mid Scale', price: 'PHP 63,900' },
-                { name: 'Large Scale', price: 'PHP 95,900' },
-                { name: 'University Scale', price: 'Custom Quote' },
+            price: 'PHP 39,900',
+            period: 'one-time',
+            features: [
+                'Up to 100 teachers',
+                'Up to 50 sections',
+                'Advanced conflict resolution',
+                'AI-powered optimization',
+                'Custom reports & analytics',
+                'Priority email & chat support',
+                'Partial regeneration mode',
+                'Multi-institution support',
             ],
+            popular: true,
         },
         {
             tier: 'Enterprise',
             description: 'Tailored for your institution',
-            scales: [
-                { name: 'Small Scale', price: 'Custom Quote' },
-                { name: 'Mid Scale', price: 'Custom Quote' },
-                { name: 'Large Scale', price: 'Custom Quote' },
-                { name: 'University Scale', price: 'Custom Quote' },
+            price: 'Custom Quote',
+            period: 'contact sales',
+            features: [
+                'Unlimited teachers & sections',
+                'White-label customization',
+                'Dedicated account manager',
+                'Custom integrations',
+                'On-premise deployment option',
+                '24/7 phone support',
+                'SLA guarantee',
+                'Training & onboarding',
             ],
+            popular: false,
         },
     ];
 
@@ -1367,47 +1385,55 @@ const PricingSection: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
                 </p>
             </div>
 
-            <div className="pricing-table-container">
-                <table className="pricing-table">
-                    <thead>
-                        <tr>
-                            <th className="pricing-table-header-tier">Tier</th>
-                            <th className="pricing-table-header-scale">Small Scale</th>
-                            <th className="pricing-table-header-scale">Mid Scale</th>
-                            <th className="pricing-table-header-scale">Large Scale</th>
-                            <th className="pricing-table-header-scale">University Scale</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {pricingData.map((row) => (
-                            <tr key={row.tier} className={`pricing-table-row ${row.isPopular ? 'pricing-table-row-popular' : ''}`}>
-                                <td className="pricing-table-cell-tier">
-                                    {row.isPopular && (
-                                        <div className="pricing-popular-badge-inline">
-                                            <Sparkles size={12} /> Most Popular
-                                        </div>
-                                    )}
-                                    <div className="pricing-tier-name">{row.tier}</div>
-                                    <div className="pricing-tier-sub">{row.description}</div>
-                                </td>
-                                {row.scales.map((scale) => (
-                                    <td key={`${row.tier}-${scale.name}`} className="pricing-table-cell-price">
-                                        {scale.price}
-                                    </td>
-                                ))}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+            <div className="pricing-grid">
+                {pricingData.map((plan) => (
+                    <div
+                        key={plan.tier}
+                        className={`pricing-card ${plan.tier.toLowerCase()} ${plan.popular ? 'pricing-card-premium' : ''}`}
+                    >
+                        {plan.popular && (
+                            <div className="pricing-popular-badge">
+                                <Sparkles size={12} /> Most Popular
+                            </div>
+                        )}
+                        <div className="pricing-card-header">
+                            <div className={`pricing-tier-badge ${plan.tier.toLowerCase() === 'premium' ? 'pricing-tier-badge-premium' : plan.tier.toLowerCase() === 'enterprise' ? 'pricing-tier-badge-enterprise' : ''}`}>
+                                {plan.tier}
+                            </div>
+                            <div className="pricing-tier-name">{plan.tier}</div>
+                            <div className="pricing-tier-sub">{plan.description}</div>
+                        </div>
+                        <div className="pricing-tier-price">
+                            <span className="pricing-currency">{plan.price === 'Custom Quote' ? '' : 'PHP'}</span>
+                            <span className="pricing-amount">{plan.price === 'Custom Quote' ? 'Custom' : plan.price.replace('PHP ', '').replace(',', '')}</span>
+                            {plan.price !== 'Custom Quote' && <span className="pricing-period">/{plan.period}</span>}
+                        </div>
+                        <div className="pricing-features">
+                            <div className="pricing-features-include">Includes:</div>
+                            {plan.features.map((feature, index) => (
+                                <div key={index} className="pricing-feature">
+                                    <Check className="pricing-feature-icon" size={16} />
+                                    {feature}
+                                </div>
+                            ))}
+                        </div>
+                        <button
+                            className={`lp-btn lp-btn-lg ${plan.popular ? 'lp-btn-primary' : 'lp-btn-secondary'}`}
+                            onClick={plan.price === 'Custom Quote' ? () => window.location.href = 'mailto:sales@optisched.edu' : onLogin}
+                        >
+                            {plan.price === 'Custom Quote' ? 'Contact Sales' : 'Get Started'}
+                            {plan.price !== 'Custom Quote' && <ArrowRight size={16} />}
+                        </button>
+                    </div>
+                ))}
             </div>
 
             <div className="pricing-cta">
-                <button className="lp-btn lp-btn-primary lp-btn-lg" onClick={onLogin}>
-                    Get Started <ArrowRight size={16} />
-                </button>
-                <a href="mailto:sales@optisched.edu" className="lp-btn lp-btn-secondary lp-btn-lg">
-                    <Mail size={16} /> Contact Sales
-                </a>
+                <p style={{ fontSize: '14px', color: 'var(--lp-ink-soft)', textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
+                    All plans include lifetime updates, security patches, and access to our knowledge base.
+                    <br />
+                    Need help deciding? <a href="mailto:sales@optisched.edu" style={{ color: 'var(--lp-accent)' }}>Contact our sales team</a>.
+                </p>
             </div>
         </section>
     );
