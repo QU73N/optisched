@@ -258,10 +258,10 @@ const Layout: React.FC = () => {
                                 {displayRole}
                             </button>
                         </div>
+                        <button className="sidebar-logout" onClick={handleSignOut} aria-label="Sign Out">
+                            <LogOut size={18} />
+                        </button>
                     </div>
-                    <button className="sidebar-logout" onClick={handleSignOut} aria-label="Sign Out">
-                        <LogOut size={18} />
-                    </button>
                 </div>
             </aside>
 
