@@ -559,8 +559,8 @@ export function checkAllHardConstraints(
 }
 
 /**
- * Check if a section meets minimum sessions per day constraint
- * This is a post-generation check, not a placement-time check
+ * Check if a section meets minimum sessions per day constraint (HARD CONSTRAINT)
+ * This is a post-generation check that will fail the generation if violated
  */
 export function checkMinimumSessionsPerDay(
   placedSessions: PlacedSession[],
@@ -585,7 +585,7 @@ export function checkMinimumSessionsPerDay(
   for (const sectionId in sectionDayCounts) {
     for (const day in sectionDayCounts[sectionId]) {
       const count = sectionDayCounts[sectionId][day];
-      if (count < minimumSessions && minimumSessions > 1) {
+      if (count < minimumSessions) {
         violations.push({
           isViolated: true,
           violationType: 'minimum_sessions_per_day',

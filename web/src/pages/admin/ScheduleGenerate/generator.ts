@@ -3722,37 +3722,37 @@ export async function runGenerator(
         best = { ...best, recommendations };
     }
 
-    // Check minimum sessions per day constraint
+    // Check minimum sessions per day constraint (HARD CONSTRAINT)
     const minimumSessionsViolations: string[] = [];
-    if (config.minimumSessionsPerDay > 1) {
-        // Group entries by section and day
-        const sectionDayCounts: Record<string, Record<string, number>> = {};
-        for (const entry of best.entries) {
-            if (!sectionDayCounts[entry.sectionId]) {
-                sectionDayCounts[entry.sectionId] = {};
-            }
-            if (!sectionDayCounts[entry.sectionId][entry.day]) {
-                sectionDayCounts[entry.sectionId][entry.day] = 0;
-            }
-            sectionDayCounts[entry.sectionId][entry.day]++;
+    // Group entries by section and day
+    const sectionDayCounts: Record<string, Record<string, number>> = {};
+    for (const entry of best.entries) {
+        if (!sectionDayCounts[entry.sectionId]) {
+            sectionDayCounts[entry.sectionId] = {};
         }
+        if (!sectionDayCounts[entry.sectionId][entry.day]) {
+            sectionDayCounts[entry.sectionId][entry.day] = 0;
+        }
+        sectionDayCounts[entry.sectionId][entry.day]++;
+    }
 
-        // Check each section-day combination
-        for (const sectionId in sectionDayCounts) {
-            for (const day in sectionDayCounts[sectionId]) {
-                const count = sectionDayCounts[sectionId][day];
-                if (count < config.minimumSessionsPerDay) {
-                    const sectionName = sectionMap.get(sectionId)?.name || sectionId;
-                    minimumSessionsViolations.push(
-                        `Section ${sectionName} has only ${count} session(s) on ${day}, but minimum is ${config.minimumSessionsPerDay}.`
-                    );
-                }
+    // Check each section-day combination
+    for (const sectionId in sectionDayCounts) {
+        for (const day in sectionDayCounts[sectionId]) {
+            const count = sectionDayCounts[sectionId][day];
+            if (count < config.minimumSessionsPerDay) {
+                const sectionName = sectionMap.get(sectionId)?.name || sectionId;
+                minimumSessionsViolations.push(
+                    `Section ${sectionName} has only ${count} session(s) on ${day}, but minimum is ${config.minimumSessionsPerDay}.`
+                );
             }
         }
     }
 
     if (minimumSessionsViolations.length > 0) {
+        // Hard constraint violation - fail the generation
         best = { ...best, errors: [...best.errors, ...minimumSessionsViolations] };
+        throw new Error(`Minimum sessions per day constraint violated:\n${minimumSessionsViolations.join('\n')}`);
     }
 
     // Add hard constraint compliance status to result (all placements satisfy hard constraints by construction)
