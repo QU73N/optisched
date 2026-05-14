@@ -541,7 +541,7 @@ const ScheduleManagement: React.FC = () => {
                         console.warn('[SCHEDULE MGMT] Unable to verify schedules before submit', activeErr.message);
                     }
                     if (!activeSchedules || activeSchedules.length === 0) {
-                        showToast({ title: 'No schedules', message: 'This draft has no active schedules. Save as draft first, then submit.', type: 'warning' });
+                        showToast({ title: 'No active schedules', message: 'This draft version has no active schedules. Please view the draft version with active schedules, or regenerate the draft to create a new active version.', type: 'warning' });
                         return;
                     }
 
