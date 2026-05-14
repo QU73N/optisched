@@ -722,6 +722,8 @@ const ScheduleVersions: React.FC = () => {
                                          version.change_type === 'created' ? 'Schedule (Draft)' :
                                          version.change_type === 'status_change' && version.change_summary === 'Version archived' ? 'Schedule (Archived)' :
                                          version.change_type === 'status_change' && version.change_summary === 'Version restored from archive' ? 'Schedule (Published)' :
+                                         version.change_type === 'status_change' && version.change_summary === 'Schedule approved' ? 'Schedule (Approved)' :
+                                         version.change_type === 'status_change' && version.change_summary === 'Schedule rejected' ? 'Schedule (Rejected)' :
                                          version.change_type === 'status_change' ? 'Schedule (Submitted)' :
                                          ['publish', 'overwrite', 'restore'].includes(version.change_type) ? 'Schedule (Previous)' :
                                          'Schedule (Saved)'}
