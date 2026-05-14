@@ -455,14 +455,14 @@ const AdminDashboard: React.FC = () => {
             if (editingEvent) {
                 const { error } = await supabase.from('custom_events').update({
                     title: evTitle, description: evDesc, event_date: evDate,
-                    start_time: evStart, end_time: evEnd, room_name: evRoom
+                    start_time: evStart, end_time: evEnd, room: evRoom
                 }).eq('id', editingEvent.id);
                 if (error) throw error;
                 eventId = editingEvent.id;
             } else {
                 const { data, error } = await supabase.from('custom_events').insert({
                     title: evTitle, description: evDesc, event_date: evDate,
-                    start_time: evStart, end_time: evEnd, room_name: evRoom
+                    start_time: evStart, end_time: evEnd, room: evRoom
                 }).select('id').single();
 
                 if (error) throw error;
@@ -592,7 +592,7 @@ const AdminDashboard: React.FC = () => {
         setEvDate(ev.event_date);
         setEvStart(ev.start_time || '08:00');
         setEvEnd(ev.end_time || '10:00');
-        setEvRoom(ev.room_name || '');
+        setEvRoom(ev.room || '');
         setShowEventModal(true);
     };
 

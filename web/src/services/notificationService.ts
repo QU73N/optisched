@@ -187,8 +187,7 @@ export async function createAnnouncement(
     // Build query based on target group
     let query = supabase
         .from('profiles')
-        .select('id, role, section')
-        .eq('is_active', true);
+        .select('id, role, section');
 
     // Filter by target group
     if (targetGroup === 'Teachers') {

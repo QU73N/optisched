@@ -71,7 +71,7 @@ export interface CustomEvent {
     event_date: string;
     start_time: string;
     end_time: string;
-    room_name: string | null;
+    room: string | null;
     created_by: string;
 }
 
