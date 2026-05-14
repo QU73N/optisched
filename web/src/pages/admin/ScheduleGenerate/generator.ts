@@ -3086,7 +3086,10 @@ export async function runGenerator(
     // Initialize metadata for orchestrated multi-attempt logic
     let attemptMetadata = { attempt_count: 0, best_score: 0 };
 
+    console.log('[GENERATOR] Starting generation loop, maxAttempts:', config.maxAttempts);
+
     for (let attempt = 0; attempt < config.maxAttempts; attempt++) {
+        console.log(`[GENERATOR] Attempt ${attempt + 1}/${config.maxAttempts} starting`);
         const busy: Busy[] = baseBusy.slice();
         const entries: PlacedEntry[] = [];
         const errors: string[] = [];
@@ -3593,6 +3596,7 @@ export async function runGenerator(
         if (isBetter) best = current;
         // Step 7 (Multi-Attempt Orchestrator): Update metadata after each attempt
         attemptMetadata = updateAttemptMetadata(attemptMetadata, attempt + 1, entries.length, score);
+        console.log(`[GENERATOR] Attempt ${attempt + 1}/${config.maxAttempts} completed: placed=${current.placed}/${current.total}, score=${current.score.toFixed(2)}, best.placed=${best.placed}/${best.total}, best.score=${best.score.toFixed(2)}`);
         if (best.placed === best.total && best.score >= 85) break;
     }
 
@@ -3727,37 +3731,51 @@ export async function runGenerator(
     }
 
     // Check minimum sessions per day constraint (HARD CONSTRAINT)
+    console.log('[GENERATOR] Checking minimum sessions per day constraint, minimum:', config.minimumSessionsPerDay);
     const minimumSessionsViolations: string[] = [];
-    // Group entries by section and day
-    const sectionDayCounts: Record<string, Record<string, number>> = {};
-    for (const entry of best.entries) {
-        if (!sectionDayCounts[entry.sectionId]) {
-            sectionDayCounts[entry.sectionId] = {};
+    try {
+        // Group entries by section and day
+        const sectionDayCounts: Record<string, Record<string, number>> = {};
+        for (const entry of best.entries) {
+            if (!sectionDayCounts[entry.sectionId]) {
+                sectionDayCounts[entry.sectionId] = {};
+            }
+            if (!sectionDayCounts[entry.sectionId][entry.day]) {
+                sectionDayCounts[entry.sectionId][entry.day] = 0;
+            }
+            sectionDayCounts[entry.sectionId][entry.day]++;
         }
-        if (!sectionDayCounts[entry.sectionId][entry.day]) {
-            sectionDayCounts[entry.sectionId][entry.day] = 0;
-        }
-        sectionDayCounts[entry.sectionId][entry.day]++;
-    }
 
-    // Check each section-day combination
-    for (const sectionId in sectionDayCounts) {
-        for (const day in sectionDayCounts[sectionId]) {
-            const count = sectionDayCounts[sectionId][day];
-            if (count < config.minimumSessionsPerDay) {
-                const sectionName = sectionMap.get(sectionId)?.name || sectionId;
-                minimumSessionsViolations.push(
-                    `Section ${sectionName} has only ${count} session(s) on ${day}, but minimum is ${config.minimumSessionsPerDay}.`
-                );
+        console.log('[GENERATOR] Section-day counts:', sectionDayCounts);
+
+        // Check each section-day combination
+        for (const sectionId in sectionDayCounts) {
+            for (const day in sectionDayCounts[sectionId]) {
+                const count = sectionDayCounts[sectionId][day];
+                if (count < config.minimumSessionsPerDay) {
+                    const sectionName = sectionMap.get(sectionId)?.name || sectionId;
+                    const violation = `Section ${sectionName} has only ${count} session(s) on ${day}, but minimum is ${config.minimumSessionsPerDay}.`;
+                    console.log('[GENERATOR] VIOLATION:', violation);
+                    minimumSessionsViolations.push(violation);
+                }
             }
         }
+
+        if (minimumSessionsViolations.length > 0) {
+            // Hard constraint violation - fail the generation
+            console.log('[GENERATOR] Minimum sessions constraint violated, throwing error');
+            best = { ...best, errors: [...best.errors, ...minimumSessionsViolations] };
+            throw new Error(`Minimum sessions per day constraint violated:\n${minimumSessionsViolations.join('\n')}`);
+        }
+
+        console.log('[GENERATOR] Minimum sessions constraint passed');
+    } catch (error) {
+        console.error('[GENERATOR] Error in minimum sessions constraint check:', error);
+        throw error;
     }
 
-    if (minimumSessionsViolations.length > 0) {
-        // Hard constraint violation - fail the generation
-        best = { ...best, errors: [...best.errors, ...minimumSessionsViolations] };
-        throw new Error(`Minimum sessions per day constraint violated:\n${minimumSessionsViolations.join('\n')}`);
-    }
+    // Step 11 (Generation Result Construction): Build final result with all metadata
+    console.log('[GENERATOR] Building final generation result');
 
     // Add hard constraint compliance status to result (all placements satisfy hard constraints by construction)
     best = { ...best, hardConstraintComplianceStatus: { noTeacherOverlap: true, noRoomOverlap: true, noSectionOverlap: true, roomCapacityCompliance: true, teacherQualificationEnforcement: true, teacherAvailabilityEnforcement: true, minimumSessionsPerDay: minimumSessionsViolations.length === 0 } };
@@ -3817,10 +3835,12 @@ export async function runGenerator(
     // Handle different overflow policies for impossible schedules
     if (config.overflowPolicy === 'fail' && best.placed < best.total) {
         // Fail policy: Return error if not all tasks placed
+        console.log('[GENERATOR] Overflow policy is fail, but not all sessions placed. Throwing error.');
         throw new Error(`Failed to place all sessions. Only ${best.placed} of ${best.total} placed.`);
     }
     // 'relax_soft', 'expand_scope', and 'partial_only' all return the best result even if incomplete
     // 'expand_scope' would require additional logic to expand the scope (future enhancement)
 
+    console.log('[GENERATOR] Generation completed successfully, returning result');
     return best;
 }
