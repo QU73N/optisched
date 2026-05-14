@@ -266,7 +266,7 @@ const ScheduleVersions: React.FC = () => {
             return;
         }
 
-        if (version.change_type === 'archive') {
+        if (version.change_type === 'status_change' && version.change_summary === 'Version archived') {
             showToast({ title: 'Already archived', message: 'This version is already archived', type: 'error' });
             return;
         }
@@ -279,11 +279,11 @@ const ScheduleVersions: React.FC = () => {
                 try {
                     console.log('[SCHEDULE VERSIONS] Archiving version:', version.id, version.label);
 
-                    // Update the version change_type to 'archive'
+                    // Update the version change_type to 'status_change'
                     const { error: updateVersionError } = await supabase
                         .from('schedule_versions')
                         .update({
-                            change_type: 'archive',
+                            change_type: 'status_change',
                             change_summary: 'Version archived',
                         })
                         .eq('id', version.id);
@@ -583,8 +583,8 @@ const ScheduleVersions: React.FC = () => {
                                     }}>
                                         {isGloballyActive ? 'Schedule (Current)' :
                                          version.change_type === 'created' ? 'Schedule (Draft)' :
+                                         version.change_type === 'status_change' && version.change_summary === 'Version archived' ? 'Schedule (Archived)' :
                                          version.change_type === 'status_change' ? 'Schedule (Submitted)' :
-                                         version.change_type === 'archive' ? 'Schedule (Archived)' :
                                          ['publish', 'overwrite', 'restore'].includes(version.change_type) ? 'Schedule (Previous)' :
                                          'Schedule (Saved)'}
                                     </h3>
@@ -621,7 +621,7 @@ const ScheduleVersions: React.FC = () => {
                                 </div>
 
                                 {/* Archive Button (Power Admin only) */}
-                                {isPowerAdmin && version.id !== 'current' && !version.is_active && version.change_type !== 'archive' && (
+                                {isPowerAdmin && version.id !== 'current' && !version.is_active && !(version.change_type === 'status_change' && version.change_summary === 'Version archived') && (
                                     <button
                                         className="btn"
                                         style={{

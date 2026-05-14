@@ -646,11 +646,11 @@ const ScheduleManagement: React.FC = () => {
                 try {
                     console.log('[SCHEDULE MGMT] Archiving version:', versionId, 'batch:', versionStatus.batch_id);
 
-                    // Update the version change_type to 'archive' and deactivate it
+                    // Update the version change_type to 'status_change' and deactivate it
                     const { error: versionError } = await supabase
                         .from('schedule_versions')
                         .update({
-                            change_type: 'archive',
+                            change_type: 'status_change',
                             change_summary: 'Version archived',
                             is_active: false,
                         })

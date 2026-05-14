@@ -39,7 +39,7 @@ export interface ScheduleVersion {
     schedule_id: string;
     version_number: number;
     snapshot: Schedule;
-    change_type: 'created' | 'updated' | 'deleted' | 'status_change' | 'checkpoint' | 'publish' | 'overwrite' | 'restore' | 'archive';
+    change_type: 'created' | 'updated' | 'deleted' | 'status_change' | 'checkpoint' | 'publish' | 'overwrite' | 'restore';
     change_summary: string;
     change_reason: string;
     state_hash: string;
@@ -1017,7 +1017,7 @@ class ScheduleVersionService {
                     .update({ is_active: false })
                     .neq('batch_id', batchId)
                     .eq('is_active', true)
-                    .neq('change_type', 'archive');
+                    .or('change_type.neq.status_change,change_summary.neq.Version archived');
             }
 
             // Get active version
@@ -1213,7 +1213,7 @@ class ScheduleVersionService {
 
             // Update the existing active version to mark it as inactive (becomes "previous")
             // But only if it's not already archived
-            if (activeVersion[0].change_type !== 'archive') {
+            if (activeVersion[0].change_type !== 'status_change' || activeVersion[0].change_summary !== 'Version archived') {
                 console.log('[scheduleVersionService] UNPUBLISH: Marking version as inactive');
                 const { error: versionUpdateError } = await this.supabase
                     .from('schedule_versions')
@@ -1401,7 +1401,7 @@ class ScheduleVersionService {
                     .update({ is_active: false })
                     .in('change_type', ['publish', 'overwrite', 'restore'])
                     .eq('is_active', true)
-                    .neq('change_type', 'archive');
+                    .or('change_type.neq.status_change,change_summary.neq.Version archived');
             }
 
             // Step 3 - Insert new schedules with batch_id
@@ -1966,7 +1966,7 @@ class ScheduleVersionService {
             }
 
             // Check if version is already archived
-            if (versionData.change_type === 'archive') {
+            if (versionData.change_type === 'status_change' && versionData.change_summary === 'Version archived') {
                 return {
                     success: false,
                     message: 'Version is already archived',
@@ -1990,11 +1990,11 @@ class ScheduleVersionService {
                 };
             }
 
-            // Update the version change_type to 'archive'
+            // Update the version change_type to 'status_change'
             const { error: updateVersionError } = await this.supabase
                 .from('schedule_versions')
                 .update({
-                    change_type: 'archive',
+                    change_type: 'status_change',
                     change_summary: reason || 'Version archived',
                     change_reason: reason || 'Version archived',
                 })
