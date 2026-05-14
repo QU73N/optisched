@@ -46,46 +46,72 @@ const CommunicationHub: React.FC = () => {
     const isAdmin = ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager'].some(r => roles.includes(r as 'admin' | 'power_admin' | 'system_admin' | 'schedule_admin' | 'schedule_manager'));
 
     const fetchAllTeachers = useCallback(async () => {
-        let query = supabase
-            .from('profiles')
-            .select('id, full_name, avatar_url, role')
-            .order('full_name', { ascending: true });
+        try {
+            if (!isAdmin) {
+                // Teachers can only chat with admins
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('id, avatar_url, full_name, role')
+                    .in('role', ['admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager']);
 
-        // If current user is a teacher, only show specific admin positions: admin (power admin) and schedule manager
-        if (!isAdmin) {
-            query = query.in('role', ['admin', 'power_admin', 'schedule_manager']);
-        } else {
-            // Admins see everyone
-            query = query.in('role', ['teacher', 'admin', 'power_admin', 'system_admin', 'schedule_admin', 'schedule_manager']);
-        }
+                if (error) {
+                    console.error('Error fetching admins:', error);
+                    return;
+                }
 
-        const { data } = await query;
+                if (data) {
+                    setAllTeachers(data);
+                }
+            } else {
+                // Admins can chat with all teachers
+                const { data, error } = await supabase
+                    .from('teachers')
+                    .select('id, avatar_url, full_name, role')
+                    .eq('is_public', true);
 
-        if (data) {
-            // Filter out the current user
-            setAllTeachers(data.filter(t => t.id !== profile?.id));
+                if (error) {
+                    console.error('Error fetching teachers:', error);
+                    return;
+                }
+
+                if (data) {
+                    // Filter out the current user
+                    setAllTeachers(data.filter(t => t.id !== profile?.id));
+                }
+            }
+        } catch (err) {
+            console.error('Exception in fetchAllTeachers:', err);
         }
     }, [isAdmin, profile?.id]);
 
     const fetchMessages = useCallback(async () => {
-        let query = supabase
-            .from('admin_messages')
-            .select('*')
-            .order('created_at', { ascending: true });
+        try {
+            let query = supabase
+                .from('admin_messages')
+                .select('*')
+                .order('created_at', { ascending: true });
 
-        // If teacher, only get their own messages
-        if (!isAdmin) {
-            query = query.or(`sender_id.eq.${profile?.id},recipient_id.eq.${profile?.id}`);
-        } else {
-            // If admin, only get messages sent to ALL admins (null), or specific to them, or sent by them
-            query = query.or(`recipient_id.is.null,recipient_id.eq.${profile?.id},sender_id.eq.${profile?.id}`);
-        }
+            // If teacher, only get their own messages
+            if (!isAdmin) {
+                query = query.or(`sender_id.eq.${profile?.id},recipient_id.eq.${profile?.id}`);
+            } else {
+                // If admin, only get messages sent to ALL admins (null), or specific to them, or sent by them
+                query = query.or(`recipient_id.is.null,recipient_id.eq.${profile?.id},sender_id.eq.${profile?.id}`);
+            }
 
-        const { data } = await query;
+            const { data, error } = await query;
 
-        if (data) {
-            setMessages(data);
-            await buildThreads(data);
+            if (error) {
+                console.error('Error fetching messages:', error);
+                return;
+            }
+
+            if (data) {
+                setMessages(data);
+                await buildThreads(data);
+            }
+        } catch (err) {
+            console.error('Exception in fetchMessages:', err);
         }
     }, [isAdmin, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -165,10 +191,14 @@ const CommunicationHub: React.FC = () => {
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
         );
         if (senderIds.length > 0) {
-            const { data: profiles } = await supabase
+            const { data: profiles, error: profileError } = await supabase
                 .from('profiles')
                 .select('id, avatar_url, full_name')
                 .in('id', senderIds);
+
+            if (profileError) {
+                console.error('Error fetching profiles:', profileError);
+            }
 
             if (profiles) {
                 profiles.forEach(p => {
@@ -204,17 +234,23 @@ const CommunicationHub: React.FC = () => {
         if (!newMessage.trim() || sending || !selectedThread) return;
         setSending(true);
         try {
-            await supabase.from('admin_messages').insert({
+            const { error } = await supabase.from('admin_messages').insert({
                 sender_id: profile?.id,
                 sender_name: profile?.full_name || (isAdmin ? 'Admin' : 'Teacher'),
                 message: newMessage.trim(),
                 direction: isAdmin ? 'admin_to_teacher' : 'teacher_to_admin',
                 recipient_id: selectedThread !== 'admin' ? selectedThread : undefined,
             });
+
+            if (error) {
+                console.error('Error sending message:', error);
+                return;
+            }
+
             setNewMessage('');
             fetchMessages();
         } catch (err) {
-            console.error(err);
+            console.error('Exception in handleSend:', err);
         } finally {
             setSending(false);
         }
@@ -226,20 +262,37 @@ const CommunicationHub: React.FC = () => {
     };
 
     const markMessagesAsRead = useCallback(async (threadId: string) => {
-        // Mark all unread messages from this thread as read
-        const unreadMessages = messages.filter(m =>
-            m.sender_id === threadId &&
-            m.recipient_id === profile?.id &&
-            !m.is_read
-        );
+        try {
+            // Mark all unread messages from this thread as read
+            const unreadMessages = messages.filter(m =>
+                m.sender_id === threadId &&
+                m.recipient_id === profile?.id &&
+                !m.is_read
+            );
 
-        if (unreadMessages.length > 0) {
-            await supabase
-                .from('admin_messages')
-                .update({ is_read: true })
-                .in('id', unreadMessages.map(m => m.id));
+            if (unreadMessages.length > 0) {
+                const ids = unreadMessages.map(m => m.id);
+                const { error } = await supabase
+                    .from('admin_messages')
+                    .update({ is_read: true })
+                    .in('id', ids);
+
+                if (error) {
+                    console.error('Error marking messages as read:', error);
+                    return;
+                }
+
+                // Update local state immediately so unread counter clears
+                const updated = messages.map(m =>
+                    ids.includes(m.id) ? { ...m, is_read: true } : m
+                );
+                setMessages(updated);
+                await buildThreads(updated);
+            }
+        } catch (err) {
+            console.error('Exception in markMessagesAsRead:', err);
         }
-    }, [messages, profile?.id]);
+    }, [messages, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Mark messages as read when a thread is selected
     useEffect(() => {
@@ -302,14 +355,13 @@ const CommunicationHub: React.FC = () => {
             <div style={{ flex: 1, display: 'flex', gap: 0, overflow: 'hidden', minHeight: 0 }}>
                 {/* Thread List / Teacher Directory */}
                 <div style={{
-                    width: selectedThread ? 360 : '100%',
-                    maxWidth: 400,
+                    width: 360,
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
                     flexShrink: 0,
                     transition: 'none',
-                    borderRight: selectedThread ? '1px solid var(--border-subtle)' : 'none',
+                    borderRight: '1px solid var(--border-subtle)',
                     background: 'var(--bg-primary)'
                 }}>
                     {/* Tab Switcher */}
