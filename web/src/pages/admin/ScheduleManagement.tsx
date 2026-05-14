@@ -139,6 +139,7 @@ const ScheduleManagement: React.FC = () => {
     const [sections, setSections] = useState<{ id: string; name: string; program: string | null; year_level: number | null; student_count?: number }[]>([]);
     const [teachers, setTeachers] = useState<{ id: string; full_name: string; department: string; is_active: boolean }[]>([]);
     const [rooms, setRooms] = useState<{ id: string; name: string; building: string | null; type: string | null; capacity: number | null; floor: number | null; compatible_subject_ids?: string[] }[]>([]);
+    const [subjects, setSubjects] = useState<{ id: string; name: string; code: string; type: 'common' | 'special'; compatible_room_ids?: string[] }[]>([]);
     const [versionName, setVersionName] = useState<string | null>(null);
     const [versionStatus, setVersionStatus] = useState<{
         change_type: string;
@@ -267,6 +268,7 @@ const ScheduleManagement: React.FC = () => {
                     setSections(loadedSections);
                     setTeachers(loadedTeachers);
                     setRooms(loadedRooms);
+                    setSubjects(loadedSubjects);
 
                     // Reconstruct schedules from snapshot with fallback to RPC data if IDs are missing
                     const snapshot = version.snapshot as VersionSnapshot[];
@@ -279,6 +281,11 @@ const ScheduleManagement: React.FC = () => {
                             const teacher = loadedTeachers.find(t => t.id === sched.teacher_id);
                             const room = loadedRooms.find(r => r.id === sched.room_id);
                             const section = loadedSections.find(s => s.id === sched.section_id);
+
+                            // Debug logging for missing subjects
+                            if (!subject) {
+                                console.warn('[ScheduleManagement] Subject not found for schedule:', sched.id, 'subject_id:', sched.subject_id, 'loadedSubjects count:', loadedSubjects.length);
+                            }
 
                             schedulesFromVersion.push({
                                 id: sched.id,
