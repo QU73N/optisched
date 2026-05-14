@@ -281,20 +281,34 @@ const ScheduleManagement: React.FC = () => {
                             });
                         }
                     }
+                    // Resolve live status from the actual schedules table (snapshot is frozen at version creation)
+                    const batchIdFromSnapshot = schedulesFromVersion[0]?.batch_id || version.batch_id || null;
+                    let liveStatus = schedulesFromVersion[0]?.status || 'draft';
+                    if (batchIdFromSnapshot) {
+                        const { data: liveSchedules } = await supabase
+                            .from('schedules')
+                            .select('status')
+                            .eq('batch_id', batchIdFromSnapshot)
+                            .eq('is_active', true);
+                        if (liveSchedules && liveSchedules.length > 0) {
+                            const uniqueLive = new Set(liveSchedules.map(s => s.status));
+                            liveStatus = uniqueLive.size === 1 ? liveSchedules[0].status : 'mixed';
+                            // Sync local schedule rows so display matches live status
+                            schedulesFromVersion.forEach(s => { s.status = liveStatus; });
+                        }
+                    }
+
                     setSchedules(schedulesFromVersion);
-                    // Verify all schedules in the batch have the same status
-                    const uniqueStatuses = new Set(schedulesFromVersion.map(s => s.status));
-                    const consistentStatus = uniqueStatuses.size === 1 ? schedulesFromVersion[0]?.status : 'mixed';
-                    
+
                     // Update version name with user-friendly status
-                    const formattedStatus = consistentStatus.charAt(0).toUpperCase() + consistentStatus.slice(1);
+                    const formattedStatus = liveStatus.charAt(0).toUpperCase() + liveStatus.slice(1);
                     setVersionName(`Version ${version.version_number} (${formattedStatus})`);
-                    
+
                     setVersionStatus({
                         change_type: version.change_type,
                         is_active: version.is_active,
-                        schedules_status: consistentStatus,
-                        batch_id: schedulesFromVersion[0]?.batch_id || null,
+                        schedules_status: liveStatus,
+                        batch_id: batchIdFromSnapshot,
                     });
                 }
             } catch (error) {
