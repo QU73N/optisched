@@ -293,6 +293,15 @@ const ScheduleVersions: React.FC = () => {
                 try {
                     console.log('[SCHEDULE VERSIONS] Archiving version:', version.id, version.label);
 
+                    // Optimistic UI update: immediately update local state
+                    setVersions(prevVersions =>
+                        prevVersions.map(v =>
+                            v.id === version.id
+                                ? { ...v, change_type: 'status_change', change_summary: 'Version archived' }
+                                : v
+                        )
+                    );
+
                     // Update the version change_type to 'status_change'
                     const { error: updateVersionError } = await supabase
                         .from('schedule_versions')
@@ -304,6 +313,14 @@ const ScheduleVersions: React.FC = () => {
 
                     if (updateVersionError) {
                         console.error('[SCHEDULE VERSIONS] Failed to update version to archive:', updateVersionError);
+                        // Rollback optimistic update
+                        setVersions(prevVersions =>
+                            prevVersions.map(v =>
+                                v.id === version.id
+                                    ? { ...v, change_type: version.change_type, change_summary: version.change_summary }
+                                    : v
+                            )
+                        );
                         throw updateVersionError;
                     }
 
@@ -326,6 +343,14 @@ const ScheduleVersions: React.FC = () => {
 
                         if (updateSchedulesError) {
                             console.error('[SCHEDULE VERSIONS] Failed to update schedules to archived:', updateSchedulesError);
+                            // Rollback optimistic update
+                            setVersions(prevVersions =>
+                                prevVersions.map(v =>
+                                    v.id === version.id
+                                        ? { ...v, change_type: version.change_type, change_summary: version.change_summary }
+                                        : v
+                                )
+                            );
                             throw updateSchedulesError;
                         }
                         console.log('[SCHEDULE VERSIONS] Schedules updated to archived');
@@ -369,6 +394,15 @@ const ScheduleVersions: React.FC = () => {
                 try {
                     console.log('[SCHEDULE VERSIONS] Unarchiving version:', version.id, version.label);
 
+                    // Optimistic UI update: immediately update local state
+                    setVersions(prevVersions =>
+                        prevVersions.map(v =>
+                            v.id === version.id
+                                ? { ...v, change_summary: 'Version restored from archive' }
+                                : v
+                        )
+                    );
+
                     // Get the batch_id from the version
                     const { data: versionData } = await supabase
                         .from('schedule_versions')
@@ -386,6 +420,14 @@ const ScheduleVersions: React.FC = () => {
 
                         if (updateSchedulesError) {
                             console.error('[SCHEDULE VERSIONS] Failed to restore schedules:', updateSchedulesError);
+                            // Rollback optimistic update
+                            setVersions(prevVersions =>
+                                prevVersions.map(v =>
+                                    v.id === version.id
+                                        ? { ...v, change_summary: version.change_summary }
+                                        : v
+                                )
+                            );
                             throw updateSchedulesError;
                         }
                         console.log('[SCHEDULE VERSIONS] Schedules restored to published');
@@ -403,6 +445,14 @@ const ScheduleVersions: React.FC = () => {
 
                     if (updateVersionError) {
                         console.error('[SCHEDULE VERSIONS] Failed to update version:', updateVersionError);
+                        // Rollback optimistic update
+                        setVersions(prevVersions =>
+                            prevVersions.map(v =>
+                                v.id === version.id
+                                    ? { ...v, change_summary: version.change_summary }
+                                    : v
+                            )
+                        );
                         throw updateVersionError;
                     }
 
