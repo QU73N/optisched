@@ -8,7 +8,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { History, CheckCircle, AlertTriangle, ArrowRight, FileText, Trash2, Archive } from 'lucide-react';
+import { History, CheckCircle, AlertTriangle, ArrowRight, FileText, Trash2, Archive, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -143,16 +143,20 @@ const ScheduleVersions: React.FC = () => {
                     // Inactive published versions
                     filteredVersions = filteredVersions.filter(v => !v.is_active && ['publish', 'overwrite', 'restore'].includes(v.change_type));
                 } else if (filter === 'submitted') {
-                    filteredVersions = filteredVersions.filter(v => ['status_change'].includes(v.change_type));
+                    filteredVersions = filteredVersions.filter(v => 
+                        ['status_change'].includes(v.change_type) && 
+                        !(v.change_summary === 'Version archived' || v.change_summary === 'Version restored from archive')
+                    );
                 } else if (filter === 'draft') {
                     filteredVersions = filteredVersions.filter(v => ['created'].includes(v.change_type));
                 } else if (filter === 'archived') {
-                    filteredVersions = filteredVersions.filter(v => ['archive'].includes(v.change_type));
+                    filteredVersions = filteredVersions.filter(v => v.change_type === 'status_change' && v.change_summary === 'Version archived');
                 }
             } else {
-                // For 'all', show all meaningful version types
+                // For 'all', show all meaningful version types except archived and restored
                 filteredVersions = filteredVersions.filter(v =>
-                    ['publish', 'overwrite', 'restore', 'status_change', 'created', 'archive'].includes(v.change_type)
+                    ['publish', 'overwrite', 'restore', 'status_change', 'created'].includes(v.change_type) &&
+                    !(v.change_type === 'status_change' && (v.change_summary === 'Version archived' || v.change_summary === 'Version restored from archive'))
                 );
             }
             
@@ -326,6 +330,79 @@ const ScheduleVersions: React.FC = () => {
                 } catch (err: unknown) {
                     console.error('[SCHEDULE VERSIONS] Failed to archive version:', err);
                     showToast({ title: 'Failed to archive', message: err instanceof Error ? err.message : String(err), type: 'error' });
+                }
+            }
+        });
+    };
+
+    const handleUnarchiveVersion = (version: LabeledVersion) => {
+        if (!isPowerAdmin) {
+            showToast({ title: 'Permission denied', message: 'Only Power Admin can unarchive versions', type: 'error' });
+            return;
+        }
+
+        if (version.id === 'current') {
+            showToast({ title: 'Cannot unarchive', message: 'Cannot unarchive current schedules', type: 'error' });
+            return;
+        }
+
+        if (!(version.change_type === 'status_change' && version.change_summary === 'Version archived')) {
+            showToast({ title: 'Not archived', message: 'This version is not archived', type: 'error' });
+            return;
+        }
+
+        setConfirmDialog({
+            open: true,
+            title: 'Unarchive Schedule Version',
+            message: `This will unarchive version ${version.label || 'N/A'} and restore all associated schedules. Are you sure?`,
+            onConfirm: async () => {
+                try {
+                    console.log('[SCHEDULE VERSIONS] Unarchiving version:', version.id, version.label);
+
+                    // Get the batch_id from the version
+                    const { data: versionData } = await supabase
+                        .from('schedule_versions')
+                        .select('batch_id')
+                        .eq('id', version.id)
+                        .single();
+
+                    if (versionData?.batch_id) {
+                        console.log('[SCHEDULE VERSIONS] Restoring schedules in batch:', versionData.batch_id);
+                        // Update the schedules in this batch to 'published' status
+                        const { error: updateSchedulesError } = await supabase
+                            .from('schedules')
+                            .update({ status: 'published' })
+                            .eq('batch_id', versionData.batch_id);
+
+                        if (updateSchedulesError) {
+                            console.error('[SCHEDULE VERSIONS] Failed to restore schedules:', updateSchedulesError);
+                            throw updateSchedulesError;
+                        }
+                        console.log('[SCHEDULE VERSIONS] Schedules restored to published');
+                    } else {
+                        console.warn('[SCHEDULE VERSIONS] No batch_id found for version');
+                    }
+
+                    // Update the version change_summary to indicate it was restored
+                    const { error: updateVersionError } = await supabase
+                        .from('schedule_versions')
+                        .update({
+                            change_summary: 'Version restored from archive',
+                        })
+                        .eq('id', version.id);
+
+                    if (updateVersionError) {
+                        console.error('[SCHEDULE VERSIONS] Failed to update version:', updateVersionError);
+                        throw updateVersionError;
+                    }
+
+                    showToast({ title: 'Version unarchived', type: 'success' });
+
+                    // Refresh the versions
+                    loadVersions();
+                } catch (err: unknown) {
+                    console.error('[SCHEDULE VERSIONS] Failed to unarchive version:', err);
+                    showToast({ title: 'Failed to unarchive', message: err instanceof Error ? err.message : String(err), type: 'error' });
                 }
             }
         });
@@ -620,25 +697,45 @@ const ScheduleVersions: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Archive Button (Power Admin only) */}
-                                {isPowerAdmin && version.id !== 'current' && !version.is_active && !(version.change_type === 'status_change' && version.change_summary === 'Version archived') && (
-                                    <button
-                                        className="btn"
-                                        style={{
-                                            marginTop: 8,
-                                            width: '100%',
-                                            backgroundColor: 'var(--accent-warning-10, rgba(245, 158, 11, 0.1))',
-                                            border: '1px solid var(--accent-warning)',
-                                            color: 'var(--accent-warning)',
-                                        }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleArchiveVersion(version);
-                                        }}
-                                    >
-                                        <Archive size={14} style={{ marginRight: 6 }} />
-                                        Archive
-                                    </button>
+                                {/* Archive/Unarchive Button (Power Admin only) */}
+                                {isPowerAdmin && version.id !== 'current' && !version.is_active && (
+                                    version.change_type === 'status_change' && version.change_summary === 'Version archived' ? (
+                                        <button
+                                            className="btn"
+                                            style={{
+                                                marginTop: 8,
+                                                width: '100%',
+                                                backgroundColor: 'var(--accent-success-10, rgba(34, 197, 94, 0.1))',
+                                                border: '1px solid var(--accent-success)',
+                                                color: 'var(--accent-success)',
+                                            }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleUnarchiveVersion(version);
+                                            }}
+                                        >
+                                            <RefreshCw size={14} style={{ marginRight: 6 }} />
+                                            Unarchive
+                                        </button>
+                                    ) : (
+                                        <button
+                                            className="btn"
+                                            style={{
+                                                marginTop: 8,
+                                                width: '100%',
+                                                backgroundColor: 'var(--accent-warning-10, rgba(245, 158, 11, 0.1))',
+                                                border: '1px solid var(--accent-warning)',
+                                                color: 'var(--accent-warning)',
+                                            }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleArchiveVersion(version);
+                                            }}
+                                        >
+                                            <Archive size={14} style={{ marginRight: 6 }} />
+                                            Archive
+                                        </button>
+                                    )
                                 )}
 
                                 {/* View Button */}
