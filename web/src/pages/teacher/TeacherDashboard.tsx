@@ -26,6 +26,7 @@ interface ScheduleItem {
 interface AnnouncementItem {
     id: string;
     target_section?: string;
+    target_audience?: 'all_users' | 'all_students' | 'specific_section' | 'specific_role' | null;
     author_id?: string;
     title?: string;
     content?: string;
@@ -148,12 +149,29 @@ const TeacherDashboard: React.FC = () => {
             }
         });
         return allAnnouncements.filter((a: AnnouncementItem) => {
+            // Check target_audience first
+            if (a.target_audience === 'all_users') {
+                return true; // Everyone sees it
+            }
+            if (a.target_audience === 'all_students') {
+                return false; // Only students see it
+            }
+            if (a.target_audience === 'specific_role') {
+                // Check if target is teachers
+                return a.target_section?.toLowerCase() === 'teachers';
+            }
+            if (a.target_audience === 'specific_section') {
+                // Check if teacher teaches this section
+                const target = a.target_section?.toLowerCase().trim();
+                return target ? teacherSectionNames.has(target) : false;
+            }
+            // Backward compatibility: check target_section
             if (a.target_section) {
                 const target = a.target_section.toLowerCase().trim();
-                if (target === 'all sections') return true;
+                if (target === 'all sections' || target === 'all users') return true;
                 return teacherSectionNames.has(target);
             }
-            return true;
+            return true; // No target means everyone
         });
     }, [allAnnouncements, allSchedules, profile?.full_name]);
 

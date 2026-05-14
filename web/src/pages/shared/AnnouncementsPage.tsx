@@ -17,6 +17,7 @@ interface AnnRow {
     created_at: string;
     expires_at: string | null;
     target_section: string | null;
+    target_audience: 'all_users' | 'all_students' | 'specific_section' | 'specific_role' | null;
 }
 
 const AnnouncementsPage: React.FC = () => {
@@ -44,19 +45,38 @@ const AnnouncementsPage: React.FC = () => {
 
     const filtered = useMemo(() => {
         const sec = (profile?.section || '').toLowerCase().trim();
+        const role = (profile?.role || '').toLowerCase().trim();
         return items.filter(a => {
             // priority filter
             if (filter !== 'all' && a.priority !== filter) return false;
-            // section filter (visible if no target, "All Sections", or matching)
-            if (a.target_section) {
-                const t = a.target_section.toLowerCase().trim();
-                if (t !== 'all sections' && t !== sec) return false;
+            
+            // Check target_audience first
+            if (a.target_audience === 'all_users') {
+                // Everyone sees it
+            } else if (a.target_audience === 'all_students') {
+                // Only students see it
+                if (role !== 'student') return false;
+            } else if (a.target_audience === 'specific_role') {
+                // Check if target matches user's role
+                const targetRole = a.target_section?.toLowerCase().trim();
+                if (targetRole !== role) return false;
+            } else if (a.target_audience === 'specific_section') {
+                // Check if user is in this section
+                const target = a.target_section?.toLowerCase().trim();
+                if (target !== sec) return false;
+            } else {
+                // Backward compatibility: check target_section
+                if (a.target_section) {
+                    const t = a.target_section.toLowerCase().trim();
+                    if (t !== 'all sections' && t !== 'all users' && t !== sec) return false;
+                }
             }
+            
             // expiry
             if (a.expires_at && new Date(a.expires_at).getTime() < Date.now()) return false;
             return true;
         });
-    }, [items, filter, profile?.section]);
+    }, [items, filter, profile?.section, profile?.role]);
 
     const priorityIcon = (p: string) => {
         if (p === 'important') return <Bell size={14} color="#f59e0b" />;
@@ -105,7 +125,21 @@ const AnnouncementsPage: React.FC = () => {
                                 </div>
                                 <div className="dash-list-item-meta">
                                     {a.author_name} · {new Date(a.created_at).toLocaleString()}
-                                    {a.target_section && a.target_section !== 'All Sections' && <> · {a.target_section}</>}
+                                    {(() => {
+                                        if (!a.target_audience || a.target_audience === 'all_users') {
+                                            return ' · All Users';
+                                        }
+                                        if (a.target_audience === 'all_students') {
+                                            return ' · All Students';
+                                        }
+                                        if (a.target_audience === 'specific_role') {
+                                            return ` · ${a.target_section}`;
+                                        }
+                                        if (a.target_audience === 'specific_section' && a.target_section) {
+                                            return ` · ${a.target_section}`;
+                                        }
+                                        return '';
+                                    })()}
                                 </div>
                                 <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
                                     {a.content}

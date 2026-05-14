@@ -47,7 +47,8 @@ export interface Announcement {
     title: string;
     content: string;
     priority: 'normal' | 'important';
-    target_section: string;
+    target_section: string | null;
+    target_audience: 'all_users' | 'all_students' | 'specific_section' | 'specific_role' | null;
     created_at: string;
     author_id?: string;
     author_name?: string;

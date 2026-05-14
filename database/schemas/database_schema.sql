@@ -35,6 +35,7 @@ CREATE TABLE public.announcements (
   created_at timestamp with time zone DEFAULT now(),
   expires_at timestamp with time zone,
   target_section text,
+  target_audience text CHECK (target_audience IS NULL OR target_audience = ANY (ARRAY['all_users'::text, 'all_students'::text, 'specific_section'::text, 'specific_role'::text])),
   CONSTRAINT announcements_pkey PRIMARY KEY (id),
   CONSTRAINT announcements_author_id_fkey FOREIGN KEY (author_id) REFERENCES auth.users(id)
 );

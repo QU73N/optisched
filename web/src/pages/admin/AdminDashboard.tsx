@@ -65,7 +65,7 @@ const AdminDashboard: React.FC = () => {
     const [annTitle, setAnnTitle] = useState('');
     const [annContent, setAnnContent] = useState('');
     const [annPriority, setAnnPriority] = useState<'normal' | 'important'>('normal');
-    const [annSection, setAnnSection] = useState('All Sections');
+    const [annAudience, setAnnAudience] = useState('All Users'); // Changed from annSection to annAudience
     const [postingAnn, setPostingAnn] = useState(false);
     const [editingAnn, setEditingAnn] = useState<Announcement | null>(null);
     const [sections, setSections] = useState<{ id: string; name: string; program?: string; year_level?: number }[]>([]);
@@ -379,12 +379,33 @@ const AdminDashboard: React.FC = () => {
         setPostingAnn(true);
         try {
             let announcementId: string | undefined;
+            
+            // Determine target_audience and target_section based on selection
+            let targetAudience: string | null = null;
+            let targetSection: string | null = null;
+            
+            if (annAudience === 'All Users') {
+                targetAudience = 'all_users';
+                targetSection = null;
+            } else if (annAudience === 'All Students') {
+                targetAudience = 'all_students';
+                targetSection = null;
+            } else if (annAudience === 'Teachers') {
+                targetAudience = 'specific_role';
+                targetSection = 'Teachers';
+            } else {
+                // Specific section
+                targetAudience = 'specific_section';
+                targetSection = annAudience;
+            }
+            
             if (editingAnn) {
                 const { error } = await supabase.from('announcements').update({
                     title: annPriority === 'important' ? `[${annPriority.toUpperCase()}] ${annTitle}` : annTitle,
                     content: annContent,
                     priority: annPriority,
-                    target_section: (annSection === 'All Sections' || annSection === 'All Users') ? null : annSection
+                    target_audience: targetAudience,
+                    target_section: targetSection
                 }).eq('id', editingAnn.id);
                 if (error) throw error;
                 announcementId = editingAnn.id;
@@ -393,7 +414,8 @@ const AdminDashboard: React.FC = () => {
                     title: annPriority === 'important' ? `[${annPriority.toUpperCase()}] ${annTitle}` : annTitle,
                     content: annContent,
                     priority: annPriority,
-                    target_section: (annSection === 'All Sections' || annSection === 'All Users') ? null : annSection
+                    target_audience: targetAudience,
+                    target_section: targetSection
                 }).select('id').single();
                 announcementId = data?.id;
                 // Create notification for new announcement (non-blocking)
@@ -404,7 +426,7 @@ const AdminDashboard: React.FC = () => {
                             annContent,
                             undefined, // No action URL
                             168, // Expires in 7 days
-                            annSection // Target group
+                            annAudience // Target group
                         );
                     } catch (notifErr) {
                         console.error('Failed to create announcement notifications:', notifErr);
@@ -412,7 +434,7 @@ const AdminDashboard: React.FC = () => {
                     }
                 }
             }
-            setShowAnnModal(false); setAnnTitle(''); setAnnContent(''); setAnnPriority('normal'); setAnnSection('All Sections'); setEditingAnn(null);
+            setShowAnnModal(false); setAnnTitle(''); setAnnContent(''); setAnnPriority('normal'); setAnnAudience('All Users'); setEditingAnn(null);
             fetchAnnouncements();
             showToast({ title: 'Announcement saved', type: 'success' });
         } catch (e: unknown) { showToast({ title: 'Error', message: e instanceof Error ? e.message : String(e), type: 'error' }); }
@@ -443,7 +465,18 @@ const AdminDashboard: React.FC = () => {
         setAnnTitle(title);
         setAnnContent(ann.content);
         setAnnPriority(ann.priority);
-        setAnnSection(ann.target_section || 'All Sections');
+        
+        // Determine audience from target_audience and target_section
+        if (ann.target_audience === 'all_users') {
+            setAnnAudience('All Users');
+        } else if (ann.target_audience === 'all_students') {
+            setAnnAudience('All Students');
+        } else if (ann.target_audience === 'specific_role') {
+            setAnnAudience(ann.target_section || 'Teachers');
+        } else {
+            setAnnAudience(ann.target_section || 'All Students');
+        }
+        
         setShowAnnModal(true);
     };
 
@@ -652,7 +685,7 @@ const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="dash-header-actions">
                     {canPostAnnouncements && (
-                        <button className="btn btn-secondary" onClick={() => { setEditingAnn(null); setAnnTitle(''); setAnnContent(''); setAnnPriority('normal'); setAnnSection('All Sections'); setShowAnnModal(true); }}>
+                        <button className="btn btn-secondary" onClick={() => { setEditingAnn(null); setAnnTitle(''); setAnnContent(''); setAnnPriority('normal'); setAnnAudience('All Users'); setShowAnnModal(true); }}>
                             <Megaphone size={14} /> Add Announcement
                         </button>
                     )}
@@ -787,7 +820,21 @@ const AdminDashboard: React.FC = () => {
                                             <div className="dash-list-item-desc">{ann.content}</div>
                                             <div className="dash-list-item-meta">
                                                 {new Date(ann.created_at).toLocaleDateString()}
-                                                {ann.target_section && ann.target_section !== 'All Sections' && ann.target_section !== 'All Users' && ` · ${ann.target_section}`}
+                                                {(() => {
+                                                    if (!ann.target_audience || ann.target_audience === 'all_users') {
+                                                        return ' · All Users';
+                                                    }
+                                                    if (ann.target_audience === 'all_students') {
+                                                        return ' · All Students';
+                                                    }
+                                                    if (ann.target_audience === 'specific_role') {
+                                                        return ` · ${ann.target_section}`;
+                                                    }
+                                                    if (ann.target_audience === 'specific_section' && ann.target_section) {
+                                                        return ` · ${ann.target_section}`;
+                                                    }
+                                                    return '';
+                                                })()}
                                             </div>
                                         </div>
                                     </div>
@@ -921,11 +968,11 @@ const AdminDashboard: React.FC = () => {
                                 <option value="normal">Normal</option>
                                 <option value="important">Important</option>
                             </select>
-                            <label>Target Group (optional)</label>
-                            <select className="input" value={annSection} onChange={e => setAnnSection(e.target.value)}>
-                                <option value="All Sections">All Sections</option>
+                            <label>Target Audience (optional)</label>
+                            <select className="input" value={annAudience} onChange={e => setAnnAudience(e.target.value)}>
+                                <option value="All Users">All Users (Everyone)</option>
+                                <option value="All Students">All Students (All Sections)</option>
                                 <option value="Teachers">Teachers</option>
-                                <option value="All Users">All Users</option>
                                 {sections.map(section => (
                                     <option key={section.id} value={section.name}>
                                         {section.name}{section.program ? ` (${section.program})` : ''}{section.year_level ? ` - Year ${section.year_level}` : ''}

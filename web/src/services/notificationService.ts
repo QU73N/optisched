@@ -184,19 +184,21 @@ export async function createAnnouncement(
         throw new Error('Only admins can create announcements');
     }
 
-    // Build query based on target group
+    // Build query based on target audience
     let query = supabase
         .from('profiles')
         .select('id, role, section');
 
-    // Filter by target group
+    // Filter by target audience
     if (targetGroup === 'Teachers') {
         query = query.in('role', ['teacher']);
-    } else if (targetGroup && targetGroup !== 'All Sections' && targetGroup !== 'All Users') {
+    } else if (targetGroup === 'All Students') {
+        query = query.in('role', ['student']);
+    } else if (targetGroup && targetGroup !== 'All Users') {
         // Target is a specific section - filter by section name
         query = query.eq('section', targetGroup);
     }
-    // 'All Sections' and 'All Users' both send to all users (no filter)
+    // 'All Users' sends to everyone (no filter)
 
     const { data: profiles, error } = await query;
 

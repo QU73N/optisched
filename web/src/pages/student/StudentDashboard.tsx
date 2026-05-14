@@ -27,6 +27,7 @@ interface ScheduleItem {
 interface AnnouncementItem {
     id: string;
     target_section?: string;
+    target_audience?: 'all_users' | 'all_students' | 'specific_section' | 'specific_role' | null;
     title?: string;
     content?: string;
     author_name?: string;
@@ -136,12 +137,30 @@ const StudentDashboard: React.FC = () => {
     const announcements = useMemo(() => {
         if (!allAnnouncements) return [];
         return allAnnouncements.filter((a: AnnouncementItem) => {
+            // Check target_audience first
+            if (a.target_audience === 'all_users') {
+                return true; // Everyone sees it
+            }
+            if (a.target_audience === 'all_students') {
+                return true; // All students see it
+            }
+            if (a.target_audience === 'specific_role') {
+                // Check if target is students
+                return a.target_section?.toLowerCase() === 'students';
+            }
+            if (a.target_audience === 'specific_section') {
+                // Check if student is in this section
+                const target = a.target_section?.toLowerCase().trim();
+                const studentSec = (studentSectionName || '').toLowerCase().trim();
+                return target === studentSec;
+            }
+            // Backward compatibility: check target_section
             if (a.target_section) {
                 const target = a.target_section.toLowerCase().trim();
-                if (target === 'all sections') return true;
+                if (target === 'all sections' || target === 'all users') return true;
                 return target === (studentSectionName || '').toLowerCase().trim();
             }
-            return true;
+            return true; // No target means everyone
         });
     }, [allAnnouncements, studentSectionName]);
 
