@@ -187,12 +187,15 @@ export async function createAnnouncement(
     // Build query based on target group
     let query = supabase
         .from('profiles')
-        .select('id, role')
+        .select('id, role, section')
         .eq('is_active', true);
 
     // Filter by target group
     if (targetGroup === 'Teachers') {
         query = query.in('role', ['teacher']);
+    } else if (targetGroup && targetGroup !== 'All Sections' && targetGroup !== 'All Users') {
+        // Target is a specific section - filter by section name
+        query = query.eq('section', targetGroup);
     }
     // 'All Sections' and 'All Users' both send to all users (no filter)
 

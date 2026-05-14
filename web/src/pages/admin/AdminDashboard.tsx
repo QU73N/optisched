@@ -68,6 +68,7 @@ const AdminDashboard: React.FC = () => {
     const [annSection, setAnnSection] = useState('All Sections');
     const [postingAnn, setPostingAnn] = useState(false);
     const [editingAnn, setEditingAnn] = useState<Announcement | null>(null);
+    const [sections, setSections] = useState<{ id: string; name: string; program?: string; year_level?: number }[]>([]);
 
     // Events
     const [events, setEvents] = useState<CustomEvent[]>([]);
@@ -86,7 +87,7 @@ const AdminDashboard: React.FC = () => {
     const [resetRequests, setResetRequests] = useState<ResetRequest[]>([]);
 
     const fetchAll = () => {
-        fetchStats(); fetchRequests(); fetchAnnouncements(); fetchEvents(); fetchRooms(); fetchResetRequests();
+        fetchStats(); fetchRequests(); fetchAnnouncements(); fetchEvents(); fetchRooms(); fetchResetRequests(); fetchSections();
     };
 
     // Format name as "Last Name, F." (e.g., "Mariano, P.")
@@ -316,6 +317,11 @@ const AdminDashboard: React.FC = () => {
     const fetchRooms = async () => {
         const { data } = await supabase.from('rooms').select('id, name').order('name');
         setRooms((data || []) as DashboardRoom[]);
+    };
+
+    const fetchSections = async () => {
+        const { data } = await supabase.from('sections').select('id, name, program, year_level').order('name');
+        setSections((data || []) as { id: string; name: string; program?: string; year_level?: number }[]);
     };
 
     const fetchResetRequests = async () => {
@@ -920,6 +926,11 @@ const AdminDashboard: React.FC = () => {
                                 <option value="All Sections">All Sections</option>
                                 <option value="Teachers">Teachers</option>
                                 <option value="All Users">All Users</option>
+                                {sections.map(section => (
+                                    <option key={section.id} value={section.name}>
+                                        {section.name}{section.program ? ` (${section.program})` : ''}{section.year_level ? ` - Year ${section.year_level}` : ''}
+                                    </option>
+                                ))}
                             </select>
                             <button className="dash-modal-btn dash-modal-btn-primary" onClick={handlePostAnnouncement} disabled={postingAnn}>
                                 {postingAnn ? <><Loader2 size={14} className="spin" /> Saving...</> : editingAnn ? 'Save Changes' : 'Post Announcement'}
