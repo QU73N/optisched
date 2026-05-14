@@ -9,12 +9,13 @@ import {
     GraduationCap,
     History, RefreshCw,
     Menu, AlertCircle,
-    Sun, Moon, TrendingUp, Zap, Settings, Layers, PanelLeft, X, LogOut, Bot
+    Sun, Moon, TrendingUp, Zap, Settings, Layers, PanelLeft, X, LogOut
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ADMIN_ROLES, ROLE_DISPLAY_NAMES, hasAnyRole } from '../../types/database';
 import HelpSidebar from '../../components/HelpSidebar';
 import FloatingOptiBot from '../../components/FloatingOptiBot';
+import OptiBotSiderail from '../../components/OptiBotSiderail';
 import './HelpPage.css';
 
 const HelpPage: React.FC = () => {
@@ -801,18 +802,7 @@ const HelpPage: React.FC = () => {
                 <aside className={`siderail ${siderailOpen ? 'siderail-open' : ''}`}>
                     <div className="siderail-content">
                         <div className="siderail-section">
-                            <h4>OptiBot Chat</h4>
-                            <div className="optibot-siderail">
-                                <div className="optibot-siderail-messages">
-                                    <div className="optibot-siderail-msg optibot-siderail-msg-bot">
-                                        Hi! I'm OptiBot, your AI assistant. Ask me anything about OptiSched!
-                                    </div>
-                                </div>
-                                <div className="optibot-siderail-input">
-                                    <input type="text" placeholder="Ask OptiBot..." />
-                                    <button><Bot size={16} /></button>
-                                </div>
-                            </div>
+                            <OptiBotSiderail />
                         </div>
                     </div>
                 </aside>
