@@ -165,7 +165,7 @@ const StudentDashboard: React.FC = () => {
 
                 // Use section_id match first, but if it yields 0 published results, fallback to name match
                 const matchesByIdAndPublished = sourceData.filter((s: any) =>
-                    s.status === 'published' && s.section_id === studentSectionId
+                    s.status === 'published' && s.is_active === true && s.section_id === studentSectionId
                 );
                 const useSectionId = studentSectionId && matchesByIdAndPublished.length > 0;
 
@@ -184,6 +184,7 @@ const StudentDashboard: React.FC = () => {
                 const processSchedules = (dayName: string) => sourceData
                     .filter((s: any) =>
                         s.status === 'published' &&
+                        s.is_active === true &&
                         matchesSection(s) &&
                         s.day_of_week === dayName
                     )

@@ -156,6 +156,7 @@ const StudentSchedule: React.FC = () => {
                 const filtered = (rpcData || [])
                     .filter((s: any) =>
                         s.status === 'published' &&
+                        s.is_active === true &&
                         matchesSection(s) &&
                         s.day_of_week === daysFull[selectedDay]
                     )

@@ -104,7 +104,8 @@ const TeacherSchedule: React.FC = () => {
                     .from('schedules')
                     .select('id, day_of_week, start_time, end_time, subject:subjects(name, code), room:rooms(name, building), section:sections(name, program)')
                     .eq('teacher_id', teacher.id)
-                    .eq('status', 'published');
+                    .eq('status', 'published')
+                    .eq('is_active', true);
 
                 if (error) {
                     console.error('[TeacherSchedule] Fetch error:', error);

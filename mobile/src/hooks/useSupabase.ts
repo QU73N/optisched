@@ -113,7 +113,8 @@ export function useSchedules(filters?: {
                         room:rooms(id, name, building),
                         section:sections(id, name, program)
                     `)
-                    .eq('status', 'published');
+                    .eq('status', 'published')
+                    .eq('is_active', true);
                 
                 if (directError) {
                     console.error('[useSchedules] Direct query also failed:', directError.message);
@@ -170,6 +171,10 @@ export function useSchedules(filters?: {
             }
             if (filters?.status) {
                 mappedData = mappedData.filter((s: any) => s.status === filters.status);
+            }
+            // Always filter for active schedules (unless explicitly requesting all)
+            if (filters?.status !== 'all') {
+                mappedData = mappedData.filter((s: any) => s.is_active === true);
             }
 
             // Sort by start_time
