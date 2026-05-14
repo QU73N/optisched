@@ -39,7 +39,7 @@ export interface ScheduleVersion {
     schedule_id: string;
     version_number: number;
     snapshot: Schedule;
-    change_type: 'created' | 'updated' | 'deleted' | 'status_change' | 'checkpoint' | 'publish' | 'overwrite' | 'restore';
+    change_type: 'created' | 'updated' | 'deleted' | 'status_change' | 'checkpoint' | 'publish' | 'overwrite' | 'restore' | 'archive';
     change_summary: string;
     change_reason: string;
     state_hash: string;
@@ -1897,6 +1897,110 @@ class ScheduleVersionService {
                 message: `Failed to restore version: ${errorMessage}`,
                 restored_version_id: null,
                 previous_active_version_id: null,
+            };
+        }
+    }
+
+    /**
+     * Archive a schedule version
+     *
+     * Marks a version as archived and updates the associated schedules to 'archived' status.
+     * Archived schedules are not visible in the main schedule views but can be restored.
+     */
+    async archiveVersion(versionId: string, reason?: string): Promise<{ success: boolean; message: string }> {
+        if (!this.supabase || !this.currentUserId) {
+            throw new Error('Version service not initialized');
+        }
+
+        const startTime = Date.now();
+        scheduleLogger.system.workflowStarted('Version archive');
+
+        try {
+            // Get the version details
+            const { data: versionData, error: versionError } = await this.supabase
+                .from('schedule_versions')
+                .select('*')
+                .eq('id', versionId)
+                .maybeSingle();
+
+            if (versionError || !versionData) {
+                throw new Error('Version not found');
+            }
+
+            // Check if version is already archived
+            if (versionData.change_type === 'archive') {
+                return {
+                    success: false,
+                    message: 'Version is already archived',
+                };
+            }
+
+            // Get the batch_id from the version
+            const batchId = versionData.batch_id;
+            if (!batchId) {
+                return {
+                    success: false,
+                    message: 'Version is not associated with a batch',
+                };
+            }
+
+            // Check if version is active
+            if (versionData.is_active) {
+                return {
+                    success: false,
+                    message: 'Cannot archive active version. Please deactivate it first.',
+                };
+            }
+
+            // Update the version change_type to 'archive'
+            const { error: updateVersionError } = await this.supabase
+                .from('schedule_versions')
+                .update({
+                    change_type: 'archive',
+                    change_summary: reason || 'Version archived',
+                    change_reason: reason || 'Version archived',
+                })
+                .eq('id', versionId);
+
+            if (updateVersionError) {
+                throw new Error(`Failed to update version: ${updateVersionError.message}`);
+            }
+
+            // Update the schedules in this batch to 'archived' status
+            const { error: updateSchedulesError } = await this.supabase
+                .from('schedules')
+                .update({ status: 'archived' })
+                .eq('batch_id', batchId);
+
+            if (updateSchedulesError) {
+                // Rollback: revert version change_type
+                await this.supabase
+                    .from('schedule_versions')
+                    .update({
+                        change_type: versionData.change_type,
+                        change_summary: versionData.change_summary,
+                        change_reason: versionData.change_reason,
+                    })
+                    .eq('id', versionId);
+                throw new Error(`Failed to archive schedules: ${updateSchedulesError.message}`);
+            }
+
+            scheduleLogger.system.workflowCompleted('Version archive', Date.now() - startTime, true);
+            scheduleLogger.system.stateSynced('version_service', 0);
+
+            return {
+                success: true,
+                message: `Successfully archived version ${versionData.version_number}`,
+            };
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            scheduleLogger.system.error('system', 'persistence', 'Version archive failed', error);
+            scheduleLogger.system.workflowCompleted('Version archive', Date.now() - startTime, false);
+
+            return {
+                success: false,
+                message: `Failed to archive version: ${errorMessage}`,
             };
         }
     }

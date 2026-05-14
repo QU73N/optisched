@@ -8,7 +8,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { History, CheckCircle, AlertTriangle, ArrowRight, FileText, Trash2 } from 'lucide-react';
+import { History, CheckCircle, AlertTriangle, ArrowRight, FileText, Trash2, Archive } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -49,7 +49,7 @@ const ScheduleVersions: React.FC = () => {
     const [versions, setVersions] = useState<LabeledVersion[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [filter, setFilter] = useState<'all' | 'published' | 'previous' | 'submitted' | 'draft'>('all');
+    const [filter, setFilter] = useState<'all' | 'published' | 'previous' | 'submitted' | 'draft' | 'archived'>('all');
     const [isDeletingAll, setIsDeletingAll] = useState(false);
     
     // Advanced date filters
@@ -134,7 +134,7 @@ const ScheduleVersions: React.FC = () => {
 
             // Filter versions based on category rules
             let filteredVersions = allVersions;
-            
+
             if (filter !== 'all') {
                 if (filter === 'published') {
                     // Active published versions only
@@ -146,11 +146,13 @@ const ScheduleVersions: React.FC = () => {
                     filteredVersions = filteredVersions.filter(v => ['status_change'].includes(v.change_type));
                 } else if (filter === 'draft') {
                     filteredVersions = filteredVersions.filter(v => ['created'].includes(v.change_type));
+                } else if (filter === 'archived') {
+                    filteredVersions = filteredVersions.filter(v => ['archive'].includes(v.change_type));
                 }
             } else {
                 // For 'all', show all meaningful version types
-                filteredVersions = filteredVersions.filter(v => 
-                    ['publish', 'overwrite', 'restore', 'status_change', 'created'].includes(v.change_type)
+                filteredVersions = filteredVersions.filter(v =>
+                    ['publish', 'overwrite', 'restore', 'status_change', 'created', 'archive'].includes(v.change_type)
                 );
             }
             
@@ -235,7 +237,7 @@ const ScheduleVersions: React.FC = () => {
                     }
 
                     showToast({ title: 'All schedules deleted', type: 'success' });
-                    
+
                     // Refresh the versions
                     loadVersions();
                 } catch (err: unknown) {
@@ -243,6 +245,77 @@ const ScheduleVersions: React.FC = () => {
                     showToast({ title: 'Failed to delete', message: err instanceof Error ? err.message : String(err), type: 'error' });
                 } finally {
                     setIsDeletingAll(false);
+                }
+            }
+        });
+    };
+
+    const handleArchiveVersion = (version: LabeledVersion) => {
+        if (!isPowerAdmin) {
+            showToast({ title: 'Permission denied', message: 'Only Power Admin can archive versions', type: 'error' });
+            return;
+        }
+
+        if (version.id === 'current') {
+            showToast({ title: 'Cannot archive', message: 'Cannot archive current schedules', type: 'error' });
+            return;
+        }
+
+        if (version.is_active) {
+            showToast({ title: 'Cannot archive', message: 'Cannot archive active version. Please deactivate it first.', type: 'error' });
+            return;
+        }
+
+        if (version.change_type === 'archive') {
+            showToast({ title: 'Already archived', message: 'This version is already archived', type: 'error' });
+            return;
+        }
+
+        setConfirmDialog({
+            open: true,
+            title: 'Archive Schedule Version',
+            message: `This will archive version ${version.label || 'N/A'} and mark all associated schedules as archived. Archived schedules are not visible in main views but can be restored. Are you sure?`,
+            onConfirm: async () => {
+                try {
+                    // Update the version change_type to 'archive'
+                    const { error: updateVersionError } = await supabase
+                        .from('schedule_versions')
+                        .update({
+                            change_type: 'archive',
+                            change_summary: 'Version archived',
+                        })
+                        .eq('id', version.id);
+
+                    if (updateVersionError) {
+                        throw updateVersionError;
+                    }
+
+                    // Get the batch_id from the version
+                    const { data: versionData } = await supabase
+                        .from('schedule_versions')
+                        .select('batch_id')
+                        .eq('id', version.id)
+                        .single();
+
+                    if (versionData?.batch_id) {
+                        // Update the schedules in this batch to 'archived' status
+                        const { error: updateSchedulesError } = await supabase
+                            .from('schedules')
+                            .update({ status: 'archived' })
+                            .eq('batch_id', versionData.batch_id);
+
+                        if (updateSchedulesError) {
+                            throw updateSchedulesError;
+                        }
+                    }
+
+                    showToast({ title: 'Version archived', type: 'success' });
+
+                    // Refresh the versions
+                    loadVersions();
+                } catch (err: unknown) {
+                    console.error('Failed to archive version:', err);
+                    showToast({ title: 'Failed to archive', message: err instanceof Error ? err.message : String(err), type: 'error' });
                 }
             }
         });
@@ -286,6 +359,7 @@ const ScheduleVersions: React.FC = () => {
                         { key: 'previous', label: 'Previous' },
                         { key: 'submitted', label: 'Submitted' },
                         { key: 'draft', label: 'Drafts' },
+                        { key: 'archived', label: 'Archived' },
                     ] as const
                 ).map(f => (
                     <button
@@ -491,15 +565,16 @@ const ScheduleVersions: React.FC = () => {
 
                                 {/* Name */}
                                 <div>
-                                    <h3 style={{ 
-                                        fontSize: 16, 
-                                        fontWeight: 600, 
+                                    <h3 style={{
+                                        fontSize: 16,
+                                        fontWeight: 600,
                                         margin: 0,
                                         color: 'var(--text-primary)'
                                     }}>
-                                        {isGloballyActive ? 'Schedule (Current)' : 
+                                        {isGloballyActive ? 'Schedule (Current)' :
                                          version.change_type === 'created' ? 'Schedule (Draft)' :
                                          version.change_type === 'status_change' ? 'Schedule (Submitted)' :
+                                         version.change_type === 'archive' ? 'Schedule (Archived)' :
                                          ['publish', 'overwrite', 'restore'].includes(version.change_type) ? 'Schedule (Previous)' :
                                          'Schedule (Saved)'}
                                     </h3>
@@ -536,13 +611,34 @@ const ScheduleVersions: React.FC = () => {
                                 </div>
 
                                 {/* View Button */}
-                                <button 
+                                <button
                                     className="btn btn-secondary"
                                     style={{ marginTop: 'auto', width: '100%' }}
                                 >
                                     View Schedule
                                     <ArrowRight size={14} style={{ marginLeft: 8 }} />
                                 </button>
+
+                                {/* Archive Button (Power Admin only) */}
+                                {isPowerAdmin && version.id !== 'current' && !version.is_active && version.change_type !== 'archive' && (
+                                    <button
+                                        className="btn"
+                                        style={{
+                                            marginTop: 8,
+                                            width: '100%',
+                                            backgroundColor: 'var(--accent-warning-10, rgba(245, 158, 11, 0.1))',
+                                            border: '1px solid var(--accent-warning)',
+                                            color: 'var(--accent-warning)',
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleArchiveVersion(version);
+                                        }}
+                                    >
+                                        <Archive size={14} style={{ marginRight: 6 }} />
+                                        Archive
+                                    </button>
+                                )}
                             </div>
                         );
                     })}

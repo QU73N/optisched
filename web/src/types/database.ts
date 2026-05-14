@@ -214,7 +214,7 @@ export interface ScheduleVersion {
     batch_id: string;
     version_number: number;
     snapshot: Record<string, unknown>;
-    change_type: 'created' | 'updated' | 'deleted' | 'status_change' | 'checkpoint' | 'publish' | 'overwrite' | 'restore';
+    change_type: 'created' | 'updated' | 'deleted' | 'status_change' | 'checkpoint' | 'publish' | 'overwrite' | 'restore' | 'archive';
     change_summary: string | null;
     change_reason: string | null;
     changed_by: string;
