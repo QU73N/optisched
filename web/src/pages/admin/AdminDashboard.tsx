@@ -454,11 +454,14 @@ const AdminDashboard: React.FC = () => {
                 if (error) throw error;
                 eventId = editingEvent.id;
             } else {
-                const { data } = await supabase.from('custom_events').insert({
+                const { data, error } = await supabase.from('custom_events').insert({
                     title: evTitle, description: evDesc, event_date: evDate,
                     start_time: evStart, end_time: evEnd, room_name: evRoom
                 }).select('id').single();
+
+                if (error) throw error;
                 eventId = data?.id;
+
                 // Create notification for new event (non-blocking)
                 if (eventId) {
                     try {
@@ -472,7 +475,20 @@ const AdminDashboard: React.FC = () => {
             setShowEventModal(false); setEvTitle(''); setEvDesc(''); setEvDate(new Date().toISOString().split('T')[0]); setEvStart('08:00'); setEvEnd('10:00'); setEvRoom(''); setEditingEvent(null);
             fetchEvents();
             showToast({ title: 'Event saved', type: 'success' });
-        } catch (e: unknown) { showToast({ title: 'Error', message: e instanceof Error ? e.message : String(e), type: 'error' }); }
+        } catch (e: unknown) {
+            console.error('Error saving event:', e);
+            let errorMessage = 'Failed to save event';
+            if (e instanceof Error) {
+                errorMessage = e.message;
+            } else if (typeof e === 'object' && e !== null) {
+                // Handle Supabase error objects
+                const errorObj = e as { message?: string; details?: string; hint?: string };
+                errorMessage = errorObj.message || errorObj.details || errorObj.hint || JSON.stringify(e);
+            } else {
+                errorMessage = String(e);
+            }
+            showToast({ title: 'Error', message: errorMessage, type: 'error' });
+        }
         setPostingEvent(false);
     };
 
@@ -546,7 +562,18 @@ const AdminDashboard: React.FC = () => {
                     fetchEvents();
                     showToast({ title: 'Event deleted', type: 'success' });
                 } catch (e: unknown) {
-                    showToast({ title: 'Failed to delete', message: e instanceof Error ? e.message : String(e), type: 'error' });
+                    console.error('Error deleting event:', e);
+                    let errorMessage = 'Failed to delete event';
+                    if (e instanceof Error) {
+                        errorMessage = e.message;
+                    } else if (typeof e === 'object' && e !== null) {
+                        // Handle Supabase error objects
+                        const errorObj = e as { message?: string; details?: string; hint?: string };
+                        errorMessage = errorObj.message || errorObj.details || errorObj.hint || JSON.stringify(e);
+                    } else {
+                        errorMessage = String(e);
+                    }
+                    showToast({ title: 'Failed to delete', message: errorMessage, type: 'error' });
                 }
             }
         });
