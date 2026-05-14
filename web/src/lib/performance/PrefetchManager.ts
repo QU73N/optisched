@@ -5,6 +5,7 @@
 import { networkMonitor } from './NetworkMonitor';
 import { cacheManager } from '../cache/CacheManager';
 import { CACHE_DURATIONS } from '../cache/cacheConfig';
+import { supabase } from '../../lib/supabase';
 
 type PrefetchRule = {
   /** Current route pattern to match */
@@ -40,7 +41,57 @@ class PrefetchManager {
         from: '/admin/schedules',
         roles: ['admin', 'power_admin', 'schedule_admin', 'schedule_manager'],
         prefetchRoutes: ['/admin/conflicts', '/admin/generate'],
-        prefetchData: [],
+        prefetchData: [
+          {
+            key: 'schedules:current',
+            fetcher: async () => {
+              const { data } = await supabase
+                .from('schedules')
+                .select('*')
+                .eq('is_active', true)
+                .eq('status', 'published');
+              return data;
+            },
+            ttl: CACHE_DURATIONS.SCHEDULE,
+          },
+          {
+            key: 'sections:list',
+            fetcher: async () => {
+              const { data } = await supabase
+                .from('sections')
+                .select('id, name, program, year_level, student_count')
+                .order('program')
+                .order('year_level')
+                .order('name');
+              return data;
+            },
+            ttl: CACHE_DURATIONS.SECTIONS,
+          },
+          {
+            key: 'teachers:list',
+            fetcher: async () => {
+              const { data } = await supabase.rpc('get_teachers_with_profiles');
+              return data;
+            },
+            ttl: CACHE_DURATIONS.FACULTY,
+          },
+          {
+            key: 'rooms:list',
+            fetcher: async () => {
+              const { data } = await supabase.rpc('get_rooms_with_details');
+              return data;
+            },
+            ttl: CACHE_DURATIONS.ROOMS,
+          },
+          {
+            key: 'subjects:list',
+            fetcher: async () => {
+              const { data } = await supabase.rpc('get_subjects_with_details');
+              return data;
+            },
+            ttl: CACHE_DURATIONS.SUBJECTS,
+          },
+        ],
       },
       {
         from: '/teacher',

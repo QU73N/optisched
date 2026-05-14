@@ -9,6 +9,8 @@ import { ADMIN_ROLES } from '../../types/database';
 import type { DayOfWeek, ScheduleStatus } from '../../types/database';
 import type { ScheduleEntry } from '../../components/ScheduleDragDrop';
 import { ScheduleDragDrop } from '../../components/ScheduleDragDrop';
+import { cacheManager } from '../../lib/cache/CacheManager';
+import { CACHE_DURATIONS } from '../../lib/cache/cacheConfig';
 
 import { Users, GraduationCap, MapPin, Search, ArrowLeft, History, Download, Lock, CalendarDays, Scissors, Merge, X, Maximize, Minimize, CheckCircle, Send, Archive, RefreshCw } from 'lucide-react';
 
@@ -153,7 +155,7 @@ const ScheduleManagement: React.FC = () => {
     }, [user]);
 
     const fetchData = useCallback(async () => {
-        setLoading(true);
+        setLoading(false); // Don't block UI - load in background
         
         if (versionId) {
             // Load schedules from specific version
@@ -188,20 +190,32 @@ const ScheduleManagement: React.FC = () => {
                     // Set initial version name (will be updated after schedules are loaded)
                     setVersionName(`Version ${version.version_number}${versionSuffix}`);
 
-                    // Load sections, teachers, rooms, and subjects for filtering
-                    // Use RPC for rooms and subjects to bypass RLS issues
+                    // Load sections, teachers, rooms, and subjects for filtering with optimistic caching
+                    // Use cacheManager.getSWR for stale-while-revalidate pattern
                     const [secRes, tchRes, roomRes, subRes] = await Promise.all([
-                        supabase.from('sections').select('id, name, program, year_level, student_count').order('program').order('year_level').order('name'),
-                        supabase.rpc('get_teachers_with_profiles'),
-                        supabase.rpc('get_rooms_with_details'),
-                        supabase.rpc('get_subjects_with_details'),
+                        cacheManager.getSWR('sections:list', async () => {
+                            const { data } = await supabase.from('sections').select('id, name, program, year_level, student_count').order('program').order('year_level').order('name');
+                            return data;
+                        }, CACHE_DURATIONS.SECTIONS).then(r => r.data),
+                        cacheManager.getSWR('teachers:list', async () => {
+                            const { data } = await supabase.rpc('get_teachers_with_profiles');
+                            return data;
+                        }, CACHE_DURATIONS.FACULTY).then(r => r.data),
+                        cacheManager.getSWR('rooms:list', async () => {
+                            const { data } = await supabase.rpc('get_rooms_with_details');
+                            return data;
+                        }, CACHE_DURATIONS.ROOMS).then(r => r.data),
+                        cacheManager.getSWR('subjects:list', async () => {
+                            const { data } = await supabase.rpc('get_subjects_with_details');
+                            return data;
+                        }, CACHE_DURATIONS.SUBJECTS).then(r => r.data),
                     ]);
 
-                    const loadedSections = (secRes.data as unknown as typeof sections) || [];
-                    const loadedTeachers = ((tchRes.data as unknown as { id: string; full_name: string; department: string; is_active: boolean }[]) || [])
+                    const loadedSections = (secRes as unknown as typeof sections) || [];
+                    const loadedTeachers = ((tchRes as unknown as { id: string; full_name: string; department: string; is_active: boolean }[]) || [])
                         .map(t => ({ id: t.id, full_name: t.full_name || 'Unnamed', department: t.department || '', is_active: t.is_active ?? true }));
                     // Map RPC room data to Room interface
-                    const loadedRooms = ((roomRes.data as unknown as Array<{
+                    const loadedRooms = ((roomRes as unknown as Array<{
                         id: string;
                         name: string;
                         building: string;
@@ -334,20 +348,29 @@ const ScheduleManagement: React.FC = () => {
                 console.error('Error loading version:', error);
             }
         } else {
-            // Load current schedules
+            // Load current schedules with optimistic caching for metadata
             const [schedRes, secRes, tchRes, roomRes, subjRes] = await Promise.all([
                 supabase.rpc('get_schedules_with_details'),
-                supabase.from('sections').select('id, name, program, year_level, student_count').order('program').order('year_level').order('name'),
-                supabase.rpc('get_teachers_with_profiles'),
-                supabase.rpc('get_rooms_with_details'),
-                supabase.rpc('get_subjects_with_details'),
+                cacheManager.getSWR('sections:list', async () => {
+                    const { data } = await supabase.from('sections').select('id, name, program, year_level, student_count').order('program').order('year_level').order('name');
+                    return data;
+                }, CACHE_DURATIONS.SECTIONS).then(r => ({ data: r.data })),
+                cacheManager.getSWR('teachers:list', async () => {
+                    const { data } = await supabase.rpc('get_teachers_with_profiles');
+                    return data;
+                }, CACHE_DURATIONS.FACULTY).then(r => ({ data: r.data })),
+                cacheManager.getSWR('rooms:list', async () => {
+                    const { data } = await supabase.rpc('get_rooms_with_details');
+                    return data;
+                }, CACHE_DURATIONS.ROOMS).then(r => ({ data: r.data })),
+                cacheManager.getSWR('subjects:list', async () => {
+                    const { data } = await supabase.rpc('get_subjects_with_details');
+                    return data;
+                }, CACHE_DURATIONS.SUBJECTS).then(r => ({ data: r.data })),
             ]);
-            
+
             if (schedRes.error) console.error('Schedules error:', schedRes.error);
-            if (tchRes.error) console.error('Teachers error:', tchRes.error);
-            if (secRes.error) console.error('Sections error:', secRes.error);
-            if (roomRes.error) console.error('Rooms error:', roomRes.error);
-            if (subjRes.error) console.error('Subjects error:', subjRes.error);
+            // Cached data doesn't have error property - errors are handled silently by SWR
             
             // Map RPC response to ScheduleRow format
             const schedulesData = (schedRes.data as unknown as Array<{
@@ -517,6 +540,8 @@ const ScheduleManagement: React.FC = () => {
 
                     const res = await scheduleVersionService.submitSchedule(versionStatus!.batch_id!, { changeReason: 'Submitted from schedule management' });
                     if (!res.success) throw new Error(res.message);
+                    // Invalidate cache after submission
+                    await cacheManager.invalidatePrefix('schedules:');
                     showToast({ title: 'Submitted', type: 'success' });
                     if (res.active_version_id) {
                         navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
@@ -546,6 +571,8 @@ const ScheduleManagement: React.FC = () => {
             if (!res.success) throw new Error(res.message);
             res = await (scheduleVersionService as any).publishApprovedSchedule(versionStatus.batch_id, { changeReason: 'Published from schedule management' }); // eslint-disable-line @typescript-eslint/no-explicit-any
             if (!res.success) throw new Error(res.message);
+            // Invalidate cache after approval and publish
+            await cacheManager.invalidatePrefix('schedules:');
             showToast({ title: 'Approved and published', type: 'success' });
             if (res.active_version_id) {
                 navigate(`/admin/schedules?version=${res.active_version_id}`, { replace: true });
@@ -648,6 +675,8 @@ const ScheduleManagement: React.FC = () => {
                     }
 
                     console.log('[SCHEDULE MGMT] Archive completed successfully');
+                    // Invalidate cache after archiving
+                    await cacheManager.invalidatePrefix('schedules:');
                     showToast({ title: 'Version archived', type: 'success' });
 
                     // Navigate back to current schedules
