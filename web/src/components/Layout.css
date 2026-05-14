@@ -374,7 +374,7 @@
 
 .siderail-content {
     flex: 1;
-    overflow: hidden;
+    overflow-y: auto;
     padding: var(--space-4) var(--space-5);
 }
 

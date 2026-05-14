@@ -40,12 +40,16 @@ interface Announcement {
 }
 
 // === API Keys (read from .env - never commit keys to source) ===
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const GEMINI_API_KEYS = [
+    import.meta.env.VITE_GEMINI_API_KEY || '',
+    import.meta.env.VITE_GEMINI_API_KEY_2 || '',
+    import.meta.env.VITE_GEMINI_API_KEY_3 || ''
+].filter(key => key && !key.includes('YOUR_'));
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
 const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
 
 console.log('[OptiBot] API Keys status:', {
-    gemini: !!GEMINI_API_KEY,
+    gemini: GEMINI_API_KEYS.length,
     groq: !!GROQ_API_KEY,
     groqLength: GROQ_API_KEY?.length,
     openrouter: !!OPENROUTER_API_KEY
@@ -425,9 +429,9 @@ export async function sendToOptiBot(
 
         const fullSystemPrompt = SYSTEM_PROMPT + userContext + scheduleContext;
 
-        // 1. Try Gemini models
-        if (!GEMINI_API_KEY) {
-            console.log('[OptiBot] Gemini API key not configured, skipping to fallback providers');
+        // 1. Try Gemini models with multiple API keys (rotation)
+        if (GEMINI_API_KEYS.length === 0) {
+            console.log('[OptiBot] Gemini API keys not configured, skipping to fallback providers');
         } else {
             const contents: GeminiMessage[] = [
                 { role: 'user', parts: [{ text: fullSystemPrompt + '\n\nPlease acknowledge briefly.' }] },
@@ -447,32 +451,46 @@ export async function sendToOptiBot(
                 ],
             });
 
-            for (const model of GEMINI_MODELS) {
-                const apiUrl = `${GEMINI_BASE_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`;
-                for (let retry = 0; retry <= MAX_RETRIES; retry++) {
-                    try {
-                        const response = await fetch(apiUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: requestBody,
-                        });
-                        if (response.ok) {
-                            const data = await response.json();
-                            const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-                            if (aiResponse) return await processAIActions(aiResponse, userProfile?.roles);
+            // Try each API key
+            for (let keyIndex = 0; keyIndex < GEMINI_API_KEYS.length; keyIndex++) {
+                const apiKey = GEMINI_API_KEYS[keyIndex];
+                console.log(`[OptiBot] Trying Gemini API key ${keyIndex + 1}/${GEMINI_API_KEYS.length}`);
+
+                for (const model of GEMINI_MODELS) {
+                    const apiUrl = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`;
+                    for (let retry = 0; retry <= MAX_RETRIES; retry++) {
+                        try {
+                            const response = await fetch(apiUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: requestBody,
+                            });
+                            if (response.ok) {
+                                const data = await response.json();
+                                const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                                if (aiResponse) {
+                                    console.log(`[OptiBot] Success with Gemini API key ${keyIndex + 1}, model ${model}`);
+                                    return await processAIActions(aiResponse, userProfile?.roles);
+                                }
+                                break;
+                            } else {
+                                console.error(`[OptiBot] Gemini API error (${model}, key ${keyIndex + 1}):`, response.status, response.statusText);
+                            }
+                            if (response.status === 429 && retry < MAX_RETRIES) {
+                                console.log(`[OptiBot] Rate limited on ${model}, retrying in ${RETRY_DELAY_MS}ms...`);
+                                await delay(RETRY_DELAY_MS);
+                                continue;
+                            }
+                            // If 403 (forbidden), try next key
+                            if (response.status === 403) {
+                                console.log(`[OptiBot] Key ${keyIndex + 1} forbidden, trying next key...`);
+                                break;
+                            }
                             break;
-                        } else {
-                            console.error(`[OptiBot] Gemini API error (${model}):`, response.status, response.statusText);
+                        } catch (error) {
+                            console.error(`[OptiBot] Gemini fetch error (${model}, key ${keyIndex + 1}):`, error);
+                            break;
                         }
-                        if (response.status === 429 && retry < MAX_RETRIES) {
-                            console.log(`[OptiBot] Rate limited on ${model}, retrying in ${RETRY_DELAY_MS}ms...`);
-                            await delay(RETRY_DELAY_MS);
-                            continue;
-                        }
-                        break;
-                    } catch (error) {
-                        console.error(`[OptiBot] Gemini fetch error (${model}):`, error);
-                        break;
                     }
                 }
             }

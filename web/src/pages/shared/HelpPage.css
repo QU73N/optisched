@@ -99,6 +99,31 @@
     background: var(--accent-primary-hover);
 }
 
+/* ========== OPTIBOT TAB IN HELP ========== */
+.help-section-optibot {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 180px);
+    min-height: 500px;
+}
+
+.help-optibot-container {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-xs);
+}
+
+.help-optibot-container > .optibot-siderail-wrapper {
+    flex: 1;
+    height: 100%;
+}
+
 /* ========== HELP CONTENT STYLES ========== */
 .help-section {
     margin-bottom: 80px;

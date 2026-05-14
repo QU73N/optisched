@@ -415,7 +415,7 @@ const Navigation: React.FC<NavProps> = ({ onLogin, theme, onToggleTheme, animati
                 <div className="lp-nav-right">
                     <button
                         className="lp-theme-btn"
-                        onClick={() => window.open('/help', '_blank')}
+                        onClick={() => window.location.href = '/help'}
                         title="Open Help Center"
                         aria-label="Help"
                     >

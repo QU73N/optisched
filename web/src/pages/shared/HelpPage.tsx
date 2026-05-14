@@ -9,7 +9,7 @@ import {
     GraduationCap,
     History, RefreshCw,
     Menu, AlertCircle,
-    Sun, Moon, TrendingUp, Zap, Settings, Layers, PanelLeft, X, LogOut
+    Sun, Moon, TrendingUp, Zap, Settings, Layers, ArrowLeft, LogOut
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ADMIN_ROLES, ROLE_DISPLAY_NAMES, hasAnyRole } from '../../types/database';
@@ -24,7 +24,6 @@ const HelpPage: React.FC = () => {
     const [theme, setTheme] = useState<string>(() =>
         (typeof window !== 'undefined' && localStorage.getItem('optisched-theme')) || 'light'
     );
-    const [siderailOpen, setSiderailOpen] = useState(true);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeSection, setActiveSection] = useState<string>('getting-started');
 
@@ -137,14 +136,11 @@ const HelpPage: React.FC = () => {
                     </div>
                 </div>
                 <div className="topbar-right">
-                    <button className="topbar-btn" onClick={() => setSiderailOpen(!siderailOpen)} aria-label="Toggle siderail">
-                        <PanelLeft size={18} />
-                    </button>
                     <button className="topbar-btn" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
                         {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
                     </button>
                     <button className="topbar-btn" onClick={() => navigate(isAnyAdmin ? '/admin' : `/${role}`)} aria-label="Back to dashboard">
-                        <X size={18} />
+                        <ArrowLeft size={18} />
                     </button>
                 </div>
             </header>
@@ -796,19 +792,23 @@ const HelpPage: React.FC = () => {
                 </section>
                     </>
                 )}
-            </main>
-                </div>
 
-                <aside className={`siderail ${siderailOpen ? 'siderail-open' : ''}`}>
-                    <div className="siderail-content">
-                        <div className="siderail-section">
+                {activeSection === 'optibot' && (
+                    <section className="help-section help-section-optibot" id="optibot">
+                        <div className="help-section-header">
+                            <h2>OptiBot Assistant</h2>
+                            <p>Chat with OptiBot, your AI assistant for OptiSched</p>
+                        </div>
+                        <div className="help-optibot-container">
                             <OptiBotSiderail />
                         </div>
-                    </div>
-                </aside>
+                    </section>
+                )}
+            </main>
+                </div>
             </div>
 
-            <FloatingOptiBot />
+            {activeSection !== 'optibot' && <FloatingOptiBot />}
         </div>
     );
 };
