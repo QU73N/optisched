@@ -20,14 +20,14 @@
 
 /* Active link styling - matches main sidebar */
 .sidebar .sidebar-nav-v2 .sidebar-link-active {
-    background: var(--accent-primary-subtle);
-    color: var(--accent-primary);
-    font-weight: 600;
+    background: var(--accent-primary-subtle) !important;
+    color: var(--accent-primary) !important;
+    font-weight: 600 !important;
 }
 
 .sidebar .sidebar-nav-v2 .sidebar-link-active svg {
-    color: var(--accent-primary);
-    opacity: 1;
+    color: var(--accent-primary) !important;
+    opacity: 1 !important;
 }
 
 /* Hide the black ::before accent indicator on active link */
