@@ -3206,7 +3206,7 @@
 .lp-scroll-top {
   position: fixed;
   bottom: 32px;
-  right: 32px;
+  left: 32px;
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -3261,7 +3261,7 @@
 @media (max-width: 640px) {
   .lp-scroll-top {
     bottom: 24px;
-    right: 24px;
+    left: 24px;
     width: 44px;
     height: 44px;
   }
