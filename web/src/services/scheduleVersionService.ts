@@ -892,10 +892,18 @@ class ScheduleVersionService {
             });
 
             // Get schedules
-            const { data: schedules } = await this.supabase.from('schedules').select('*').eq('batch_id', batchId).eq('is_active', true);
-            if (!schedules) {
-                console.error('[scheduleVersionService] APPROVE: Failed to fetch schedules');
-                throw new Error('Failed to fetch schedules');
+            console.log('[scheduleVersionService] APPROVE: Fetching schedules for batch:', batchId);
+            const { data: schedules, error: schedulesError } = await this.supabase.from('schedules').select('*').eq('batch_id', batchId).eq('is_active', true);
+            if (schedulesError) {
+                console.error('[scheduleVersionService] APPROVE: Error fetching schedules:', schedulesError);
+                throw new Error(`Failed to fetch schedules: ${schedulesError.message}`);
+            }
+            if (!schedules || schedules.length === 0) {
+                console.error('[scheduleVersionService] APPROVE: No schedules found for batch:', batchId);
+                // Try fetching all schedules in batch (even inactive) for debugging
+                const { data: allSchedules } = await this.supabase.from('schedules').select('id, status, is_active').eq('batch_id', batchId);
+                console.log('[scheduleVersionService] APPROVE: All schedules in batch:', allSchedules);
+                throw new Error('Failed to fetch schedules: No active schedules found in batch');
             }
 
             console.log('[scheduleVersionService] APPROVE: Schedules fetched:', {
@@ -1026,10 +1034,18 @@ class ScheduleVersionService {
             });
 
             // Get schedules
-            const { data: schedules } = await this.supabase.from('schedules').select('*').eq('batch_id', batchId).eq('is_active', true);
-            if (!schedules) {
-                console.error('[scheduleVersionService] PUBLISH: Failed to fetch schedules');
-                throw new Error('Failed to fetch schedules');
+            console.log('[scheduleVersionService] PUBLISH: Fetching schedules for batch:', batchId);
+            const { data: schedules, error: schedulesError } = await this.supabase.from('schedules').select('*').eq('batch_id', batchId).eq('is_active', true);
+            if (schedulesError) {
+                console.error('[scheduleVersionService] PUBLISH: Error fetching schedules:', schedulesError);
+                throw new Error(`Failed to fetch schedules: ${schedulesError.message}`);
+            }
+            if (!schedules || schedules.length === 0) {
+                console.error('[scheduleVersionService] PUBLISH: No schedules found for batch:', batchId);
+                // Try fetching all schedules in batch (even inactive) for debugging
+                const { data: allSchedules } = await this.supabase.from('schedules').select('id, status, is_active').eq('batch_id', batchId);
+                console.log('[scheduleVersionService] PUBLISH: All schedules in batch:', allSchedules);
+                throw new Error('Failed to fetch schedules: No active schedules found in batch');
             }
 
             console.log('[scheduleVersionService] PUBLISH: Schedules fetched:', {
