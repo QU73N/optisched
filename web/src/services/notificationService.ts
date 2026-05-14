@@ -3,7 +3,7 @@ import type { Notification } from '../types/database';
 
 export async function createNotification(
     userId: string,
-    type: 'schedule_change' | 'sharing_request' | 'approval' | 'system' | 'reminder' | 'conflict_alert' | 'announcement',
+    type: 'schedule_change' | 'sharing_request' | 'approval' | 'system' | 'reminder' | 'conflict_alert' | 'announcement' | 'password_reset' | 'event',
     title: string,
     message: string,
     data: Record<string, unknown> = {},
@@ -27,10 +27,15 @@ export async function getNotifications(
     unreadOnly = false,
     limit = 50
 ): Promise<Notification[]> {
+    console.log('[NotificationService] getNotifications called, unreadOnly:', unreadOnly, 'limit:', limit);
     const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user;
-    if (!user) throw new Error('User not authenticated');
+    if (!user) {
+        console.error('[NotificationService] User not authenticated');
+        throw new Error('User not authenticated');
+    }
 
+    console.log('[NotificationService] Querying notifications for user:', user.id);
     let query = supabase
         .from('notifications')
         .select('*')
@@ -43,7 +48,11 @@ export async function getNotifications(
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+        console.error('[NotificationService] Query error:', error);
+        throw error;
+    }
+    console.log('[NotificationService] Query success, returned', (data || []).length, 'notifications');
     return (data || []) as Notification[];
 }
 
@@ -73,14 +82,23 @@ export async function markAllAsRead(): Promise<number> {
 }
 
 export async function getUnreadCount(): Promise<number> {
+    console.log('[NotificationService] getUnreadCount called');
     const { data: authData } = await supabase.auth.getUser();
     const user = authData?.user;
-    if (!user) throw new Error('User not authenticated');
+    if (!user) {
+        console.error('[NotificationService] User not authenticated');
+        throw new Error('User not authenticated');
+    }
 
+    console.log('[NotificationService] Calling RPC get_unread_notification_count for user:', user.id);
     const { data, error } = await supabase.rpc('get_unread_notification_count', {
         p_user_id: user.id
     });
-    if (error) throw error;
+    if (error) {
+        console.error('[NotificationService] RPC error:', error);
+        throw error;
+    }
+    console.log('[NotificationService] RPC success, unread count:', data);
     return data || 0;
 }
 
@@ -248,4 +266,114 @@ export async function createConflictResolutionNotification(
         '/admin/conflicts',
         24
     );
+}
+
+// Create password reset notification for admin
+export async function createPasswordResetNotification(
+    email: string,
+    requestId: string
+): Promise<void> {
+    // Get all admins to notify
+    const { data: admins } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['power_admin', 'system_admin', 'schedule_admin']);
+
+    if (!admins) return;
+
+    for (const admin of admins) {
+        try {
+            await createNotification(
+                admin.id,
+                'password_reset',
+                'Password Reset Request',
+                `User ${email} has requested a password reset.`,
+                {
+                    email,
+                    request_id: requestId,
+                    timestamp: new Date().toISOString(),
+                },
+                '/admin',
+                24 // Expires in 24 hours
+            );
+        } catch (err) {
+            console.error(`Failed to create password reset notification for admin ${admin.id}:`, err);
+        }
+    }
+}
+
+// Create event notification for all users
+export async function createEventNotification(
+    eventTitle: string,
+    eventDate: string,
+    eventTime: string,
+    eventId: string
+): Promise<void> {
+    // Get all active users
+    const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('is_active', true);
+
+    if (!profiles) return;
+
+    const message = `Event: ${eventTitle} on ${new Date(eventDate).toLocaleDateString()} at ${eventTime}`;
+
+    for (const profile of profiles) {
+        try {
+            await createNotification(
+                profile.id,
+                'event',
+                'New Event Added',
+                message,
+                {
+                    event_id: eventId,
+                    event_title: eventTitle,
+                    event_date: eventDate,
+                    event_time: eventTime,
+                    timestamp: new Date().toISOString(),
+                },
+                undefined, // No action URL for events
+                168 // Expires in 7 days
+            );
+        } catch (err) {
+            console.error(`Failed to create event notification for user ${profile.id}:`, err);
+        }
+    }
+}
+
+// Create teacher request notification for admins
+export async function createTeacherRequestNotification(
+    teacherName: string,
+    requestType: string,
+    requestId: string
+): Promise<void> {
+    // Get all admins to notify
+    const { data: admins } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['power_admin', 'system_admin', 'schedule_admin']);
+
+    if (!admins) return;
+
+    for (const admin of admins) {
+        try {
+            await createNotification(
+                admin.id,
+                'approval',
+                'New Teacher Request',
+                `${teacherName} submitted a ${requestType} request.`,
+                {
+                    teacher_name: teacherName,
+                    request_type: requestType,
+                    request_id: requestId,
+                    timestamp: new Date().toISOString(),
+                },
+                '/admin',
+                24 // Expires in 24 hours
+            );
+        } catch (err) {
+            console.error(`Failed to create teacher request notification for admin ${admin.id}:`, err);
+        }
+    }
 }

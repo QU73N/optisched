@@ -145,22 +145,33 @@ const Layout: React.FC = () => {
 
     // Notifications
     const loadNotifications = useCallback(async () => {
-        if (!profile) return;
+        if (!profile) {
+            console.warn('[Notifications] No profile found, skipping load');
+            return;
+        }
         try {
+            console.log('[Notifications] Loading notifications for user:', profile.id);
             const [notifList, unread] = await Promise.all([
                 getNotifications(false, 20),
                 getUnreadCount()
             ]);
+            console.log('[Notifications] Loaded:', notifList.length, 'notifications, unread:', unread);
             setNotifications(notifList);
             setUnreadCount(unread);
         } catch (err) {
-            console.error('Failed to load notifications:', err);
+            console.error('[Notifications] Failed to load notifications:', err);
+            // Set empty state to prevent UI from breaking
+            setNotifications([]);
+            setUnreadCount(0);
         }
     }, [profile]);
 
-    const handleNotificationsClick = () => {
+    const handleNotificationsClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        console.log('[Notifications] Button clicked, current state:', notificationsOpen);
         setNotificationsOpen(!notificationsOpen);
         if (!notificationsOpen) {
+            console.log('[Notifications] Opening dropdown, loading notifications...');
             loadNotifications();
         }
     };
@@ -225,6 +236,11 @@ const Layout: React.FC = () => {
             return () => document.removeEventListener('click', handleClickOutside);
         }
     }, [notificationsOpen]);
+
+    // Debug: Log when notificationsOpen changes
+    useEffect(() => {
+        console.log('[Notifications] notificationsOpen changed to:', notificationsOpen, 'notifications count:', notifications.length);
+    }, [notificationsOpen, notifications]);
 
     return (
         <div className="layout">
@@ -304,9 +320,12 @@ const Layout: React.FC = () => {
 
             {/* Notifications Dropdown */}
             {notificationsOpen && (
-                <div 
+                <div
                     className="notifications-dropdown"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        console.log('[Notifications] Dropdown clicked');
+                        e.stopPropagation();
+                    }}
                 >
                     <div className="notifications-header">
                         <h3>Notifications</h3>

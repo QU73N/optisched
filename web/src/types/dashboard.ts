@@ -88,6 +88,7 @@ export interface AdminMessage {
 export interface ResetRequest {
     id: string;
     email: string;
+    user_id?: string;
     status: 'pending' | 'approved' | 'denied';
     requested_at: string;
     resolved_at?: string;

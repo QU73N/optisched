@@ -4,12 +4,12 @@ import { useToast } from '../../contexts/ToastContext';
 import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { POWER_ADMIN_ROLES, hasAnyRole } from '../../types/database';
 import type {
-    ChangeRequest, Announcement, CustomEvent, ResetRequest,
+    ChangeRequest, CustomEvent, ResetRequest,
     ConflictsTrend, DashboardStats, DashboardDeltas, DashboardRoom
 } from '../../types/dashboard';
 import { DASHBOARD_CONFIG } from '../../config/dashboard';
 import {
-    Activity, CalendarDays, CalendarPlus, CheckCircle, Clock, Inbox, Megaphone, TrendingUp, XCircle, AlertTriangle, Edit3, Trash2, X, Loader2, Users, BookOpen, LayoutDashboard, Shield, KeyRound
+    Activity, CalendarDays, CalendarPlus, CheckCircle, Clock, Inbox, TrendingUp, XCircle, AlertTriangle, Edit3, Trash2, X, Loader2, Users, BookOpen, LayoutDashboard, Shield, KeyRound
 } from 'lucide-react';
 import {
     LineChart, Line,
@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { ChartTooltip } from '../../components/ChartTooltip';
 import { ConfirmDialog } from '../../components/states/ConfirmDialog';
+import { createPasswordResetNotification, createEventNotification, createTeacherRequestNotification } from '../../services/notificationService';
 import './Dashboard.css';
 
 const AdminDashboard: React.FC = () => {
@@ -50,24 +51,12 @@ const AdminDashboard: React.FC = () => {
     const canSeeRequests = isPowerAdmin || isScheduleAdmin;
     const canSeeResets = isPowerAdmin || isSystemAdmin;
     const canSeeEvents = isPowerAdmin || isScheduleAdmin || isScheduleManager;
-    const canPostAnnouncements = isPowerAdmin || isSystemAdmin || isScheduleAdmin;
     const canCreateEvents = isPowerAdmin || isScheduleAdmin || isScheduleManager;
     const [requests, setRequests] = useState<ChangeRequest[]>([]);
     const [requestsLoading, setRequestsLoading] = useState(true);
     const [resolvingRequest, setResolvingRequest] = useState<ChangeRequest | null>(null);
     const [resolveAction, setResolveAction] = useState<'approved' | 'rejected'>('approved');
     const [resolveNotes, setResolveNotes] = useState('');
-
-    // Announcements
-    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-    const [showAnnModal, setShowAnnModal] = useState(false);
-    const [annTitle, setAnnTitle] = useState('');
-    const [annContent, setAnnContent] = useState('');
-    const [annPriority, setAnnPriority] = useState<'normal' | 'important'>('normal');
-    const [annSection, setAnnSection] = useState('All Sections');
-    const [sections, setSections] = useState<string[]>([]);
-    const [postingAnn, setPostingAnn] = useState(false);
-    const [editingAnn, setEditingAnn] = useState<Announcement | null>(null);
 
     // Events
     const [events, setEvents] = useState<CustomEvent[]>([]);
@@ -86,9 +75,7 @@ const AdminDashboard: React.FC = () => {
     const [resetRequests, setResetRequests] = useState<ResetRequest[]>([]);
 
     const fetchAll = () => {
-        fetchStats(); fetchRequests(); fetchAnnouncements();
-        fetchEvents(); fetchSections(); fetchRooms();
-        fetchResetRequests();
+        fetchStats(); fetchRequests(); fetchEvents(); fetchRooms(); fetchResetRequests();
     };
 
     const fetchStats = async () => {
@@ -294,19 +281,9 @@ const AdminDashboard: React.FC = () => {
         setRequestsLoading(false);
     };
 
-    const fetchAnnouncements = async () => {
-        const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(DASHBOARD_CONFIG.QUERY_LIMITS.ANNOUNCEMENTS);
-        setAnnouncements((data || []) as Announcement[]);
-    };
-
     const fetchEvents = async () => {
         const { data } = await supabase.from('custom_events').select('*').gte('event_date', new Date().toISOString().split('T')[0]).order('event_date', { ascending: true }).limit(DASHBOARD_CONFIG.QUERY_LIMITS.EVENTS);
         setEvents((data || []) as CustomEvent[]);
-    };
-
-    const fetchSections = async () => {
-        const { data } = await supabase.from('sections').select('name').order('name');
-        setSections((data || []).map(s => s.name));
     };
 
     const fetchRooms = async () => {
@@ -322,10 +299,24 @@ const AdminDashboard: React.FC = () => {
     useEffect(() => {
         fetchAll();
         const ch = supabase.channel('admin-dash-rt')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_change_requests' }, () => fetchRequests())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => fetchAnnouncements())
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'schedule_change_requests' }, async (payload) => {
+                const req = payload.new as ChangeRequest;
+                // Create notification for new teacher request
+                if (req.status === 'pending') {
+                    await createTeacherRequestNotification(req.teacher_name || 'Unknown', req.request_type || 'schedule change', req.id);
+                }
+                fetchRequests();
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'schedule_change_requests' }, () => fetchRequests())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_events' }, () => fetchEvents())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'password_reset_requests' }, () => fetchResetRequests())
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'password_reset_requests' }, async (payload) => {
+                const req = payload.new as ResetRequest;
+                if (req.status === 'pending') {
+                    await createPasswordResetNotification(req.email, req.id);
+                }
+                fetchResetRequests();
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'password_reset_requests' }, () => fetchResetRequests())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'conflicts' }, () => fetchStats())
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'schedules' }, () => fetchStats())
             .subscribe();
@@ -341,74 +332,27 @@ const AdminDashboard: React.FC = () => {
         setResolveNotes('');
     };
 
-    const handlePostAnnouncement = async () => {
-        if (!annTitle.trim() || !annContent.trim()) return;
-        setPostingAnn(true);
-        try {
-            if (editingAnn) {
-                await supabase.from('announcements').update({
-                    title: annPriority === 'important' ? `[${annPriority.toUpperCase()}] ${annTitle}` : annTitle,
-                    content: annContent,
-                    priority: annPriority,
-                    target_section: annSection === 'All Sections' ? null : annSection
-                }).eq('id', editingAnn.id);
-            } else {
-                await supabase.from('announcements').insert({
-                    title: annPriority === 'important' ? `[${annPriority.toUpperCase()}] ${annTitle}` : annTitle,
-                    content: annContent,
-                    priority: annPriority,
-                    target_section: annSection === 'All Sections' ? null : annSection
-                });
-            }
-            setShowAnnModal(false); setAnnTitle(''); setAnnContent(''); setAnnPriority('normal'); setAnnSection('All Sections'); setEditingAnn(null);
-            fetchAnnouncements();
-            showToast({ title: 'Announcement saved', type: 'success' });
-        } catch (e: unknown) { showToast({ title: 'Error', message: e instanceof Error ? e.message : String(e), type: 'error' }); }
-        setPostingAnn(false);
-    };
-
-    const handleDeleteAnn = async (id: string) => {
-        setConfirmDialog({
-            open: true,
-            title: 'Delete Announcement',
-            message: 'Are you sure you want to delete this announcement?',
-            onConfirm: async () => {
-                try {
-                    const { error } = await supabase.from('announcements').delete().eq('id', id);
-                    if (error) throw error;
-                    fetchAnnouncements();
-                    showToast({ title: 'Announcement deleted', type: 'success' });
-                } catch (e: unknown) {
-                    showToast({ title: 'Failed to delete', message: e instanceof Error ? e.message : String(e), type: 'error' });
-                }
-            }
-        });
-    };
-
-    const openEditAnn = (ann: Announcement) => {
-        setEditingAnn(ann);
-        const title = ann.title.replace(/^\[.*?\]\s*/, '');
-        setAnnTitle(title);
-        setAnnContent(ann.content);
-        setAnnPriority(ann.priority);
-        setAnnSection(ann.target_section || 'All Sections');
-        setShowAnnModal(true);
-    };
-
     const handleCreateEvent = async () => {
         if (!evTitle.trim()) return;
         setPostingEvent(true);
         try {
+            let eventId: string | undefined;
             if (editingEvent) {
                 await supabase.from('custom_events').update({
                     title: evTitle, description: evDesc, event_date: evDate,
                     start_time: evStart, end_time: evEnd, room_name: evRoom
                 }).eq('id', editingEvent.id);
+                eventId = editingEvent.id;
             } else {
-                await supabase.from('custom_events').insert({
+                const { data } = await supabase.from('custom_events').insert({
                     title: evTitle, description: evDesc, event_date: evDate,
                     start_time: evStart, end_time: evEnd, room_name: evRoom
-                });
+                }).select('id').single();
+                eventId = data?.id;
+                // Create notification for new event
+                if (eventId) {
+                    await createEventNotification(evTitle, evDate, evStart, eventId);
+                }
             }
             setShowEventModal(false); setEvTitle(''); setEvDesc(''); setEvDate(new Date().toISOString().split('T')[0]); setEvStart('08:00'); setEvEnd('10:00'); setEvRoom(''); setEditingEvent(null);
             fetchEvents();
@@ -505,10 +449,6 @@ const AdminDashboard: React.FC = () => {
     };
 
     const pendingRequests = requests.filter(r => r.status === 'pending');
-    const prioStyles: Record<string, { bg: string; color: string }> = {
-        important: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
-        normal: { bg: 'rgba(59,130,246,0.12)', color: '#3b82f6' },
-    };
 
     // Build stat cards based on role, with deltas (state plus recent change)
     type StatCard = { label: string; value: number; icon: typeof Users; color: string; show: boolean; warning?: boolean; delta?: number; deltaLabel?: string; deltaGood?: 'up' | 'down' };
@@ -563,11 +503,6 @@ const AdminDashboard: React.FC = () => {
                     </p>
                 </div>
                 <div className="dash-header-actions">
-                    {canPostAnnouncements && (
-                        <button className="btn btn-primary" onClick={() => { setEditingAnn(null); setAnnTitle(''); setAnnContent(''); setShowAnnModal(true); }}>
-                            <Megaphone size={14} /> Post Announcement
-                        </button>
-                    )}
                     {canCreateEvents && (
                         <button className="btn btn-secondary" onClick={() => { setEditingEvent(null); setEvTitle(''); setEvDesc(''); setEvDate(new Date().toISOString().split('T')[0]); setEvStart('08:00'); setEvEnd('10:00'); setEvRoom(''); setShowEventModal(true); }}>
                             <CalendarPlus size={14} /> Add Event
@@ -635,9 +570,9 @@ const AdminDashboard: React.FC = () => {
 
             {/* ===== BOTTOM SECTION: 2-row × 3-column grid ===== */}
             <div className="dash-bottom-section">
-                {/* Row 1: Teacher Requests, Announcements, Events */}
+                {/* Row 1: Teacher Requests, Password Resets, Events */}
                 {canSeeRequests && (
-                    <div className="dash-card dash-stagger">
+                    <div className="dash-card dash-stagger" style={{ maxHeight: '350px' }}>
                         <div className="dash-card-header">
                             <div className="dash-card-title"><Inbox size={16} /> Teacher Requests</div>
                             {pendingRequests.length > 0 && <span className="dash-card-badge dash-badge-warning">{pendingRequests.length}</span>}
@@ -674,77 +609,9 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
 
-                {/* Announcements */}
-                <div className="dash-card dash-stagger">
-                    <div className="dash-card-header">
-                        <div className="dash-card-title"><Megaphone size={16} /> Announcements</div>
-                        <span className="dash-card-badge dash-badge-info">{announcements.length}</span>
-                    </div>
-                    {announcements.length === 0 ? (
-                        <div className="dash-empty"><Megaphone size={28} /><div>No announcements</div></div>
-                    ) : (
-                        <div className="dash-list">
-                            {announcements.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(ann => {
-                                const prio = prioStyles[ann.priority] || prioStyles.normal;
-                                return (
-                                    <div key={ann.id} className="dash-list-item">
-                                        <div className="dash-list-item-accent" style={{ background: prio.color }} />
-                                        <div className="dash-list-item-body dash-list-item-body--compact">
-                                            <div className="dash-header-row">
-                                                <div className="dash-list-item-title">{ann.title}</div>
-                                                <div className="dash-icon-group">
-                                                    {ann.priority !== 'normal' && (
-                                                        <span className="dash-status-badge" style={{ background: prio.bg, color: prio.color, fontSize: 10 }}>{ann.priority.toUpperCase()}</span>
-                                                    )}
-                                                    <button className="dash-icon-btn" onClick={() => openEditAnn(ann)}><Edit3 size={13} /></button>
-                                                    <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => handleDeleteAnn(ann.id)}><Trash2 size={13} /></button>
-                                                </div>
-                                            </div>
-                                            <div className="dash-list-item-desc">{ann.content}</div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Events */}
-                {canSeeEvents && (
-                    <div className="dash-card dash-stagger">
-                        <div className="dash-card-header">
-                            <div className="dash-card-title"><CalendarPlus size={16} /> Events</div>
-                            <span className="dash-card-badge dash-badge-success">{events.length}</span>
-                        </div>
-                        {events.length === 0 ? (
-                            <div className="dash-empty"><CalendarPlus size={28} /><div>No events</div></div>
-                        ) : (
-                            <div className="dash-list">
-                                {events.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(ev => (
-                                    <div key={ev.id} className="dash-list-item">
-                                        <div className="dash-list-item-accent dash-accent-success" />
-                                        <div className="dash-list-item-body dash-list-item-body--compact">
-                                            <div className="dash-header-row">
-                                                <div className="dash-list-item-title">{ev.title}</div>
-                                                <div className="dash-icon-group">
-                                                    <button className="dash-icon-btn" onClick={() => openEditEvent(ev)}><Edit3 size={13} /></button>
-                                                    <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => handleDeleteEvent(ev.id)}><Trash2 size={13} /></button>
-                                                </div>
-                                            </div>
-                                            <div className="dash-list-item-meta">
-                                                {new Date(ev.event_date).toLocaleDateString()} · {ev.start_time?.slice(0, 5)} to {ev.end_time?.slice(0, 5)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-
                 {/* Password Reset Requests */}
                 {canSeeResets && (
-                    <div className="dash-card dash-stagger">
+                    <div className="dash-card dash-stagger" style={{ maxHeight: '350px' }}>
                         <div className="dash-card-header">
                             <div className="dash-card-title"><KeyRound size={16} /> Password Resets</div>
                             {resetRequests.length > 0 && <span className="dash-card-badge dash-badge-warning">{resetRequests.length}</span>}
@@ -780,42 +647,42 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
 
+                {/* Events */}
+                {canSeeEvents && (
+                    <div className="dash-card dash-stagger" style={{ maxHeight: '350px' }}>
+                        <div className="dash-card-header">
+                            <div className="dash-card-title"><CalendarPlus size={16} /> Events</div>
+                            <span className="dash-card-badge dash-badge-success">{events.length}</span>
+                        </div>
+                        {events.length === 0 ? (
+                            <div className="dash-empty"><CalendarPlus size={28} /><div>No events</div></div>
+                        ) : (
+                            <div className="dash-list">
+                                {events.slice(0, DASHBOARD_CONFIG.DISPLAY_LIMITS.RECENT_ITEMS).map(ev => (
+                                    <div key={ev.id} className="dash-list-item">
+                                        <div className="dash-list-item-accent dash-accent-success" />
+                                        <div className="dash-list-item-body dash-list-item-body--compact">
+                                            <div className="dash-header-row">
+                                                <div className="dash-list-item-title">{ev.title}</div>
+                                                <div className="dash-icon-group">
+                                                    <button className="dash-icon-btn" onClick={() => openEditEvent(ev)}><Edit3 size={13} /></button>
+                                                    <button className="dash-icon-btn dash-icon-btn-danger" onClick={() => handleDeleteEvent(ev.id)}><Trash2 size={13} /></button>
+                                                </div>
+                                            </div>
+                                            <div className="dash-list-item-meta">
+                                                {new Date(ev.event_date).toLocaleDateString()} · {ev.start_time?.slice(0, 5)} to {ev.end_time?.slice(0, 5)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
             </div>
 
             {/* ===== MODALS ===== */}
-            {/* Announcement Modal */}
-            {showAnnModal && (
-                <div className="modal-overlay" onClick={() => setShowAnnModal(false)}>
-                    <div className="dash-modal-box" onClick={e => e.stopPropagation()}>
-                        <div className="dash-modal-header">
-                            <h3>{editingAnn ? 'Edit Announcement' : 'Post Announcement'}</h3>
-                            <button className="dash-modal-close" onClick={() => setShowAnnModal(false)}><X size={16} /></button>
-                        </div>
-                        <div className="dash-modal-body">
-                            <label>Title</label>
-                            <input className="input" value={annTitle} onChange={e => setAnnTitle(e.target.value)} placeholder="Announcement title" />
-                            <label>Content</label>
-                            <textarea className="input" value={annContent} onChange={e => setAnnContent(e.target.value)} placeholder="Announcement content..." rows={3} style={{ height: '120px', overflowY: 'auto', resize: 'none' }} />
-                            <label>Priority</label>
-                            <div className="dash-btn-group">
-                                {(['Normal', 'Important'] as const).map(p => (
-                                    <button key={p} className={`dash-btn-tab ${annPriority === p.toLowerCase() ? 'active' : ''}`}
-                                        onClick={() => setAnnPriority(p.toLowerCase() as 'normal' | 'important')}>{p}</button>
-                                ))}
-                            </div>
-                            <label>Target Section</label>
-                            <select className="input" value={annSection} onChange={e => setAnnSection(e.target.value)}>
-                                <option value="All Sections">All Sections</option>
-                                {sections.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                            <button className="dash-modal-btn dash-modal-btn-primary" onClick={handlePostAnnouncement} disabled={postingAnn}>
-                                {postingAnn ? <><Loader2 size={14} className="spin" /> Posting...</> : editingAnn ? 'Save Changes' : 'Post Announcement'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Event Modal */}
             {showEventModal && (
                 <div className="modal-overlay" onClick={() => { setShowEventModal(false); setEditingEvent(null); }}>
