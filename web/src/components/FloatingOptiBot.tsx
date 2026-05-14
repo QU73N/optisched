@@ -28,75 +28,19 @@ const FloatingOptiBot: React.FC = () => {
     useEffect(() => {
         const checkOptiBotStatus = async () => {
             const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+            const GEMINI_API_KEY_2 = import.meta.env.VITE_GEMINI_API_KEY_2 || '';
+            const GEMINI_API_KEY_3 = import.meta.env.VITE_GEMINI_API_KEY_3 || '';
             const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
             const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
 
             // Check if at least one API key is configured
-            const hasValidKey = GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_') ||
-                               GROQ_API_KEY && !GROQ_API_KEY.includes('YOUR_') ||
-                               OPENROUTER_API_KEY && !OPENROUTER_API_KEY.includes('YOUR_');
+            const hasValidKey = (GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_')) ||
+                               (GEMINI_API_KEY_2 && !GEMINI_API_KEY_2.includes('YOUR_')) ||
+                               (GEMINI_API_KEY_3 && !GEMINI_API_KEY_3.includes('YOUR_')) ||
+                               (GROQ_API_KEY && !GROQ_API_KEY.includes('YOUR_')) ||
+                               (OPENROUTER_API_KEY && !OPENROUTER_API_KEY.includes('YOUR_'));
 
-            if (!hasValidKey) {
-                setIsOnline(false);
-                return;
-            }
-
-            // Test connectivity with Groq first (since it's the primary fallback)
-            if (GROQ_API_KEY && !GROQ_API_KEY.includes('YOUR_')) {
-                try {
-                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json', 
-                            'Authorization': `Bearer ${GROQ_API_KEY}` 
-                        },
-                        body: JSON.stringify({
-                            model: 'llama-3.3-70b-versatile',
-                            messages: [{ role: 'user', content: 'ping' }],
-                            max_tokens: 1
-                        }),
-                    });
-                    if (response.ok) {
-                        setIsOnline(true);
-                        return;
-                    }
-                } catch {
-                    // Fall through to check other providers
-                }
-            }
-
-            // Test connectivity with Gemini
-            try {
-                if (GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_')) {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ parts: [{ text: 'ping' }] }],
-                            generationConfig: { maxOutputTokens: 1 }
-                        }),
-                    });
-                    setIsOnline(response.ok);
-                    return;
-                }
-            } catch {
-                // Fall through to check other providers
-            }
-
-            // If Gemini failed, try a simple check on OpenRouter
-            if (OPENROUTER_API_KEY && !OPENROUTER_API_KEY.includes('YOUR_')) {
-                try {
-                    const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
-                        headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}` },
-                    });
-                    setIsOnline(response.ok);
-                    return;
-                } catch {
-                    setIsOnline(false);
-                }
-            } else {
-                setIsOnline(false);
-            }
+            setIsOnline(hasValidKey);
         };
 
         checkOptiBotStatus();

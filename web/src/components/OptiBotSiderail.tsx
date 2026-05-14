@@ -84,12 +84,16 @@ const OptiBotSiderail: React.FC = () => {
     useEffect(() => {
         const checkOptiBotStatus = async () => {
             const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+            const GEMINI_API_KEY_2 = import.meta.env.VITE_GEMINI_API_KEY_2 || '';
+            const GEMINI_API_KEY_3 = import.meta.env.VITE_GEMINI_API_KEY_3 || '';
             const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
             const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
 
-            const hasValidKey = GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_') ||
-                               GROQ_API_KEY && !GROQ_API_KEY.includes('YOUR_') ||
-                               OPENROUTER_API_KEY && !OPENROUTER_API_KEY.includes('YOUR_');
+            const hasValidKey = (GEMINI_API_KEY && !GEMINI_API_KEY.includes('YOUR_')) ||
+                               (GEMINI_API_KEY_2 && !GEMINI_API_KEY_2.includes('YOUR_')) ||
+                               (GEMINI_API_KEY_3 && !GEMINI_API_KEY_3.includes('YOUR_')) ||
+                               (GROQ_API_KEY && !GROQ_API_KEY.includes('YOUR_')) ||
+                               (OPENROUTER_API_KEY && !OPENROUTER_API_KEY.includes('YOUR_'));
 
             setIsOnline(hasValidKey);
         };
