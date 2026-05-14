@@ -277,6 +277,8 @@ const ScheduleVersions: React.FC = () => {
             message: `This will archive version ${version.label || 'N/A'} and mark all associated schedules as archived. Archived schedules are not visible in main views but can be restored. Are you sure?`,
             onConfirm: async () => {
                 try {
+                    console.log('[SCHEDULE VERSIONS] Archiving version:', version.id, version.label);
+
                     // Update the version change_type to 'archive'
                     const { error: updateVersionError } = await supabase
                         .from('schedule_versions')
@@ -287,8 +289,11 @@ const ScheduleVersions: React.FC = () => {
                         .eq('id', version.id);
 
                     if (updateVersionError) {
+                        console.error('[SCHEDULE VERSIONS] Failed to update version to archive:', updateVersionError);
                         throw updateVersionError;
                     }
+
+                    console.log('[SCHEDULE VERSIONS] Version updated to archive, getting batch_id');
 
                     // Get the batch_id from the version
                     const { data: versionData } = await supabase
@@ -298,6 +303,7 @@ const ScheduleVersions: React.FC = () => {
                         .single();
 
                     if (versionData?.batch_id) {
+                        console.log('[SCHEDULE VERSIONS] Updating schedules in batch:', versionData.batch_id);
                         // Update the schedules in this batch to 'archived' status
                         const { error: updateSchedulesError } = await supabase
                             .from('schedules')
@@ -305,8 +311,12 @@ const ScheduleVersions: React.FC = () => {
                             .eq('batch_id', versionData.batch_id);
 
                         if (updateSchedulesError) {
+                            console.error('[SCHEDULE VERSIONS] Failed to update schedules to archived:', updateSchedulesError);
                             throw updateSchedulesError;
                         }
+                        console.log('[SCHEDULE VERSIONS] Schedules updated to archived');
+                    } else {
+                        console.warn('[SCHEDULE VERSIONS] No batch_id found for version');
                     }
 
                     showToast({ title: 'Version archived', type: 'success' });
@@ -314,7 +324,7 @@ const ScheduleVersions: React.FC = () => {
                     // Refresh the versions
                     loadVersions();
                 } catch (err: unknown) {
-                    console.error('Failed to archive version:', err);
+                    console.error('[SCHEDULE VERSIONS] Failed to archive version:', err);
                     showToast({ title: 'Failed to archive', message: err instanceof Error ? err.message : String(err), type: 'error' });
                 }
             }

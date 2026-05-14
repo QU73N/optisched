@@ -617,26 +617,43 @@ const ScheduleManagement: React.FC = () => {
             message: 'Are you sure you want to archive this version? It will be moved to archived status and can be recovered later.',
             onConfirm: async () => {
                 try {
-                    // Archive the schedules associated with this version by setting status to 'archived'
-                    const { error: updateError } = await supabase
+                    console.log('[SCHEDULE MGMT] Archiving version:', versionId, 'batch:', versionStatus.batch_id);
+
+                    // Update the version change_type to 'archive' and deactivate it
+                    const { error: versionError } = await supabase
+                        .from('schedule_versions')
+                        .update({
+                            change_type: 'archive',
+                            change_summary: 'Version archived',
+                            is_active: false,
+                        })
+                        .eq('id', versionId);
+
+                    if (versionError) {
+                        console.error('[SCHEDULE MGMT] Failed to update version to archive:', versionError);
+                        throw versionError;
+                    }
+
+                    console.log('[SCHEDULE MGMT] Version updated to archive, updating schedules');
+
+                    // Update the schedules in this batch to 'archived' status
+                    const { error: schedulesError } = await supabase
                         .from('schedules')
                         .update({ status: 'archived' })
                         .eq('batch_id', versionStatus.batch_id);
 
-                    if (updateError) throw updateError;
+                    if (schedulesError) {
+                        console.error('[SCHEDULE MGMT] Failed to update schedules to archived:', schedulesError);
+                        throw schedulesError;
+                    }
 
-                    // Also deactivate the version
-                    const { error: versionError } = await supabase
-                        .from('schedule_versions')
-                        .update({ is_active: false })
-                        .eq('id', versionId);
-
-                    if (versionError) throw versionError;
+                    console.log('[SCHEDULE MGMT] Archive completed successfully');
+                    showToast({ title: 'Version archived', type: 'success' });
 
                     // Navigate back to current schedules
                     navigate('/admin/schedules');
                 } catch (err: unknown) {
-                    console.error('Failed to archive version:', err);
+                    console.error('[SCHEDULE MGMT] Failed to archive version:', err);
                     showToast({ title: 'Failed to archive', message: err instanceof Error ? err.message : String(err), type: 'error' });
                 }
             }
