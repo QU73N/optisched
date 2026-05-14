@@ -33,12 +33,15 @@ const StudentUpcoming: React.FC = () => {
 
     const fetchSchedules = useCallback(async () => {
         if (!studentSectionId) {
+            console.log('[StudentUpcoming] No studentSectionId, skipping fetch');
             setLoading(false);
             return;
         }
         try {
+            console.log('[StudentUpcoming] Fetching schedules for section:', studentSectionId);
             const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
             if (rpcError) { console.error('[StudentUpcoming] RPC error:', rpcError); setLoading(false); return; }
+            console.log('[StudentUpcoming] RPC data count:', rpcData?.length);
             const list = (rpcData || [])
                 .filter((s: any) => s.status === 'published' && s.is_active === true && s.section_id === studentSectionId)
                 .map((s: any) => ({
@@ -50,13 +53,15 @@ const StudentUpcoming: React.FC = () => {
                     room: s.room_name,
                     teacher: s.teacher_name,
                 }));
+            console.log('[StudentUpcoming] Filtered schedules count:', list.length);
             setWeekly(list);
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error('[StudentUpcoming] Error fetching schedules:', err); }
         finally { setLoading(false); }
     }, [studentSectionId]);
 
     const fetchStudentSection = useCallback(async () => {
         try {
+            console.log('[StudentUpcoming] Fetching student section for profile:', profile?.id);
             // Fix: Use a simpler query without !inner join to avoid 406 error
             const { data: studentData, error: studentError } = await supabase
                 .from('students')
@@ -71,10 +76,13 @@ const StudentUpcoming: React.FC = () => {
                 return;
             }
 
+            console.log('[StudentUpcoming] Student data found:', studentData);
+
             if (studentData) {
                 setStudentSectionId(studentData.section_id);
+                console.log('[StudentUpcoming] Section set:', studentData.section_id);
             } else {
-                console.warn('[StudentUpcoming] No student record found for profile');
+                console.warn('[StudentUpcoming] No student record found for profile:', profile?.id);
                 setLoading(false);
             }
         } catch (err) {

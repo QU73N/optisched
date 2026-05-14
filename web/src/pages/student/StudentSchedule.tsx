@@ -43,12 +43,15 @@ const StudentSchedule: React.FC = () => {
 
     const fetchSchedules = useCallback(async () => {
         if (!studentSectionId) {
+            console.log('[StudentSchedule] No studentSectionId, skipping fetch');
             setLoading(false);
             return;
         }
         try {
+            console.log('[StudentSchedule] Fetching schedules for section:', studentSectionId);
             const { data: rpcData, error: rpcError } = await supabase.rpc('get_schedules_with_details');
             if (rpcError) { console.error('[StudentSchedule] RPC error:', rpcError); setLoading(false); return; }
+            console.log('[StudentSchedule] RPC data count:', rpcData?.length);
             // Filter to this student's section + published + active
             const filtered = (rpcData || [])
                 .filter((s: any) => s.status === 'published' && s.is_active === true && s.section_id === studentSectionId)
@@ -61,13 +64,15 @@ const StudentSchedule: React.FC = () => {
                     room: { name: s.room_name, building: s.room_building },
                     teacher: { profile: { full_name: s.teacher_name } },
                 }));
+            console.log('[StudentSchedule] Filtered schedules count:', filtered.length);
             setSchedules(filtered);
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error('[StudentSchedule] Error fetching schedules:', err); }
         finally { setLoading(false); }
     }, [studentSectionId]);
 
     const fetchStudentSection = useCallback(async () => {
         try {
+            console.log('[StudentSchedule] Fetching student section for profile:', profile?.id);
             // Fix: Use a simpler query without !inner join to avoid 406 error
             const { data: studentData, error: studentError } = await supabase
                 .from('students')
@@ -82,6 +87,8 @@ const StudentSchedule: React.FC = () => {
                 return;
             }
 
+            console.log('[StudentSchedule] Student data found:', studentData);
+
             if (studentData) {
                 setStudentSectionId(studentData.section_id);
                 // Fetch section name separately
@@ -91,8 +98,9 @@ const StudentSchedule: React.FC = () => {
                     .eq('id', studentData.section_id)
                     .single();
                 setStudentSectionName(sectionData?.name || null);
+                console.log('[StudentSchedule] Section set:', studentData.section_id, sectionData?.name);
             } else {
-                console.warn('[StudentSchedule] No student record found for profile');
+                console.warn('[StudentSchedule] No student record found for profile:', profile?.id);
                 setLoading(false);
             }
         } catch (err) {
