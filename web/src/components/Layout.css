@@ -200,11 +200,12 @@
 /* ========== USER FOOTER ========== */
 .sidebar-footer {
     position: relative;
-    padding: var(--space-4) 0 var(--space-4);
+    padding: var(--space-4);
     border-top: 1px solid var(--border-default);
     overflow: hidden;
     white-space: nowrap;
-    height: 64px;
+    display: flex;
+    align-items: center;
 }
 
 .sidebar-avatar {
@@ -228,14 +229,10 @@
 }
 
 .sidebar-user {
-    position: absolute;
-    left: var(--space-4);
-    right: var(--space-4);
-    top: 50%;
-    transform: translateY(-50%);
     display: flex;
     align-items: center;
     gap: 10px;
+    width: 100%;
 }
 
 .sidebar-user-name {
@@ -690,37 +687,23 @@
     }
 
     .sidebar-footer {
-        position: static;
-        display: flex;
-        align-items: center;
-        gap: 10px;
         padding: 12px 14px;
-        height: auto;
     }
 
     .sidebar-avatar {
         position: static;
-        transform: none;
     }
 
     .sidebar-user {
-        position: static;
-        transform: none;
-        display: flex;
-        align-items: center;
         gap: 10px;
-        flex: 1;
     }
 
     .sidebar-user-info {
         position: static;
-        transform: none;
     }
 
     .sidebar-logout {
         position: static;
-        transform: none;
-        margin-left: auto;
     }
 
     .layout {
